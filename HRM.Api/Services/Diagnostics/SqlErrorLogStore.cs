@@ -1,0 +1,361 @@
+using System.Data;
+using System.Text.Json;
+using HRM.ErrorLogs.Models;
+using HRM.ErrorLogs.Services;
+using Microsoft.Data.SqlClient;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
+
+namespace HRM.Services.Diagnostics;
+
+/// <summary>
+/// Persists ErrorLogEntry records to the dedicated HrmErrorLogs SQL Server database (ERR_ErrorLogs table).
+/// </summary>
+public sealed class SqlErrorLogStore : IErrorLogStore
+{
+    private readonly string _connectionString;
+    private readonly ILogger<SqlErrorLogStore>? _logger;
+    private static bool _schemaEnsured;
+    private static readonly object _schemaLock = new();
+
+    public SqlErrorLogStore(
+        IConfiguration configuration,
+        ILogger<SqlErrorLogStore>? logger = null,
+        string? connectionString = null)
+    {
+        _logger = logger;
+
+        if (!string.IsNullOrWhiteSpace(connectionString))
+        {
+            _connectionString = connectionString;
+        }
+        else
+        {
+            var raw = configuration.GetConnectionString("ErrorLogsConnection") ??
+                      configuration.GetConnectionString("HrmErrorLogs");
+
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                var fallback = configuration.GetConnectionString("DefaultConnection") ??
+                               "Server=DESKTOP-IGBGLUQ\\SQLEXPRESS;Database=HrmErrorLogs;Trusted_Connection=True;TrustServerCertificate=True;";
+                try
+                {
+                    var csb = new SqlConnectionStringBuilder(fallback) { InitialCatalog = "HrmErrorLogs" };
+                    raw = csb.ConnectionString;
+                }
+                catch
+                {
+                    raw = "Server=DESKTOP-IGBGLUQ\\SQLEXPRESS;Database=HrmErrorLogs;Trusted_Connection=True;TrustServerCertificate=True;";
+                }
+            }
+            _connectionString = raw;
+        }
+
+        EnsureDatabaseAndSchema();
+    }
+
+    public async Task PersistAsync(ErrorLogEntry entry, CancellationToken cancellationToken = default)
+    {
+        if (entry == null) return;
+
+        try
+        {
+            await using var conn = new SqlConnection(_connectionString);
+            await conn.OpenAsync(cancellationToken);
+
+            const string sql = @"
+INSERT INTO [dbo].[ERR_ErrorLogs] (
+    [Id], [TimestampUtc], [TimestampLocal], [CriticalityLevel], [ApplicationSource],
+    [Environment], [MachineName], [ProcessId], [ThreadId], [TraceId],
+    [Username], [UserId], [RemoteIp], [PageLocation], [HttpMethod],
+    [StatusCode], [UserAgent], [ExceptionType], [ErrorMessage], [StackTrace],
+    [InnerExceptionType], [InnerErrorMessage], [InnerStackTrace],
+    [FileName], [FilePath], [LineNumber], [ColumnNumber], [ClassName],
+    [MethodName], [Namespace], [AssemblyName], [RootCauseSummary],
+    [RecommendedAction], [DiagnosticStepsJson], [SuggestedCodePattern],
+    [CustomDataJson], [IsResolved], [ResolvedBy], [ResolvedAt], [ResolutionNotes]
+) VALUES (
+    @Id, @TimestampUtc, @TimestampLocal, @CriticalityLevel, @ApplicationSource,
+    @Environment, @MachineName, @ProcessId, @ThreadId, @TraceId,
+    @Username, @UserId, @RemoteIp, @PageLocation, @HttpMethod,
+    @StatusCode, @UserAgent, @ExceptionType, @ErrorMessage, @StackTrace,
+    @InnerExceptionType, @InnerErrorMessage, @InnerStackTrace,
+    @FileName, @FilePath, @LineNumber, @ColumnNumber, @ClassName,
+    @MethodName, @Namespace, @AssemblyName, @RootCauseSummary,
+    @RecommendedAction, @DiagnosticStepsJson, @SuggestedCodePattern,
+    @CustomDataJson, @IsResolved, @ResolvedBy, @ResolvedAt, @ResolutionNotes
+);";
+
+            await using var cmd = new SqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@Id", entry.Id);
+            cmd.Parameters.AddWithValue("@TimestampUtc", entry.TimestampUtc);
+            cmd.Parameters.AddWithValue("@TimestampLocal", entry.TimestampLocal);
+            cmd.Parameters.AddWithValue("@CriticalityLevel", (int)entry.CriticalityLevel);
+            cmd.Parameters.AddWithValue("@ApplicationSource", entry.ApplicationSource ?? "HRM.Api");
+            cmd.Parameters.AddWithValue("@Environment", entry.Environment ?? "Development");
+            cmd.Parameters.AddWithValue("@MachineName", entry.MachineName ?? System.Environment.MachineName);
+            cmd.Parameters.AddWithValue("@ProcessId", entry.ProcessId);
+            cmd.Parameters.AddWithValue("@ThreadId", entry.ThreadId);
+            cmd.Parameters.AddWithValue("@TraceId", (object?)entry.TraceId ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@Username", (object?)entry.Username ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@UserId", (object?)entry.UserId ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@RemoteIp", (object?)entry.RemoteIp ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@PageLocation", (object?)entry.PageLocation ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@HttpMethod", (object?)entry.HttpMethod ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@StatusCode", (object?)entry.StatusCode ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@UserAgent", (object?)entry.UserAgent ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@ExceptionType", entry.ExceptionType ?? string.Empty);
+            cmd.Parameters.AddWithValue("@ErrorMessage", entry.ErrorMessage ?? string.Empty);
+            cmd.Parameters.AddWithValue("@StackTrace", (object?)entry.StackTrace ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@InnerExceptionType", (object?)entry.InnerExceptionType ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@InnerErrorMessage", (object?)entry.InnerErrorMessage ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@InnerStackTrace", (object?)entry.InnerStackTrace ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@FileName", (object?)entry.Location?.FileName ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@FilePath", (object?)entry.Location?.FilePath ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@LineNumber", entry.Location?.LineNumber ?? 0);
+            cmd.Parameters.AddWithValue("@ColumnNumber", entry.Location?.ColumnNumber ?? 0);
+            cmd.Parameters.AddWithValue("@ClassName", (object?)entry.Location?.ClassName ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@MethodName", (object?)entry.Location?.MethodName ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@Namespace", (object?)entry.Location?.Namespace ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@AssemblyName", (object?)entry.Location?.AssemblyName ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@RootCauseSummary", (object?)entry.Fix?.RootCauseSummary ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@RecommendedAction", (object?)entry.Fix?.RecommendedAction ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@DiagnosticStepsJson", entry.Fix?.DiagnosticSteps != null ? JsonSerializer.Serialize(entry.Fix.DiagnosticSteps) : (object)DBNull.Value);
+            cmd.Parameters.AddWithValue("@SuggestedCodePattern", (object?)entry.Fix?.SuggestedCodePattern ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@CustomDataJson", (object?)entry.CustomDataJson ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@IsResolved", entry.IsResolved);
+            cmd.Parameters.AddWithValue("@ResolvedBy", (object?)entry.ResolvedBy ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@ResolvedAt", (object?)entry.ResolvedAt ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@ResolutionNotes", (object?)entry.ResolutionNotes ?? DBNull.Value);
+
+            await cmd.ExecuteNonQueryAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogWarning(ex, "SqlErrorLogStore: Unable to write to HrmErrorLogs database (ERR_ErrorLogs table).");
+        }
+    }
+
+    public async Task<IReadOnlyList<ErrorLogEntry>> LoadRecentAsync(int count, CancellationToken cancellationToken = default)
+    {
+        var list = new List<ErrorLogEntry>();
+        try
+        {
+            await using var conn = new SqlConnection(_connectionString);
+            await conn.OpenAsync(cancellationToken);
+
+            var sql = $"SELECT TOP ({Math.Min(count, 500)}) * FROM [dbo].[ERR_ErrorLogs] ORDER BY [TimestampUtc] DESC;";
+            await using var cmd = new SqlCommand(sql, conn);
+            await using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
+
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                var entry = new ErrorLogEntry
+                {
+                    Id = reader.GetGuid(reader.GetOrdinal("Id")),
+                    TimestampUtc = reader.GetDateTime(reader.GetOrdinal("TimestampUtc")),
+                    TimestampLocal = reader.GetDateTime(reader.GetOrdinal("TimestampLocal")),
+                    CriticalityLevel = (ErrorCriticalityLevel)reader.GetInt32(reader.GetOrdinal("CriticalityLevel")),
+                    ApplicationSource = reader.GetString(reader.GetOrdinal("ApplicationSource")),
+                    Environment = reader.GetString(reader.GetOrdinal("Environment")),
+                    MachineName = reader.GetString(reader.GetOrdinal("MachineName")),
+                    ProcessId = reader.GetInt32(reader.GetOrdinal("ProcessId")),
+                    ThreadId = reader.GetInt32(reader.GetOrdinal("ThreadId")),
+                    TraceId = reader.IsDBNull(reader.GetOrdinal("TraceId")) ? null : reader.GetString(reader.GetOrdinal("TraceId")),
+                    Username = reader.IsDBNull(reader.GetOrdinal("Username")) ? null : reader.GetString(reader.GetOrdinal("Username")),
+                    UserId = reader.IsDBNull(reader.GetOrdinal("UserId")) ? null : reader.GetString(reader.GetOrdinal("UserId")),
+                    RemoteIp = reader.IsDBNull(reader.GetOrdinal("RemoteIp")) ? null : reader.GetString(reader.GetOrdinal("RemoteIp")),
+                    PageLocation = reader.IsDBNull(reader.GetOrdinal("PageLocation")) ? null : reader.GetString(reader.GetOrdinal("PageLocation")),
+                    HttpMethod = reader.IsDBNull(reader.GetOrdinal("HttpMethod")) ? null : reader.GetString(reader.GetOrdinal("HttpMethod")),
+                    StatusCode = reader.IsDBNull(reader.GetOrdinal("StatusCode")) ? null : reader.GetInt32(reader.GetOrdinal("StatusCode")),
+                    UserAgent = reader.IsDBNull(reader.GetOrdinal("UserAgent")) ? null : reader.GetString(reader.GetOrdinal("UserAgent")),
+                    ExceptionType = reader.GetString(reader.GetOrdinal("ExceptionType")),
+                    ErrorMessage = reader.GetString(reader.GetOrdinal("ErrorMessage")),
+                    StackTrace = reader.IsDBNull(reader.GetOrdinal("StackTrace")) ? null : reader.GetString(reader.GetOrdinal("StackTrace")),
+                    InnerExceptionType = reader.IsDBNull(reader.GetOrdinal("InnerExceptionType")) ? null : reader.GetString(reader.GetOrdinal("InnerExceptionType")),
+                    InnerErrorMessage = reader.IsDBNull(reader.GetOrdinal("InnerErrorMessage")) ? null : reader.GetString(reader.GetOrdinal("InnerErrorMessage")),
+                    InnerStackTrace = reader.IsDBNull(reader.GetOrdinal("InnerStackTrace")) ? null : reader.GetString(reader.GetOrdinal("InnerStackTrace")),
+                    Location = new ErrorLocation
+                    {
+                        FileName = reader.IsDBNull(reader.GetOrdinal("FileName")) ? string.Empty : reader.GetString(reader.GetOrdinal("FileName")),
+                        FilePath = reader.IsDBNull(reader.GetOrdinal("FilePath")) ? string.Empty : reader.GetString(reader.GetOrdinal("FilePath")),
+                        LineNumber = reader.GetInt32(reader.GetOrdinal("LineNumber")),
+                        ColumnNumber = reader.GetInt32(reader.GetOrdinal("ColumnNumber")),
+                        ClassName = reader.IsDBNull(reader.GetOrdinal("ClassName")) ? string.Empty : reader.GetString(reader.GetOrdinal("ClassName")),
+                        MethodName = reader.IsDBNull(reader.GetOrdinal("MethodName")) ? string.Empty : reader.GetString(reader.GetOrdinal("MethodName")),
+                        Namespace = reader.IsDBNull(reader.GetOrdinal("Namespace")) ? string.Empty : reader.GetString(reader.GetOrdinal("Namespace")),
+                        AssemblyName = reader.IsDBNull(reader.GetOrdinal("AssemblyName")) ? string.Empty : reader.GetString(reader.GetOrdinal("AssemblyName"))
+                    },
+                    Fix = new FixRecommendation
+                    {
+                        RootCauseSummary = reader.IsDBNull(reader.GetOrdinal("RootCauseSummary")) ? string.Empty : reader.GetString(reader.GetOrdinal("RootCauseSummary")),
+                        RecommendedAction = reader.IsDBNull(reader.GetOrdinal("RecommendedAction")) ? string.Empty : reader.GetString(reader.GetOrdinal("RecommendedAction")),
+                        SuggestedCodePattern = reader.IsDBNull(reader.GetOrdinal("SuggestedCodePattern")) ? null : reader.GetString(reader.GetOrdinal("SuggestedCodePattern"))
+                    },
+                    CustomDataJson = reader.IsDBNull(reader.GetOrdinal("CustomDataJson")) ? null : reader.GetString(reader.GetOrdinal("CustomDataJson")),
+                    IsResolved = reader.GetBoolean(reader.GetOrdinal("IsResolved")),
+                    ResolvedBy = reader.IsDBNull(reader.GetOrdinal("ResolvedBy")) ? null : reader.GetString(reader.GetOrdinal("ResolvedBy")),
+                    ResolvedAt = reader.IsDBNull(reader.GetOrdinal("ResolvedAt")) ? null : reader.GetDateTime(reader.GetOrdinal("ResolvedAt")),
+                    ResolutionNotes = reader.IsDBNull(reader.GetOrdinal("ResolutionNotes")) ? null : reader.GetString(reader.GetOrdinal("ResolutionNotes"))
+                };
+
+                var stepsJson = reader.IsDBNull(reader.GetOrdinal("DiagnosticStepsJson")) ? null : reader.GetString(reader.GetOrdinal("DiagnosticStepsJson"));
+                if (!string.IsNullOrWhiteSpace(stepsJson))
+                {
+                    try
+                    {
+                        entry.Fix.DiagnosticSteps = JsonSerializer.Deserialize<List<string>>(stepsJson) ?? new List<string>();
+                    }
+                    catch { }
+                }
+
+                list.Add(entry);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogWarning(ex, "SqlErrorLogStore: Unable to read from HrmErrorLogs database (ERR_ErrorLogs table).");
+        }
+
+        return list;
+    }
+
+    public async Task<bool> UpdateResolutionAsync(Guid id, bool isResolved, string? resolvedBy, string? notes, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await using var conn = new SqlConnection(_connectionString);
+            await conn.OpenAsync(cancellationToken);
+
+            const string sql = @"
+UPDATE [dbo].[ERR_ErrorLogs]
+SET [IsResolved] = @IsResolved,
+    [ResolvedBy] = @ResolvedBy,
+    [ResolvedAt] = @ResolvedAt,
+    [ResolutionNotes] = @ResolutionNotes
+WHERE [Id] = @Id;";
+
+            await using var cmd = new SqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@Id", id);
+            cmd.Parameters.AddWithValue("@IsResolved", isResolved);
+            cmd.Parameters.AddWithValue("@ResolvedBy", (object?)resolvedBy ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@ResolvedAt", isResolved ? DateTime.UtcNow : (object)DBNull.Value);
+            cmd.Parameters.AddWithValue("@ResolutionNotes", (object?)notes ?? DBNull.Value);
+
+            int rows = await cmd.ExecuteNonQueryAsync(cancellationToken);
+            return rows > 0;
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogWarning(ex, "SqlErrorLogStore: Unable to update resolution in HrmErrorLogs for {Id}", id);
+            return false;
+        }
+    }
+
+    private void EnsureDatabaseAndSchema()
+    {
+        if (_schemaEnsured) return;
+
+        lock (_schemaLock)
+        {
+            if (_schemaEnsured) return;
+
+            try
+            {
+                // 1. Ensure dedicated HrmErrorLogs database exists on the target SQL Server
+                try
+                {
+                    var masterCsb = new SqlConnectionStringBuilder(_connectionString)
+                    {
+                        InitialCatalog = "master",
+                        ConnectTimeout = 8
+                    };
+
+                    using (var masterConn = new SqlConnection(masterCsb.ConnectionString))
+                    {
+                        masterConn.Open();
+                        using var cmdDb = new SqlCommand(
+                            "IF NOT EXISTS (SELECT * FROM sys.databases WHERE name = 'HrmErrorLogs') CREATE DATABASE [HrmErrorLogs];",
+                            masterConn);
+                        cmdDb.ExecuteNonQuery();
+                    }
+                }
+                catch (Exception exMaster)
+                {
+                    _logger?.LogDebug(exMaster, "SqlErrorLogStore: Master database check skipped or non-privileged.");
+                }
+
+                // 2. Ensure ERR_ErrorLogs table and indexes exist in HrmErrorLogs database
+                using (var conn = new SqlConnection(_connectionString))
+                {
+                    conn.Open();
+
+                    const string ddl = @"
+IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[ERR_ErrorLogs]') AND type in (N'U'))
+BEGIN
+    CREATE TABLE [dbo].[ERR_ErrorLogs](
+        [Id] UNIQUEIDENTIFIER NOT NULL CONSTRAINT [PK_ERR_ErrorLogs] PRIMARY KEY ([Id]),
+        [TimestampUtc] DATETIME2(7) NOT NULL,
+        [TimestampLocal] DATETIME2(7) NOT NULL,
+        [CriticalityLevel] INT NOT NULL,
+        [ApplicationSource] NVARCHAR(100) NOT NULL,
+        [Environment] NVARCHAR(50) NOT NULL,
+        [MachineName] NVARCHAR(100) NOT NULL,
+        [ProcessId] INT NOT NULL,
+        [ThreadId] INT NOT NULL,
+        [TraceId] NVARCHAR(150) NULL,
+        [Username] NVARCHAR(250) NULL,
+        [UserId] NVARCHAR(150) NULL,
+        [RemoteIp] NVARCHAR(100) NULL,
+        [PageLocation] NVARCHAR(1000) NULL,
+        [HttpMethod] NVARCHAR(20) NULL,
+        [StatusCode] INT NULL,
+        [UserAgent] NVARCHAR(1000) NULL,
+        [ExceptionType] NVARCHAR(300) NOT NULL,
+        [ErrorMessage] NVARCHAR(MAX) NOT NULL,
+        [StackTrace] NVARCHAR(MAX) NULL,
+        [InnerExceptionType] NVARCHAR(300) NULL,
+        [InnerErrorMessage] NVARCHAR(MAX) NULL,
+        [InnerStackTrace] NVARCHAR(MAX) NULL,
+        [FileName] NVARCHAR(500) NULL,
+        [FilePath] NVARCHAR(1000) NULL,
+        [LineNumber] INT NOT NULL CONSTRAINT [DF_ERR_ErrorLogs_LineNumber] DEFAULT (0),
+        [ColumnNumber] INT NOT NULL CONSTRAINT [DF_ERR_ErrorLogs_ColumnNumber] DEFAULT (0),
+        [ClassName] NVARCHAR(300) NULL,
+        [MethodName] NVARCHAR(300) NULL,
+        [Namespace] NVARCHAR(300) NULL,
+        [AssemblyName] NVARCHAR(300) NULL,
+        [RootCauseSummary] NVARCHAR(MAX) NULL,
+        [RecommendedAction] NVARCHAR(MAX) NULL,
+        [DiagnosticStepsJson] NVARCHAR(MAX) NULL,
+        [SuggestedCodePattern] NVARCHAR(MAX) NULL,
+        [CustomDataJson] NVARCHAR(MAX) NULL,
+        [IsResolved] BIT NOT NULL CONSTRAINT [DF_ERR_ErrorLogs_IsResolved] DEFAULT (0),
+        [ResolvedBy] NVARCHAR(250) NULL,
+        [ResolvedAt] DATETIME2(7) NULL,
+        [ResolutionNotes] NVARCHAR(MAX) NULL
+    );
+
+    IF NOT EXISTS (SELECT * FROM sys.indexes WHERE object_id = OBJECT_ID(N'[dbo].[ERR_ErrorLogs]') AND name = N'IX_ERR_ErrorLogs_TimestampUtc')
+        CREATE NONCLUSTERED INDEX [IX_ERR_ErrorLogs_TimestampUtc] ON [dbo].[ERR_ErrorLogs]([TimestampUtc] DESC);
+
+    IF NOT EXISTS (SELECT * FROM sys.indexes WHERE object_id = OBJECT_ID(N'[dbo].[ERR_ErrorLogs]') AND name = N'IX_ERR_ErrorLogs_Criticality')
+        CREATE NONCLUSTERED INDEX [IX_ERR_ErrorLogs_Criticality] ON [dbo].[ERR_ErrorLogs]([CriticalityLevel], [IsResolved]);
+
+    IF NOT EXISTS (SELECT * FROM sys.indexes WHERE object_id = OBJECT_ID(N'[dbo].[ERR_ErrorLogs]') AND name = N'IX_ERR_ErrorLogs_ApplicationSource')
+        CREATE NONCLUSTERED INDEX [IX_ERR_ErrorLogs_ApplicationSource] ON [dbo].[ERR_ErrorLogs]([ApplicationSource], [TimestampUtc] DESC);
+END";
+
+                    using var cmd = new SqlCommand(ddl, conn);
+                    cmd.ExecuteNonQuery();
+                }
+
+                _schemaEnsured = true;
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "SqlErrorLogStore: Unable to automatically verify or create ERR_ErrorLogs in HrmErrorLogs database.");
+            }
+        }
+    }
+}

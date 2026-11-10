@@ -1,0 +1,972 @@
+@using HRM.ErrorLogs.Models
+@using HRM.UI.Services.Diagnostics
+@inject IErrorLogApiClient ErrorApiClient
+@inject IJSRuntime JSRuntime
+
+<div class="space-y-4">
+    <!-- Stat Summary Bar -->
+    <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <!-- Unresolved Total -->
+        <button type="button"
+                @onclick="@(() => SetFilterResolved(false))"
+                class="text-left rounded-lg border p-3 transition-all @(filterResolved == false ? "border-amber-500 bg-amber-50/70 shadow-xs" : "border-slate-200 bg-white hover:border-slate-300 shadow-2xs")">
+            <div class="flex items-center justify-between text-xs font-medium text-slate-500">
+                <span>Active Unresolved</span>
+                <span class="h-2 w-2 rounded-full @(stats.UnresolvedCount > 0 ? "bg-rose-500 animate-pulse" : "bg-emerald-500")"></span>
+            </div>
+            <div class="mt-1 text-2xl font-bold @(stats.UnresolvedCount > 0 ? "text-rose-600" : "text-slate-800")">
+                @stats.UnresolvedCount
+            </div>
+            <div class="text-[11px] text-slate-400 mt-0.5">Need attention</div>
+        </button>
+
+        <!-- Critical & Fatal -->
+        <button type="button"
+                @onclick="@(() => SetFilterMinLevel(ErrorCriticalityLevel.Critical))"
+                class="text-left rounded-lg border p-3 transition-all @(filterMinLevel == ErrorCriticalityLevel.Critical ? "border-rose-500 bg-rose-50/70 shadow-xs" : "border-slate-200 bg-white hover:border-slate-300 shadow-2xs")">
+            <div class="flex items-center justify-between text-xs font-medium text-rose-700">
+                <span>Critical / Fatal</span>
+                <i class="bi bi-exclamation-octagon-fill text-rose-500"></i>
+            </div>
+            <div class="mt-1 text-2xl font-bold text-rose-600">
+                @(stats.CriticalCount + stats.FatalCount)
+            </div>
+            <div class="text-[11px] text-rose-500 mt-0.5">High priority</div>
+        </button>
+
+        <!-- Standard Errors -->
+        <button type="button"
+                @onclick="@(() => SetFilterMinLevel(ErrorCriticalityLevel.Error))"
+                class="text-left rounded-lg border p-3 transition-all @(filterMinLevel == ErrorCriticalityLevel.Error ? "border-amber-500 bg-amber-50/70 shadow-xs" : "border-slate-200 bg-white hover:border-slate-300 shadow-2xs")">
+            <div class="flex items-center justify-between text-xs font-medium text-amber-700">
+                <span>Standard Errors</span>
+                <i class="bi bi-exclamation-triangle-fill text-amber-500"></i>
+            </div>
+            <div class="mt-1 text-2xl font-bold text-amber-600">
+                @stats.ErrorCount
+            </div>
+            <div class="text-[11px] text-amber-600 mt-0.5">Application faults</div>
+        </button>
+
+        <!-- Warnings -->
+        <button type="button"
+                @onclick="@(() => SetFilterMinLevel(ErrorCriticalityLevel.Warning))"
+                class="text-left rounded-lg border p-3 transition-all @(filterMinLevel == ErrorCriticalityLevel.Warning ? "border-yellow-500 bg-yellow-50/70 shadow-xs" : "border-slate-200 bg-white hover:border-slate-300 shadow-2xs")">
+            <div class="flex items-center justify-between text-xs font-medium text-slate-600">
+                <span>Warnings</span>
+                <i class="bi bi-info-circle-fill text-yellow-500"></i>
+            </div>
+            <div class="mt-1 text-2xl font-bold text-slate-700">
+                @stats.WarningCount
+            </div>
+            <div class="text-[11px] text-slate-400 mt-0.5">Degraded operations</div>
+        </button>
+
+        <!-- Resolved -->
+        <button type="button"
+                @onclick="@(() => SetFilterResolved(true))"
+                class="text-left rounded-lg border p-3 transition-all @(filterResolved == true ? "border-emerald-500 bg-emerald-50/70 shadow-xs" : "border-slate-200 bg-white hover:border-slate-300 shadow-2xs")">
+            <div class="flex items-center justify-between text-xs font-medium text-emerald-700">
+                <span>Resolved</span>
+                <i class="bi bi-check-circle-fill text-emerald-500"></i>
+            </div>
+            <div class="mt-1 text-2xl font-bold text-emerald-600">
+                @stats.ResolvedCount
+            </div>
+            <div class="text-[11px] text-emerald-600 mt-0.5">Verified fixes</div>
+        </button>
+    </div>
+
+    <!-- Filter & Action Controls -->
+    <div class="bg-white rounded-lg border border-slate-200 p-3 shadow-2xs">
+        <div class="flex flex-col lg:flex-row gap-2.5 items-stretch lg:items-center justify-between">
+            <!-- Search & Filters -->
+            <div class="flex flex-wrap items-center gap-2 flex-1">
+                <!-- Search input -->
+                <div class="relative min-w-[14rem] flex-1 max-w-md">
+                    <span class="absolute inset-y-0 left-0 flex items-center pl-2.5 text-slate-400 text-xs">
+                        <i class="bi bi-search"></i>
+                    </span>
+                    <input type="text"
+                           value="@searchText"
+                           @oninput="@((e) => OnSearchInput(e.Value?.ToString()))"
+                           placeholder="Search message, file, line, user, IP, path..."
+                           class="w-full rounded border border-slate-200 bg-slate-50/50 pl-8 pr-3 py-1.5 text-xs text-slate-800 focus:bg-white focus:border-amber-500 focus:outline-hidden transition" />
+                </div>
+
+                <!-- Source Project Selector -->
+                <select value="@selectedSource"
+                        @onchange="@((e) => OnSourceChanged(e.Value?.ToString()))"
+                        class="rounded border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-700 focus:border-amber-500 focus:outline-hidden">
+                    <option value="">All Projects</option>
+                    <option value="HRM.Api">HRM.Api</option>
+                    <option value="HRM.UI">HRM.UI</option>
+                    <option value="HRM.Payroll.Worker">HRM.Payroll.Worker</option>
+                </select>
+
+                <!-- Severity Level Selector -->
+                <select value="@(filterMinLevel?.ToString() ?? "")"
+                        @onchange="@((e) => OnLevelChanged(e.Value?.ToString()))"
+                        class="rounded border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-700 focus:border-amber-500 focus:outline-hidden">
+                    <option value="">All Severities</option>
+                    <option value="Fatal">Fatal Only</option>
+                    <option value="Critical">Critical &amp; Above</option>
+                    <option value="Error">Error &amp; Above</option>
+                    <option value="Warning">Warning &amp; Above</option>
+                </select>
+
+                <!-- Resolution State Selector -->
+                <select value="@(filterResolved?.ToString() ?? "")"
+                        @onchange="@((e) => OnResolvedChanged(e.Value?.ToString()))"
+                        class="rounded border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-700 focus:border-amber-500 focus:outline-hidden">
+                    <option value="">All Statuses</option>
+                    <option value="false">Unresolved Only</option>
+                    <option value="true">Resolved Only</option>
+                </select>
+
+                @if (!string.IsNullOrWhiteSpace(searchText) || !string.IsNullOrWhiteSpace(selectedSource) || filterMinLevel.HasValue || filterResolved.HasValue)
+                {
+                    <button type="button"
+                            @onclick="@ResetFilters"
+                            class="rounded border border-slate-200 bg-slate-100 hover:bg-slate-200 px-2 py-1 text-xs text-slate-600 transition">
+                        Reset Filters
+                    </button>
+                }
+            </div>
+
+            <!-- Simulation & Quick Actions -->
+            <div class="flex items-center gap-2">
+                <!-- Test Error Trigger -->
+                <div class="relative">
+                    <button type="button"
+                            @onclick="@(() => isSimulateMenuOpen = !isSimulateMenuOpen)"
+                            class="inline-flex items-center gap-1.5 rounded border border-amber-300 bg-amber-50 hover:bg-amber-100 px-2.5 py-1.5 text-xs font-semibold text-amber-900 transition shadow-2xs">
+                        <i class="bi bi-bug"></i>
+                        <span>Simulate Test Error</span>
+                        <i class="bi bi-chevron-down text-[10px]"></i>
+                    </button>
+
+                    @if (isSimulateMenuOpen)
+                    {
+                        <div class="absolute right-0 mt-1 w-60 rounded-md border border-slate-200 bg-white py-1 shadow-lg z-30">
+                            <div class="px-3 py-1 text-[11px] font-bold text-slate-400 uppercase tracking-wider">Test Diagnostics</div>
+                            <button type="button"
+                                    @onclick="@(() => SimulateError("nullreference"))"
+                                    class="w-full text-left px-3 py-1.5 text-xs text-slate-700 hover:bg-amber-50 hover:text-amber-900 flex items-center justify-between">
+                                <span>NullReferenceException</span>
+                                <span class="text-[10px] text-slate-400 font-mono">Line #</span>
+                            </button>
+                            <button type="button"
+                                    @onclick="@(() => SimulateError("sqlkey"))"
+                                    class="w-full text-left px-3 py-1.5 text-xs text-slate-700 hover:bg-amber-50 hover:text-amber-900 flex items-center justify-between">
+                                <span>Unique Key SQL Error</span>
+                                <span class="text-[10px] text-slate-400 font-mono">SQL 2627</span>
+                            </button>
+                            <button type="button"
+                                    @onclick="@(() => SimulateError("concurrency"))"
+                                    class="w-full text-left px-3 py-1.5 text-xs text-slate-700 hover:bg-amber-50 hover:text-amber-900 flex items-center justify-between">
+                                <span>DbUpdateConcurrency</span>
+                                <span class="text-[10px] text-slate-400 font-mono">Conflict</span>
+                            </button>
+                            <button type="button"
+                                    @onclick="@(() => SimulateError("argumentnull"))"
+                                    class="w-full text-left px-3 py-1.5 text-xs text-slate-700 hover:bg-amber-50 hover:text-amber-900 flex items-center justify-between">
+                                <span>ArgumentNullException</span>
+                                <span class="text-[10px] text-slate-400 font-mono">Params</span>
+                            </button>
+                            <button type="button"
+                                    @onclick="@(() => SimulateError("http"))"
+                                    class="w-full text-left px-3 py-1.5 text-xs text-slate-700 hover:bg-amber-50 hover:text-amber-900 flex items-center justify-between">
+                                <span>HttpRequestException</span>
+                                <span class="text-[10px] text-slate-400 font-mono">Network</span>
+                            </button>
+                        </div>
+                    }
+                </div>
+
+                <!-- Refresh -->
+                <button type="button"
+                        @onclick="@LoadDataAsync"
+                        disabled="@isLoading"
+                        class="inline-flex items-center gap-1.5 rounded border border-slate-200 bg-white hover:bg-slate-50 px-2.5 py-1.5 text-xs font-medium text-slate-700 transition shadow-2xs">
+                    <i class="bi bi-arrow-clockwise @(isLoading ? "animate-spin" : "")"></i>
+                    <span>Refresh</span>
+                </button>
+
+                <!-- Clear Resolved -->
+                @if (stats.ResolvedCount > 0)
+                {
+                    <button type="button"
+                            @onclick="@ClearResolvedAsync"
+                            class="inline-flex items-center gap-1 rounded border border-slate-200 bg-white hover:bg-rose-50 hover:text-rose-700 px-2.5 py-1.5 text-xs font-medium text-slate-600 transition shadow-2xs">
+                        <i class="bi bi-trash text-slate-400"></i>
+                        <span>Clear Resolved</span>
+                    </button>
+                }
+            </div>
+        </div>
+    </div>
+
+    <!-- Error Log Table -->
+    <div class="bg-white rounded-lg border border-slate-200 overflow-hidden shadow-2xs">
+        <div class="px-4 py-3 border-b border-slate-200 bg-slate-50/60 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+                <span class="font-semibold text-xs text-slate-800">Recorded Application Errors</span>
+                <span class="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-bold text-slate-700">@filteredErrors.Count</span>
+            </div>
+            <div class="text-[11px] text-slate-400">
+                Detailed stack trace, exact line numbers, and prescriptive fix suggestions
+            </div>
+        </div>
+
+        @if (isLoading)
+        {
+            <div class="p-8 text-center text-slate-400 text-xs">
+                <i class="bi bi-arrow-clockwise animate-spin text-lg mb-2 block text-amber-500"></i>
+                Loading error logs...
+            </div>
+        }
+        else if (filteredErrors.Count == 0)
+        {
+            <div class="p-10 text-center text-slate-400 text-xs">
+                <i class="bi bi-shield-check text-3xl text-emerald-500 mb-2 block"></i>
+                <div class="font-semibold text-slate-700 text-sm">No Errors Found</div>
+                <div class="mt-1">All monitored HRM projects are healthy or no errors match your filter criteria.</div>
+            </div>
+        }
+        else
+        {
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse text-xs">
+                    <thead>
+                        <tr class="border-b border-slate-200 bg-slate-50 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                            <th class="py-2.5 px-3">Severity</th>
+                            <th class="py-2.5 px-3">Time &amp; Source</th>
+                            <th class="py-2.5 px-3">Location &amp; Line #</th>
+                            <th class="py-2.5 px-3">What Happened</th>
+                            <th class="py-2.5 px-3">User &amp; Remote IP</th>
+                            <th class="py-2.5 px-3">Route / Endpoint</th>
+                            <th class="py-2.5 px-3 text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100">
+                        @foreach (var entry in filteredErrors)
+                        {
+                            <tr class="hover:bg-slate-50/90 transition-colors @(entry.IsResolved ? "opacity-60 bg-slate-50/30" : "")">
+                                <!-- Severity -->
+                                <td class="py-3 px-3 align-top">
+                                    <span class="inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider @GetSeverityBadgeClass(entry.CriticalityLevel)">
+                                        <span class="h-1.5 w-1.5 rounded-full @GetSeverityDotClass(entry.CriticalityLevel)"></span>
+                                        @entry.CriticalityLevel
+                                    </span>
+                                    @if (entry.IsResolved)
+                                    {
+                                        <div class="mt-1">
+                                            <span class="inline-flex items-center gap-1 text-[10px] font-medium text-emerald-700 bg-emerald-50 rounded px-1.5 py-0.2">
+                                                <i class="bi bi-check"></i> Resolved
+                                            </span>
+                                        </div>
+                                    }
+                                </td>
+
+                                <!-- Time & Source -->
+                                <td class="py-3 px-3 align-top whitespace-nowrap">
+                                    <div class="font-semibold text-slate-800">
+                                        @entry.TimestampLocal.ToString("HH:mm:ss")
+                                    </div>
+                                    <div class="text-[10px] text-slate-400">
+                                        @entry.TimestampLocal.ToString("yyyy-MM-dd")
+                                    </div>
+                                    <div class="mt-1">
+                                        <span class="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] font-semibold @GetSourceColorClass(entry.ApplicationSource)">
+                                            @entry.ApplicationSource
+                                        </span>
+                                    </div>
+                                </td>
+
+                                <!-- Error Location with Line Number -->
+                                <td class="py-3 px-3 align-top min-w-[14rem]">
+                                    @if (entry.Location != null && !string.IsNullOrWhiteSpace(entry.Location.FileName))
+                                    {
+                                        <div class="inline-flex items-center gap-1 rounded bg-amber-50 border border-amber-200 px-2 py-0.5 font-mono text-[11px] font-bold text-amber-900 shadow-2xs">
+                                            <i class="bi bi-file-earmark-code text-amber-600"></i>
+                                            <span>@entry.Location.FileName</span>
+                                            @if (entry.Location.LineNumber > 0)
+                                            {
+                                                <span class="rounded bg-amber-600 text-white px-1 py-0.2 text-[10px]">:@entry.Location.LineNumber</span>
+                                            }
+                                        </div>
+                                        @if (!string.IsNullOrWhiteSpace(entry.Location.MethodName))
+                                        {
+                                            <div class="text-[11px] text-slate-500 font-mono mt-1 truncate max-w-xs" title="@entry.Location.MethodName">
+                                                in @(entry.Location.MethodName)()
+                                            </div>
+                                        }
+                                    }
+                                    else
+                                    {
+                                        <span class="font-mono text-[11px] text-slate-400 italic">No line info</span>
+                                    }
+                                </td>
+
+                                <!-- What Happened (Exception & Message) -->
+                                <td class="py-3 px-3 align-top max-w-md">
+                                    <div class="font-semibold text-slate-800 text-[11px] truncate" title="@entry.ExceptionType">
+                                        @GetShortExceptionName(entry.ExceptionType)
+                                    </div>
+                                    <div class="text-slate-600 line-clamp-2 mt-0.5 text-[11px]" title="@entry.ErrorMessage">
+                                        @entry.ErrorMessage
+                                    </div>
+                                    @if (!string.IsNullOrWhiteSpace(entry.Fix?.RecommendedAction))
+                                    {
+                                        <div class="mt-1.5 flex items-center gap-1 text-[10px] font-medium text-amber-700 bg-amber-50/80 rounded px-1.5 py-0.5 border border-amber-100">
+                                            <i class="bi bi-lightbulb-fill text-amber-500"></i>
+                                            <span class="truncate">Fix: @entry.Fix.RecommendedAction</span>
+                                        </div>
+                                    }
+                                </td>
+
+                                <!-- User & Remote IP -->
+                                <td class="py-3 px-3 align-top whitespace-nowrap">
+                                    <div class="font-medium text-slate-800">
+                                        @(string.IsNullOrWhiteSpace(entry.Username) ? "Anonymous" : entry.Username)
+                                    </div>
+                                    <div class="font-mono text-[10px] text-slate-500 mt-0.5">
+                                        @(string.IsNullOrWhiteSpace(entry.RemoteIp) ? "Local / Worker" : entry.RemoteIp)
+                                    </div>
+                                </td>
+
+                                <!-- Route / Endpoint -->
+                                <td class="py-3 px-3 align-top max-w-xs">
+                                    @if (!string.IsNullOrWhiteSpace(entry.PageLocation))
+                                    {
+                                        <div class="font-mono text-[11px] text-blue-600 truncate" title="@entry.PageLocation">
+                                            @if (!string.IsNullOrWhiteSpace(entry.HttpMethod))
+                                            {
+                                                <span class="font-bold text-slate-500 mr-1 text-[10px]">@entry.HttpMethod</span>
+                                            }
+                                            @entry.PageLocation
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-slate-400 text-[11px]">N/A</span>
+                                    }
+                                    @if (entry.StatusCode.HasValue)
+                                    {
+                                        <div class="mt-0.5">
+                                            <span class="rounded bg-rose-50 text-rose-700 border border-rose-200 px-1.5 py-0.2 text-[9px] font-bold">
+                                                HTTP @entry.StatusCode
+                                            </span>
+                                        </div>
+                                    }
+                                </td>
+
+                                <!-- Actions -->
+                                <td class="py-3 px-3 align-top text-right whitespace-nowrap">
+                                    <div class="inline-flex items-center gap-1.5">
+                                        <button type="button"
+                                                @onclick="@(() => OpenDetailModal(entry))"
+                                                class="inline-flex items-center gap-1 rounded border border-amber-300 bg-amber-50 hover:bg-amber-100 px-2 py-1 text-[11px] font-semibold text-amber-900 transition shadow-2xs">
+                                            <i class="bi bi-tools text-amber-600"></i>
+                                            <span>Inspect &amp; Fix</span>
+                                        </button>
+
+                                        @if (!entry.IsResolved)
+                                        {
+                                            <button type="button"
+                                                    @onclick="@(() => ToggleResolveAsync(entry))"
+                                                    title="Mark as resolved"
+                                                    class="inline-flex items-center rounded border border-slate-200 bg-white hover:bg-emerald-50 hover:text-emerald-700 px-1.5 py-1 text-[11px] text-slate-600 transition shadow-2xs">
+                                                <i class="bi bi-check2"></i>
+                                            </button>
+                                        }
+                                        else
+                                        {
+                                            <button type="button"
+                                                    @onclick="@(() => ToggleResolveAsync(entry))"
+                                                    title="Reopen error"
+                                                    class="inline-flex items-center rounded border border-slate-200 bg-white hover:bg-slate-100 px-1.5 py-1 text-[11px] text-slate-400 transition shadow-2xs">
+                                                <i class="bi bi-arrow-counterclockwise"></i>
+                                            </button>
+                                        }
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</div>
+
+<!-- Modal: Inspect & Fix Diagnostics -->
+@if (selectedEntry != null)
+{
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto">
+        <div class="relative w-full max-w-4xl rounded-xl bg-white border border-slate-200 shadow-2xl overflow-hidden my-6">
+            <!-- Modal Header -->
+            <div class="bg-gradient-to-r from-amber-900 via-amber-800 to-amber-700 px-5 py-4 text-white flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <span class="rounded bg-amber-950/60 p-2 text-amber-300">
+                        <i class="bi bi-bug-fill text-lg"></i>
+                    </span>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <h3 class="text-sm font-bold tracking-tight">@GetShortExceptionName(selectedEntry.ExceptionType)</h3>
+                            <span class="rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider @GetSeverityBadgeClass(selectedEntry.CriticalityLevel)">
+                                @selectedEntry.CriticalityLevel
+                            </span>
+                            @if (selectedEntry.IsResolved)
+                            {
+                                <span class="rounded bg-emerald-500 text-white px-2 py-0.5 text-[10px] font-bold">
+                                    RESOLVED
+                                </span>
+                            }
+                        </div>
+                        <div class="text-[11px] text-amber-200 mt-0.5 font-mono">
+                            ID: @selectedEntry.Id &bull; @selectedEntry.ApplicationSource &bull; @selectedEntry.TimestampLocal.ToString("yyyy-MM-dd HH:mm:ss")
+                        </div>
+                    </div>
+                </div>
+                <button type="button"
+                        @onclick="@CloseDetailModal"
+                        class="rounded-lg p-1.5 text-amber-200 hover:bg-white/10 hover:text-white transition">
+                    <i class="bi bi-x-lg text-sm"></i>
+                </button>
+            </div>
+
+            <!-- Modal Body -->
+            <div class="p-5 max-h-[75vh] overflow-y-auto space-y-4">
+                <!-- 1. Prescriptive Fix Box (What Should Be Done) -->
+                <div class="rounded-lg border-2 border-amber-300 bg-amber-50/60 p-4 shadow-xs">
+                    <div class="flex items-center gap-2 text-amber-900 font-bold text-xs uppercase tracking-wider mb-2">
+                        <i class="bi bi-wrench-adjustable-circle-fill text-amber-600 text-sm"></i>
+                        <span>How to Fix This Error (Prescriptive Guide)</span>
+                    </div>
+
+                    @if (!string.IsNullOrWhiteSpace(selectedEntry.Fix?.RootCauseSummary))
+                    {
+                        <div class="mb-3">
+                            <div class="text-[11px] font-semibold text-slate-700 mb-0.5">Root Cause Summary:</div>
+                            <div class="text-xs text-slate-800 bg-white p-2.5 rounded border border-amber-200">
+                                @selectedEntry.Fix.RootCauseSummary
+                            </div>
+                        </div>
+                    }
+
+                    @if (!string.IsNullOrWhiteSpace(selectedEntry.Fix?.RecommendedAction))
+                    {
+                        <div class="mb-3">
+                            <div class="text-[11px] font-semibold text-amber-900 mb-0.5">Actionable Remediation:</div>
+                            <div class="text-xs font-medium text-amber-900 bg-amber-100/70 p-2.5 rounded border border-amber-300">
+                                @selectedEntry.Fix.RecommendedAction
+                            </div>
+                        </div>
+                    }
+
+                    @if (selectedEntry.Fix?.DiagnosticSteps != null && selectedEntry.Fix.DiagnosticSteps.Count > 0)
+                    {
+                        <div class="mb-3">
+                            <div class="text-[11px] font-semibold text-slate-700 mb-1">Diagnostic Steps:</div>
+                            <ol class="list-decimal list-inside space-y-1 text-xs text-slate-700 bg-white p-3 rounded border border-amber-200">
+                                @foreach (var step in selectedEntry.Fix.DiagnosticSteps)
+                                {
+                                    <li class="leading-relaxed">@step</li>
+                                }
+                            </ol>
+                        </div>
+                    }
+
+                    @if (!string.IsNullOrWhiteSpace(selectedEntry.Fix?.SuggestedCodePattern))
+                    {
+                        <div>
+                            <div class="text-[11px] font-semibold text-slate-700 mb-1">Suggested Code Pattern / Fix:</div>
+                            <pre class="rounded bg-slate-900 text-amber-300 p-3 font-mono text-[11px] overflow-x-auto leading-relaxed border border-slate-700">@selectedEntry.Fix.SuggestedCodePattern</pre>
+                        </div>
+                    }
+                </div>
+
+                <!-- 2. Detail Error Location (File, Line Number, Method) -->
+                <div class="rounded-lg border border-slate-200 bg-slate-50 p-3.5">
+                    <div class="flex items-center gap-2 text-slate-800 font-bold text-xs uppercase tracking-wider mb-2.5">
+                        <i class="bi bi-geo-alt-fill text-amber-600"></i>
+                        <span>Exact Code Location</span>
+                    </div>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                        <div class="bg-white p-2.5 rounded border border-slate-200">
+                            <div class="text-[10px] text-slate-400 font-semibold uppercase">Source File</div>
+                            <div class="font-mono font-bold text-slate-800 truncate" title="@selectedEntry.Location?.FilePath">
+                                @(string.IsNullOrWhiteSpace(selectedEntry.Location?.FileName) ? "N/A" : selectedEntry.Location.FileName)
+                            </div>
+                        </div>
+                        <div class="bg-amber-50 p-2.5 rounded border border-amber-300">
+                            <div class="text-[10px] text-amber-700 font-semibold uppercase">Exact Line Number</div>
+                            <div class="font-mono font-extrabold text-amber-900 text-sm">
+                                @(selectedEntry.Location?.LineNumber > 0 ? $"Line {selectedEntry.Location.LineNumber}" : "Symbols not loaded")
+                            </div>
+                        </div>
+                        <div class="bg-white p-2.5 rounded border border-slate-200">
+                            <div class="text-[10px] text-slate-400 font-semibold uppercase">Method</div>
+                            <div class="font-mono font-bold text-slate-800 truncate" title="@selectedEntry.Location?.MethodName">
+                                @(string.IsNullOrWhiteSpace(selectedEntry.Location?.MethodName) ? "N/A" : $"{selectedEntry.Location.MethodName}()")
+                            </div>
+                        </div>
+                        <div class="bg-white p-2.5 rounded border border-slate-200">
+                            <div class="text-[10px] text-slate-400 font-semibold uppercase">Class / Namespace</div>
+                            <div class="font-mono font-bold text-slate-800 truncate" title="@selectedEntry.Location?.Namespace">
+                                @(string.IsNullOrWhiteSpace(selectedEntry.Location?.ClassName) ? "N/A" : selectedEntry.Location.ClassName)
+                            </div>
+                        </div>
+                    </div>
+                    @if (!string.IsNullOrWhiteSpace(selectedEntry.Location?.FilePath))
+                    {
+                        <div class="mt-2 text-[11px] text-slate-500 font-mono truncate bg-white px-2 py-1 rounded border border-slate-200">
+                            <span class="text-slate-400">Path:</span> @selectedEntry.Location.FilePath
+                        </div>
+                    }
+                </div>
+
+                <!-- 3. What Happened (Full Error & Inner Exception) -->
+                <div class="rounded-lg border border-slate-200 bg-white p-3.5">
+                    <div class="flex items-center gap-2 text-slate-800 font-bold text-xs uppercase tracking-wider mb-2">
+                        <i class="bi bi-card-text text-amber-600"></i>
+                        <span>What Happened (Exception Message)</span>
+                    </div>
+                    <div class="p-3 bg-rose-50/50 rounded border border-rose-200 text-rose-900 font-mono text-xs whitespace-pre-wrap leading-relaxed">
+                        <div class="font-bold mb-1">@selectedEntry.ExceptionType:</div>
+                        @selectedEntry.ErrorMessage
+                    </div>
+
+                    @if (!string.IsNullOrWhiteSpace(selectedEntry.InnerErrorMessage))
+                    {
+                        <div class="mt-3 p-3 bg-slate-50 rounded border border-slate-200 text-slate-700 font-mono text-[11px] whitespace-pre-wrap">
+                            <div class="font-bold text-slate-900 mb-1">Inner Exception (@selectedEntry.InnerExceptionType):</div>
+                            @selectedEntry.InnerErrorMessage
+                        </div>
+                    }
+                </div>
+
+                <!-- 4. Stack Trace -->
+                @if (!string.IsNullOrWhiteSpace(selectedEntry.StackTrace))
+                {
+                    <div class="rounded-lg border border-slate-200 bg-white p-3.5">
+                        <div class="flex items-center justify-between text-slate-800 font-bold text-xs uppercase tracking-wider mb-2">
+                            <div class="flex items-center gap-2">
+                                <i class="bi bi-code-slash text-amber-600"></i>
+                                <span>Stack Trace (Application Frames Highlighted)</span>
+                            </div>
+                            <button type="button"
+                                    @onclick="@(() => CopyToClipboard(selectedEntry.StackTrace))"
+                                    class="text-[11px] font-medium text-amber-700 hover:text-amber-900 underline">
+                                Copy Stack Trace
+                            </button>
+                        </div>
+                        <pre class="p-3 bg-slate-950 text-slate-300 rounded font-mono text-[11px] max-h-56 overflow-y-auto leading-relaxed border border-slate-800">@FormatStackTrace(selectedEntry.StackTrace)</pre>
+                    </div>
+                }
+
+                <!-- 5. Request & Environment Context Grid -->
+                <div class="rounded-lg border border-slate-200 bg-slate-50 p-3.5">
+                    <div class="flex items-center gap-2 text-slate-800 font-bold text-xs uppercase tracking-wider mb-2.5">
+                        <i class="bi bi-info-circle text-amber-600"></i>
+                        <span>Request, Identity &amp; System Metadata</span>
+                    </div>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-2 text-[11px]">
+                        <div class="bg-white p-2 rounded border border-slate-200">
+                            <span class="text-slate-400 block font-semibold">User:</span>
+                            <span class="font-semibold text-slate-800">@(string.IsNullOrWhiteSpace(selectedEntry.Username) ? "Anonymous" : selectedEntry.Username)</span>
+                        </div>
+                        <div class="bg-white p-2 rounded border border-slate-200">
+                            <span class="text-slate-400 block font-semibold">Remote IP:</span>
+                            <span class="font-mono text-slate-800">@(string.IsNullOrWhiteSpace(selectedEntry.RemoteIp) ? "127.0.0.1" : selectedEntry.RemoteIp)</span>
+                        </div>
+                        <div class="bg-white p-2 rounded border border-slate-200">
+                            <span class="text-slate-400 block font-semibold">Endpoint / Path:</span>
+                            <span class="font-mono text-blue-600 truncate block">@(string.IsNullOrWhiteSpace(selectedEntry.PageLocation) ? "N/A" : selectedEntry.PageLocation)</span>
+                        </div>
+                        <div class="bg-white p-2 rounded border border-slate-200">
+                            <span class="text-slate-400 block font-semibold">HTTP Method:</span>
+                            <span class="font-bold text-slate-800">@(string.IsNullOrWhiteSpace(selectedEntry.HttpMethod) ? "N/A" : selectedEntry.HttpMethod)</span>
+                        </div>
+                        <div class="bg-white p-2 rounded border border-slate-200">
+                            <span class="text-slate-400 block font-semibold">Machine / Host:</span>
+                            <span class="font-mono text-slate-800">@selectedEntry.MachineName</span>
+                        </div>
+                        <div class="bg-white p-2 rounded border border-slate-200">
+                            <span class="text-slate-400 block font-semibold">Environment:</span>
+                            <span class="font-semibold text-slate-800">@selectedEntry.Environment</span>
+                        </div>
+                        <div class="bg-white p-2 rounded border border-slate-200">
+                            <span class="text-slate-400 block font-semibold">PID / Thread:</span>
+                            <span class="font-mono text-slate-800">@selectedEntry.ProcessId / @selectedEntry.ThreadId</span>
+                        </div>
+                        <div class="bg-white p-2 rounded border border-slate-200">
+                            <span class="text-slate-400 block font-semibold">Trace ID:</span>
+                            <span class="font-mono text-slate-700 truncate block" title="@selectedEntry.TraceId">@(string.IsNullOrWhiteSpace(selectedEntry.TraceId) ? "N/A" : selectedEntry.TraceId)</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 6. Resolution Status & Developer Notes -->
+                <div class="rounded-lg border border-slate-200 bg-white p-3.5">
+                    <div class="flex items-center gap-2 text-slate-800 font-bold text-xs uppercase tracking-wider mb-2">
+                        <i class="bi bi-clipboard-check text-emerald-600"></i>
+                        <span>Resolution Tracking</span>
+                    </div>
+
+                    @if (selectedEntry.IsResolved)
+                    {
+                        <div class="mb-3 p-2.5 bg-emerald-50 rounded border border-emerald-200 text-xs text-emerald-900">
+                            <div class="font-bold">Marked Resolved by @selectedEntry.ResolvedBy on @selectedEntry.ResolvedAt?.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</div>
+                            @if (!string.IsNullOrWhiteSpace(selectedEntry.ResolutionNotes))
+                            {
+                                <div class="mt-1 text-emerald-800">Notes: @selectedEntry.ResolutionNotes</div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="space-y-2">
+                            <label class="block text-xs font-semibold text-slate-700">Developer Resolution Notes:</label>
+                            <input type="text"
+                                   @bind="resolutionNoteInput"
+                                   placeholder="e.g. Added null-check in PayrollProcessor.cs line 142..."
+                                   class="w-full rounded border border-slate-200 px-3 py-1.5 text-xs text-slate-800 focus:border-amber-500 focus:outline-hidden" />
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="bg-slate-50 px-5 py-3 border-t border-slate-200 flex items-center justify-between">
+                <button type="button"
+                        @onclick="@(() => CopyFullDiagnosticJson(selectedEntry))"
+                        class="inline-flex items-center gap-1.5 rounded border border-slate-200 bg-white hover:bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700 transition shadow-2xs">
+                    <i class="bi bi-clipboard"></i>
+                    <span>Copy Full Diagnostic JSON</span>
+                </button>
+
+                <div class="flex items-center gap-2">
+                    @if (!selectedEntry.IsResolved)
+                    {
+                        <button type="button"
+                                @onclick="@(() => ResolveSelectedWithNotesAsync(selectedEntry))"
+                                class="inline-flex items-center gap-1.5 rounded border border-emerald-600 bg-emerald-600 hover:bg-emerald-700 px-3 py-1.5 text-xs font-bold text-white transition shadow-xs">
+                            <i class="bi bi-check-lg"></i>
+                            <span>Mark Resolved</span>
+                        </button>
+                    }
+                    else
+                    {
+                        <button type="button"
+                                @onclick="@(() => ReopenSelectedAsync(selectedEntry))"
+                                class="inline-flex items-center gap-1.5 rounded border border-slate-300 bg-white hover:bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-700 transition shadow-2xs">
+                            <i class="bi bi-arrow-counterclockwise"></i>
+                            <span>Reopen Error</span>
+                        </button>
+                    }
+
+                    <button type="button"
+                            @onclick="@CloseDetailModal"
+                            class="rounded border border-slate-200 bg-white hover:bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700 transition shadow-2xs">
+                        Close
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<ErrorLogEntry> allErrors = new();
+    private List<ErrorLogEntry> filteredErrors = new();
+    private ErrorStatistics stats = new();
+    private ErrorLogEntry? selectedEntry;
+
+    private bool isLoading = true;
+    private bool isSimulateMenuOpen = false;
+    private string searchText = string.Empty;
+    private string selectedSource = string.Empty;
+    private ErrorCriticalityLevel? filterMinLevel;
+    private bool? filterResolved;
+    private string resolutionNoteInput = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        isLoading = true;
+        try
+        {
+            var fetchTask = ErrorApiClient.GetRecentAsync(200);
+            var statsTask = ErrorApiClient.GetStatisticsAsync();
+
+            await Task.WhenAll(fetchTask, statsTask);
+
+            allErrors = (await fetchTask).ToList();
+            stats = await statsTask;
+            ApplyFilters();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[ErrorLogsTab] Load error: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void ApplyFilters()
+    {
+        var query = allErrors.AsEnumerable();
+
+        if (filterMinLevel.HasValue)
+        {
+            query = query.Where(e => e.CriticalityLevel >= filterMinLevel.Value);
+        }
+
+        if (filterResolved.HasValue)
+        {
+            query = query.Where(e => e.IsResolved == filterResolved.Value);
+        }
+
+        if (!string.IsNullOrWhiteSpace(selectedSource))
+        {
+            query = query.Where(e => string.Equals(e.ApplicationSource, selectedSource, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (!string.IsNullOrWhiteSpace(searchText))
+        {
+            var term = searchText.Trim();
+            query = query.Where(e =>
+                e.ErrorMessage.Contains(term, StringComparison.OrdinalIgnoreCase) ||
+                e.ExceptionType.Contains(term, StringComparison.OrdinalIgnoreCase) ||
+                (e.Location?.FileName?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (e.Location?.MethodName?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (e.Location?.LineNumber.ToString().Contains(term) ?? false) ||
+                (e.Username != null && e.Username.Contains(term, StringComparison.OrdinalIgnoreCase)) ||
+                (e.RemoteIp != null && e.RemoteIp.Contains(term, StringComparison.OrdinalIgnoreCase)) ||
+                (e.PageLocation != null && e.PageLocation.Contains(term, StringComparison.OrdinalIgnoreCase)) ||
+                (e.ApplicationSource != null && e.ApplicationSource.Contains(term, StringComparison.OrdinalIgnoreCase)));
+        }
+
+        filteredErrors = query.OrderByDescending(e => e.TimestampUtc).ToList();
+    }
+
+    private void OnSearchInput(string? value)
+    {
+        searchText = value ?? string.Empty;
+        ApplyFilters();
+    }
+
+    private void OnSourceChanged(string? value)
+    {
+        selectedSource = value ?? string.Empty;
+        ApplyFilters();
+    }
+
+    private void OnLevelChanged(string? value)
+    {
+        if (Enum.TryParse<ErrorCriticalityLevel>(value, out var lvl))
+            filterMinLevel = lvl;
+        else
+            filterMinLevel = null;
+
+        ApplyFilters();
+    }
+
+    private void OnResolvedChanged(string? value)
+    {
+        if (bool.TryParse(value, out var b))
+            filterResolved = b;
+        else
+            filterResolved = null;
+
+        ApplyFilters();
+    }
+
+    private void SetFilterResolved(bool resolved)
+    {
+        if (filterResolved == resolved)
+            filterResolved = null;
+        else
+            filterResolved = resolved;
+
+        ApplyFilters();
+    }
+
+    private void SetFilterMinLevel(ErrorCriticalityLevel level)
+    {
+        if (filterMinLevel == level)
+            filterMinLevel = null;
+        else
+            filterMinLevel = level;
+
+        ApplyFilters();
+    }
+
+    private void ResetFilters()
+    {
+        searchText = string.Empty;
+        selectedSource = string.Empty;
+        filterMinLevel = null;
+        filterResolved = null;
+        ApplyFilters();
+    }
+
+    private void OpenDetailModal(ErrorLogEntry entry)
+    {
+        selectedEntry = entry;
+        resolutionNoteInput = entry.ResolutionNotes ?? string.Empty;
+    }
+
+    private void CloseDetailModal()
+    {
+        selectedEntry = null;
+        resolutionNoteInput = string.Empty;
+    }
+
+    private async Task ToggleResolveAsync(ErrorLogEntry entry)
+    {
+        if (!entry.IsResolved)
+        {
+            await ErrorApiClient.MarkResolvedAsync(entry.Id, "Developer", "Resolved via Error Logs tab");
+            entry.IsResolved = true;
+            entry.ResolvedBy = "Developer";
+            entry.ResolvedAt = DateTime.UtcNow;
+        }
+        else
+        {
+            await ErrorApiClient.ReopenAsync(entry.Id);
+            entry.IsResolved = false;
+            entry.ResolvedBy = null;
+            entry.ResolvedAt = null;
+        }
+
+        stats = await ErrorApiClient.GetStatisticsAsync();
+        ApplyFilters();
+    }
+
+    private async Task ResolveSelectedWithNotesAsync(ErrorLogEntry entry)
+    {
+        await ErrorApiClient.MarkResolvedAsync(entry.Id, "Developer", resolutionNoteInput);
+        entry.IsResolved = true;
+        entry.ResolvedBy = "Developer";
+        entry.ResolvedAt = DateTime.UtcNow;
+        entry.ResolutionNotes = resolutionNoteInput;
+
+        stats = await ErrorApiClient.GetStatisticsAsync();
+        ApplyFilters();
+    }
+
+    private async Task ReopenSelectedAsync(ErrorLogEntry entry)
+    {
+        await ErrorApiClient.ReopenAsync(entry.Id);
+        entry.IsResolved = false;
+        entry.ResolvedBy = null;
+        entry.ResolvedAt = null;
+
+        stats = await ErrorApiClient.GetStatisticsAsync();
+        ApplyFilters();
+    }
+
+    private async Task ClearResolvedAsync()
+    {
+        await ErrorApiClient.ClearResolvedAsync();
+        await LoadDataAsync();
+    }
+
+    private async Task SimulateError(string type)
+    {
+        isSimulateMenuOpen = false;
+        isLoading = true;
+        try
+        {
+            var simulated = await ErrorApiClient.SimulateErrorAsync(type);
+            if (simulated != null)
+            {
+                allErrors.Insert(0, simulated);
+                stats = await ErrorApiClient.GetStatisticsAsync();
+                ApplyFilters();
+                selectedEntry = simulated; // Open inspector immediately so user sees results!
+            }
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task CopyToClipboard(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return;
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", text);
+        }
+        catch { }
+    }
+
+    private async Task CopyFullDiagnosticJson(ErrorLogEntry entry)
+    {
+        try
+        {
+            var json = System.Text.Json.JsonSerializer.Serialize(entry, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+            await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", json);
+        }
+        catch { }
+    }
+
+    private static string GetShortExceptionName(string? fullName)
+    {
+        if (string.IsNullOrWhiteSpace(fullName)) return "Exception";
+        var parts = fullName.Split('.');
+        return parts[^1];
+    }
+
+    private static string FormatStackTrace(string stackTrace)
+    {
+        return stackTrace;
+    }
+
+    private static string GetSeverityBadgeClass(ErrorCriticalityLevel level)
+    {
+        return level switch
+        {
+            ErrorCriticalityLevel.Fatal => "bg-red-900 text-white",
+            ErrorCriticalityLevel.Critical => "bg-rose-100 text-rose-800 border border-rose-300",
+            ErrorCriticalityLevel.Error => "bg-amber-100 text-amber-900 border border-amber-300",
+            ErrorCriticalityLevel.Warning => "bg-yellow-100 text-yellow-800 border border-yellow-300",
+            _ => "bg-slate-100 text-slate-700"
+        };
+    }
+
+    private static string GetSeverityDotClass(ErrorCriticalityLevel level)
+    {
+        return level switch
+        {
+            ErrorCriticalityLevel.Fatal => "bg-red-400 animate-pulse",
+            ErrorCriticalityLevel.Critical => "bg-rose-500",
+            ErrorCriticalityLevel.Error => "bg-amber-500",
+            ErrorCriticalityLevel.Warning => "bg-yellow-500",
+            _ => "bg-slate-400"
+        };
+    }
+
+    private static string GetSourceColorClass(string? source)
+    {
+        return (source?.ToLowerInvariant()) switch
+        {
+            "hrm.api" => "text-blue-700 bg-blue-50 border border-blue-200",
+            "hrm.ui" => "text-purple-700 bg-purple-50 border border-purple-200",
+            "hrm.payroll.worker" => "text-emerald-700 bg-emerald-50 border border-emerald-200",
+            _ => "text-slate-700 bg-slate-100"
+        };
+    }
+}

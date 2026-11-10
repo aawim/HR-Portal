@@ -37,6 +37,11 @@ public static class ApiClientRegistration
         services.AddScoped<HRM.Services.Stores.LeaveStore>();
         services.AddScoped<HRM.Helpers.NavigationTrail>(p => new(p.GetRequiredService<Microsoft.AspNetCore.Components.NavigationManager>().Uri));
         services.AddScoped<HRM.Services.PortalContext>();
+        services.AddScoped<HRM.UI.Services.Diagnostics.IErrorLogApiClient>(provider =>
+            new HRM.UI.Services.Diagnostics.ErrorLogApiClient(
+                provider.GetRequiredService<IHttpClientFactory>().CreateClient("backend"),
+                provider.GetService<HRM.ErrorLogs.Services.IErrorLogService>(),
+                provider.GetService<ILogger<HRM.UI.Services.Diagnostics.ErrorLogApiClient>>()));
         services.AddScoped<HRM.UI.Services.Budget.BudgetApiClient>(provider =>
         {
             var origins = provider.GetRequiredService<BackendOrigins>();
