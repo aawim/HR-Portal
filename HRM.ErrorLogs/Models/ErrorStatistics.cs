@@ -8,6 +8,7 @@ public sealed class ErrorStatistics
     public int TotalErrors { get; set; }
     public int UnresolvedCount { get; set; }
     public int ResolvedCount { get; set; }
+    public int SoftDeletedCount { get; set; }
     public int FatalCount { get; set; }
     public int CriticalCount { get; set; }
     public int ErrorCount { get; set; }

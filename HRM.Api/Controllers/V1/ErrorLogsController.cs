@@ -13,9 +13,11 @@ public sealed class ErrorLogsController(IErrorLogService errorLogService) : HrmA
     public async Task<ActionResult<IReadOnlyList<ErrorLogEntry>>> GetRecent(
         [FromQuery] int count = 100,
         [FromQuery] ErrorCriticalityLevel? minLevel = null,
-        [FromQuery] string? search = null)
+        [FromQuery] string? search = null,
+        [FromQuery] bool includeDeleted = false,
+        [FromQuery] bool onlyDeleted = false)
     {
-        var errors = await errorLogService.GetRecentErrorsAsync(count, minLevel, search);
+        var errors = await errorLogService.GetRecentErrorsAsync(count, minLevel, search, includeDeleted, onlyDeleted);
         return Ok(errors);
     }
 
@@ -56,10 +58,28 @@ public sealed class ErrorLogsController(IErrorLogService errorLogService) : HrmA
         return Ok(true);
     }
 
+    [HttpDelete("{id:guid}")]
+    public async Task<ActionResult<bool>> SoftDelete(Guid id)
+    {
+        var deletedBy = User?.Identity?.Name ?? "Developer";
+        var success = await errorLogService.SoftDeleteAsync(id, deletedBy);
+        if (!success) return NotFound();
+        return Ok(true);
+    }
+
+    [HttpPost("{id:guid}/restore")]
+    public async Task<ActionResult<bool>> Restore(Guid id)
+    {
+        var success = await errorLogService.RestoreAsync(id);
+        if (!success) return NotFound();
+        return Ok(true);
+    }
+
     [HttpDelete("resolved")]
     public async Task<ActionResult<int>> ClearResolved()
     {
-        var count = await errorLogService.ClearResolvedAsync();
+        var deletedBy = User?.Identity?.Name ?? "Developer";
+        var count = await errorLogService.SoftDeleteResolvedAsync(deletedBy);
         return Ok(count);
     }
 

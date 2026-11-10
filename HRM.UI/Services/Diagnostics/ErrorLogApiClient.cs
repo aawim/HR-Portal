@@ -24,13 +24,17 @@ public sealed class ErrorLogApiClient : IErrorLogApiClient
     public async Task<IReadOnlyList<ErrorLogEntry>> GetRecentAsync(
         int count = 100,
         ErrorCriticalityLevel? minLevel = null,
-        string? search = null)
+        string? search = null,
+        bool includeDeleted = false,
+        bool onlyDeleted = false)
     {
         try
         {
             var url = $"/api/v1/error-logs?count={count}";
             if (minLevel.HasValue) url += $"&minLevel={(int)minLevel.Value}";
             if (!string.IsNullOrWhiteSpace(search)) url += $"&search={Uri.EscapeDataString(search)}";
+            if (includeDeleted) url += "&includeDeleted=true";
+            if (onlyDeleted) url += "&onlyDeleted=true";
 
             var response = await _client.GetFromJsonAsync<List<ErrorLogEntry>>(url);
             if (response != null)
@@ -43,7 +47,7 @@ public sealed class ErrorLogApiClient : IErrorLogApiClient
 
         if (_localService != null)
         {
-            return await _localService.GetRecentErrorsAsync(count, minLevel, search);
+            return await _localService.GetRecentErrorsAsync(count, minLevel, search, includeDeleted, onlyDeleted);
         }
 
         return Array.Empty<ErrorLogEntry>();
@@ -131,6 +135,48 @@ public sealed class ErrorLogApiClient : IErrorLogApiClient
         if (_localService != null)
         {
             return await _localService.ReopenAsync(id);
+        }
+
+        return false;
+    }
+
+    public async Task<bool> SoftDeleteAsync(Guid id, string deletedBy = "Developer")
+    {
+        try
+        {
+            var response = await _client.DeleteAsync($"/api/v1/error-logs/{id}");
+            if (response.IsSuccessStatusCode)
+                return true;
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogDebug(ex, "ErrorLogApiClient: Failed to soft-delete error {Id} via API, trying local service.", id);
+        }
+
+        if (_localService != null)
+        {
+            return await _localService.SoftDeleteAsync(id, deletedBy);
+        }
+
+        return false;
+    }
+
+    public async Task<bool> RestoreAsync(Guid id)
+    {
+        try
+        {
+            var response = await _client.PostAsync($"/api/v1/error-logs/{id}/restore", null);
+            if (response.IsSuccessStatusCode)
+                return true;
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogDebug(ex, "ErrorLogApiClient: Failed to restore error {Id} via API, trying local service.", id);
+        }
+
+        if (_localService != null)
+        {
+            return await _localService.RestoreAsync(id);
         }
 
         return false;

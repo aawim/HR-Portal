@@ -55,4 +55,9 @@ public sealed class ErrorLogEntry
     public string? ResolvedBy { get; set; }
     public DateTime? ResolvedAt { get; set; }
     public string? ResolutionNotes { get; set; }
+
+    // Soft Deletion Tracking (Never physically removed from database)
+    public bool IsDeleted { get; set; }
+    public string? DeletedBy { get; set; }
+    public DateTime? DeletedAt { get; set; }
 }

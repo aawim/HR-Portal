@@ -73,7 +73,8 @@ INSERT INTO [dbo].[ERR_ErrorLogs] (
     [FileName], [FilePath], [LineNumber], [ColumnNumber], [ClassName],
     [MethodName], [Namespace], [AssemblyName], [RootCauseSummary],
     [RecommendedAction], [DiagnosticStepsJson], [SuggestedCodePattern],
-    [CustomDataJson], [IsResolved], [ResolvedBy], [ResolvedAt], [ResolutionNotes]
+    [CustomDataJson], [IsResolved], [ResolvedBy], [ResolvedAt], [ResolutionNotes],
+    [IsDeleted], [DeletedBy], [DeletedAt]
 ) VALUES (
     @Id, @TimestampUtc, @TimestampLocal, @CriticalityLevel, @ApplicationSource,
     @Environment, @MachineName, @ProcessId, @ThreadId, @TraceId,
@@ -83,7 +84,8 @@ INSERT INTO [dbo].[ERR_ErrorLogs] (
     @FileName, @FilePath, @LineNumber, @ColumnNumber, @ClassName,
     @MethodName, @Namespace, @AssemblyName, @RootCauseSummary,
     @RecommendedAction, @DiagnosticStepsJson, @SuggestedCodePattern,
-    @CustomDataJson, @IsResolved, @ResolvedBy, @ResolvedAt, @ResolutionNotes
+    @CustomDataJson, @IsResolved, @ResolvedBy, @ResolvedAt, @ResolutionNotes,
+    @IsDeleted, @DeletedBy, @DeletedAt
 );";
 
             await using var cmd = new SqlCommand(sql, conn);
@@ -127,6 +129,9 @@ INSERT INTO [dbo].[ERR_ErrorLogs] (
             cmd.Parameters.AddWithValue("@ResolvedBy", (object?)entry.ResolvedBy ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@ResolvedAt", (object?)entry.ResolvedAt ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@ResolutionNotes", (object?)entry.ResolutionNotes ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@IsDeleted", entry.IsDeleted);
+            cmd.Parameters.AddWithValue("@DeletedBy", (object?)entry.DeletedBy ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@DeletedAt", (object?)entry.DeletedAt ?? DBNull.Value);
 
             await cmd.ExecuteNonQueryAsync(cancellationToken);
         }
@@ -222,6 +227,9 @@ INSERT INTO [dbo].[ERR_ErrorLogs] (
         table.Columns.Add("ResolvedBy", typeof(string));
         table.Columns.Add("ResolvedAt", typeof(DateTime));
         table.Columns.Add("ResolutionNotes", typeof(string));
+        table.Columns.Add("IsDeleted", typeof(bool));
+        table.Columns.Add("DeletedBy", typeof(string));
+        table.Columns.Add("DeletedAt", typeof(DateTime));
         return table;
     }
 
@@ -267,9 +275,16 @@ INSERT INTO [dbo].[ERR_ErrorLogs] (
         row["ResolvedBy"] = (object?)entry.ResolvedBy ?? DBNull.Value;
         row["ResolvedAt"] = (object?)entry.ResolvedAt ?? DBNull.Value;
         row["ResolutionNotes"] = (object?)entry.ResolutionNotes ?? DBNull.Value;
+        row["IsDeleted"] = entry.IsDeleted;
+        row["DeletedBy"] = (object?)entry.DeletedBy ?? DBNull.Value;
+        row["DeletedAt"] = (object?)entry.DeletedAt ?? DBNull.Value;
     }
 
-    public async Task<IReadOnlyList<ErrorLogEntry>> LoadRecentAsync(int count, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<ErrorLogEntry>> LoadRecentAsync(
+        int count,
+        bool includeDeleted = false,
+        bool onlyDeleted = false,
+        CancellationToken cancellationToken = default)
     {
         var list = new List<ErrorLogEntry>();
         try
@@ -277,7 +292,11 @@ INSERT INTO [dbo].[ERR_ErrorLogs] (
             await using var conn = new SqlConnection(_connectionString);
             await conn.OpenAsync(cancellationToken);
 
-            var sql = $"SELECT TOP ({Math.Min(count, 500)}) * FROM [dbo].[ERR_ErrorLogs] ORDER BY [TimestampUtc] DESC;";
+            string filterClause = onlyDeleted
+                ? "WHERE [IsDeleted] = 1"
+                : includeDeleted ? "" : "WHERE [IsDeleted] = 0";
+
+            var sql = $"SELECT TOP ({Math.Min(count, 500)}) * FROM [dbo].[ERR_ErrorLogs] {filterClause} ORDER BY [TimestampUtc] DESC;";
             await using var cmd = new SqlCommand(sql, conn);
             await using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
 
@@ -319,26 +338,96 @@ INSERT INTO [dbo].[ERR_ErrorLogs] (
         return null;
     }
 
-    public async Task<int> ClearResolvedAsync(CancellationToken cancellationToken = default)
+    public async Task<bool> SoftDeleteAsync(Guid id, string deletedBy, CancellationToken cancellationToken = default)
     {
         try
         {
             await using var conn = new SqlConnection(_connectionString);
             await conn.OpenAsync(cancellationToken);
 
-            const string sql = "DELETE FROM [dbo].[ERR_ErrorLogs] WHERE [IsResolved] = 1;";
+            const string sql = @"
+UPDATE [dbo].[ERR_ErrorLogs]
+SET [IsDeleted] = 1,
+    [DeletedBy] = @DeletedBy,
+    [DeletedAt] = SYSUTCDATETIME()
+WHERE [Id] = @Id AND [IsDeleted] = 0;";
+
             await using var cmd = new SqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@Id", id);
+            cmd.Parameters.AddWithValue("@DeletedBy", (object?)deletedBy ?? "Developer");
+
+            int rows = await cmd.ExecuteNonQueryAsync(cancellationToken);
+            return rows > 0;
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogWarning(ex, "SqlErrorLogStore: Unable to soft delete error log {Id}.", id);
+            return false;
+        }
+    }
+
+    public async Task<bool> RestoreAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await using var conn = new SqlConnection(_connectionString);
+            await conn.OpenAsync(cancellationToken);
+
+            const string sql = @"
+UPDATE [dbo].[ERR_ErrorLogs]
+SET [IsDeleted] = 0,
+    [DeletedBy] = NULL,
+    [DeletedAt] = NULL
+WHERE [Id] = @Id;";
+
+            await using var cmd = new SqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@Id", id);
+
+            int rows = await cmd.ExecuteNonQueryAsync(cancellationToken);
+            return rows > 0;
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogWarning(ex, "SqlErrorLogStore: Unable to restore error log {Id}.", id);
+            return false;
+        }
+    }
+
+    public async Task<int> SoftDeleteResolvedAsync(string deletedBy, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await using var conn = new SqlConnection(_connectionString);
+            await conn.OpenAsync(cancellationToken);
+
+            const string sql = @"
+UPDATE [dbo].[ERR_ErrorLogs]
+SET [IsDeleted] = 1,
+    [DeletedBy] = @DeletedBy,
+    [DeletedAt] = SYSUTCDATETIME()
+WHERE [IsResolved] = 1 AND [IsDeleted] = 0;";
+
+            await using var cmd = new SqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@DeletedBy", (object?)deletedBy ?? "Developer");
+
             return await cmd.ExecuteNonQueryAsync(cancellationToken);
         }
         catch (Exception ex)
         {
-            _logger?.LogWarning(ex, "SqlErrorLogStore: Unable to clear resolved error logs from HrmErrorLogs database.");
+            _logger?.LogWarning(ex, "SqlErrorLogStore: Unable to soft delete resolved error logs from HrmErrorLogs database.");
             return 0;
         }
     }
 
     private static ErrorLogEntry MapEntryFromReader(SqlDataReader reader)
     {
+        int colIsDeleted = -1;
+        try { colIsDeleted = reader.GetOrdinal("IsDeleted"); } catch { }
+        int colDeletedBy = -1;
+        try { colDeletedBy = reader.GetOrdinal("DeletedBy"); } catch { }
+        int colDeletedAt = -1;
+        try { colDeletedAt = reader.GetOrdinal("DeletedAt"); } catch { }
+
         var entry = new ErrorLogEntry
         {
             Id = reader.GetGuid(reader.GetOrdinal("Id")),
@@ -385,7 +474,10 @@ INSERT INTO [dbo].[ERR_ErrorLogs] (
             IsResolved = reader.GetBoolean(reader.GetOrdinal("IsResolved")),
             ResolvedBy = reader.IsDBNull(reader.GetOrdinal("ResolvedBy")) ? null : reader.GetString(reader.GetOrdinal("ResolvedBy")),
             ResolvedAt = reader.IsDBNull(reader.GetOrdinal("ResolvedAt")) ? null : reader.GetDateTime(reader.GetOrdinal("ResolvedAt")),
-            ResolutionNotes = reader.IsDBNull(reader.GetOrdinal("ResolutionNotes")) ? null : reader.GetString(reader.GetOrdinal("ResolutionNotes"))
+            ResolutionNotes = reader.IsDBNull(reader.GetOrdinal("ResolutionNotes")) ? null : reader.GetString(reader.GetOrdinal("ResolutionNotes")),
+            IsDeleted = colIsDeleted >= 0 && !reader.IsDBNull(colIsDeleted) && reader.GetBoolean(colIsDeleted),
+            DeletedBy = colDeletedBy >= 0 && !reader.IsDBNull(colDeletedBy) ? reader.GetString(colDeletedBy) : null,
+            DeletedAt = colDeletedAt >= 0 && !reader.IsDBNull(colDeletedAt) ? reader.GetDateTime(colDeletedAt) : null
         };
 
         var stepsJson = reader.IsDBNull(reader.GetOrdinal("DiagnosticStepsJson")) ? null : reader.GetString(reader.GetOrdinal("DiagnosticStepsJson"));
@@ -514,7 +606,10 @@ BEGIN
         [IsResolved] BIT NOT NULL CONSTRAINT [DF_ERR_ErrorLogs_IsResolved] DEFAULT (0),
         [ResolvedBy] NVARCHAR(250) NULL,
         [ResolvedAt] DATETIME2(7) NULL,
-        [ResolutionNotes] NVARCHAR(MAX) NULL
+        [ResolutionNotes] NVARCHAR(MAX) NULL,
+        [IsDeleted] BIT NOT NULL CONSTRAINT [DF_ERR_ErrorLogs_IsDeleted] DEFAULT (0),
+        [DeletedBy] NVARCHAR(250) NULL,
+        [DeletedAt] DATETIME2(7) NULL
     );
 
     IF NOT EXISTS (SELECT * FROM sys.indexes WHERE object_id = OBJECT_ID(N'[dbo].[ERR_ErrorLogs]') AND name = N'IX_ERR_ErrorLogs_TimestampUtc')
@@ -525,6 +620,9 @@ BEGIN
 
     IF NOT EXISTS (SELECT * FROM sys.indexes WHERE object_id = OBJECT_ID(N'[dbo].[ERR_ErrorLogs]') AND name = N'IX_ERR_ErrorLogs_ApplicationSource')
         CREATE NONCLUSTERED INDEX [IX_ERR_ErrorLogs_ApplicationSource] ON [dbo].[ERR_ErrorLogs]([ApplicationSource], [TimestampUtc] DESC);
+
+    IF NOT EXISTS (SELECT * FROM sys.indexes WHERE object_id = OBJECT_ID(N'[dbo].[ERR_ErrorLogs]') AND name = N'IX_ERR_ErrorLogs_IsDeleted')
+        CREATE NONCLUSTERED INDEX [IX_ERR_ErrorLogs_IsDeleted] ON [dbo].[ERR_ErrorLogs]([IsDeleted], [TimestampUtc] DESC);
 END";
 
                     using var cmd = new SqlCommand(ddl, conn);

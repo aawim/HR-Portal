@@ -37,6 +37,22 @@ if (args.Contains("--stats"))
     return;
 }
 
+var deleteIndex = Array.IndexOf(args, "--soft-delete");
+if (deleteIndex >= 0 && deleteIndex < args.Length - 1 && Guid.TryParse(args[deleteIndex + 1], out var deleteId))
+{
+    var success = await errorService.SoftDeleteAsync(deleteId, "CLI-Developer");
+    Console.WriteLine($"Soft-delete for {deleteId}: {(success ? "SUCCESS" : "FAILED")}");
+    return;
+}
+
+var restoreIndex = Array.IndexOf(args, "--restore");
+if (restoreIndex >= 0 && restoreIndex < args.Length - 1 && Guid.TryParse(args[restoreIndex + 1], out var restoreId))
+{
+    var success = await errorService.RestoreAsync(restoreId);
+    Console.WriteLine($"Restore for {restoreId}: {(success ? "SUCCESS" : "FAILED")}");
+    return;
+}
+
 // Display Overview Dashboard
 await DisplayDashboardAsync(errorService);
 
@@ -212,6 +228,9 @@ static async Task RunSimulationAsync(IErrorLogService errorService)
     Console.WriteLine($"     Root Cause    : {entry.Fix.RootCauseSummary}");
     Console.WriteLine($"     Prescribed Fix: {entry.Fix.RecommendedAction}");
     Console.ResetColor();
+
+    // Allow background persistence task to complete before process exit
+    await Task.Delay(1500);
 }
 
 static void ThrowSimulatedException()

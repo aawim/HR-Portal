@@ -121,7 +121,9 @@ public sealed class ErrorLogService : IErrorLogService
     public async Task<IReadOnlyList<ErrorLogEntry>> GetRecentErrorsAsync(
         int count = 100,
         ErrorCriticalityLevel? minLevel = null,
-        string? search = null)
+        string? search = null,
+        bool includeDeleted = false,
+        bool onlyDeleted = false)
     {
         IEnumerable<ErrorLogEntry> combined;
 
@@ -129,7 +131,7 @@ public sealed class ErrorLogService : IErrorLogService
         {
             try
             {
-                var dbEntries = await _persistentStore.LoadRecentAsync(count);
+                var dbEntries = await _persistentStore.LoadRecentAsync(count, includeDeleted, onlyDeleted);
                 var map = new Dictionary<Guid, ErrorLogEntry>();
 
                 foreach (var item in dbEntries)
@@ -157,6 +159,15 @@ public sealed class ErrorLogService : IErrorLogService
         }
 
         var query = combined.AsEnumerable();
+
+        if (onlyDeleted)
+        {
+            query = query.Where(e => e.IsDeleted);
+        }
+        else if (!includeDeleted)
+        {
+            query = query.Where(e => !e.IsDeleted);
+        }
 
         if (minLevel.HasValue)
         {
@@ -265,61 +276,114 @@ public sealed class ErrorLogService : IErrorLogService
         return found;
     }
 
-    public async Task<int> ClearResolvedAsync()
+    public async Task<bool> SoftDeleteAsync(Guid id, string deletedBy)
     {
-        var resolvedIds = _entries.Values
-            .Where(e => e.IsResolved)
-            .Select(e => e.Id)
-            .ToList();
-
-        int removed = 0;
-        foreach (var id in resolvedIds)
+        bool found = false;
+        if (_entries.TryGetValue(id, out var entry))
         {
-            if (_entries.TryRemove(id, out _))
-            {
-                removed++;
-            }
+            entry.IsDeleted = true;
+            entry.DeletedBy = deletedBy;
+            entry.DeletedAt = DateTime.UtcNow;
+            found = true;
         }
 
         if (_persistentStore != null)
         {
             try
             {
-                var storeCleared = await _persistentStore.ClearResolvedAsync();
-                return Math.Max(removed, storeCleared);
+                var storeUpdated = await _persistentStore.SoftDeleteAsync(id, deletedBy);
+                found = found || storeUpdated;
             }
             catch (Exception ex)
             {
-                _logger?.LogWarning(ex, "Failed to clear resolved error logs from persistent store.");
+                _logger?.LogWarning(ex, "Failed to soft-delete error in store for {Id}", id);
             }
         }
 
-        return removed;
+        return found;
     }
+
+    public async Task<bool> RestoreAsync(Guid id)
+    {
+        bool found = false;
+        if (_entries.TryGetValue(id, out var entry))
+        {
+            entry.IsDeleted = false;
+            entry.DeletedBy = null;
+            entry.DeletedAt = null;
+            found = true;
+        }
+
+        if (_persistentStore != null)
+        {
+            try
+            {
+                var storeUpdated = await _persistentStore.RestoreAsync(id);
+                found = found || storeUpdated;
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "Failed to restore error in store for {Id}", id);
+            }
+        }
+
+        return found;
+    }
+
+    public async Task<int> SoftDeleteResolvedAsync(string deletedBy = "Developer")
+    {
+        int memoryUpdated = 0;
+        foreach (var entry in _entries.Values.Where(e => e.IsResolved && !e.IsDeleted))
+        {
+            entry.IsDeleted = true;
+            entry.DeletedBy = deletedBy;
+            entry.DeletedAt = DateTime.UtcNow;
+            memoryUpdated++;
+        }
+
+        if (_persistentStore != null)
+        {
+            try
+            {
+                var storeUpdated = await _persistentStore.SoftDeleteResolvedAsync(deletedBy);
+                return Math.Max(memoryUpdated, storeUpdated);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "Failed to soft-delete resolved error logs in store.");
+            }
+        }
+
+        return memoryUpdated;
+    }
+
+    public Task<int> ClearResolvedAsync(string deletedBy = "Developer") => SoftDeleteResolvedAsync(deletedBy);
 
     public async Task<ErrorStatistics> GetStatisticsAsync()
     {
-        var all = (await GetRecentErrorsAsync(MaxBufferSize)).ToList();
+        var all = (await GetRecentErrorsAsync(MaxBufferSize, includeDeleted: true)).ToList();
+        var active = all.Where(e => !e.IsDeleted).ToList();
         var now = DateTime.UtcNow;
 
         var stats = new ErrorStatistics
         {
-            TotalErrors = all.Count,
-            UnresolvedCount = all.Count(e => !e.IsResolved),
-            ResolvedCount = all.Count(e => e.IsResolved),
-            FatalCount = all.Count(e => e.CriticalityLevel == ErrorCriticalityLevel.Fatal),
-            CriticalCount = all.Count(e => e.CriticalityLevel == ErrorCriticalityLevel.Critical),
-            ErrorCount = all.Count(e => e.CriticalityLevel == ErrorCriticalityLevel.Error),
-            WarningCount = all.Count(e => e.CriticalityLevel == ErrorCriticalityLevel.Warning),
-            ErrorsLast24Hours = all.Count(e => e.TimestampUtc >= now.AddHours(-24))
+            TotalErrors = active.Count,
+            UnresolvedCount = active.Count(e => !e.IsResolved),
+            ResolvedCount = active.Count(e => e.IsResolved),
+            SoftDeletedCount = all.Count(e => e.IsDeleted),
+            FatalCount = active.Count(e => e.CriticalityLevel == ErrorCriticalityLevel.Fatal),
+            CriticalCount = active.Count(e => e.CriticalityLevel == ErrorCriticalityLevel.Critical),
+            ErrorCount = active.Count(e => e.CriticalityLevel == ErrorCriticalityLevel.Error),
+            WarningCount = active.Count(e => e.CriticalityLevel == ErrorCriticalityLevel.Warning),
+            ErrorsLast24Hours = active.Count(e => e.TimestampUtc >= now.AddHours(-24))
         };
 
-        foreach (var group in all.GroupBy(e => e.ApplicationSource, StringComparer.OrdinalIgnoreCase))
+        foreach (var group in active.GroupBy(e => e.ApplicationSource, StringComparer.OrdinalIgnoreCase))
         {
             stats.SourceBreakdown[group.Key] = group.Count();
         }
 
-        stats.TopExceptions = all
+        stats.TopExceptions = active
             .GroupBy(e => e.ExceptionType)
             .OrderByDescending(g => g.Count())
             .Take(5)

@@ -20,7 +20,12 @@ public interface IErrorLogService
     /// <summary>
     /// Retrieves recent errors matching optional filters.
     /// </summary>
-    Task<IReadOnlyList<ErrorLogEntry>> GetRecentErrorsAsync(int count = 100, ErrorCriticalityLevel? minLevel = null, string? search = null);
+    Task<IReadOnlyList<ErrorLogEntry>> GetRecentErrorsAsync(
+        int count = 100,
+        ErrorCriticalityLevel? minLevel = null,
+        string? search = null,
+        bool includeDeleted = false,
+        bool onlyDeleted = false);
 
     /// <summary>
     /// Retrieves full details of a specific error by its unique identifier.
@@ -38,9 +43,24 @@ public interface IErrorLogService
     Task<bool> ReopenAsync(Guid id);
 
     /// <summary>
-    /// Clears resolved error entries.
+    /// Soft-deletes an error record (never physically deletes from database).
     /// </summary>
-    Task<int> ClearResolvedAsync();
+    Task<bool> SoftDeleteAsync(Guid id, string deletedBy);
+
+    /// <summary>
+    /// Restores a soft-deleted error record back to active.
+    /// </summary>
+    Task<bool> RestoreAsync(Guid id);
+
+    /// <summary>
+    /// Soft-deletes all resolved error entries (preserves database records permanently).
+    /// </summary>
+    Task<int> SoftDeleteResolvedAsync(string deletedBy = "Developer");
+
+    /// <summary>
+    /// Clears resolved error entries via soft-deletion.
+    /// </summary>
+    Task<int> ClearResolvedAsync(string deletedBy = "Developer");
 
     /// <summary>
     /// Computes summary statistics across all logged errors.

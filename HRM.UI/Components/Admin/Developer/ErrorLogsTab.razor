@@ -5,7 +5,7 @@
 
 <div class="space-y-4">
     <!-- Stat Summary Bar -->
-    <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <!-- Unresolved Total -->
         <button type="button"
                 @onclick="@(() => SetFilterResolved(false))"
@@ -75,6 +75,21 @@
             </div>
             <div class="text-[11px] text-emerald-600 mt-0.5">Verified fixes</div>
         </button>
+
+        <!-- Soft Deleted (Retained in DB) -->
+        <button type="button"
+                @onclick="@ToggleShowDeletedOnly"
+                title="View errors soft-deleted from active view. Records are permanently stored in database."
+                class="text-left rounded-lg border p-3 transition-all @(filterDeletedMode == DeletionFilterMode.OnlyDeleted ? "border-slate-600 bg-slate-100 shadow-xs ring-2 ring-slate-400/40" : "border-slate-200 bg-white hover:border-slate-300 shadow-2xs")">
+            <div class="flex items-center justify-between text-xs font-medium text-slate-600">
+                <span>Soft Deleted</span>
+                <i class="bi bi-archive text-slate-400"></i>
+            </div>
+            <div class="mt-1 text-2xl font-bold text-slate-700">
+                @stats.SoftDeletedCount
+            </div>
+            <div class="text-[11px] text-slate-400 mt-0.5">Retained in DB</div>
+        </button>
     </div>
 
     <!-- Filter & Action Controls -->
@@ -124,7 +139,16 @@
                     <option value="true">Resolved Only</option>
                 </select>
 
-                @if (!string.IsNullOrWhiteSpace(searchText) || !string.IsNullOrWhiteSpace(selectedSource) || filterMinLevel.HasValue || filterResolved.HasValue)
+                <!-- Deletion Status Selector -->
+                <select value="@filterDeletedMode.ToString()"
+                        @onchange="@((e) => OnDeletedModeChanged(e.Value?.ToString()))"
+                        class="rounded border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-700 focus:border-amber-500 focus:outline-hidden font-medium">
+                    <option value="ActiveOnly">Active Errors Only</option>
+                    <option value="IncludeDeleted">All (Inc. Soft Deleted)</option>
+                    <option value="OnlyDeleted">Soft Deleted Only</option>
+                </select>
+
+                @if (!string.IsNullOrWhiteSpace(searchText) || !string.IsNullOrWhiteSpace(selectedSource) || filterMinLevel.HasValue || filterResolved.HasValue || filterDeletedMode != DeletionFilterMode.ActiveOnly)
                 {
                     <button type="button"
                             @onclick="@ResetFilters"
@@ -193,13 +217,14 @@
                     <span>Refresh</span>
                 </button>
 
-                <!-- Clear Resolved -->
+                <!-- Clear Resolved (Soft Delete) -->
                 @if (stats.ResolvedCount > 0)
                 {
                     <button type="button"
                             @onclick="@ClearResolvedAsync"
+                            title="Soft-deletes all resolved errors from active view. Records remain permanent in the database."
                             class="inline-flex items-center gap-1 rounded border border-slate-200 bg-white hover:bg-rose-50 hover:text-rose-700 px-2.5 py-1.5 text-xs font-medium text-slate-600 transition shadow-2xs">
-                        <i class="bi bi-trash text-slate-400"></i>
+                        <i class="bi bi-archive text-slate-400"></i>
                         <span>Clear Resolved</span>
                     </button>
                 }
@@ -252,13 +277,22 @@
                     <tbody class="divide-y divide-slate-100">
                         @foreach (var entry in filteredErrors)
                         {
-                            <tr class="hover:bg-slate-50/90 transition-colors @(entry.IsResolved ? "opacity-60 bg-slate-50/30" : "")">
+                            <tr class="hover:bg-slate-50/90 transition-colors @(entry.IsDeleted ? "bg-slate-100/70 opacity-75" : (entry.IsResolved ? "opacity-60 bg-slate-50/30" : ""))">
                                 <!-- Severity -->
                                 <td class="py-3 px-3 align-top">
                                     <span class="inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider @GetSeverityBadgeClass(entry.CriticalityLevel)">
                                         <span class="h-1.5 w-1.5 rounded-full @GetSeverityDotClass(entry.CriticalityLevel)"></span>
                                         @entry.CriticalityLevel
                                     </span>
+                                    @if (entry.IsDeleted)
+                                    {
+                                        <div class="mt-1">
+                                            <span class="inline-flex items-center gap-1 text-[10px] font-semibold text-slate-700 bg-slate-200/90 rounded px-1.5 py-0.5"
+                                                  title="Soft-deleted by @(entry.DeletedBy ?? "System") on @(entry.DeletedAt?.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss") ?? "N/A")">
+                                                <i class="bi bi-archive-fill text-slate-500 text-[9px]"></i> Soft Deleted
+                                            </span>
+                                        </div>
+                                    }
                                     @if (entry.IsResolved)
                                     {
                                         <div class="mt-1">
@@ -372,22 +406,42 @@
                                             <span>Inspect &amp; Fix</span>
                                         </button>
 
-                                        @if (!entry.IsResolved)
+                                        @if (entry.IsDeleted)
                                         {
                                             <button type="button"
-                                                    @onclick="@(() => ToggleResolveAsync(entry))"
-                                                    title="Mark as resolved"
-                                                    class="inline-flex items-center rounded border border-slate-200 bg-white hover:bg-emerald-50 hover:text-emerald-700 px-1.5 py-1 text-[11px] text-slate-600 transition shadow-2xs">
-                                                <i class="bi bi-check2"></i>
+                                                    @onclick="@(() => RestoreEntryAsync(entry))"
+                                                    title="Restore error (reactivate)"
+                                                    class="inline-flex items-center gap-1 rounded border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 px-2 py-1 text-[11px] font-semibold transition shadow-2xs">
+                                                <i class="bi bi-arrow-counterclockwise text-emerald-600"></i>
+                                                <span>Restore</span>
                                             </button>
                                         }
                                         else
                                         {
+                                            @if (!entry.IsResolved)
+                                            {
+                                                <button type="button"
+                                                        @onclick="@(() => ToggleResolveAsync(entry))"
+                                                        title="Mark as resolved"
+                                                        class="inline-flex items-center rounded border border-slate-200 bg-white hover:bg-emerald-50 hover:text-emerald-700 px-1.5 py-1 text-[11px] text-slate-600 transition shadow-2xs">
+                                                    <i class="bi bi-check2"></i>
+                                                </button>
+                                            }
+                                            else
+                                            {
+                                                <button type="button"
+                                                        @onclick="@(() => ToggleResolveAsync(entry))"
+                                                        title="Reopen error"
+                                                        class="inline-flex items-center rounded border border-slate-200 bg-white hover:bg-slate-100 px-1.5 py-1 text-[11px] text-slate-400 transition shadow-2xs">
+                                                    <i class="bi bi-arrow-counterclockwise"></i>
+                                                </button>
+                                            }
+
                                             <button type="button"
-                                                    @onclick="@(() => ToggleResolveAsync(entry))"
-                                                    title="Reopen error"
-                                                    class="inline-flex items-center rounded border border-slate-200 bg-white hover:bg-slate-100 px-1.5 py-1 text-[11px] text-slate-400 transition shadow-2xs">
-                                                <i class="bi bi-arrow-counterclockwise"></i>
+                                                    @onclick="@(() => SoftDeleteEntryAsync(entry))"
+                                                    title="Soft delete (retained permanently in database)"
+                                                    class="inline-flex items-center rounded border border-slate-200 bg-white hover:bg-rose-50 hover:text-rose-700 px-1.5 py-1 text-[11px] text-slate-400 transition shadow-2xs">
+                                                <i class="bi bi-trash"></i>
                                             </button>
                                         }
                                     </div>
@@ -418,6 +472,12 @@
                             <span class="rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider @GetSeverityBadgeClass(selectedEntry.CriticalityLevel)">
                                 @selectedEntry.CriticalityLevel
                             </span>
+                            @if (selectedEntry.IsDeleted)
+                            {
+                                <span class="rounded bg-slate-600 text-white px-2 py-0.5 text-[10px] font-bold">
+                                    SOFT DELETED
+                                </span>
+                            }
                             @if (selectedEntry.IsResolved)
                             {
                                 <span class="rounded bg-emerald-500 text-white px-2 py-0.5 text-[10px] font-bold">
@@ -439,6 +499,25 @@
 
             <!-- Modal Body -->
             <div class="p-5 max-h-[75vh] overflow-y-auto space-y-4">
+                @if (selectedEntry.IsDeleted)
+                {
+                    <div class="rounded-lg border border-slate-300 bg-slate-100 p-3 text-xs text-slate-700 flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <i class="bi bi-archive-fill text-slate-500 text-base"></i>
+                            <div>
+                                <span class="font-bold text-slate-800">This error is soft-deleted.</span>
+                                <span class="text-slate-600 ml-1">Deleted by <strong>@(selectedEntry.DeletedBy ?? "Developer")</strong> on @(selectedEntry.DeletedAt?.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss") ?? "N/A"). Retained permanently in database.</span>
+                            </div>
+                        </div>
+                        <button type="button"
+                                @onclick="@(() => RestoreEntryAsync(selectedEntry))"
+                                class="inline-flex items-center gap-1 rounded bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-2.5 py-1 text-xs transition shadow-xs">
+                            <i class="bi bi-arrow-counterclockwise"></i>
+                            <span>Restore Error</span>
+                        </button>
+                    </div>
+                }
+
                 <!-- 1. Prescriptive Fix Box (What Should Be Done) -->
                 <div class="rounded-lg border-2 border-amber-300 bg-amber-50/60 p-4 shadow-xs">
                     <div class="flex items-center gap-2 text-amber-900 font-bold text-xs uppercase tracking-wider mb-2">
@@ -649,22 +728,42 @@
                 </button>
 
                 <div class="flex items-center gap-2">
-                    @if (!selectedEntry.IsResolved)
+                    @if (selectedEntry.IsDeleted)
                     {
                         <button type="button"
-                                @onclick="@(() => ResolveSelectedWithNotesAsync(selectedEntry))"
+                                @onclick="@(() => RestoreEntryAsync(selectedEntry))"
                                 class="inline-flex items-center gap-1.5 rounded border border-emerald-600 bg-emerald-600 hover:bg-emerald-700 px-3 py-1.5 text-xs font-bold text-white transition shadow-xs">
-                            <i class="bi bi-check-lg"></i>
-                            <span>Mark Resolved</span>
+                            <i class="bi bi-arrow-counterclockwise"></i>
+                            <span>Restore to Active</span>
                         </button>
                     }
                     else
                     {
+                        @if (!selectedEntry.IsResolved)
+                        {
+                            <button type="button"
+                                    @onclick="@(() => ResolveSelectedWithNotesAsync(selectedEntry))"
+                                    class="inline-flex items-center gap-1.5 rounded border border-emerald-600 bg-emerald-600 hover:bg-emerald-700 px-3 py-1.5 text-xs font-bold text-white transition shadow-xs">
+                                <i class="bi bi-check-lg"></i>
+                                <span>Mark Resolved</span>
+                            </button>
+                        }
+                        else
+                        {
+                            <button type="button"
+                                    @onclick="@(() => ReopenSelectedAsync(selectedEntry))"
+                                    class="inline-flex items-center gap-1.5 rounded border border-slate-300 bg-white hover:bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-700 transition shadow-2xs">
+                                <i class="bi bi-arrow-counterclockwise"></i>
+                                <span>Reopen Error</span>
+                            </button>
+                        }
+
                         <button type="button"
-                                @onclick="@(() => ReopenSelectedAsync(selectedEntry))"
-                                class="inline-flex items-center gap-1.5 rounded border border-slate-300 bg-white hover:bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-700 transition shadow-2xs">
-                            <i class="bi bi-arrow-counterclockwise"></i>
-                            <span>Reopen Error</span>
+                                @onclick="@(() => SoftDeleteEntryAsync(selectedEntry))"
+                                title="Soft delete (record retained permanently in database)"
+                                class="inline-flex items-center gap-1.5 rounded border border-slate-200 bg-white hover:bg-rose-50 hover:text-rose-700 hover:border-rose-300 px-3 py-1.5 text-xs font-semibold text-slate-600 transition shadow-2xs">
+                            <i class="bi bi-trash"></i>
+                            <span>Soft Delete</span>
                         </button>
                     }
 
@@ -680,6 +779,13 @@
 }
 
 @code {
+    public enum DeletionFilterMode
+    {
+        ActiveOnly,
+        IncludeDeleted,
+        OnlyDeleted
+    }
+
     private List<ErrorLogEntry> allErrors = new();
     private List<ErrorLogEntry> filteredErrors = new();
     private ErrorStatistics stats = new();
@@ -691,6 +797,7 @@
     private string selectedSource = string.Empty;
     private ErrorCriticalityLevel? filterMinLevel;
     private bool? filterResolved;
+    private DeletionFilterMode filterDeletedMode = DeletionFilterMode.ActiveOnly;
     private string resolutionNoteInput = string.Empty;
 
     protected override async Task OnInitializedAsync()
@@ -703,7 +810,10 @@
         isLoading = true;
         try
         {
-            var fetchTask = ErrorApiClient.GetRecentAsync(200);
+            var includeDeleted = filterDeletedMode != DeletionFilterMode.ActiveOnly;
+            var onlyDeleted = filterDeletedMode == DeletionFilterMode.OnlyDeleted;
+
+            var fetchTask = ErrorApiClient.GetRecentAsync(200, includeDeleted: includeDeleted, onlyDeleted: onlyDeleted);
             var statsTask = ErrorApiClient.GetStatisticsAsync();
 
             await Task.WhenAll(fetchTask, statsTask);
@@ -725,6 +835,15 @@
     private void ApplyFilters()
     {
         var query = allErrors.AsEnumerable();
+
+        if (filterDeletedMode == DeletionFilterMode.ActiveOnly)
+        {
+            query = query.Where(e => !e.IsDeleted);
+        }
+        else if (filterDeletedMode == DeletionFilterMode.OnlyDeleted)
+        {
+            query = query.Where(e => e.IsDeleted);
+        }
 
         if (filterMinLevel.HasValue)
         {
@@ -811,13 +930,62 @@
         ApplyFilters();
     }
 
-    private void ResetFilters()
+    private async Task ResetFilters()
     {
         searchText = string.Empty;
         selectedSource = string.Empty;
         filterMinLevel = null;
         filterResolved = null;
-        ApplyFilters();
+        filterDeletedMode = DeletionFilterMode.ActiveOnly;
+        await LoadDataAsync();
+    }
+
+    private async Task OnDeletedModeChanged(string? value)
+    {
+        if (Enum.TryParse<DeletionFilterMode>(value, out var mode))
+        {
+            filterDeletedMode = mode;
+            await LoadDataAsync();
+        }
+    }
+
+    private async Task ToggleShowDeletedOnly()
+    {
+        if (filterDeletedMode == DeletionFilterMode.OnlyDeleted)
+        {
+            filterDeletedMode = DeletionFilterMode.ActiveOnly;
+        }
+        else
+        {
+            filterDeletedMode = DeletionFilterMode.OnlyDeleted;
+        }
+        await LoadDataAsync();
+    }
+
+    private async Task SoftDeleteEntryAsync(ErrorLogEntry entry)
+    {
+        var success = await ErrorApiClient.SoftDeleteAsync(entry.Id, "Developer");
+        if (success)
+        {
+            entry.IsDeleted = true;
+            entry.DeletedBy = "Developer";
+            entry.DeletedAt = DateTime.UtcNow;
+            stats = await ErrorApiClient.GetStatisticsAsync();
+            ApplyFilters();
+        }
+    }
+
+    private async Task RestoreEntryAsync(ErrorLogEntry entry)
+    {
+        var success = await ErrorApiClient.RestoreAsync(entry.Id);
+        if (success)
+        {
+            entry.IsDeleted = false;
+            entry.DeletedBy = null;
+            entry.DeletedAt = null;
+            stats = await ErrorApiClient.GetStatisticsAsync();
+            ApplyFilters();
+        }
     }
 
     private void OpenDetailModal(ErrorLogEntry entry)
