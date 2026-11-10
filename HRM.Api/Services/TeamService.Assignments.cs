@@ -244,15 +244,24 @@ public partial class TeamService
             if (!actor.IsSuperAdministrator && team.OrganisationId != currentOrgId && !await access.HasOrganisationAccessAsync(team.OrganisationId))
                 throw new UnauthorizedAccessException("Not authorized for this team's organisation.");
         }
+        else if (input.OrganisationStructureId.HasValue && input.OrganisationStructureId.Value > 0)
+        {
+            var dept = await db.OrganisationStructures.AsNoTracking().FirstOrDefaultAsync(d => d.OrganisationStructureId == input.OrganisationStructureId.Value, ct)
+                ?? throw new ArgumentException("Department / Organisation structure not found.");
+            orgId = dept.OrganisationBusinessEntityID;
+            if (!actor.IsSuperAdministrator && dept.OrganisationBusinessEntityID != currentOrgId && !await access.HasOrganisationAccessAsync(dept.OrganisationBusinessEntityID))
+                throw new UnauthorizedAccessException("Not authorized for this department's organisation.");
+        }
 
         bool canManage = actor.IsSuperAdministrator ||
             await access.HasPermissionAsync("Admin") ||
             await access.HasPermissionAsync("Organisation.Edit") ||
             (input.TeamId.HasValue && await db.TeamStaffs.AnyAsync(x => x.TeamId == input.TeamId.Value && x.StaffId == actor.IndividualId && x.IsSuperVisor && x.IsValid, ct)) ||
-            await db.TeamStaffs.AnyAsync(x => x.StaffId == actor.IndividualId && x.IsSuperVisor && x.IsValid, ct);
+            (input.OrganisationStructureId.HasValue && await db.OrganisationStructureSupervisors.AnyAsync(x => x.OrganisationStructureId == input.OrganisationStructureId.Value && x.SupervisorStaffId == actor.IndividualId && x.IsValid && x.IsActive, ct)) ||
+            (input.ProjectManagerStaffId.HasValue && input.ProjectManagerStaffId.Value == actor.IndividualId);
 
         if (!canManage)
-            throw new UnauthorizedAccessException("Only team supervisors or administrators can create projects.");
+            throw new UnauthorizedAccessException("Only department/team supervisors, project managers, or administrators can create projects.");
 
         var reference = (input.Reference ?? "").Trim();
         if (string.IsNullOrWhiteSpace(reference))
@@ -277,6 +286,7 @@ public partial class TeamService
         {
             OrganisationId = orgId,
             TeamId = input.TeamId > 0 ? input.TeamId : null,
+            OrganisationStructureId = input.OrganisationStructureId > 0 ? input.OrganisationStructureId : null,
             Name = name,
             Reference = reference,
             Description = input.Description?.Trim(),
@@ -295,7 +305,7 @@ public partial class TeamService
         await db.SaveChangesAsync(ct);
 
         AddHistory(db, project.ProjectId, null, input.ProjectManagerStaffId, null, "ProjectCreated",
-            $"Created project {reference}: {name}." + (input.TeamId.HasValue ? $" Assigned to team #{input.TeamId.Value}." : ""),
+            $"Created project {reference}: {name}." + (input.TeamId.HasValue ? $" Assigned to team #{input.TeamId.Value}." : "") + (input.OrganisationStructureId.HasValue ? $" Assigned to department #{input.OrganisationStructureId.Value}." : ""),
             actor.IndividualId, audit.OperationLogId);
         await db.SaveChangesAsync(ct);
 
@@ -388,7 +398,299 @@ public partial class TeamService
         return task.TaskId;
     }
 
-    // Project managers and active team supervisors of the project's team may manage it; so may administrators.
+    public async Task<bool> UpdateProjectAsync(UpdateProjectInputDto input, CancellationToken ct = default)
+    {
+        var actor = await access.RequireContextAsync();
+        if (input.ProjectId <= 0) throw new ArgumentException("Select a valid project.");
+        var name = (input.Name ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(name)) throw new ArgumentException("Project name is required.");
+        if (name.Length > 200) throw new ArgumentException("Project name cannot exceed 200 characters.");
+        if (input.StartDate == default) throw new ArgumentException("Start date is required.");
+        if (input.PlannedEndDate.HasValue && input.PlannedEndDate.Value.Date < input.StartDate.Date)
+            throw new ArgumentException("Planned end date cannot be earlier than start date.");
+
+        await using var db = await factory.CreateDbContextAsync(ct);
+        await EnsureTablesExistAsync(db, ct);
+        await using var tx = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, ct);
+
+        var project = await db.Projects.FirstOrDefaultAsync(p => p.ProjectId == input.ProjectId, ct)
+            ?? throw new ArgumentException("Project not found.");
+        await RequireManageProjectAsync(db, project);
+
+        string? pmName = input.ProjectManagerName?.Trim();
+        if (input.ProjectManagerStaffId.HasValue && input.ProjectManagerStaffId.Value > 0)
+        {
+            var names = await StaffNamesAsync(db, [input.ProjectManagerStaffId.Value], ct);
+            if (names.TryGetValue(input.ProjectManagerStaffId.Value, out var resolvedName))
+            {
+                pmName = resolvedName;
+            }
+        }
+
+        project.Name = name;
+        if (!string.IsNullOrWhiteSpace(input.Reference)) project.Reference = input.Reference.Trim();
+        project.Description = input.Description?.Trim();
+        project.TeamId = input.TeamId > 0 ? input.TeamId : null;
+        project.OrganisationStructureId = input.OrganisationStructureId > 0 ? input.OrganisationStructureId : null;
+        project.ProjectManagerStaffId = input.ProjectManagerStaffId > 0 ? input.ProjectManagerStaffId : null;
+        project.ProjectManagerName = pmName;
+        project.StartDate = input.StartDate.Date;
+        project.PlannedEndDate = input.PlannedEndDate?.Date;
+        project.ActualEndDate = input.ActualEndDate?.Date;
+        if (!string.IsNullOrWhiteSpace(input.Status)) project.Status = input.Status.Trim();
+        if (input.ProgressPercentage >= 0 && input.ProgressPercentage <= 100) project.ProgressPercentage = input.ProgressPercentage;
+
+        var audit = await logs.CreateAsync(db, SharedConfig.OperationLogActionTypes.TEAM_STAFF_UPDATE,
+            $"Updated project {project.Reference}: {project.Name}.");
+        AddHistory(db, project.ProjectId, null, project.ProjectManagerStaffId, null, "ProjectUpdated",
+            $"Updated project details. Status: {project.Status}, Progress: {project.ProgressPercentage}%.",
+            actor.IndividualId, audit.OperationLogId);
+
+        await db.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
+        return true;
+    }
+
+    public async Task<bool> DeleteProjectAsync(int projectId, CancellationToken ct = default)
+    {
+        var actor = await access.RequireContextAsync();
+        if (projectId <= 0) return false;
+
+        await using var db = await factory.CreateDbContextAsync(ct);
+        await EnsureTablesExistAsync(db, ct);
+        await using var tx = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, ct);
+
+        var project = await db.Projects.Include(p => p.Tasks).Include(p => p.Members)
+            .FirstOrDefaultAsync(p => p.ProjectId == projectId, ct);
+        if (project == null) return false;
+        await RequireManageProjectAsync(db, project);
+
+        var audit = await logs.CreateAsync(db, SharedConfig.OperationLogActionTypes.TEAM_STAFF_UPDATE,
+            $"Deleted project {project.Reference}: {project.Name}.");
+
+        var histories = await db.ProjectAssignmentHistories.Where(h => h.ProjectId == projectId).ToListAsync(ct);
+        db.ProjectAssignmentHistories.RemoveRange(histories);
+        db.ProjectTasks.RemoveRange(project.Tasks);
+        db.ProjectMembers.RemoveRange(project.Members);
+        db.Projects.Remove(project);
+
+        await db.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
+        return true;
+    }
+
+    public async Task<List<TeamProjectDto>> GetAllProjectsAsync(int? organisationId = null, int? organisationStructureId = null, int? teamId = null, CancellationToken ct = default)
+    {
+        var actor = await access.RequireContextAsync();
+        var orgId = organisationId ?? await access.GetCurrentOrganisationIdAsync();
+        await using var db = await factory.CreateDbContextAsync(ct);
+        await EnsureTablesExistAsync(db, ct);
+
+        bool isAdmin = actor.IsSuperAdministrator ||
+            await access.HasPermissionAsync("Admin") ||
+            await access.HasPermissionAsync("Organisation.Edit");
+
+        var q = db.Projects.AsNoTracking()
+            .Include(p => p.Team)
+            .Include(p => p.OrganisationStructure)
+            .Include(p => p.Members)
+            .Include(p => p.Tasks)
+            .AsQueryable();
+
+        if (orgId > 0 && !actor.IsSuperAdministrator)
+        {
+            q = q.Where(p => p.OrganisationId == orgId || p.OrganisationId == 0);
+        }
+
+        if (organisationStructureId.HasValue && organisationStructureId.Value > 0)
+        {
+            q = q.Where(p => p.OrganisationStructureId == organisationStructureId.Value);
+        }
+
+        if (teamId.HasValue && teamId.Value > 0)
+        {
+            q = q.Where(p => p.TeamId == teamId.Value);
+        }
+
+        var candidateProjects = await q.OrderByDescending(p => p.StartDate).ToListAsync(ct);
+        var dtos = new List<TeamProjectDto>();
+        foreach (var p in candidateProjects)
+        {
+            if (!isAdmin && !await CanViewProjectAsync(db, p)) continue;
+            var dto = MapProjectDto(p);
+            dto.CanManageAssignments = isAdmin || await CanManageProjectAsync(db, p);
+            dtos.Add(dto);
+        }
+        return dtos;
+    }
+
+    public async Task<List<TeamProjectDto>> GetDepartmentProjectsAsync(int organisationStructureId, CancellationToken ct = default)
+    {
+        var actor = await access.RequireContextAsync();
+        var orgId = await access.GetCurrentOrganisationIdAsync();
+        await using var db = await factory.CreateDbContextAsync(ct);
+        await EnsureTablesExistAsync(db, ct);
+
+        var dept = await db.OrganisationStructures.AsNoTracking().FirstOrDefaultAsync(d => d.OrganisationStructureId == organisationStructureId, ct);
+        if (dept == null) return [];
+
+        if (!actor.IsSuperAdministrator && dept.OrganisationBusinessEntityID != orgId && !await access.HasOrganisationAccessAsync(dept.OrganisationBusinessEntityID))
+            return [];
+
+        // ONLY supervisors can see their department projects and tasks
+        bool isSupervisor = actor.IsSuperAdministrator ||
+            await access.HasPermissionAsync("Admin") ||
+            await access.HasPermissionAsync("Organisation.Edit") ||
+            await db.OrganisationStructureSupervisors.AnyAsync(x => x.OrganisationStructureId == organisationStructureId && x.SupervisorStaffId == actor.IndividualId && x.IsValid && x.IsActive, ct);
+
+        if (!isSupervisor) return [];
+
+        var projects = await db.Projects.AsNoTracking()
+            .Include(p => p.Team)
+            .Include(p => p.OrganisationStructure)
+            .Include(p => p.Members)
+            .Include(p => p.Tasks)
+            .Where(p => p.OrganisationStructureId == organisationStructureId)
+            .OrderByDescending(p => p.StartDate)
+            .ToListAsync(ct);
+
+        var dtos = new List<TeamProjectDto>();
+        foreach (var p in projects)
+        {
+            var dto = MapProjectDto(p);
+            dto.CanManageAssignments = await CanManageProjectAsync(db, p);
+            dtos.Add(dto);
+        }
+        return dtos;
+    }
+
+    public async Task<List<OrganisationStructureDropdownDto>> GetOrganisationStructuresAsync(int? organisationId = null, CancellationToken ct = default)
+    {
+        var actor = await access.RequireContextAsync();
+        var orgId = organisationId ?? await access.GetCurrentOrganisationIdAsync();
+        await using var db = await factory.CreateDbContextAsync(ct);
+
+        var q = db.OrganisationStructures.AsNoTracking().AsQueryable();
+        if (orgId > 0 && !actor.IsSuperAdministrator)
+        {
+            q = q.Where(s => s.OrganisationBusinessEntityID == orgId);
+        }
+        return await q.OrderBy(s => s.Name)
+            .Select(s => new OrganisationStructureDropdownDto
+            {
+                OrganisationStructureId = s.OrganisationStructureId,
+                Name = s.Name
+            })
+            .ToListAsync(ct);
+    }
+
+    public async Task<bool> UpdateTaskAsync(UpdateTaskInputDto input, CancellationToken ct = default)
+    {
+        var actor = await access.RequireContextAsync();
+        if (input.TaskId <= 0) throw new ArgumentException("Select a valid task.");
+        var title = (input.Title ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(title)) throw new ArgumentException("Task title is required.");
+        if (title.Length > 200) throw new ArgumentException("Task title cannot exceed 200 characters.");
+        var priority = string.IsNullOrWhiteSpace(input.Priority) ? "Medium" : input.Priority.Trim();
+        if (!TaskPriorities.Contains(priority)) throw new ArgumentException("Invalid priority.");
+        if (input.StartDate.HasValue && input.ExpectedEndDate.HasValue && input.ExpectedEndDate.Value.Date < input.StartDate.Value.Date)
+            throw new ArgumentException("Expected end date cannot be earlier than start date.");
+
+        await using var db = await factory.CreateDbContextAsync(ct);
+        await EnsureTablesExistAsync(db, ct);
+        await using var tx = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, ct);
+
+        var task = await db.ProjectTasks.Include(t => t.Project).FirstOrDefaultAsync(t => t.TaskId == input.TaskId, ct)
+            ?? throw new ArgumentException("Task not found.");
+        await RequireManageProjectAsync(db, task.Project);
+
+        var previousStaffId = task.AssignedStaffId;
+        string? assignedStaffName = task.AssignedStaffName;
+
+        if (input.AssignedStaffId.HasValue && input.AssignedStaffId.Value > 0 && input.AssignedStaffId.Value != task.AssignedStaffId)
+        {
+            await EnsureStaffInOrganisationAsync(db, input.AssignedStaffId.Value, ct);
+            var names = await StaffNamesAsync(db, [input.AssignedStaffId.Value], ct);
+            assignedStaffName = names.GetValueOrDefault(input.AssignedStaffId.Value, $"Staff #{input.AssignedStaffId.Value}");
+
+            if (!await db.ProjectMembers.AnyAsync(m => m.ProjectId == task.ProjectId && m.StaffId == input.AssignedStaffId.Value && m.IsActive, ct))
+            {
+                var autoMember = new ProjectMember
+                {
+                    ProjectId = task.ProjectId,
+                    StaffId = input.AssignedStaffId.Value,
+                    StaffName = assignedStaffName,
+                    Role = "Member",
+                    AssignedDate = DateTime.UtcNow.Date,
+                    Remarks = "Assigned via task update",
+                    IsActive = true,
+                    AssignedByStaffId = actor.IndividualId
+                };
+                db.ProjectMembers.Add(autoMember);
+            }
+        }
+        else if (input.AssignedStaffId == null || input.AssignedStaffId <= 0)
+        {
+            assignedStaffName = null;
+        }
+
+        task.Title = title;
+        if (!string.IsNullOrWhiteSpace(input.TaskReference)) task.TaskReference = input.TaskReference.Trim();
+        task.Description = input.Description?.Trim();
+        task.AssignedStaffId = input.AssignedStaffId > 0 ? input.AssignedStaffId : null;
+        task.AssignedStaffName = assignedStaffName;
+        task.Priority = priority;
+        if (!string.IsNullOrWhiteSpace(input.Status)) task.Status = input.Status.Trim();
+        if (input.Progress >= 0 && input.Progress <= 100) task.Progress = input.Progress;
+        task.StartDate = input.StartDate?.Date;
+        task.ExpectedEndDate = input.ExpectedEndDate?.Date;
+        task.ActualCompletionDate = input.ActualCompletionDate?.Date;
+        if (task.Status == "Completed" && !task.ActualCompletionDate.HasValue)
+        {
+            task.ActualCompletionDate = DateTime.UtcNow.Date;
+            task.Progress = 100;
+        }
+        task.Remarks = input.Remarks?.Trim();
+
+        var audit = await logs.CreateAsync(db, SharedConfig.OperationLogActionTypes.TEAM_STAFF_UPDATE,
+            $"Updated task {task.TaskReference}: {task.Title}.");
+
+        string action = previousStaffId != task.AssignedStaffId ? "TaskReassigned" : "TaskUpdated";
+        AddHistory(db, task.ProjectId, task.TaskId, task.AssignedStaffId, previousStaffId, action,
+            $"Task updated: {task.Title}. Priority: {task.Priority}, Status: {task.Status}.",
+            actor.IndividualId, audit.OperationLogId);
+
+        await db.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
+        return true;
+    }
+
+    public async Task<bool> DeleteTaskAsync(int taskId, CancellationToken ct = default)
+    {
+        var actor = await access.RequireContextAsync();
+        if (taskId <= 0) return false;
+
+        await using var db = await factory.CreateDbContextAsync(ct);
+        await EnsureTablesExistAsync(db, ct);
+        await using var tx = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, ct);
+
+        var task = await db.ProjectTasks.Include(t => t.Project).FirstOrDefaultAsync(t => t.TaskId == taskId, ct);
+        if (task == null) return false;
+        await RequireManageProjectAsync(db, task.Project);
+
+        var audit = await logs.CreateAsync(db, SharedConfig.OperationLogActionTypes.TEAM_STAFF_UPDATE,
+            $"Deleted task {task.TaskReference}: {task.Title} from project {task.Project.Reference}.");
+
+        AddHistory(db, task.ProjectId, task.TaskId, task.AssignedStaffId, null, "TaskDeleted",
+            $"Deleted task {task.TaskReference} ({task.Title}).", actor.IndividualId, audit.OperationLogId);
+
+        db.ProjectTasks.Remove(task);
+        await db.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
+        return true;
+    }
+
+    // Project managers, active department supervisors, and active team supervisors may manage it; so may administrators.
     private async Task<bool> CanManageProjectAsync(HrmTeContext db, Project project)
     {
         var actor = await access.RequireContextAsync();
@@ -401,7 +703,15 @@ public partial class TeamService
         if (project.TeamId.HasValue && await db.TeamStaffs.AnyAsync(x =>
             x.TeamId == project.TeamId && x.StaffId == actor.IndividualId && x.IsSuperVisor && x.IsValid, default))
             return true;
-        return await db.TeamStaffs.AnyAsync(x => x.StaffId == actor.IndividualId && x.IsSuperVisor && x.IsValid, default);
+        if (project.OrganisationStructureId.HasValue && await db.OrganisationStructureSupervisors.AnyAsync(x =>
+            x.OrganisationStructureId == project.OrganisationStructureId && x.SupervisorStaffId == actor.IndividualId && x.IsValid && x.IsActive, default))
+            return true;
+        return false;
+    }
+
+    private async Task<bool> CanViewProjectAsync(HrmTeContext db, Project project)
+    {
+        return await CanManageProjectAsync(db, project);
     }
 
     private async Task RequireManageProjectAsync(HrmTeContext db, Project project)

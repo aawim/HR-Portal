@@ -195,11 +195,20 @@ public partial class TeamService(IDbContextFactory<HrmTeContext> factory, IUserA
         if (!actor.IsSuperAdministrator && team.OrganisationId != orgId && !await access.HasOrganisationAccessAsync(team.OrganisationId))
             return [];
 
+        // ONLY supervisors can see their team projects and tasks
+        bool isSupervisor = actor.IsSuperAdministrator ||
+            await access.HasPermissionAsync("Admin") ||
+            await access.HasPermissionAsync("Organisation.Edit") ||
+            await db.TeamStaffs.AnyAsync(x => x.TeamId == teamId && x.StaffId == actor.IndividualId && x.IsSuperVisor && x.IsValid, ct);
+
+        if (!isSupervisor) return [];
+
         var projects = await db.Projects.AsNoTracking()
             .Include(p => p.Team)
             .Include(p => p.Members)
             .Include(p => p.Tasks)
-            .Where(p => p.TeamId == teamId || (p.TeamId == null && (p.OrganisationId == orgId || p.OrganisationId == team.OrganisationId || p.OrganisationId == 0)))
+            .Include(p => p.OrganisationStructure)
+            .Where(p => p.TeamId == teamId)
             .OrderByDescending(p => p.StartDate)
             .ToListAsync(ct);
 
@@ -289,6 +298,14 @@ public partial class TeamService(IDbContextFactory<HrmTeContext> factory, IUserA
             {
                 await db.Database.ExecuteSqlRawAsync(script2, ct);
             }
+            try
+            {
+                await db.Database.ExecuteSqlRawAsync(@"IF OBJECT_ID(N'dbo.PR_Projects', N'U') IS NOT NULL AND COL_LENGTH(N'dbo.PR_Projects', N'OrganisationStructureId') IS NULL
+                BEGIN
+                    ALTER TABLE dbo.PR_Projects ADD OrganisationStructureId int NULL;
+                END;", ct);
+            }
+            catch { }
             _tablesInitialized = true;
         }
         catch
@@ -817,6 +834,8 @@ public partial class TeamService(IDbContextFactory<HrmTeContext> factory, IUserA
             Description = p.Description,
             TeamId = p.TeamId,
             TeamName = p.Team?.Name ?? "General Team",
+            OrganisationStructureId = p.OrganisationStructureId,
+            OrganisationStructureName = p.OrganisationStructure?.Name ?? "",
             ProjectManagerStaffId = p.ProjectManagerStaffId,
             ProjectManagerName = p.ProjectManagerName,
             StartDate = p.StartDate,

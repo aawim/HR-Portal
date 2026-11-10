@@ -27,7 +27,14 @@ namespace HRM.Services.Interfaces
         Task<bool> RemoveProjectAssignmentAsync(int projectMemberId, string? remarks, CancellationToken ct = default);
         Task<bool> AssignTaskAsync(AssignTaskRequestDto request, CancellationToken ct = default);
         Task<int> CreateProjectAsync(CreateProjectInputDto input, CancellationToken ct = default);
+        Task<bool> UpdateProjectAsync(UpdateProjectInputDto input, CancellationToken ct = default);
+        Task<bool> DeleteProjectAsync(int projectId, CancellationToken ct = default);
+        Task<List<TeamProjectDto>> GetAllProjectsAsync(int? organisationId = null, int? organisationStructureId = null, int? teamId = null, CancellationToken ct = default);
+        Task<List<TeamProjectDto>> GetDepartmentProjectsAsync(int organisationStructureId, CancellationToken ct = default);
+        Task<List<OrganisationStructureDropdownDto>> GetOrganisationStructuresAsync(int? organisationId = null, CancellationToken ct = default);
         Task<int> CreateTaskAsync(CreateTaskInputDto input, CancellationToken ct = default);
+        Task<bool> UpdateTaskAsync(UpdateTaskInputDto input, CancellationToken ct = default);
+        Task<bool> DeleteTaskAsync(int taskId, CancellationToken ct = default);
         Task<List<AssignmentHistoryDto>> GetAssignmentHistoryAsync(int projectId, int? staffId, CancellationToken ct = default);
         Task<SubTeamWorkspaceDto> LoadSubTeamsAsync(int parentTeamId, CancellationToken ct = default);
         Task<int> SaveSubTeamAsync(SaveSubTeamDto model, CancellationToken ct = default);

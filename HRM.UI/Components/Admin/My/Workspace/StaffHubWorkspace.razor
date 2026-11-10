@@ -40,6 +40,7 @@
 @inject IJSRuntime JS
 @inject ILogger<StaffHubWorkspace> Logger
 @inject HRM.Services.ToastService ToastService
+@inject IUserAccessService UserAccess
 @attribute [Authorize]
 @rendermode RenderMode.InteractiveServer
 
@@ -1084,6 +1085,18 @@
                             <!-- SUB-TAB 2: PROJECTS LIST -->
                             @if (teamCenterSubTab == "projects")
                             {
+                                @if (!IsSupervisorOfCurrentTeam)
+                                {
+                                    <div class="rounded-2xl border border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-950/40 p-8 text-center space-y-2 my-2">
+                                        <div class="text-3xl">🔒</div>
+                                        <h4 class="font-bold text-sm text-amber-900 dark:text-amber-200">Restricted Project Access</h4>
+                                        <p class="text-xs text-amber-700 dark:text-amber-300 max-w-md mx-auto">
+                                            Only supervisors of this team or department are authorized to view and manage projects and tasks.
+                                        </p>
+                                    </div>
+                                }
+                                else
+                                {
                                 <div class="flex items-center justify-between pb-2 mb-3 border-b border-slate-200 dark:border-slate-800 flex-wrap gap-2">
                                     <div>
                                         <h3 class="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
@@ -1191,6 +1204,7 @@
                                             </div>
                                         }
                                     </div>
+                                }
                                 }
                             }
 
@@ -3136,6 +3150,19 @@
         (selectedTeamId.HasValue ? allTeamStaff.Where(s => s.TeamId == selectedTeamId.Value) : allTeamStaff)
         .OrderBy(s => !s.IsSuperVisor).ThenBy(s => s.FullName).ToList();
 
+    private HRM.DTOs.UserContext.UserContextDto? currentUserContext;
+    private bool IsSupervisorOfCurrentTeam
+    {
+        get
+        {
+            if (currentUserContext?.IsSuperAdministrator == true || currentUserContext?.IsOrganisationAdmin == true) return true;
+            if (!selectedTeamId.HasValue) return false;
+            var staffId = currentUserContext?.IndividualId ?? currentUserContext?.BusinessEntityId ?? 0;
+            if (staffId <= 0) return false;
+            return CurrentTeamStaffList.Any(s => s.StaffId == staffId && s.IsSuperVisor);
+        }
+    }
+
     // Projects & Tasks
     private List<TeamProjectDto> currentTeamProjects = new();
     private bool loadingProjects;
@@ -3316,6 +3343,11 @@
 
     protected override async Task OnInitializedAsync()
     {
+        try
+        {
+            currentUserContext = await UserAccess.GetContextAsync();
+        }
+        catch { }
         SyncTabsFromRouteAndQuery();
         await LoadAllDataAsync();
         if (inspectedStaffId.HasValue)
@@ -3793,6 +3825,11 @@
 
     private async Task LoadTeamProjectsAsync(int teamId)
     {
+        if (!IsSupervisorOfCurrentTeam)
+        {
+            currentTeamProjects.Clear();
+            return;
+        }
         loadingProjects = true;
         try
         {

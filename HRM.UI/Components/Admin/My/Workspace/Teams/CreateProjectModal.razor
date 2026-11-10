@@ -48,7 +48,7 @@
                            @bind="model.Name" />
                 </div>
 
-                <!-- Reference & Team -->
+                <!-- Reference & Department -->
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                         <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
@@ -61,6 +61,26 @@
                                @bind="model.Reference" />
                     </div>
 
+                    <div>
+                        <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                            Department / Organisation Structure
+                        </label>
+                        <select class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-xs text-slate-900 dark:text-slate-100 focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
+                                @bind="model.OrganisationStructureId">
+                            <option value="0">None / Cross-department</option>
+                            @if (Departments != null)
+                            {
+                                @foreach (var d in Departments)
+                                {
+                                    <option value="@d.OrganisationStructureId">@d.Name</option>
+                                }
+                            }
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Team, Project Manager & Status -->
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <div>
                         <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
                             Assigned Team
@@ -87,10 +107,7 @@
                                    class="w-full rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-800/60 px-3 py-2 text-xs text-slate-600 dark:text-slate-400" />
                         }
                     </div>
-                </div>
 
-                <!-- Project Manager & Status -->
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                         <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
                             Project Manager / Lead
@@ -186,7 +203,9 @@
     [Parameter] public bool Visible { get; set; }
     [Parameter] public int? TeamId { get; set; }
     [Parameter] public string? TeamName { get; set; }
+    [Parameter] public int? OrganisationStructureId { get; set; }
     [Parameter] public List<TeamDto>? Teams { get; set; }
+    [Parameter] public List<OrganisationStructureDropdownDto>? Departments { get; set; }
     [Parameter] public List<StaffOptionDto>? StaffOptions { get; set; }
     [Parameter] public EventCallback<int> OnSaved { get; set; }
     [Parameter] public EventCallback OnClose { get; set; }
@@ -201,7 +220,7 @@
     private bool busy;
     private string? error;
 
-    protected override void OnParametersSet()
+    protected override async Task OnParametersSetAsync()
     {
         if (Visible)
         {
@@ -209,9 +228,19 @@
             model = new CreateProjectInputDto
             {
                 TeamId = TeamId,
+                OrganisationStructureId = OrganisationStructureId,
                 StartDate = DateTime.Today,
                 Status = "Active"
             };
+
+            if (Departments == null || Departments.Count == 0)
+            {
+                try
+                {
+                    Departments = await TeamService.GetOrganisationStructuresAsync();
+                }
+                catch { }
+            }
         }
     }
 
