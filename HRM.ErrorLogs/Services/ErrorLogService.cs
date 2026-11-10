@@ -15,15 +15,18 @@ public sealed class ErrorLogService : IErrorLogService
     private readonly ConcurrentDictionary<Guid, ErrorLogEntry> _entries = new();
     private readonly ConcurrentQueue<Guid> _order = new();
     private readonly IErrorLogStore? _persistentStore;
+    private readonly IErrorLogQueue? _queue;
     private readonly ILogger<ErrorLogService>? _logger;
     private readonly string _defaultApplicationSource;
 
     public ErrorLogService(
         IErrorLogStore? persistentStore = null,
+        IErrorLogQueue? queue = null,
         ILogger<ErrorLogService>? logger = null,
         string defaultApplicationSource = "HRM.Api")
     {
         _persistentStore = persistentStore;
+        _queue = queue;
         _logger = logger;
         _defaultApplicationSource = defaultApplicationSource;
 
@@ -91,9 +94,14 @@ public sealed class ErrorLogService : IErrorLogService
             _entries.TryRemove(oldId, out _);
         }
 
-        // Asynchronously persist to store if available without blocking or propagating errors
-        if (_persistentStore != null)
+        // Enqueue to bounded channel queue for background batch writing (zero thread blocking)
+        if (_queue != null)
         {
+            _queue.Enqueue(entry);
+        }
+        else if (_persistentStore != null)
+        {
+            // Fallback for standalone/in-memory environments without hosted queue
             _ = Task.Run(async () =>
             {
                 try

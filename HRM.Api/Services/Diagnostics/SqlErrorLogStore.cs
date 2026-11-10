@@ -136,6 +136,139 @@ INSERT INTO [dbo].[ERR_ErrorLogs] (
         }
     }
 
+    public async Task PersistBatchAsync(IReadOnlyList<ErrorLogEntry> entries, CancellationToken cancellationToken = default)
+    {
+        if (entries == null || entries.Count == 0) return;
+
+        if (entries.Count == 1)
+        {
+            await PersistAsync(entries[0], cancellationToken);
+            return;
+        }
+
+        try
+        {
+            var table = BuildErrorLogsDataTable();
+            foreach (var entry in entries)
+            {
+                var row = table.NewRow();
+                PopulateRow(row, entry);
+                table.Rows.Add(row);
+            }
+
+            await using var conn = new SqlConnection(_connectionString);
+            await conn.OpenAsync(cancellationToken);
+
+            using var bulkCopy = new SqlBulkCopy(conn, SqlBulkCopyOptions.CheckConstraints, null)
+            {
+                DestinationTableName = "[dbo].[ERR_ErrorLogs]",
+                BatchSize = entries.Count,
+                BulkCopyTimeout = 30
+            };
+
+            foreach (DataColumn col in table.Columns)
+            {
+                bulkCopy.ColumnMappings.Add(col.ColumnName, col.ColumnName);
+            }
+
+            await bulkCopy.WriteToServerAsync(table, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogWarning(ex, "SqlErrorLogStore: Unable to write batch of {Count} errors to HrmErrorLogs database.", entries.Count);
+        }
+    }
+
+    private static DataTable BuildErrorLogsDataTable()
+    {
+        var table = new DataTable("ERR_ErrorLogs");
+        table.Columns.Add("Id", typeof(Guid));
+        table.Columns.Add("TimestampUtc", typeof(DateTime));
+        table.Columns.Add("TimestampLocal", typeof(DateTime));
+        table.Columns.Add("CriticalityLevel", typeof(int));
+        table.Columns.Add("ApplicationSource", typeof(string));
+        table.Columns.Add("Environment", typeof(string));
+        table.Columns.Add("MachineName", typeof(string));
+        table.Columns.Add("ProcessId", typeof(int));
+        table.Columns.Add("ThreadId", typeof(int));
+        table.Columns.Add("TraceId", typeof(string));
+        table.Columns.Add("Username", typeof(string));
+        table.Columns.Add("UserId", typeof(string));
+        table.Columns.Add("RemoteIp", typeof(string));
+        table.Columns.Add("PageLocation", typeof(string));
+        table.Columns.Add("HttpMethod", typeof(string));
+        table.Columns.Add("StatusCode", typeof(int));
+        table.Columns.Add("UserAgent", typeof(string));
+        table.Columns.Add("ExceptionType", typeof(string));
+        table.Columns.Add("ErrorMessage", typeof(string));
+        table.Columns.Add("StackTrace", typeof(string));
+        table.Columns.Add("InnerExceptionType", typeof(string));
+        table.Columns.Add("InnerErrorMessage", typeof(string));
+        table.Columns.Add("InnerStackTrace", typeof(string));
+        table.Columns.Add("FileName", typeof(string));
+        table.Columns.Add("FilePath", typeof(string));
+        table.Columns.Add("LineNumber", typeof(int));
+        table.Columns.Add("ColumnNumber", typeof(int));
+        table.Columns.Add("ClassName", typeof(string));
+        table.Columns.Add("MethodName", typeof(string));
+        table.Columns.Add("Namespace", typeof(string));
+        table.Columns.Add("AssemblyName", typeof(string));
+        table.Columns.Add("RootCauseSummary", typeof(string));
+        table.Columns.Add("RecommendedAction", typeof(string));
+        table.Columns.Add("DiagnosticStepsJson", typeof(string));
+        table.Columns.Add("SuggestedCodePattern", typeof(string));
+        table.Columns.Add("CustomDataJson", typeof(string));
+        table.Columns.Add("IsResolved", typeof(bool));
+        table.Columns.Add("ResolvedBy", typeof(string));
+        table.Columns.Add("ResolvedAt", typeof(DateTime));
+        table.Columns.Add("ResolutionNotes", typeof(string));
+        return table;
+    }
+
+    private static void PopulateRow(DataRow row, ErrorLogEntry entry)
+    {
+        row["Id"] = entry.Id;
+        row["TimestampUtc"] = entry.TimestampUtc;
+        row["TimestampLocal"] = entry.TimestampLocal;
+        row["CriticalityLevel"] = (int)entry.CriticalityLevel;
+        row["ApplicationSource"] = entry.ApplicationSource ?? "HRM.Api";
+        row["Environment"] = entry.Environment ?? "Development";
+        row["MachineName"] = entry.MachineName ?? System.Environment.MachineName;
+        row["ProcessId"] = entry.ProcessId;
+        row["ThreadId"] = entry.ThreadId;
+        row["TraceId"] = (object?)entry.TraceId ?? DBNull.Value;
+        row["Username"] = (object?)entry.Username ?? DBNull.Value;
+        row["UserId"] = (object?)entry.UserId ?? DBNull.Value;
+        row["RemoteIp"] = (object?)entry.RemoteIp ?? DBNull.Value;
+        row["PageLocation"] = (object?)entry.PageLocation ?? DBNull.Value;
+        row["HttpMethod"] = (object?)entry.HttpMethod ?? DBNull.Value;
+        row["StatusCode"] = (object?)entry.StatusCode ?? DBNull.Value;
+        row["UserAgent"] = (object?)entry.UserAgent ?? DBNull.Value;
+        row["ExceptionType"] = entry.ExceptionType;
+        row["ErrorMessage"] = entry.ErrorMessage;
+        row["StackTrace"] = (object?)entry.StackTrace ?? DBNull.Value;
+        row["InnerExceptionType"] = (object?)entry.InnerExceptionType ?? DBNull.Value;
+        row["InnerErrorMessage"] = (object?)entry.InnerErrorMessage ?? DBNull.Value;
+        row["InnerStackTrace"] = (object?)entry.InnerStackTrace ?? DBNull.Value;
+        row["FileName"] = (object?)entry.Location?.FileName ?? DBNull.Value;
+        row["FilePath"] = (object?)entry.Location?.FilePath ?? DBNull.Value;
+        row["LineNumber"] = (object?)entry.Location?.LineNumber ?? DBNull.Value;
+        row["ColumnNumber"] = (object?)entry.Location?.ColumnNumber ?? DBNull.Value;
+        row["ClassName"] = (object?)entry.Location?.ClassName ?? DBNull.Value;
+        row["MethodName"] = (object?)entry.Location?.MethodName ?? DBNull.Value;
+        row["Namespace"] = (object?)entry.Location?.Namespace ?? DBNull.Value;
+        row["AssemblyName"] = (object?)entry.Location?.AssemblyName ?? DBNull.Value;
+        row["RootCauseSummary"] = (object?)entry.Fix?.RootCauseSummary ?? DBNull.Value;
+        row["RecommendedAction"] = (object?)entry.Fix?.RecommendedAction ?? DBNull.Value;
+        row["DiagnosticStepsJson"] = entry.Fix?.DiagnosticSteps != null ? JsonSerializer.Serialize(entry.Fix.DiagnosticSteps) : DBNull.Value;
+        row["SuggestedCodePattern"] = (object?)entry.Fix?.SuggestedCodePattern ?? DBNull.Value;
+        row["CustomDataJson"] = (object?)entry.CustomDataJson ?? DBNull.Value;
+        row["IsResolved"] = entry.IsResolved;
+        row["ResolvedBy"] = (object?)entry.ResolvedBy ?? DBNull.Value;
+        row["ResolvedAt"] = (object?)entry.ResolvedAt ?? DBNull.Value;
+        row["ResolutionNotes"] = (object?)entry.ResolutionNotes ?? DBNull.Value;
+    }
+
     public async Task<IReadOnlyList<ErrorLogEntry>> LoadRecentAsync(int count, CancellationToken cancellationToken = default)
     {
         var list = new List<ErrorLogEntry>();

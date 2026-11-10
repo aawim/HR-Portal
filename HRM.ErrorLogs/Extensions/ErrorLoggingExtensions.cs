@@ -15,11 +15,16 @@ public static class ErrorLoggingExtensions
         this IServiceCollection services,
         string applicationSource = "HRM.Api")
     {
+        // High-performance bounded channel queue and batch background processor
+        services.AddSingleton<IErrorLogQueue, ChannelErrorLogQueue>();
+        services.AddHostedService<ErrorLogBackgroundProcessor>();
+
         services.AddSingleton<IErrorLogService>(sp =>
         {
             var store = sp.GetService<IErrorLogStore>();
+            var queue = sp.GetRequiredService<IErrorLogQueue>();
             var logger = sp.GetService<ILogger<ErrorLogService>>();
-            return new ErrorLogService(store, logger, applicationSource);
+            return new ErrorLogService(store, queue, logger, applicationSource);
         });
 
         // Register logger provider so standard ILogger.LogError feeds into ErrorLogService
