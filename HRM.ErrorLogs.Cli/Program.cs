@@ -1,4 +1,5 @@
 using System.Text.Json;
+using HRM.ErrorLogs.Cli;
 using HRM.ErrorLogs.Diagnostics;
 using HRM.ErrorLogs.Models;
 using HRM.ErrorLogs.Services;
@@ -17,8 +18,9 @@ var connStr = config.GetConnectionString("ErrorLogsConnection") ??
               config.GetConnectionString("HrmErrorLogs") ??
               "Server=DESKTOP-IGBGLUQ\\SQLEXPRESS;Database=HrmErrorLogs;Trusted_Connection=True;TrustServerCertificate=True;";
 
-// Initialize service
-var errorService = new ErrorLogService(persistentStore: null, queue: null, logger: null, defaultApplicationSource: "HRM.ErrorLogs.CLI");
+// Initialize store and service
+var store = new CliErrorLogStore(connStr);
+var errorService = new ErrorLogService(persistentStore: store, queue: null, logger: null, defaultApplicationSource: "HRM.ErrorLogs.CLI");
 
 PrintBanner(connStr);
 

@@ -283,66 +283,7 @@ INSERT INTO [dbo].[ERR_ErrorLogs] (
 
             while (await reader.ReadAsync(cancellationToken))
             {
-                var entry = new ErrorLogEntry
-                {
-                    Id = reader.GetGuid(reader.GetOrdinal("Id")),
-                    TimestampUtc = reader.GetDateTime(reader.GetOrdinal("TimestampUtc")),
-                    TimestampLocal = reader.GetDateTime(reader.GetOrdinal("TimestampLocal")),
-                    CriticalityLevel = (ErrorCriticalityLevel)reader.GetInt32(reader.GetOrdinal("CriticalityLevel")),
-                    ApplicationSource = reader.GetString(reader.GetOrdinal("ApplicationSource")),
-                    Environment = reader.GetString(reader.GetOrdinal("Environment")),
-                    MachineName = reader.GetString(reader.GetOrdinal("MachineName")),
-                    ProcessId = reader.GetInt32(reader.GetOrdinal("ProcessId")),
-                    ThreadId = reader.GetInt32(reader.GetOrdinal("ThreadId")),
-                    TraceId = reader.IsDBNull(reader.GetOrdinal("TraceId")) ? null : reader.GetString(reader.GetOrdinal("TraceId")),
-                    Username = reader.IsDBNull(reader.GetOrdinal("Username")) ? null : reader.GetString(reader.GetOrdinal("Username")),
-                    UserId = reader.IsDBNull(reader.GetOrdinal("UserId")) ? null : reader.GetString(reader.GetOrdinal("UserId")),
-                    RemoteIp = reader.IsDBNull(reader.GetOrdinal("RemoteIp")) ? null : reader.GetString(reader.GetOrdinal("RemoteIp")),
-                    PageLocation = reader.IsDBNull(reader.GetOrdinal("PageLocation")) ? null : reader.GetString(reader.GetOrdinal("PageLocation")),
-                    HttpMethod = reader.IsDBNull(reader.GetOrdinal("HttpMethod")) ? null : reader.GetString(reader.GetOrdinal("HttpMethod")),
-                    StatusCode = reader.IsDBNull(reader.GetOrdinal("StatusCode")) ? null : reader.GetInt32(reader.GetOrdinal("StatusCode")),
-                    UserAgent = reader.IsDBNull(reader.GetOrdinal("UserAgent")) ? null : reader.GetString(reader.GetOrdinal("UserAgent")),
-                    ExceptionType = reader.GetString(reader.GetOrdinal("ExceptionType")),
-                    ErrorMessage = reader.GetString(reader.GetOrdinal("ErrorMessage")),
-                    StackTrace = reader.IsDBNull(reader.GetOrdinal("StackTrace")) ? null : reader.GetString(reader.GetOrdinal("StackTrace")),
-                    InnerExceptionType = reader.IsDBNull(reader.GetOrdinal("InnerExceptionType")) ? null : reader.GetString(reader.GetOrdinal("InnerExceptionType")),
-                    InnerErrorMessage = reader.IsDBNull(reader.GetOrdinal("InnerErrorMessage")) ? null : reader.GetString(reader.GetOrdinal("InnerErrorMessage")),
-                    InnerStackTrace = reader.IsDBNull(reader.GetOrdinal("InnerStackTrace")) ? null : reader.GetString(reader.GetOrdinal("InnerStackTrace")),
-                    Location = new ErrorLocation
-                    {
-                        FileName = reader.IsDBNull(reader.GetOrdinal("FileName")) ? string.Empty : reader.GetString(reader.GetOrdinal("FileName")),
-                        FilePath = reader.IsDBNull(reader.GetOrdinal("FilePath")) ? string.Empty : reader.GetString(reader.GetOrdinal("FilePath")),
-                        LineNumber = reader.GetInt32(reader.GetOrdinal("LineNumber")),
-                        ColumnNumber = reader.GetInt32(reader.GetOrdinal("ColumnNumber")),
-                        ClassName = reader.IsDBNull(reader.GetOrdinal("ClassName")) ? string.Empty : reader.GetString(reader.GetOrdinal("ClassName")),
-                        MethodName = reader.IsDBNull(reader.GetOrdinal("MethodName")) ? string.Empty : reader.GetString(reader.GetOrdinal("MethodName")),
-                        Namespace = reader.IsDBNull(reader.GetOrdinal("Namespace")) ? string.Empty : reader.GetString(reader.GetOrdinal("Namespace")),
-                        AssemblyName = reader.IsDBNull(reader.GetOrdinal("AssemblyName")) ? string.Empty : reader.GetString(reader.GetOrdinal("AssemblyName"))
-                    },
-                    Fix = new FixRecommendation
-                    {
-                        RootCauseSummary = reader.IsDBNull(reader.GetOrdinal("RootCauseSummary")) ? string.Empty : reader.GetString(reader.GetOrdinal("RootCauseSummary")),
-                        RecommendedAction = reader.IsDBNull(reader.GetOrdinal("RecommendedAction")) ? string.Empty : reader.GetString(reader.GetOrdinal("RecommendedAction")),
-                        SuggestedCodePattern = reader.IsDBNull(reader.GetOrdinal("SuggestedCodePattern")) ? null : reader.GetString(reader.GetOrdinal("SuggestedCodePattern"))
-                    },
-                    CustomDataJson = reader.IsDBNull(reader.GetOrdinal("CustomDataJson")) ? null : reader.GetString(reader.GetOrdinal("CustomDataJson")),
-                    IsResolved = reader.GetBoolean(reader.GetOrdinal("IsResolved")),
-                    ResolvedBy = reader.IsDBNull(reader.GetOrdinal("ResolvedBy")) ? null : reader.GetString(reader.GetOrdinal("ResolvedBy")),
-                    ResolvedAt = reader.IsDBNull(reader.GetOrdinal("ResolvedAt")) ? null : reader.GetDateTime(reader.GetOrdinal("ResolvedAt")),
-                    ResolutionNotes = reader.IsDBNull(reader.GetOrdinal("ResolutionNotes")) ? null : reader.GetString(reader.GetOrdinal("ResolutionNotes"))
-                };
-
-                var stepsJson = reader.IsDBNull(reader.GetOrdinal("DiagnosticStepsJson")) ? null : reader.GetString(reader.GetOrdinal("DiagnosticStepsJson"));
-                if (!string.IsNullOrWhiteSpace(stepsJson))
-                {
-                    try
-                    {
-                        entry.Fix.DiagnosticSteps = JsonSerializer.Deserialize<List<string>>(stepsJson) ?? new List<string>();
-                    }
-                    catch { }
-                }
-
-                list.Add(entry);
+                list.Add(MapEntryFromReader(reader));
             }
         }
         catch (Exception ex)
@@ -351,6 +292,113 @@ INSERT INTO [dbo].[ERR_ErrorLogs] (
         }
 
         return list;
+    }
+
+    public async Task<ErrorLogEntry?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await using var conn = new SqlConnection(_connectionString);
+            await conn.OpenAsync(cancellationToken);
+
+            const string sql = "SELECT TOP (1) * FROM [dbo].[ERR_ErrorLogs] WHERE [Id] = @Id;";
+            await using var cmd = new SqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@Id", id);
+
+            await using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
+            if (await reader.ReadAsync(cancellationToken))
+            {
+                return MapEntryFromReader(reader);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogWarning(ex, "SqlErrorLogStore: Unable to read error log {Id} from HrmErrorLogs database.", id);
+        }
+
+        return null;
+    }
+
+    public async Task<int> ClearResolvedAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await using var conn = new SqlConnection(_connectionString);
+            await conn.OpenAsync(cancellationToken);
+
+            const string sql = "DELETE FROM [dbo].[ERR_ErrorLogs] WHERE [IsResolved] = 1;";
+            await using var cmd = new SqlCommand(sql, conn);
+            return await cmd.ExecuteNonQueryAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogWarning(ex, "SqlErrorLogStore: Unable to clear resolved error logs from HrmErrorLogs database.");
+            return 0;
+        }
+    }
+
+    private static ErrorLogEntry MapEntryFromReader(SqlDataReader reader)
+    {
+        var entry = new ErrorLogEntry
+        {
+            Id = reader.GetGuid(reader.GetOrdinal("Id")),
+            TimestampUtc = reader.GetDateTime(reader.GetOrdinal("TimestampUtc")),
+            TimestampLocal = reader.GetDateTime(reader.GetOrdinal("TimestampLocal")),
+            CriticalityLevel = (ErrorCriticalityLevel)reader.GetInt32(reader.GetOrdinal("CriticalityLevel")),
+            ApplicationSource = reader.GetString(reader.GetOrdinal("ApplicationSource")),
+            Environment = reader.GetString(reader.GetOrdinal("Environment")),
+            MachineName = reader.GetString(reader.GetOrdinal("MachineName")),
+            ProcessId = reader.GetInt32(reader.GetOrdinal("ProcessId")),
+            ThreadId = reader.GetInt32(reader.GetOrdinal("ThreadId")),
+            TraceId = reader.IsDBNull(reader.GetOrdinal("TraceId")) ? null : reader.GetString(reader.GetOrdinal("TraceId")),
+            Username = reader.IsDBNull(reader.GetOrdinal("Username")) ? null : reader.GetString(reader.GetOrdinal("Username")),
+            UserId = reader.IsDBNull(reader.GetOrdinal("UserId")) ? null : reader.GetString(reader.GetOrdinal("UserId")),
+            RemoteIp = reader.IsDBNull(reader.GetOrdinal("RemoteIp")) ? null : reader.GetString(reader.GetOrdinal("RemoteIp")),
+            PageLocation = reader.IsDBNull(reader.GetOrdinal("PageLocation")) ? null : reader.GetString(reader.GetOrdinal("PageLocation")),
+            HttpMethod = reader.IsDBNull(reader.GetOrdinal("HttpMethod")) ? null : reader.GetString(reader.GetOrdinal("HttpMethod")),
+            StatusCode = reader.IsDBNull(reader.GetOrdinal("StatusCode")) ? null : reader.GetInt32(reader.GetOrdinal("StatusCode")),
+            UserAgent = reader.IsDBNull(reader.GetOrdinal("UserAgent")) ? null : reader.GetString(reader.GetOrdinal("UserAgent")),
+            ExceptionType = reader.GetString(reader.GetOrdinal("ExceptionType")),
+            ErrorMessage = reader.GetString(reader.GetOrdinal("ErrorMessage")),
+            StackTrace = reader.IsDBNull(reader.GetOrdinal("StackTrace")) ? null : reader.GetString(reader.GetOrdinal("StackTrace")),
+            InnerExceptionType = reader.IsDBNull(reader.GetOrdinal("InnerExceptionType")) ? null : reader.GetString(reader.GetOrdinal("InnerExceptionType")),
+            InnerErrorMessage = reader.IsDBNull(reader.GetOrdinal("InnerErrorMessage")) ? null : reader.GetString(reader.GetOrdinal("InnerErrorMessage")),
+            InnerStackTrace = reader.IsDBNull(reader.GetOrdinal("InnerStackTrace")) ? null : reader.GetString(reader.GetOrdinal("InnerStackTrace")),
+            Location = new ErrorLocation
+            {
+                FileName = reader.IsDBNull(reader.GetOrdinal("FileName")) ? string.Empty : reader.GetString(reader.GetOrdinal("FileName")),
+                FilePath = reader.IsDBNull(reader.GetOrdinal("FilePath")) ? string.Empty : reader.GetString(reader.GetOrdinal("FilePath")),
+                LineNumber = reader.GetInt32(reader.GetOrdinal("LineNumber")),
+                ColumnNumber = reader.GetInt32(reader.GetOrdinal("ColumnNumber")),
+                ClassName = reader.IsDBNull(reader.GetOrdinal("ClassName")) ? string.Empty : reader.GetString(reader.GetOrdinal("ClassName")),
+                MethodName = reader.IsDBNull(reader.GetOrdinal("MethodName")) ? string.Empty : reader.GetString(reader.GetOrdinal("MethodName")),
+                Namespace = reader.IsDBNull(reader.GetOrdinal("Namespace")) ? string.Empty : reader.GetString(reader.GetOrdinal("Namespace")),
+                AssemblyName = reader.IsDBNull(reader.GetOrdinal("AssemblyName")) ? string.Empty : reader.GetString(reader.GetOrdinal("AssemblyName"))
+            },
+            Fix = new FixRecommendation
+            {
+                RootCauseSummary = reader.IsDBNull(reader.GetOrdinal("RootCauseSummary")) ? string.Empty : reader.GetString(reader.GetOrdinal("RootCauseSummary")),
+                RecommendedAction = reader.IsDBNull(reader.GetOrdinal("RecommendedAction")) ? string.Empty : reader.GetString(reader.GetOrdinal("RecommendedAction")),
+                SuggestedCodePattern = reader.IsDBNull(reader.GetOrdinal("SuggestedCodePattern")) ? null : reader.GetString(reader.GetOrdinal("SuggestedCodePattern"))
+            },
+            CustomDataJson = reader.IsDBNull(reader.GetOrdinal("CustomDataJson")) ? null : reader.GetString(reader.GetOrdinal("CustomDataJson")),
+            IsResolved = reader.GetBoolean(reader.GetOrdinal("IsResolved")),
+            ResolvedBy = reader.IsDBNull(reader.GetOrdinal("ResolvedBy")) ? null : reader.GetString(reader.GetOrdinal("ResolvedBy")),
+            ResolvedAt = reader.IsDBNull(reader.GetOrdinal("ResolvedAt")) ? null : reader.GetDateTime(reader.GetOrdinal("ResolvedAt")),
+            ResolutionNotes = reader.IsDBNull(reader.GetOrdinal("ResolutionNotes")) ? null : reader.GetString(reader.GetOrdinal("ResolutionNotes"))
+        };
+
+        var stepsJson = reader.IsDBNull(reader.GetOrdinal("DiagnosticStepsJson")) ? null : reader.GetString(reader.GetOrdinal("DiagnosticStepsJson"));
+        if (!string.IsNullOrWhiteSpace(stepsJson))
+        {
+            try
+            {
+                entry.Fix.DiagnosticSteps = JsonSerializer.Deserialize<List<string>>(stepsJson) ?? new List<string>();
+            }
+            catch { }
+        }
+
+        return entry;
     }
 
     public async Task<bool> UpdateResolutionAsync(Guid id, bool isResolved, string? resolvedBy, string? notes, CancellationToken cancellationToken = default)

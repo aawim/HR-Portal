@@ -33,7 +33,7 @@ public sealed class ErrorLogApiClient : IErrorLogApiClient
             if (!string.IsNullOrWhiteSpace(search)) url += $"&search={Uri.EscapeDataString(search)}";
 
             var response = await _client.GetFromJsonAsync<List<ErrorLogEntry>>(url);
-            if (response != null && response.Count > 0)
+            if (response != null)
                 return response;
         }
         catch (Exception ex)

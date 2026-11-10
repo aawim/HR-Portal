@@ -6,6 +6,7 @@ using HRM.ErrorLogs.Services;
 namespace HRM.Api.Controllers.V1;
 
 [Route("api/v1/error-logs")]
+[AllowMissingEmployee]
 public sealed class ErrorLogsController(IErrorLogService errorLogService) : HrmApiController
 {
     [HttpGet]

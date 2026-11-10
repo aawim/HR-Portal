@@ -118,12 +118,45 @@ public sealed class ErrorLogService : IErrorLogService
         return Task.FromResult(entry);
     }
 
-    public Task<IReadOnlyList<ErrorLogEntry>> GetRecentErrorsAsync(
+    public async Task<IReadOnlyList<ErrorLogEntry>> GetRecentErrorsAsync(
         int count = 100,
         ErrorCriticalityLevel? minLevel = null,
         string? search = null)
     {
-        var query = _entries.Values.AsEnumerable();
+        IEnumerable<ErrorLogEntry> combined;
+
+        if (_persistentStore != null)
+        {
+            try
+            {
+                var dbEntries = await _persistentStore.LoadRecentAsync(count);
+                var map = new Dictionary<Guid, ErrorLogEntry>();
+
+                foreach (var item in dbEntries)
+                {
+                    map[item.Id] = item;
+                    _entries.TryAdd(item.Id, item);
+                }
+
+                foreach (var item in _entries.Values)
+                {
+                    map.TryAdd(item.Id, item);
+                }
+
+                combined = map.Values;
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "ErrorLogService: Failed to load recent errors from persistent store, falling back to memory.");
+                combined = _entries.Values;
+            }
+        }
+        else
+        {
+            combined = _entries.Values;
+        }
+
+        var query = combined.AsEnumerable();
 
         if (minLevel.HasValue)
         {
@@ -134,10 +167,10 @@ public sealed class ErrorLogService : IErrorLogService
         {
             var term = search.Trim();
             query = query.Where(e =>
-                e.ErrorMessage.Contains(term, StringComparison.OrdinalIgnoreCase) ||
-                e.ExceptionType.Contains(term, StringComparison.OrdinalIgnoreCase) ||
-                e.Location.FileName.Contains(term, StringComparison.OrdinalIgnoreCase) ||
-                e.Location.MethodName.Contains(term, StringComparison.OrdinalIgnoreCase) ||
+                (e.ErrorMessage != null && e.ErrorMessage.Contains(term, StringComparison.OrdinalIgnoreCase)) ||
+                (e.ExceptionType != null && e.ExceptionType.Contains(term, StringComparison.OrdinalIgnoreCase)) ||
+                (e.Location?.FileName != null && e.Location.FileName.Contains(term, StringComparison.OrdinalIgnoreCase)) ||
+                (e.Location?.MethodName != null && e.Location.MethodName.Contains(term, StringComparison.OrdinalIgnoreCase)) ||
                 (e.Username != null && e.Username.Contains(term, StringComparison.OrdinalIgnoreCase)) ||
                 (e.RemoteIp != null && e.RemoteIp.Contains(term, StringComparison.OrdinalIgnoreCase)) ||
                 (e.PageLocation != null && e.PageLocation.Contains(term, StringComparison.OrdinalIgnoreCase)) ||
@@ -149,69 +182,90 @@ public sealed class ErrorLogService : IErrorLogService
             .Take(Math.Min(count, MaxBufferSize))
             .ToList();
 
-        return Task.FromResult<IReadOnlyList<ErrorLogEntry>>(results);
+        return results;
     }
 
-    public Task<ErrorLogEntry?> GetErrorByIdAsync(Guid id)
+    public async Task<ErrorLogEntry?> GetErrorByIdAsync(Guid id)
     {
-        _entries.TryGetValue(id, out var entry);
-        return Task.FromResult(entry);
+        if (_entries.TryGetValue(id, out var entry))
+            return entry;
+
+        if (_persistentStore != null)
+        {
+            try
+            {
+                var dbEntry = await _persistentStore.GetByIdAsync(id);
+                if (dbEntry != null)
+                {
+                    _entries[dbEntry.Id] = dbEntry;
+                    return dbEntry;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "ErrorLogService: Failed to fetch error {Id} from persistent store.", id);
+            }
+        }
+
+        return null;
     }
 
     public async Task<bool> MarkResolvedAsync(Guid id, string resolvedBy, string? notes = null)
     {
+        bool found = false;
         if (_entries.TryGetValue(id, out var entry))
         {
             entry.IsResolved = true;
             entry.ResolvedBy = resolvedBy;
             entry.ResolvedAt = DateTime.UtcNow;
             entry.ResolutionNotes = notes;
-
-            if (_persistentStore != null)
-            {
-                try
-                {
-                    await _persistentStore.UpdateResolutionAsync(id, true, resolvedBy, notes);
-                }
-                catch (Exception ex)
-                {
-                    _logger?.LogWarning(ex, "Failed to update resolution in store for {Id}", id);
-                }
-            }
-
-            return true;
+            found = true;
         }
 
-        return false;
+        if (_persistentStore != null)
+        {
+            try
+            {
+                var storeUpdated = await _persistentStore.UpdateResolutionAsync(id, true, resolvedBy, notes);
+                found = found || storeUpdated;
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "Failed to update resolution in store for {Id}", id);
+            }
+        }
+
+        return found;
     }
 
     public async Task<bool> ReopenAsync(Guid id)
     {
+        bool found = false;
         if (_entries.TryGetValue(id, out var entry))
         {
             entry.IsResolved = false;
             entry.ResolvedBy = null;
             entry.ResolvedAt = null;
-
-            if (_persistentStore != null)
-            {
-                try
-                {
-                    await _persistentStore.UpdateResolutionAsync(id, false, null, null);
-                }
-                catch (Exception ex)
-                {
-                    _logger?.LogWarning(ex, "Failed to update resolution in store for {Id}", id);
-                }
-            }
-
-            return true;
+            found = true;
         }
 
-        return false;
+        if (_persistentStore != null)
+        {
+            try
+            {
+                var storeUpdated = await _persistentStore.UpdateResolutionAsync(id, false, null, null);
+                found = found || storeUpdated;
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "Failed to update resolution in store for {Id}", id);
+            }
+        }
+
+        return found;
     }
 
-    public Task<int> ClearResolvedAsync()
+    public async Task<int> ClearResolvedAsync()
     {
         var resolvedIds = _entries.Values
             .Where(e => e.IsResolved)
@@ -227,12 +281,25 @@ public sealed class ErrorLogService : IErrorLogService
             }
         }
 
-        return Task.FromResult(removed);
+        if (_persistentStore != null)
+        {
+            try
+            {
+                var storeCleared = await _persistentStore.ClearResolvedAsync();
+                return Math.Max(removed, storeCleared);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "Failed to clear resolved error logs from persistent store.");
+            }
+        }
+
+        return removed;
     }
 
-    public Task<ErrorStatistics> GetStatisticsAsync()
+    public async Task<ErrorStatistics> GetStatisticsAsync()
     {
-        var all = _entries.Values.ToList();
+        var all = (await GetRecentErrorsAsync(MaxBufferSize)).ToList();
         var now = DateTime.UtcNow;
 
         var stats = new ErrorStatistics
@@ -264,11 +331,13 @@ public sealed class ErrorLogService : IErrorLogService
             })
             .ToList();
 
-        return Task.FromResult(stats);
+        return stats;
     }
 
     private void SeedSampleIfEmpty()
     {
+        if (_persistentStore != null) return;
+
         if (_entries.IsEmpty)
         {
             // Seed a representative sample entry so developer portal demonstrates rich metadata immediately
