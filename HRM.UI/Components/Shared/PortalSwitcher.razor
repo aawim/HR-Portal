@@ -104,10 +104,10 @@ else if (CanAccessAdminPortal && PortalContext.CanAccessAdminPortal)
     {
         var path = new Uri(NavManager.Uri).AbsolutePath.ToLower();
 
-        if (path == "/admin" || path.StartsWith("/admin/"))
-            PortalContext.SwitchToAdmin();
-        else if (path == "/developer" || path.StartsWith("/developer/"))
+        if (path.Contains("/developer"))
             PortalContext.SwitchToDeveloper();
+        else if (path == "/admin" || path.StartsWith("/admin/"))
+            PortalContext.SwitchToAdmin();
         else
             PortalContext.SwitchToEmployee();
     }

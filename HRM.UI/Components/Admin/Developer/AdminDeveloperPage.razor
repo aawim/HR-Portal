@@ -104,6 +104,11 @@
                             Approval Workflows
                         </button>
                         <button type="button"
+                                class="rounded-t-xl px-4 py-2 font-bold text-xs md:text-sm transition-all border-t border-l border-r @(activeTab == "health" ? "bg-amber-600 dark:bg-amber-600 text-white border-amber-600 dark:border-amber-500 shadow-sm" : "bg-[#fef3c7]/60 text-slate-800 dark:bg-slate-800 dark:text-slate-300 border-slate-300 dark:border-slate-700 hover:bg-[#fde68a]/60")"
+                                @onclick='() => SetTab("health")'>
+                            Application Health
+                        </button>
+                        <button type="button"
                                 class="rounded-t-xl px-4 py-2 font-bold text-xs md:text-sm transition-all border-t border-l border-r @(activeTab == "diagnostics" ? "bg-amber-600 dark:bg-amber-600 text-white border-amber-600 dark:border-amber-500 shadow-sm" : "bg-[#fef3c7]/60 text-slate-800 dark:bg-slate-800 dark:text-slate-300 border-slate-300 dark:border-slate-700 hover:bg-[#fde68a]/60")"
                                 @onclick='() => SetTab("diagnostics")'>
                             System & Diagnostics
@@ -158,7 +163,7 @@
                             </div>
 
                             <!-- Fast Navigation Feature Panels -->
-                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                                 <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs flex flex-col justify-between gap-3">
                                     <div>
                                         <div class="flex items-center gap-2 mb-1">
@@ -206,6 +211,22 @@
                                         Configure Workflows →
                                     </button>
                                 </div>
+
+                                <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs flex flex-col justify-between gap-3">
+                                    <div>
+                                        <div class="flex items-center gap-2 mb-1">
+                                            <span class="text-lg">❤️</span>
+                                            <h3 class="font-bold text-sm text-slate-900">Application Health</h3>
+                                        </div>
+                                        <p class="text-xs text-slate-500">
+                                            Live health telemetry for Backend API, Payroll.Worker background service, pages directory, and most visited pages.
+                                        </p>
+                                    </div>
+                                    <button type="button" class="w-full rounded-lg bg-amber-600 hover:bg-amber-700 text-white px-3 py-2 text-xs font-semibold transition"
+                                            @onclick='() => SetTab("health")'>
+                                        View App Health →
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     }
@@ -225,6 +246,12 @@
                     {
                         <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
                             <LeaveFlowSettings />
+                        </div>
+                    }
+                    else if (activeTab == "health")
+                    {
+                        <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
+                            <ApplicationHealthTab />
                         </div>
                     }
                     else if (activeTab == "diagnostics")
@@ -298,6 +325,13 @@
 
     protected override async Task OnInitializedAsync()
     {
+        var path = new Uri(Navigation.Uri).AbsolutePath;
+        if (path.StartsWith("/admin/developer", StringComparison.OrdinalIgnoreCase))
+        {
+            var target = "/developer" + path.Substring("/admin/developer".Length);
+            Navigation.NavigateTo(target, replace: true);
+            return;
+        }
         try
         {
             isDeveloper = await UserAccess.HasUserGroupAsync("Developer") || await UserAccess.HasPermissionAsync("Developer");
@@ -322,7 +356,7 @@
         if (!string.IsNullOrWhiteSpace(selected))
         {
             var normalized = selected.ToLowerInvariant();
-            if (normalized is "overview" or "request-types" or "transitions" or "workflows" or "diagnostics")
+            if (normalized is "overview" or "request-types" or "transitions" or "workflows" or "health" or "diagnostics")
             {
                 activeTab = normalized;
             }

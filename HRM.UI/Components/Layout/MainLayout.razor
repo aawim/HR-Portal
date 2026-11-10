@@ -84,13 +84,13 @@
     [CascadingParameter]
     private Task<AuthenticationState>? AuthenticationState { get; set; }
 
-    private bool IsAdminPortal =>
-     new Uri(Navigation.Uri).AbsolutePath
-         .Split('/', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.Equals("admin", StringComparison.OrdinalIgnoreCase) == true;
-
     private bool IsDeveloperPortal =>
      new Uri(Navigation.Uri).AbsolutePath
-         .Split('/', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.Equals("developer", StringComparison.OrdinalIgnoreCase) == true;
+         .Split('/', StringSplitOptions.RemoveEmptyEntries).Any(s => s.Equals("developer", StringComparison.OrdinalIgnoreCase));
+
+    private bool IsAdminPortal =>
+     !IsDeveloperPortal && new Uri(Navigation.Uri).AbsolutePath
+         .Split('/', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.Equals("admin", StringComparison.OrdinalIgnoreCase) == true;
 
     private bool IsAuditPortal =>
      new Uri(Navigation.Uri).AbsolutePath
@@ -105,8 +105,8 @@
         }
     }
 
-    private string ShellContextClass => IsAdminPortal ? "portal-admin" :
-        IsDeveloperPortal ? "portal-developer" :
+    private string ShellContextClass => IsDeveloperPortal ? "portal-developer" :
+        IsAdminPortal ? "portal-admin" :
         IsAuditPortal ? "portal-audit" :
         IsOnlinePortal ? "portal-online" : "portal-public";
 
