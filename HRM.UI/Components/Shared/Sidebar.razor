@@ -35,7 +35,23 @@
                 <!-- Active Navigation Links -->
                 <nav class="flex-1 overflow-y-auto py-4">
                     <ul class="space-y-1 px-3">
-                        @if (IsAdminPortal && CanAccessAdminPortal)
+                        @if (IsDeveloperPortal && (CanAccessDeveloperPortal || isDeveloper))
+                        {
+                            <!-- Developer Menu -->
+                            <NavItem Compact="collapsed" Href="/developer" Icon="code" Text="Workspace" IsActive="true" />
+                            <NavItem Compact="collapsed" Href="/developer/overview" Icon="home" Text="Overview" />
+                            <NavItem Compact="collapsed" Href="/developer/request-types" Icon="document" Text="Request Types" />
+                            <NavItem Compact="collapsed" Href="/developer/transitions" Icon="trending-up" Text="Transitions" />
+                            <NavItem Compact="collapsed" Href="/developer/workflows" Icon="briefcase" Text="Workflows" />
+                            <NavItem Compact="collapsed" Href="/developer/diagnostics" Icon="cog" Text="Diagnostics" />
+                            <hr class="my-2 border-white/15" />
+                            <NavItem Compact="collapsed" Href="/online" Icon="users" Text="Employee Portal" />
+                            @if (CanAccessAdminPortal)
+                            {
+                                <NavItem Compact="collapsed" Href="/admin" Icon="briefcase" Text="Admin Portal" />
+                            }
+                        }
+                        else if (IsAdminPortal && CanAccessAdminPortal)
                         {
                             <!-- Admin Menu-->
 
@@ -48,7 +64,7 @@
                             <NavItem Compact="collapsed" Href="admin/recruitment" Icon="user-plus" Text="Recruitment" />
                             @if (isDeveloper)
                             {
-                                <NavItem Compact="collapsed" Href="/admin/developer" Icon="code" Text="Developer" />
+                                <NavItem Compact="collapsed" Href="/developer" Icon="code" Text="Developer" />
                             }
                         }
                         else
@@ -72,12 +88,17 @@
                             <NavItem Compact="collapsed" Href="/online/leaves" Icon="calendar" Text="Leaves" />
                             <NavItem Compact="collapsed" Href="/online/leave-handovers" Icon="briefcase" Text="Work handovers" />
                             <NavItem Compact="collapsed" Href="/online/chat" Icon="chat" Text="Chat" />
+                            @if (isDeveloper && !CanAccessAdminPortal)
+                            {
+                                <hr class="my-2 border-white/15" />
+                                <NavItem Compact="collapsed" Href="/developer" Icon="code" Text="Developer Portal" />
+                            }
                         }
                     </ul>
                 </nav>
 
 
-                <PortalSwitcher CanAccessAdminPortal="CanAccessAdminPortal" @rendermode="RenderMode.InteractiveServer" />
+                <PortalSwitcher CanAccessAdminPortal="CanAccessAdminPortal" CanAccessDeveloperPortal="CanAccessDeveloperPortal || isDeveloper" @rendermode="RenderMode.InteractiveServer" />
             }
             else
             {
@@ -167,5 +188,9 @@
     private bool IsAdminPortal =>
         new Uri(Navigation.Uri).AbsolutePath
             .Split('/', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.Equals("admin", StringComparison.OrdinalIgnoreCase) == true;
+
+    private bool IsDeveloperPortal =>
+        new Uri(Navigation.Uri).AbsolutePath
+            .Split('/', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.Equals("developer", StringComparison.OrdinalIgnoreCase) == true;
 
 }

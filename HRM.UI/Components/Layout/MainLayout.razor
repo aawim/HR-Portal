@@ -16,6 +16,7 @@
 @inject PortalContext PortalContext
 @inject AuthenticationStateProvider AuthenticationProvider
 @inject IUserContextService EmployeeContext
+@inject IUserAccessService UserAccess
 
 <div class="app-shell flex h-screen bg-slate-50 @ShellContextClass">
 
@@ -50,7 +51,7 @@
             {
                 <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 shadow-sm"><p role="alert" class="font-medium">You do not have access to the Admin portal.</p><a href="/online" class="mt-2 inline-block font-semibold text-blue-700 underline">Return to employee portal</a></div>
             }
-            else if (IsDeveloperPortal && _session?.CanAccessDeveloperPortal != true)
+            else if (IsDeveloperPortal && !CanAccessDeveloperPortal)
             {
                 <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 shadow-sm"><p role="alert" class="font-medium">You do not have access to the Developer portal.</p><a href="/online" class="mt-2 inline-block font-semibold text-blue-700 underline">Return to employee portal</a></div>
             }
@@ -75,9 +76,10 @@
     private bool _isAuthenticated;
     private bool mobileNavOpen;
     private int _accessLoadVersion;
+    private bool _isDeveloper;
     private bool HasSystemAccess => !_checkingAccess && _session?.CanAccessSystem == true;
     private bool CanAccessAdminPortal => HasSystemAccess && _session?.CanAccessAdminPortal == true;
-    private bool CanAccessDeveloperPortal => HasSystemAccess && _session?.CanAccessDeveloperPortal == true;
+    private bool CanAccessDeveloperPortal => HasSystemAccess && (_session?.CanAccessDeveloperPortal == true || _isDeveloper);
     private bool CanAccessAuditPortal => HasSystemAccess && _session?.CanAccessAuditPortal == true;
     [CascadingParameter]
     private Task<AuthenticationState>? AuthenticationState { get; set; }
@@ -134,9 +136,11 @@
             await EmployeeContext.GetCurrentAsync();
         if (version != _accessLoadVersion) return;
         _session = session;
+        try { _isDeveloper = await UserAccess.HasUserGroupAsync("Developer") || await UserAccess.HasPermissionAsync("Developer"); }
+        catch { _isDeveloper = false; }
         PortalContext.Initialize(_session?.OrganisationId, _session?.OrganisationName ?? "",
             _session?.CanAccessAdminPortal == true,
-            _session?.CanAccessDeveloperPortal == true,
+            _session?.CanAccessDeveloperPortal == true || _isDeveloper,
             _session?.CanAccessAuditPortal == true);
 
         if (IsAdminPortal) PortalContext.SwitchToAdmin();
