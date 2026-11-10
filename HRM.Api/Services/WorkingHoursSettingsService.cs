@@ -154,6 +154,66 @@ public sealed partial class WorkingHoursSettingsService(IDbContextFactory<HrmTeC
             (!j.TerminatedDate.HasValue || j.TerminatedDate >= model.WorkDate)), "Schedule amendment", notification);
         await db.SaveChangesAsync(); await tx.CommitAsync();
     }
+
+    public async Task SaveAmendmentRangeAsync(HRM.DTOs.Contracts.OrganisationScheduleAmendmentRangeDto model)
+    {
+        var org = await RequireAsync(AmendPermission);
+        var today = DateTime.UtcNow.AddHours(5).Date;
+        var from = model.FromDate.Date;
+        var to = model.ToDate.Date;
+        if (from < today || to < from || to > today.AddYears(1) ||
+            model.OriginalStart < TimeSpan.Zero || model.RevisedStart >= TimeSpan.FromDays(1) || model.RevisedStart <= model.OriginalStart ||
+            string.IsNullOrWhiteSpace(model.Reason) || model.Reason.Trim().Length > 1000)
+            throw new InvalidOperationException("Select today or a future date range of up to one year, a later official start time and a reason (up to 1,000 characters).");
+
+        await using var db = await factory.CreateDbContextAsync();
+        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+        var dates = Enumerable.Range(0, (to - from).Days + 1).Select(offset => from.AddDays(offset)).ToList();
+        if (await db.OrganisationScheduleAmendments.AnyAsync(x => x.OrganisationId == org && dates.Contains(x.WorkDate) && x.OriginalStart == model.OriginalStart))
+            throw new InvalidOperationException("An amendment already exists for one or more selected dates and the original start time. Edit those dates separately or choose a different range.");
+        if (await db.WorkPlans.AnyAsync(p => p.OrganisationBusinessEntityId == org && dates.Contains(p.WorkDate) && p.IsValid && p.IsFinalized))
+            throw new InvalidOperationException("An attendance plan in the selected range is finalized. HR must reopen it before amending the schedule.");
+
+        var originalClock = TimeOnly.FromTimeSpan(model.OriginalStart);
+        var revisedClock = TimeOnly.FromTimeSpan(model.RevisedStart);
+        foreach (var date in dates)
+        {
+            var officialTemplateIds = db.JobWorkTemplateAssignments.Where(a => a.Job.OrganisationID == org && a.IsActive && a.SchedulePurpose == "Official" &&
+                    a.EffectiveFrom <= date && (!a.EffectiveTo.HasValue || a.EffectiveTo >= date)).Select(a => a.WorkTemplateID)
+                .Union(db.JobWorkTemplates.Where(a => a.Job.OrganisationID == org && a.IsActive && a.EffectiveFrom <= date &&
+                    (!a.EffectiveTo.HasValue || a.EffectiveTo >= date)).Select(a => a.WorkTemplateId))
+                .Union(db.ScopeScheduleAssignments.Where(a => a.OrganisationId == org && a.IsActive && a.SchedulePurpose == "Official" &&
+                    a.EffectiveFrom <= date && (!a.EffectiveTo.HasValue || a.EffectiveTo >= date)).Select(a => a.WorkTemplateId));
+            if (await db.WorkTemplates.AnyAsync(t => t.IsActive && officialTemplateIds.Contains(t.WorkTemplateId) &&
+                t.DefaultStartTime == originalClock && !t.EndsNextDay && t.DefaultEndTime <= revisedClock))
+                throw new InvalidOperationException($"The temporary start must be earlier than the matching official template's end time on {date:dd MMM yyyy}.");
+            if (await db.WorkAssignments.AnyAsync(a => a.WorkPlan.OrganisationBusinessEntityId == org && a.WorkPlan.WorkDate == date &&
+                a.WorkPlan.IsValid && a.IsValid && a.SchedulePurpose == "Official" && a.StartDateTime.TimeOfDay == model.OriginalStart &&
+                a.EndDateTime <= date.Add(model.RevisedStart)))
+                throw new InvalidOperationException($"The amended start must be earlier than the official end time on {date:dd MMM yyyy}.");
+        }
+
+        var reason = model.Reason.Trim();
+        var audit = await logs.CreateAsync(db, SharedConfig.OperationLogActionTypes.USERS_UPDATE,
+            $"Official schedule amendment range: tenant {org}, {from:yyyy-MM-dd} to {to:yyyy-MM-dd}, {model.OriginalStart} to {model.RevisedStart}; end unchanged; waived minutes not owed; {reason}.");
+        db.OrganisationScheduleAmendments.AddRange(dates.Select(date => new OrganisationScheduleAmendment
+        {
+            OrganisationId = org,
+            WorkDate = date,
+            OriginalStart = model.OriginalStart,
+            RevisedStart = model.RevisedStart,
+            Reason = reason,
+            IsActive = true,
+            OperationLogId = audit.OperationLogId
+        }));
+        var period = from == to ? from.ToString("dd MMM yyyy") : $"{from:dd MMM yyyy} to {to:dd MMM yyyy}";
+        await NotifyJobsAsync(db, org, db.Jobs.Where(j => j.OrganisationID == org && j.JobStateId == 4 && j.JoinedDate <= to &&
+            (!j.TerminatedDate.HasValue || j.TerminatedDate >= from)), "Schedule amendment",
+            $"Official schedules starting at {model.OriginalStart:hh\\:mm} from {period} now start at {model.RevisedStart:hh\\:mm}. End unchanged; waived time needs no make-up. {reason}");
+        await db.SaveChangesAsync();
+        await tx.CommitAsync();
+    }
+
     private static async Task NotifyJobsAsync(HrmTeContext db, int org, IQueryable<Job> jobs, string kind, string message)
     {
         if (message.Length > 500) message = message[..500];

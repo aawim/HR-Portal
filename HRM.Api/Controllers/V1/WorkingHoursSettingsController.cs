@@ -48,4 +48,16 @@ public sealed class WorkingHoursSettingsController(global::HRM.Services.Contract
         public global::HRM.DTOs.Contracts.OrganisationScheduleAmendmentDto model { get; set; } = default!;
     }
 
+    [HttpPost("save-amendment-range")]
+    public async Task<IActionResult> SaveAmendmentRange([FromBody] WorkingHoursSettingsSaveAmendmentRangeRequest request)
+    {
+        await service.SaveAmendmentRangeAsync(request.model);
+        return NoContent();
+    }
+
+    public sealed class WorkingHoursSettingsSaveAmendmentRangeRequest
+    {
+        public global::HRM.DTOs.Contracts.OrganisationScheduleAmendmentRangeDto model { get; set; } = default!;
+    }
+
 }

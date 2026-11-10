@@ -1,0 +1,247 @@
+@namespace HRM.Components.Admin.My.Workspace
+@using HRM.DTOs.Contracts
+@inject HRM.Services.Contracts.WorkingHoursSettingsServiceContracts.IOperations Settings
+@inject HRM.Services.ToastService Toasts
+@inject ILogger<OrganisationTimeChangeWorkspacePanel> Logger
+
+<section class="w-full min-w-0 space-y-4 p-2">
+    <header class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs dark:border-slate-800 dark:bg-slate-900">
+        <div class="flex flex-wrap items-start justify-between gap-3">
+            <div>
+                <div class="flex flex-wrap items-center gap-2">
+                    <h1 class="text-lg font-bold text-slate-900 dark:text-slate-100">Organisation Schedule Time Change</h1>
+                    <span class="rounded-full bg-indigo-100 px-2.5 py-0.5 text-xs font-semibold text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300">HR · All staff</span>
+                </div>
+                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                    Change the original official start time across @OrganisationName on one day or across a date range.
+                </p>
+            </div>
+            <button type="button" class="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+                    disabled="@busy" @onclick="LoadAsync">@(busy ? "Loading…" : "Refresh")</button>
+        </div>
+    </header>
+
+    @if (!string.IsNullOrWhiteSpace(error))
+    {
+        <div role="alert" class="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-200">@error</div>
+    }
+
+    @if (data is null)
+    {
+        <div class="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-900">Loading organisation schedule settings…</div>
+    }
+    else if (!data.CanAmend)
+    {
+        <div role="alert" class="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+            You do not have permission to amend the organisation's official schedule.
+        </div>
+    }
+    else
+    {
+        <div class="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,5fr)_minmax(0,4fr)]">
+            <div class="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-xs dark:border-slate-800 dark:bg-slate-900">
+                <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                        <h2 class="font-bold text-slate-900 dark:text-slate-100">@(editing is null ? "Apply organisation-wide change" : "Edit schedule change")</h2>
+                        <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">The official end time stays unchanged. Waived minutes do not require make-up.</p>
+                    </div>
+                    @if (editing is not null)
+                    {
+                        <button type="button" class="text-xs font-semibold text-indigo-700 hover:underline dark:text-indigo-300" @onclick="NewChange">+ New date range</button>
+                    }
+                </div>
+
+                <fieldset disabled="@busy" class="space-y-4">
+                    <div class="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+                        <strong>Organisation-wide impact:</strong> this changes every active employee whose official schedule begins at the original start time.
+                        It does not create a personal Late Check-in request.
+                    </div>
+
+                    @if (editing is null)
+                    {
+                        <div class="grid gap-3 sm:grid-cols-2">
+                            <label class="text-sm font-medium text-slate-700 dark:text-slate-200">From date
+                                <InputDate @bind-Value="range.FromDate" class="mt-1 block w-full rounded-lg border border-slate-300 bg-transparent p-2 dark:border-slate-700" />
+                            </label>
+                            <label class="text-sm font-medium text-slate-700 dark:text-slate-200">To date
+                                <InputDate @bind-Value="range.ToDate" class="mt-1 block w-full rounded-lg border border-slate-300 bg-transparent p-2 dark:border-slate-700" />
+                            </label>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="rounded-lg bg-slate-50 p-3 text-sm dark:bg-slate-800">
+                            <span class="text-slate-500 dark:text-slate-400">Schedule date</span>
+                            <div class="font-semibold text-slate-900 dark:text-slate-100">@editing.WorkDate.ToString("dd MMM yyyy")</div>
+                        </div>
+                    }
+
+                    <div class="grid gap-3 sm:grid-cols-2">
+                        <label class="text-sm font-medium text-slate-700 dark:text-slate-200">Original official start
+                            <input type="time" @bind="originalTime" disabled="@(editing is not null)" class="mt-1 block w-full rounded-lg border border-slate-300 bg-transparent p-2 disabled:bg-slate-100 dark:border-slate-700 dark:disabled:bg-slate-800" />
+                        </label>
+                        <label class="text-sm font-medium text-slate-700 dark:text-slate-200">New temporary start
+                            <input type="time" @bind="revisedTime" class="mt-1 block w-full rounded-lg border border-slate-300 bg-transparent p-2 dark:border-slate-700" />
+                        </label>
+                    </div>
+
+                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-200">Reason
+                        <textarea @bind="Reason" maxlength="1000" rows="3" placeholder="Explain why HR is changing the organisation schedule" class="mt-1 block w-full rounded-lg border border-slate-300 bg-transparent p-2 dark:border-slate-700"></textarea>
+                    </label>
+
+                    @if (editing is not null)
+                    {
+                        <label class="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
+                            <input type="checkbox" @bind="editing.IsActive" /> Active
+                            <span class="text-xs text-slate-500">Uncheck to withdraw this date's change and restore the original schedule.</span>
+                        </label>
+                    }
+
+                    <div class="rounded-lg border border-indigo-200 bg-indigo-50 p-3 text-xs text-indigo-900 dark:border-indigo-900 dark:bg-indigo-950/40 dark:text-indigo-200">
+                        Staff whose official schedule starts at @originalTime.ToString("HH:mm") will start at @revisedTime.ToString("HH:mm").
+                        HR's change is applied directly; no supervisor approval is created.
+                    </div>
+
+                    <div class="flex flex-wrap gap-2">
+                        <button type="button" class="rounded-lg bg-indigo-700 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-800 disabled:opacity-50" disabled="@(!CanSave)" @onclick="SaveAsync">
+                            @(busy ? "Saving…" : editing is null ? "Apply to organisation" : "Save change")
+                        </button>
+                        <button type="button" class="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800" @onclick="NewChange">Clear</button>
+                    </div>
+                </fieldset>
+            </div>
+
+            <aside class="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-xs dark:border-slate-800 dark:bg-slate-900">
+                <div class="mb-3 flex items-center justify-between gap-2">
+                    <div>
+                        <h2 class="font-bold text-slate-900 dark:text-slate-100">Schedule change history</h2>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Organisation-wide amendments only</p>
+                    </div>
+                    <span class="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-200">@data.Amendments.Count</span>
+                </div>
+
+                @if (data.Amendments.Count == 0)
+                {
+                    <div class="rounded-xl border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500 dark:border-slate-700">No organisation schedule changes recorded.</div>
+                }
+                else
+                {
+                    <div class="max-h-[42rem] space-y-2 overflow-y-auto pr-1">
+                        @foreach (var item in data.Amendments.OrderByDescending(x => x.WorkDate))
+                        {
+                            <article class="rounded-xl border border-slate-200 p-3 text-sm dark:border-slate-800">
+                                <div class="flex items-start justify-between gap-2">
+                                    <div>
+                                        <div class="font-semibold text-slate-900 dark:text-slate-100">@item.WorkDate.ToString("dd MMM yyyy")</div>
+                                        <div class="mt-1 font-mono text-xs text-indigo-700 dark:text-indigo-300">@item.OriginalStart.ToString(@"hh\:mm") → @item.RevisedStart.ToString(@"hh\:mm")</div>
+                                    </div>
+                                    <span class="rounded-full px-2 py-0.5 text-[11px] font-semibold @(item.IsActive ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300" : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300")">@(item.IsActive ? "Active" : "Withdrawn")</span>
+                                </div>
+                                <p class="mt-2 text-xs text-slate-600 dark:text-slate-300">@item.Reason</p>
+                                <button type="button" class="mt-2 text-xs font-semibold text-indigo-700 hover:underline disabled:text-slate-400 dark:text-indigo-300" disabled="@(busy || item.WorkDate.Date < Today)" @onclick="() => Edit(item)">Edit / withdraw</button>
+                            </article>
+                        }
+                    </div>
+                }
+            </aside>
+        </div>
+    }
+</section>
+
+@code {
+    private static DateTime Today => DateTime.UtcNow.AddHours(5).Date;
+    private WorkingHoursSettingsDataResponse? data;
+    private OrganisationScheduleAmendmentRangeDto range = CreateRange();
+    private OrganisationScheduleAmendmentDto? editing;
+    private TimeOnly originalTime = new(8, 0);
+    private TimeOnly revisedTime = new(8, 30);
+    private bool busy;
+    private string? error;
+
+    private string OrganisationName => data?.Organisation ?? "the current organisation";
+    private string Reason
+    {
+        get => editing?.Reason ?? range.Reason;
+        set { if (editing is null) range.Reason = value; else editing.Reason = value; }
+    }
+    private bool CanSave => !busy && revisedTime > originalTime && !string.IsNullOrWhiteSpace(Reason) &&
+        (editing is not null || range.FromDate.Date >= Today && range.ToDate.Date >= range.FromDate.Date && range.ToDate.Date <= Today.AddYears(1));
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private static OrganisationScheduleAmendmentRangeDto CreateRange() => new() { FromDate = Today, ToDate = Today };
+
+    private async Task LoadAsync()
+    {
+        busy = true;
+        error = null;
+        try
+        {
+            data = await Settings.LoadAsync();
+            if (editing is not null)
+            {
+                var current = data.Amendments.FirstOrDefault(x => x.Id == editing.Id);
+                if (current is not null) editing = current;
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Organisation schedule amendments could not load");
+            error = ex is UnauthorizedAccessException ? ex.Message : "Organisation schedule changes could not be loaded. Refresh and try again.";
+        }
+        finally { busy = false; }
+    }
+
+    private void NewChange()
+    {
+        editing = null;
+        range = CreateRange();
+        originalTime = new(8, 0);
+        revisedTime = new(8, 30);
+        error = null;
+    }
+
+    private void Edit(OrganisationScheduleAmendmentDto item)
+    {
+        editing = System.Text.Json.JsonSerializer.Deserialize<OrganisationScheduleAmendmentDto>(System.Text.Json.JsonSerializer.Serialize(item))!;
+        originalTime = TimeOnly.FromTimeSpan(item.OriginalStart);
+        revisedTime = TimeOnly.FromTimeSpan(item.RevisedStart);
+        error = null;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (!CanSave) return;
+        busy = true;
+        error = null;
+        try
+        {
+            if (editing is null)
+            {
+                range.OriginalStart = originalTime.ToTimeSpan();
+                range.RevisedStart = revisedTime.ToTimeSpan();
+                range.Reason = range.Reason.Trim();
+                await Settings.SaveAmendmentRangeAsync(range);
+                Toasts.Success(range.FromDate.Date == range.ToDate.Date
+                    ? "Organisation schedule changed for the selected day."
+                    : "Organisation schedule changed for the selected date range.");
+            }
+            else
+            {
+                editing.OriginalStart = originalTime.ToTimeSpan();
+                editing.RevisedStart = revisedTime.ToTimeSpan();
+                editing.Reason = editing.Reason.Trim();
+                await Settings.SaveAmendmentAsync(editing);
+                Toasts.Success(editing.IsActive ? "Organisation schedule change updated." : "Organisation schedule change withdrawn.");
+            }
+            NewChange();
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Organisation schedule amendment could not save");
+            error = ex is InvalidOperationException or UnauthorizedAccessException ? ex.Message : "The organisation schedule change could not be saved. Refresh and try again.";
+        }
+        finally { busy = false; }
+    }
+}
