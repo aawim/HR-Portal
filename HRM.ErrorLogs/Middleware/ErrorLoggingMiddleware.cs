@@ -33,6 +33,12 @@ public sealed class ErrorLoggingMiddleware
         {
             await _next(context);
         }
+        catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
+        {
+            // Client intentionally closed connection or navigated away before request finished.
+            // This is a normal HTTP cancellation lifecycle event, not an application fault.
+            _logger.LogDebug("HTTP {Method} {Path} was canceled by client disconnection.", context.Request.Method, context.Request.Path);
+        }
         catch (Exception ex)
         {
             await HandleExceptionAsync(context, ex, errorLogService);

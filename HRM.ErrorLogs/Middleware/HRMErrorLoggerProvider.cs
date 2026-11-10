@@ -52,6 +52,7 @@ public sealed class HRMErrorLoggerProvider : ILoggerProvider
             Func<TState, Exception?, string> formatter)
         {
             if (logLevel < LogLevel.Error || exception == null) return;
+            if (exception is OperationCanceledException) return; // Ignore normal task cancellations
             if (InLogging.Value) return; // Prevent recursive loops
 
             // Filter out ErrorLogService internal logs to avoid feedback
