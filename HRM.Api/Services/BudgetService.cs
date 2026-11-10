@@ -199,9 +199,11 @@ public sealed class BudgetService(IDbContextFactory<HrmTeContext> factory) : IBu
             throw new InvalidOperationException("Enter a component name and select no more than one salary component or allowance type.");
         if (!await db.BudgetItems.AnyAsync(x => x.BudgetItemID == request.BudgetItemId && x.IsActive, ct))
             throw new InvalidOperationException("The selected budget item is unavailable.");
+        var targetOrgId = request.CostCenterOrganisationId > 0 ? (int?)request.CostCenterOrganisationId : null;
         if (await db.PayrollBudgetMappings.AnyAsync(x => x.IsActive && x.BudgetItemId == request.BudgetItemId &&
             x.SalaryComponentId == request.SalaryComponentId && x.AllowanceTypeId == request.AllowanceTypeId &&
-            x.CostCenterOrganisationId == request.CostCenterOrganisationId, ct))
+            x.CostCenterOrganisationId == targetOrgId &&
+            x.ComponentName == request.ComponentName.Trim(), ct))
             throw new InvalidOperationException("This payroll budget mapping already exists.");
         var mapping = new PayrollBudgetMapping
         {
@@ -209,7 +211,7 @@ public sealed class BudgetService(IDbContextFactory<HrmTeContext> factory) : IBu
             ComponentName = request.ComponentName.Trim(),
             SalaryComponentId = request.SalaryComponentId,
             AllowanceTypeId = request.AllowanceTypeId,
-            CostCenterOrganisationId = request.CostCenterOrganisationId,
+            CostCenterOrganisationId = targetOrgId,
             IsActive = true,
             CreatedAtUtc = DateTime.UtcNow
         };
@@ -591,7 +593,9 @@ public sealed class BudgetService(IDbContextFactory<HrmTeContext> factory) : IBu
                 (m.AllowanceTypeId.HasValue && line.ComponentCode == $"ALLW_{m.AllowanceTypeId.Value}") ||
                 (!m.SalaryComponentId.HasValue && !m.AllowanceTypeId.HasValue &&
                  (string.Equals(m.ComponentName, line.ComponentCode, StringComparison.OrdinalIgnoreCase) ||
-                  string.Equals(m.ComponentName, line.ComponentName, StringComparison.OrdinalIgnoreCase))));
+                  string.Equals(m.ComponentName, line.ComponentName, StringComparison.OrdinalIgnoreCase) ||
+                  (line.ComponentType == SalaryComponentType.EmployerPension &&
+                   (m.ComponentName.Contains("Pension", StringComparison.OrdinalIgnoreCase) || m.BudgetItemId == 59)))));
             if (mapping == null)
             {
                 unmapped.Add(line);

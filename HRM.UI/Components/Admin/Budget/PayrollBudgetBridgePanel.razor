@@ -142,9 +142,17 @@
                                         }
                                         else if (check.BudgetItemId == 0)
                                         {
-                                            <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-100 text-amber-800">
-                                                Unmapped
-                                            </span>
+                                            <div class="inline-flex items-center gap-1.5">
+                                                <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-100 text-amber-800">
+                                                    Unmapped
+                                                </span>
+                                                <button type="button"
+                                                        @onclick="() => PreFillAndOpenMapping(check.ComponentName)"
+                                                        class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-500 hover:bg-amber-600 text-white shadow-2xs transition">
+                                                    <i class="bi bi-link-45deg"></i>
+                                                    <span>Map</span>
+                                                </button>
+                                            </div>
                                         }
                                         else
                                         {
@@ -217,10 +225,18 @@
                     <h3 class="text-base font-bold text-slate-800">Map Payroll Component to MoF Economic Code</h3>
                     <button type="button" @onclick="() => showAddMappingModal = false" class="text-slate-400 hover:text-slate-600 text-lg font-bold">&times;</button>
                 </div>
+                @if (!string.IsNullOrWhiteSpace(errorMessage))
+                {
+                    <div class="p-2.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
+                        <i class="bi bi-exclamation-triangle-fill shrink-0"></i>
+                        <span>@errorMessage</span>
+                    </div>
+                }
                 <div class="space-y-3 text-xs">
                     <div>
                         <label class="block font-semibold text-slate-700 p-1">Payroll / Allowance Component Name</label>
-                        <input type="text" @bind="newMappingComponentName" class="w-full border border-slate-300 rounded-lg p-2" placeholder="e.g. Basic Salary or Special Duty Allowance" />
+                        <input type="text" @bind="newMappingComponentName" class="w-full border border-slate-300 rounded-lg p-2" placeholder="e.g. Employer Pension (7%) or Basic Salary" />
+                        <p class="text-[11px] text-slate-400 mt-1">Must match the payroll component code (e.g. PEN_EMPR) or title.</p>
                     </div>
                     <div>
                         <label class="block font-semibold text-slate-700 p-1">Target MoF Economic Code</label>
@@ -289,6 +305,37 @@
         showAddMappingModal = true;
     }
 
+    private void PreFillAndOpenMapping(string rawName)
+    {
+        errorMessage = null;
+        successMessage = null;
+
+        var cleanName = rawName;
+        if (rawName.Contains(" - "))
+        {
+            var parts = rawName.Split(new[] { " - " }, StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length > 1)
+            {
+                cleanName = parts[1].Trim();
+            }
+        }
+
+        newMappingComponentName = cleanName;
+
+        if (cleanName.Contains("Pension", StringComparison.OrdinalIgnoreCase) || rawName.Contains("PEN", StringComparison.OrdinalIgnoreCase))
+        {
+            var pensionItem = budgetItems.FirstOrDefault(b => b.EconomicCode == "213006" || b.DisplayText.Contains("213006") || b.BudgetItemId == 59);
+            if (pensionItem != null) newMappingBudgetItemId = pensionItem.BudgetItemId;
+        }
+        else if (cleanName.Contains("Salary", StringComparison.OrdinalIgnoreCase))
+        {
+            var salaryItem = budgetItems.FirstOrDefault(b => b.EconomicCode == "211001" || b.DisplayText.Contains("211001") || b.BudgetItemId == 24);
+            if (salaryItem != null) newMappingBudgetItemId = salaryItem.BudgetItemId;
+        }
+
+        showAddMappingModal = true;
+    }
+
     private async Task SaveMappingAsync()
     {
         if (string.IsNullOrWhiteSpace(newMappingComponentName))
@@ -306,14 +353,19 @@
         {
             await BudgetService.SavePayrollMappingAsync(new CreatePayrollMappingRequest
             {
-                ComponentName = newMappingComponentName,
+                ComponentName = newMappingComponentName.Trim(),
                 BudgetItemId = newMappingBudgetItemId,
                 CostCenterOrganisationId = 0
             });
             showAddMappingModal = false;
             newMappingComponentName = "";
-            successMessage = "Payroll component mapping saved.";
+            successMessage = "Payroll component mapping saved successfully.";
             mappings = await BudgetService.GetPayrollMappingsAsync(0);
+
+            if (selectedPayrollRunId > 0)
+            {
+                await RunPrePayrollCheckAsync();
+            }
         }
         catch (Exception ex)
         {
