@@ -236,7 +236,7 @@
                                     <span class="text-slate-500">@page.Percentage%</span>
                                 </div>
                                 <div class="w-full h-1.5 rounded-full bg-slate-100 overflow-hidden">
-                                    <div class="h-full rounded-full @page.BarClass" style="width: @page.Percentage%"></div>
+                                    <div class="h-full rounded-full @page.BarClass" style="@($"width: {page.Percentage}%")"></div>
                                 </div>
                             </td>
                             <td class="py-3 px-3">
@@ -274,19 +274,19 @@
             <div class="flex flex-wrap items-center gap-2">
                 <!-- Filter Pills -->
                 <button type="button" class="rounded-lg px-2.5 py-1 text-xs font-semibold transition @(filterCategory == "all" ? "bg-amber-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200")"
-                        @onclick='() => filterCategory = "all"'>
+                        @onclick="@(e => filterCategory = "all")">
                     All (@AllPages.Count)
                 </button>
                 <button type="button" class="rounded-lg px-2.5 py-1 text-xs font-semibold transition @(filterCategory == "online" ? "bg-amber-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200")"
-                        @onclick='() => filterCategory = "online"'>
+                        @onclick="@(e => filterCategory = "online")">
                     Employee (@AllPages.Count(p => p.PortalContext == "Employee"))
                 </button>
                 <button type="button" class="rounded-lg px-2.5 py-1 text-xs font-semibold transition @(filterCategory == "admin" ? "bg-amber-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200")"
-                        @onclick='() => filterCategory = "admin"'>
+                        @onclick="@(e => filterCategory = "admin")">
                     Admin (@AllPages.Count(p => p.PortalContext == "Admin"))
                 </button>
                 <button type="button" class="rounded-lg px-2.5 py-1 text-xs font-semibold transition @(filterCategory == "developer" ? "bg-amber-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200")"
-                        @onclick='() => filterCategory = "developer"'>
+                        @onclick="@(e => filterCategory = "developer")">
                     Developer (@AllPages.Count(p => p.PortalContext == "Developer"))
                 </button>
             </div>
