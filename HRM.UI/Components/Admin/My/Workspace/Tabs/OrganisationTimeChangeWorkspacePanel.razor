@@ -4,20 +4,23 @@
 @inject HRM.Services.ToastService Toasts
 @inject ILogger<OrganisationTimeChangeWorkspacePanel> Logger
 
-<section class="w-full min-w-0 space-y-4 p-2">
-    <header class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs dark:border-slate-800 dark:bg-slate-900">
+<section class="time-change-workspace w-full min-w-0 space-y-4 p-2">
+    <header class="sticky top-0 z-20 m-0 flex w-full min-w-0 flex-wrap items-center justify-between gap-3 rounded-2xl border-b border-slate-200 bg-white/95 px-3 py-3 shadow-xs backdrop-blur-xs dark:border-slate-800 dark:bg-slate-900/95">
         <div class="flex flex-wrap items-start justify-between gap-3">
             <div>
                 <div class="flex flex-wrap items-center gap-2">
                     <h1 class="text-lg font-bold text-slate-900 dark:text-slate-100">Organisation Schedule Time Change</h1>
-                    <span class="rounded-full bg-indigo-100 px-2.5 py-0.5 text-xs font-semibold text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300">HR · All staff</span>
+                    <span class="rounded-full bg-teal-100 px-2.5 py-0.5 text-xs font-semibold text-teal-800 dark:bg-teal-950 dark:text-teal-300">HR · All staff</span>
                 </div>
                 <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
                     Change the original official start time across @OrganisationName on one day or across a date range.
                 </p>
             </div>
-            <button type="button" class="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
-                    disabled="@busy" @onclick="LoadAsync">@(busy ? "Loading…" : "Refresh")</button>
+            <button type="button" class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-teal-700 shadow-2xs transition-colors hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:text-teal-400 dark:hover:bg-slate-700"
+                    disabled="@busy" @onclick="LoadAsync">
+                <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                <span>@(busy ? "Loading…" : "Refresh")</span>
+            </button>
         </div>
     </header>
 
@@ -38,8 +41,8 @@
     }
     else
     {
-        <div class="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,5fr)_minmax(0,4fr)]">
-            <div class="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-xs dark:border-slate-800 dark:bg-slate-900">
+        <div class="page-panels page-panels-standard">
+            <div class="page-panel-left min-w-0 rounded-2xl border border-slate-300 bg-white p-4 shadow-xs dark:border-slate-700 dark:bg-slate-900">
                 <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
                     <div>
                         <h2 class="font-bold text-slate-900 dark:text-slate-100">@(editing is null ? "Apply organisation-wide change" : "Edit schedule change")</h2>
@@ -47,7 +50,7 @@
                     </div>
                     @if (editing is not null)
                     {
-                        <button type="button" class="text-xs font-semibold text-indigo-700 hover:underline dark:text-indigo-300" @onclick="NewChange">+ New date range</button>
+                        <button type="button" class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-teal-700 px-3.5 py-1.5 text-xs font-semibold text-white shadow-2xs transition hover:bg-teal-800" @onclick="NewChange">+ New date range</button>
                     }
                 </div>
 
@@ -97,27 +100,27 @@
                         </label>
                     }
 
-                    <div class="rounded-lg border border-indigo-200 bg-indigo-50 p-3 text-xs text-indigo-900 dark:border-indigo-900 dark:bg-indigo-950/40 dark:text-indigo-200">
+                    <div class="rounded-lg border border-teal-200 bg-teal-50 p-3 text-xs text-teal-900 dark:border-teal-900 dark:bg-teal-950/40 dark:text-teal-200">
                         Staff whose official schedule starts at @originalTime.ToString("HH:mm") will start at @revisedTime.ToString("HH:mm").
                         HR's change is applied directly; no supervisor approval is created.
                     </div>
 
                     <div class="flex flex-wrap gap-2">
-                        <button type="button" class="rounded-lg bg-indigo-700 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-800 disabled:opacity-50" disabled="@(!CanSave)" @onclick="SaveAsync">
+                        <button type="button" class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-teal-700 px-3.5 py-1.5 text-xs font-semibold text-white shadow-2xs transition hover:bg-teal-800 disabled:opacity-50" disabled="@(!CanSave)" @onclick="SaveAsync">
                             @(busy ? "Saving…" : editing is null ? "Apply to organisation" : "Save change")
                         </button>
-                        <button type="button" class="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800" @onclick="NewChange">Clear</button>
+                        <button type="button" class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700" @onclick="NewChange">Clear</button>
                     </div>
                 </fieldset>
             </div>
 
-            <aside class="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-xs dark:border-slate-800 dark:bg-slate-900">
+            <aside class="page-panel-right min-w-0 rounded-2xl border border-slate-300 bg-white p-4 shadow-xs dark:border-slate-700 dark:bg-slate-900">
                 <div class="mb-3 flex items-center justify-between gap-2">
                     <div>
                         <h2 class="font-bold text-slate-900 dark:text-slate-100">Schedule change history</h2>
                         <p class="text-xs text-slate-500 dark:text-slate-400">Organisation-wide amendments only</p>
                     </div>
-                    <span class="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-200">@data.Amendments.Count</span>
+                    <span class="rounded-full bg-teal-100 px-2.5 py-1 text-xs font-semibold text-teal-800 dark:bg-teal-950 dark:text-teal-300">@data.Amendments.Count</span>
                 </div>
 
                 @if (data.Amendments.Count == 0)
@@ -133,12 +136,12 @@
                                 <div class="flex items-start justify-between gap-2">
                                     <div>
                                         <div class="font-semibold text-slate-900 dark:text-slate-100">@item.WorkDate.ToString("dd MMM yyyy")</div>
-                                        <div class="mt-1 font-mono text-xs text-indigo-700 dark:text-indigo-300">@item.OriginalStart.ToString(@"hh\:mm") → @item.RevisedStart.ToString(@"hh\:mm")</div>
+                                        <div class="mt-1 font-mono text-xs text-teal-700 dark:text-teal-300">@item.OriginalStart.ToString(@"hh\:mm") → @item.RevisedStart.ToString(@"hh\:mm")</div>
                                     </div>
                                     <span class="rounded-full px-2 py-0.5 text-[11px] font-semibold @(item.IsActive ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300" : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300")">@(item.IsActive ? "Active" : "Withdrawn")</span>
                                 </div>
                                 <p class="mt-2 text-xs text-slate-600 dark:text-slate-300">@item.Reason</p>
-                                <button type="button" class="mt-2 text-xs font-semibold text-indigo-700 hover:underline disabled:text-slate-400 dark:text-indigo-300" disabled="@(busy || item.WorkDate.Date < Today)" @onclick="() => Edit(item)">Edit / withdraw</button>
+                                <button type="button" class="mt-2 text-xs font-semibold text-teal-700 hover:underline disabled:text-slate-400 dark:text-teal-300" disabled="@(busy || item.WorkDate.Date < Today)" @onclick="() => Edit(item)">Edit / withdraw</button>
                             </article>
                         }
                     </div>
@@ -147,6 +150,27 @@
         </div>
     }
 </section>
+
+<style>
+    .page-panels {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        align-items: start;
+        gap: 1rem;
+        width: 100%;
+        min-width: 0;
+        padding: 0;
+        margin-inline: auto;
+        box-sizing: border-box;
+    }
+
+    .page-panels-standard { max-width: 80rem; }
+    .page-panel-left, .page-panel-right { min-width: 0; width: 100%; box-sizing: border-box; }
+
+    @@media (min-width: 1024px) {
+        .page-panels { grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); }
+    }
+</style>
 
 @code {
     private static DateTime Today => DateTime.UtcNow.AddHours(5).Date;

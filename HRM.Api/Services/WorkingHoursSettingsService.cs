@@ -113,7 +113,8 @@ public sealed partial class WorkingHoursSettingsService(IDbContextFactory<HrmTeC
     public async Task SaveAmendmentAsync(OrganisationScheduleAmendment model)
     {
         var org = await RequireAsync(AmendPermission);
-        if (model.WorkDate.Date < DateTime.UtcNow.AddHours(5).Date || model.WorkDate.Date > DateTime.UtcNow.AddHours(5).Date.AddYears(1) ||
+        var today = DateTime.UtcNow.AddHours(5).Date;
+        if (model.WorkDate.Date < today || model.WorkDate.Date > today.AddYears(1) ||
             model.OriginalStart < TimeSpan.Zero || model.RevisedStart >= TimeSpan.FromDays(1) || model.RevisedStart <= model.OriginalStart ||
             string.IsNullOrWhiteSpace(model.Reason) || model.Reason.Trim().Length > 1000)
             throw new InvalidOperationException("Select today or a future date, a later official start time and a reason (up to 1,000 characters).");
@@ -129,7 +130,7 @@ public sealed partial class WorkingHoursSettingsService(IDbContextFactory<HrmTeC
         if (await db.WorkTemplates.AnyAsync(t => t.IsActive && officialTemplateIds.Contains(t.WorkTemplateId) &&
             t.DefaultStartTime == originalClock && !t.EndsNextDay && t.DefaultEndTime <= revisedClock))
             throw new InvalidOperationException("The temporary start must be earlier than the matching official template's end time.");
-        if (await db.WorkPlans.AnyAsync(p => p.OrganisationBusinessEntityId == org && p.WorkDate == model.WorkDate.Date && p.IsValid && p.IsFinalized))
+        if (model.WorkDate.Date > today && await db.WorkPlans.AnyAsync(p => p.OrganisationBusinessEntityId == org && p.WorkDate == model.WorkDate.Date && p.IsValid && p.IsFinalized))
             throw new InvalidOperationException("An attendance plan for this date is finalized. HR must reopen it before amending the schedule.");
         if (await db.WorkAssignments.AnyAsync(a => a.WorkPlan.OrganisationBusinessEntityId == org && a.WorkPlan.WorkDate == model.WorkDate.Date &&
             a.WorkPlan.IsValid && a.IsValid && a.SchedulePurpose == "Official" && a.StartDateTime.TimeOfDay == model.OriginalStart && a.EndDateTime <= model.WorkDate.Date.Add(model.RevisedStart)))
