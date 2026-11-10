@@ -48,7 +48,7 @@
                             <button type="button"
                                     class="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition"
                                     @onclick="() => StateHasChanged()">
-                                <span>â†»</span>
+                                <i class="bi bi-arrow-clockwise" aria-hidden="true"></i>
                                 <span>Refresh</span>
                             </button>
                         </div>
@@ -65,7 +65,7 @@
                                     aria-current="@(isActive ? "page" : null)"
                                     class="rounded-t-xl px-4 py-2 font-bold text-xs md:text-sm transition-all border-t border-l border-r flex items-center gap-2 @(isActive ? "bg-teal-700 text-white border-teal-700 shadow-sm" : "bg-[#86b0be]/40 text-slate-800 border-slate-300 hover:bg-[#86b0be]/60")"
                                     @onclick="() => SelectItem(item)">
-                                <span class="text-base">@item.Icon</span>
+                                <i class="bi @item.Icon text-base" aria-hidden="true"></i>
                                 <span>@item.Title</span>
                             </button>
                         }
@@ -77,7 +77,7 @@
                     @if (activeItem == null)
                     {
                         <div class="h-full flex flex-col items-center justify-center text-slate-400 opacity-60 py-12">
-                            <div class="text-6xl mb-4">ðŸ‘ˆ</div>
+                            <i class="bi bi-arrow-left-circle text-6xl mb-4" aria-hidden="true"></i>
                             <p class="text-lg font-medium">Select an item from the menu to view data.</p>
                         </div>
                     }
@@ -112,9 +112,7 @@
                             </h2>
 
                             <button aria-expanded="@isSidebarExpanded" aria-label="Toggle settings sections" @onclick="ToggleSidebar" class="p-2 rounded-lg text-slate-500 hover:bg-slate-100 hover:text-blue-600 transition-colors flex-shrink-0" title="@(isSidebarExpanded ? "Collapse Sidebar" : "Expand Sidebar")">
-                                <svg class="w-6 h-6 transition-transform duration-300 @(isSidebarExpanded ? "rotate-180" : "")" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h7"></path>
-                                </svg>
+                                <AppIcon Name="menu" Class="w-6 h-6 transition-transform duration-300 text-2xl " />
                             </button>
                         </div>
 
@@ -128,7 +126,7 @@
 
                                     <div class="w-8 h-8 flex items-center justify-center rounded-lg text-xl flex-shrink-0 transition-colors duration-300 mx-auto
                             @(activeItem?.Title == item.Title ? "bg-blue-600 text-white" : "bg-blue-50 text-blue-600 group-hover:bg-blue-100 group-hover:text-blue-700")">
-                                        @item.Icon
+                                        <i class="bi @item.Icon" aria-hidden="true"></i>
                                     </div>
 
                                     <div class="flex-grow min-w-0 transition-all duration-300 @(isSidebarExpanded ? "opacity-100 w-auto" : "opacity-0 w-0 hidden")">
@@ -139,7 +137,7 @@
                                     </div>
 
                                     <div class="flex-shrink-0 transition-all duration-300 @(isSidebarExpanded ? "opacity-100 block" : "opacity-0 hidden") @(activeItem?.Title == item.Title ? "text-blue-600" : "text-slate-300 group-hover:text-blue-600")">
-                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                                        <AppIcon Name="chevron_right" Class="w-5 h-5 text-xl" />
                                     </div>
                                 </button>
                             }
@@ -155,7 +153,7 @@
                                 @if (activeItem == null)
                                 {
                                     <div class="h-full flex flex-col items-center justify-center text-slate-400 opacity-60 py-6">
-                                        <div class="text-6xl mb-4">ðŸ‘ˆ</div>
+                                        <i class="bi bi-arrow-left-circle text-6xl mb-4" aria-hidden="true"></i>
                                         <p class="text-lg font-medium">Select an item from the menu to view data.</p>
                                     </div>
                                 }
@@ -268,71 +266,71 @@
     private List<SubItem> GetSubItems(string? cat) => (string.IsNullOrWhiteSpace(cat) ? ResolvedCategoryName : cat.Trim().ToLowerInvariant()) switch
     {
         "leaves" => new() {
-            new("Work Handover Rules", "ðŸ¤", "", typeof(HandoverRuleSettings)),
-            new("Leave Set Management", "ðŸ—‚ï¸", "", typeof(LeaveSetsGrid)),
-            new("Leave Accrual by Job Type", "ðŸ“…", "Configure this tenant's accrual rates, waiting periods and carry-forward for every Job Type.", typeof(LeaveAccrualSettings)),
-            new("Leave Carry Forward", "ðŸ“…", "HR reviews unused days and processes carry-forward at service-year renewal.", typeof(LeaveCarryForwardSettings)),
-            new("Manage Configurable", "âš™ï¸", "Global leave system variables.", typeof(LeaveConfigGrid)),
-            new("Manage Leave Types", "âš™ï¸", "Global leave system variables.", typeof(LeaveTypeManagement)),
-            new("Manage Leave Policy", "âš™ï¸", "Global leave system variables.", typeof(LeavePolicyManagement)),
+            new("Work Handover Rules", "bi-arrow-left-right", "", typeof(HandoverRuleSettings)),
+            new("Leave Set Management", "bi-collection", "", typeof(LeaveSetsGrid)),
+            new("Leave Accrual by Job Type", "bi-calendar2-plus", "Configure this tenant's accrual rates, waiting periods and carry-forward for every Job Type.", typeof(LeaveAccrualSettings)),
+            new("Leave Carry Forward", "bi-calendar2-check", "HR reviews unused days and processes carry-forward at service-year renewal.", typeof(LeaveCarryForwardSettings)),
+            new("Manage Configurable", "bi-sliders", "Global leave system variables.", typeof(LeaveConfigGrid)),
+            new("Manage Leave Types", "bi-tags", "Global leave system variables.", typeof(LeaveTypeManagement)),
+            new("Manage Leave Policy", "bi-journal-check", "Global leave system variables.", typeof(LeavePolicyManagement)),
 
         },
         "user" => new() {
-            new("Manage Account", "ðŸ‘¤", "Edit user account details and account status.", typeof(AccountGrid)),
-            new("Admin Portal Access", "ðŸ”", "Explicitly grant or revoke access to the Admin portal.", typeof(AdminPortalAccess)),
-            new("Manage Permissions", "ðŸ”", "Assign account roles and direct permissions.", typeof(AccountPermissionsGrid)),
+            new("Manage Account", "bi-person-gear", "Edit user account details and account status.", typeof(AccountGrid)),
+            new("Admin Portal Access", "bi-shield-lock", "Explicitly grant or revoke access to the Admin portal.", typeof(AdminPortalAccess)),
+            new("Manage Permissions", "bi-key", "Assign account roles and direct permissions.", typeof(AccountPermissionsGrid)),
         },
         "org" => new() {
-            new("Manage", "ðŸ¢", "Manage organisation details, addresses, contacts, teams and supervisors.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationSettingsEditor)),
-            new("Document Centre", "ðŸ—‚ï¸", "Central enterprise document repository, classifications and document requests.", typeof(HRM.Components.Admin.Hr.Documents.DocumentCentreAdminPanel)),
-            new("Manage type", "ðŸ·ï¸", "Manage Organisation Structure Types, such as departments and divisions.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationResources)),
-            new("Calendar", "ðŸ“…", "View and assign organisation calendars.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationResources)),
-            new("Locations", "ðŸ“", "View organisation locations and manage their addresses.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationResources)),
-            new("Location Types", "ðŸ·ï¸", "Manage the shared location type catalogue.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationResources)),
-            new("Organisation Types", "ðŸ›ï¸", "Manage organisation classifications.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationResources)),
-            new("Structure Request Types", "ðŸ“¥", "Manage request types used for organisation structure changes.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationResources)),
-            new("Organisation Permissions", "ðŸ”", "Manage the permissions available to this organisation.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationPermissions)),
+            new("Manage", "bi-building-gear", "Manage organisation details, addresses, contacts, teams and supervisors.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationSettingsEditor)),
+            new("Document Centre", "bi-folder2-open", "Central enterprise document repository, classifications and document requests.", typeof(HRM.Components.Admin.Hr.Documents.DocumentCentreAdminPanel)),
+            new("Manage type", "bi-diagram-3", "Manage Organisation Structure Types, such as departments and divisions.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationResources)),
+            new("Calendar", "bi-calendar3", "View and assign organisation calendars.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationResources)),
+            new("Locations", "bi-geo-alt", "View organisation locations and manage their addresses.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationResources)),
+            new("Location Types", "bi-tags", "Manage the shared location type catalogue.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationResources)),
+            new("Organisation Types", "bi-buildings", "Manage organisation classifications.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationResources)),
+            new("Structure Request Types", "bi-inbox", "Manage request types used for organisation structure changes.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationResources)),
+            new("Organisation Permissions", "bi-shield-check", "Manage the permissions available to this organisation.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationPermissions)),
         },
         "payroll" => new() {
-            new("Manage Period", "â³", "Configure pay cycles and deadlines.", null),
-            new("Manage Item Type", "ðŸ“‘", "Categorize payroll income and deductions.", null)
+            new("Manage Period", "bi-hourglass-split", "Configure pay cycles and deadlines.", null),
+            new("Manage Item Type", "bi-receipt", "Categorize payroll income and deductions.", null)
         },
         "roles" => new() {
-            new("Permissions", "ðŸ”‘", "Manage permissions grouped by area, such as Leave.", typeof(RoleGrid)),
-            new("Roles", "ðŸ›¡ï¸", "Manage user groups and their assigned permissions.", typeof(HRM.Components.Admin.Settings.Roles.AccessRolesGrid)),
-            new("Staff Attribute Access", "ðŸ”’", "Restrict staff visibility by position classification, user, role or specific staff member.", typeof(HRM.Components.Admin.Settings.Roles.StaffAccessControl)),
+            new("Permissions", "bi-key", "Manage permissions grouped by area, such as Leave.", typeof(RoleGrid)),
+            new("Roles", "bi-shield-check", "Manage user groups and their assigned permissions.", typeof(HRM.Components.Admin.Settings.Roles.AccessRolesGrid)),
+            new("Staff Attribute Access", "bi-person-lock", "Restrict staff visibility by position classification, user, role or specific staff member.", typeof(HRM.Components.Admin.Settings.Roles.StaffAccessControl)),
         },
         "requests" => new() {
-           new("Request Types", "ðŸ“‹", "Manage request types and default approval workflows.", typeof(HRM.Components.Admin.Settings.RequestTypes.RequestTypeConfiguration)),
+           new("Request Types", "bi-ui-checks", "Manage request types and default approval workflows.", typeof(HRM.Components.Admin.Settings.RequestTypes.RequestTypeConfiguration)),
         },
         "config" => new() {
-            new("Work Types", "ðŸ“‹", "Manage the Work Type catalogue.", typeof(HRM.Components.Admin.Settings.WorkTypeManagement)),
-            new("Request State Transitions", "ðŸ”„", "Configure allowed From State and To State for each Request Type.", typeof(RequestStateTransitionSettings)),
-            new("Request Approval Flows", "ðŸ”„", "Configure approvals for all staff by Job Type and Request Type.", typeof(LeaveFlowSettings)),
+            new("Work Types", "bi-list-check", "Manage the Work Type catalogue.", typeof(HRM.Components.Admin.Settings.WorkTypeManagement)),
+            new("Request State Transitions", "bi-arrow-repeat", "Configure allowed From State and To State for each Request Type.", typeof(RequestStateTransitionSettings)),
+            new("Request Approval Flows", "bi-diagram-3", "Configure approvals for all staff by Job Type and Request Type.", typeof(LeaveFlowSettings)),
 
-           new("Job Type Configuration", "ðŸ‘¥", "Manage job types and staff approval workflows.", typeof(HRM.Components.Admin.Settings.JobTypes.JobTypeConfiguration)),
-           new("Manage Attendance Clients", "ðŸ–¥ï¸", "Configure attendance clients and devices.", null),
+           new("Job Type Configuration", "bi-people", "Manage job types and staff approval workflows.", typeof(HRM.Components.Admin.Settings.JobTypes.JobTypeConfiguration)),
+           new("Manage Attendance Clients", "bi-pc-display", "Configure attendance clients and devices.", null),
         },
         "positions" => new() {
-           new("Overview", "ðŸ“‹", "View active positions across both frameworks and their assigned staff.", typeof(PositionOverview)),
-           new("Pay Frameworks", "ðŸ’°", "Manage shared frameworks, Job Matrices, pay steps, titles and allowances.", typeof(PayFrameworks)),
-           new("Manage Ranks", "ðŸ…", "Configure attendance clients and devices.", typeof(RankGrid)),
-           new("Manage Classiffications", "ðŸ·ï¸", "Configure attendance clients and devices.", typeof(ClassifficationGrid)),
-           new("Manage Positions", "ðŸ’¼", "Manage custom positions and government Job Matrix links.", typeof(PositionGrid)),
-           new("Position Allowances", "ðŸ’µ", "Configure required position allowances.", typeof(PositionAllowances)),
+           new("Overview", "bi-card-list", "View active positions across both frameworks and their assigned staff.", typeof(PositionOverview)),
+           new("Pay Frameworks", "bi-cash-stack", "Manage shared frameworks, Job Matrices, pay steps, titles and allowances.", typeof(PayFrameworks)),
+           new("Manage Ranks", "bi-award", "Configure attendance clients and devices.", typeof(RankGrid)),
+           new("Manage Classifications", "bi-tags", "Configure attendance clients and devices.", typeof(ClassifficationGrid)),
+           new("Manage Positions", "bi-briefcase", "Manage custom positions and government Job Matrix links.", typeof(PositionGrid)),
+           new("Position Allowances", "bi-cash-coin", "Configure required position allowances.", typeof(PositionAllowances)),
         },
         "workplaning" => new() {
-           new("Working Hours", "🕒", "Configure weekly hours and temporary official start-time amendments.", typeof(WorkingHoursSettings)),
-           new("Duty roster", "📅", "View dated duties, schedule assignments, manual assignments and create rosters.", typeof(HRM.Components.Admin.WorkPlanning.DutyRosterAdmin)),
-           new("Templates", "💼", "Define working hours and required clock events using ordered segments.", typeof(WorkTemplateManagement)),
-           new("Plans", "💼", "Generate assigned schedules or add manual duty to a staff member's daily plan.", typeof(WorkPlanManagement)),
-           new("Segments", "💼", "Manage check-in, work, break and check-out events within templates.", typeof(Segments)),
+           new("Working Hours", "bi-clock-history", "Configure weekly hours and temporary official start-time amendments.", typeof(WorkingHoursSettings)),
+           new("Duty roster", "bi-calendar3", "View dated duties, schedule assignments, manual assignments and create rosters.", typeof(HRM.Components.Admin.WorkPlanning.DutyRosterAdmin)),
+           new("Templates", "bi-layout-text-window", "Define working hours and required clock events using ordered segments.", typeof(WorkTemplateManagement)),
+           new("Plans", "bi-calendar2-check", "Generate assigned schedules or add manual duty to a staff member's daily plan.", typeof(WorkPlanManagement)),
+           new("Segments", "bi-segmented-nav", "Manage check-in, work, break and check-out events within templates.", typeof(Segments)),
         },
         "projects" => new() {
-            new("Projects & Tasks", "📁", "Comprehensive management, CRUD operations, timelines and task tracking for all projects.", typeof(HRM.Components.Admin.Settings.Projects.ProjectsManagementHub)),
+            new("Projects & Tasks", "bi-kanban", "Comprehensive management, CRUD operations, timelines and task tracking for all projects.", typeof(HRM.Components.Admin.Settings.Projects.ProjectsManagementHub)),
         },
 
-        _ => new() { new("General Configuration", "ðŸ”§", "System level management.", null) }
+        _ => new() { new("General Configuration", "bi-wrench-adjustable", "System level management.", null) }
     };
 
     // --- Authentication and Service Logic ---

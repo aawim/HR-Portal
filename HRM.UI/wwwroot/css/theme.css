@@ -13,6 +13,12 @@
     --app-table-header-bg: #f8fafc;
     --app-table-header-text: #475569;
     --app-table-row-hover: #f8fafc;
+    --app-muted-text: #64748b;
+    --app-elevated-bg: #ffffff;
+    --app-overlay: rgb(15 23 42 / .48);
+    --app-focus-ring: #2563eb;
+    --app-danger-bg: #fff1f2;
+    --app-danger-text: #9f1239;
     --select-bg: #ffffff; --select-text: #0f172a; --select-muted: #64748b;
     --select-popup-bg: #ffffff; --select-hover: #f1f5f9;
     --select-selected-bg: #dbeafe; --select-selected-text: #1e3a8a;
@@ -32,6 +38,12 @@
     --app-table-header-bg: #182438;
     --app-table-header-text: #cbd5e1;
     --app-table-row-hover: #334155;
+    --app-muted-text: #b6c4d6;
+    --app-elevated-bg: #1e293b;
+    --app-overlay: rgb(2 6 23 / .72);
+    --app-focus-ring: #93c5fd;
+    --app-danger-bg: #512735;
+    --app-danger-text: #fecdd3;
     --app-toast-bg: #1e293b; --app-toast-text: #f1f5f9; --app-toast-muted: #cbd5e1; --app-toast-hover: #334155;
 }
 .theme-toggle {
@@ -42,10 +54,48 @@
 }
 .theme-toggle:hover { background: #e2e8f0; }
 .theme-toggle:disabled { opacity: .5; cursor: wait; }
-.theme-toggle:focus-visible { outline: 3px solid #60a5fa; outline-offset: 3px; }
+.theme-toggle:focus-visible { outline: 3px solid var(--app-focus-ring); outline-offset: 3px; }
 .theme-icon-light { display: none; }
 [data-theme="dark"] .theme-icon-light { display: block; }
 [data-theme="dark"] .theme-icon-dark { display: none; }
+[data-theme="dark"] .theme-toggle {
+    border-color: var(--app-input-border);
+    background: var(--app-surface-bg);
+    color: var(--app-text);
+}
+[data-theme="dark"] .theme-toggle:hover { background: var(--app-table-row-hover); }
+
+/* Stable semantic surfaces for new and migrated components. */
+.app-page { background: var(--app-page-bg); color: var(--app-text); }
+.app-surface { background: var(--app-surface-bg); color: var(--app-text); border-color: var(--app-border-color); }
+.app-surface-elevated { background: var(--app-elevated-bg); color: var(--app-text); border-color: var(--app-border-color); }
+.app-muted { color: var(--app-muted-text); }
+
+/* Blazor reconnect UI must remain readable in both themes. */
+#components-reconnect-modal {
+    max-width: min(28rem, calc(100vw - 2rem));
+    border: 1px solid var(--app-border-color);
+    border-radius: 1rem;
+    background: var(--app-elevated-bg);
+    color: var(--app-text);
+    box-shadow: 0 24px 64px rgb(15 23 42 / .28);
+}
+#components-reconnect-modal::backdrop {
+    background: var(--app-overlay);
+    backdrop-filter: blur(2px);
+}
+#components-reconnect-modal button {
+    border: 1px solid var(--action-border, var(--app-input-border));
+    border-radius: .5rem;
+    background: var(--action-primary, #2563eb);
+    color: #fff;
+    padding: .5rem .75rem;
+    font-weight: 600;
+}
+#components-reconnect-modal button:focus-visible {
+    outline: 3px solid var(--app-focus-ring);
+    outline-offset: 3px;
+}
 
 /* Shared palette covers existing Tailwind cards and Bootstrap forms and dialogs. */
 @media screen {
