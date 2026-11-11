@@ -1163,6 +1163,12 @@ namespace HRM.Services
                 // -----------------------------------------------------
                 // Add day
                 // -----------------------------------------------------
+                var scheduledEndMax = requiredSchedules.Select(s => (DateTime?)s.ScheduledEnd).Max();
+                var nowTime = DateTime.UtcNow.AddHours(5);
+                var isMissingClock = !isAbsent && !isHoliday && !isRestDay && !isOnLeave &&
+                    ((firstCheckIn != null && lastCheckOut == null && (date < nowTime.Date || nowTime >= (scheduledEndMax ?? date.AddHours(14))))
+                     || (firstCheckIn == null && lastCheckOut != null));
+
                 result.Add(
                     new YearlyAttendanceDayDto
                     {
@@ -1170,7 +1176,7 @@ namespace HRM.Services
                         IsLate = isLate,
                         LateMinutes = lateMinutes,
                         ScheduledStart = scheduled?.ScheduledStart,
-                        ScheduledEnd = requiredSchedules.Select(s => (DateTime?)s.ScheduledEnd).Max(),
+                        ScheduledEnd = scheduledEndMax,
                         IsPerfectlyAttended = isPresent && !isLate && completed,
                         HasApprovedPosition = eligibility[date].HasApprovedPosition,
                         RequiresAttendance = eligibility[date].CanBeAbsent,
@@ -1228,7 +1234,10 @@ namespace HRM.Services
                             isOnLeave,
 
                         IsHoliday =
-                            isHoliday
+                            isHoliday,
+
+                        IsMissingClock =
+                            isMissingClock
                     });
             }
 

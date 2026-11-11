@@ -19,11 +19,19 @@
         </div>
 
         <div class="flex flex-wrap items-center gap-2 text-xs text-slate-500">
-            <span class="flex items-center gap-1"><span class="h-2.5 w-2.5 rounded-full bg-amber-500"></span>Late</span>
-
             <span class="flex items-center gap-1">
                 <span class="h-2.5 w-2.5 rounded-full bg-green-500"></span>
                 Attended
+            </span>
+
+            <span class="flex items-center gap-1">
+                <span class="h-2.5 w-2.5 rounded-full bg-amber-500"></span>
+                Late
+            </span>
+
+            <span class="flex items-center gap-1">
+                <span class="h-2.5 w-2.5 rounded-full bg-pink-700"></span>
+                Missing Clock
             </span>
 
             <span class="flex items-center gap-1">
@@ -32,21 +40,19 @@
             </span>
 
             <span class="flex items-center gap-1">
-                <span class="h-2.5 w-2.5 rounded-full bg-purple-500"></span>
+                <span class="h-2.5 w-2.5 rounded-full bg-purple-600"></span>
                 Holiday
             </span>
 
-              <span class="flex items-center gap-1">
+            <span class="flex items-center gap-1">
                 <span class="h-2.5 w-2.5 rounded-full bg-slate-300"></span>
                 Upcoming
             </span>
-
 
             <span class="flex items-center gap-1">
                 <span class="h-2.5 w-2.5 rounded-full bg-slate-600"></span>
                 Unresolved
             </span>
-
         </div>
 
     </div>
@@ -78,233 +84,207 @@
                 @for (int i = 0; i < 7; i++)
                 {
                     var day = WeekStart.AddDays(i);
+                    var now = DateTime.UtcNow.AddHours(5);
+                    var isToday = day.Date == now.Date;
+                    var isFutureDay = day.Date > now.Date;
 
-                    var dayLogs = WeeklyLogs
-                    .Where(x => x.Date.Date == day.Date)
-                    .OrderBy(x => x.Date)
-                    .ToList();
+                    var dayLogs = WeeklyLogs?
+                        .Where(x => x.Date.Date == day.Date)
+                        .OrderBy(x => x.Date)
+                        .ToList() ?? [];
 
+                    var checkIn = dayLogs.FirstOrDefault(x => x.IsCheckIn);
+                    var checkOut = dayLogs.OrderByDescending(x => x.Date).FirstOrDefault(x => x.IsCheckOut);
 
-                    // ------------------------------------------------
-                    // Resolved Check In
-                    // ------------------------------------------------
-                    var checkIn = dayLogs
-                    .Where(x => x.IsCheckIn)
-                    .OrderBy(x => x.Date)
-                    .FirstOrDefault();
+                    var hasResolvedAttendance = checkIn != null || checkOut != null;
+                    var hasLogs = dayLogs.Count > 0;
+                    var isUnresolvedDay = hasLogs && !hasResolvedAttendance;
 
-
-                    // ------------------------------------------------
-                    // Resolved Check Out
-                    // ------------------------------------------------
-                    var checkOut = dayLogs
-                    .Where(x => x.IsCheckOut)
-                    .OrderByDescending(x => x.Date)
-                    .FirstOrDefault();
-
-
-                    // ------------------------------------------------
-                    // Attendance state
-                    // ------------------------------------------------
-                    var hasResolvedAttendance =
-                    checkIn != null ||
-                    checkOut != null;
-
-                    var hasLogs =
-                    dayLogs.Count > 0;
-
-                    var isUnresolvedDay =
-                    hasLogs &&
-                    !hasResolvedAttendance;
-
-                    var isPresent =
-                    checkIn != null;
-
-
-                    // ------------------------------------------------
-                    // Future day
-                    // ------------------------------------------------
-                    var isFutureDay =
-                    day.Date > DateTime.UtcNow.AddHours(5).Date;
                     var overview = Days?.FirstOrDefault(x => x.Date.Date == day.Date);
                     if (overview != null)
                     {
-                        isPresent = overview.IsPresent;
                         isUnresolvedDay = overview.IsUnresolved;
                     }
+
                     var displayedCheckIn = overview != null ? overview.FirstCheckIn : checkIn?.Date;
                     var displayedCheckOut = overview != null ? overview.LastCheckOut : checkOut?.Date;
                     var isHoliday = overview?.IsHoliday == true;
                     var isWeekend = overview?.IsRestDay ?? (day.DayOfWeek == DayOfWeek.Friday || day.DayOfWeek == DayOfWeek.Saturday);
                     var isOnLeave = overview?.IsOnLeave == true;
-                    var isAbsent = overview?.IsAbsent == true && !isHoliday && !isWeekend;
 
+                    var hasCheckIn = displayedCheckIn != null;
+                    var hasCheckOut = displayedCheckOut != null;
 
-                    // ------------------------------------------------
-                    // Display state
-                    // ------------------------------------------------
-                    var stateClass =
-                    isFutureDay
-                    ? (isHoliday ? "bg-purple-100 text-purple-700 border border-purple-200" : isWeekend ? "bg-slate-100 text-slate-500" : "bg-slate-100 text-slate-400")
-                    : isHoliday
-                    ? "bg-purple-100 text-purple-800 border border-purple-300"
-                    : overview?.EligibilityMessage != null && !isOnLeave
-                    ? "bg-slate-100 text-slate-500"
-                    : isOnLeave
-                    ? "bg-blue-500 text-white"
-                    : overview?.IsLate == true
-                    ? "bg-amber-500 text-slate-900"
-                    : isPresent
-                    ? "bg-green-500 text-white"
-                    : isUnresolvedDay
-                    ? "bg-slate-500 text-white"
-                    : isWeekend
-                    ? "bg-slate-100 text-slate-600"
-                    : isAbsent ? "bg-red-500 text-white" : "bg-slate-100 text-slate-500";
+                    // Determine IN and OUT display strings
+                    string inDisplay;
+                    string outDisplay;
 
+                    if (hasCheckIn && displayedCheckIn.HasValue)
+                    {
+                        inDisplay = displayedCheckIn.Value.ToString("HH:mm");
+                    }
+                    else if (isFutureDay)
+                    {
+                        inDisplay = "--";
+                    }
+                    else if (isToday)
+                    {
+                        var checkinDeadline = overview?.ScheduledStart ?? day.Date.AddHours(8).AddMinutes(30);
+                        inDisplay = now > checkinDeadline ? "Missing" : "Pending";
+                    }
+                    else
+                    {
+                        inDisplay = "Missing";
+                    }
+
+                    if (hasCheckOut && displayedCheckOut.HasValue)
+                    {
+                        outDisplay = displayedCheckOut.Value.ToString("HH:mm");
+                    }
+                    else if (isFutureDay)
+                    {
+                        outDisplay = "--";
+                    }
+                    else if (isToday)
+                    {
+                        var checkoutDeadline = overview?.ScheduledEnd ?? day.Date.AddHours(14);
+                        outDisplay = now < checkoutDeadline ? "Pending" : "Missing";
+                    }
+                    else
+                    {
+                        outDisplay = "Missing";
+                    }
+
+                    // Classification:
+                    // - If both IN and OUT are missing after scheduled working period, classify as Absent.
+                    // - If either IN or OUT is missing, classify as Missing Clock.
+                    // - When a card contains both Late and Missing Clock conditions, Missing Clock takes colour priority.
+                    // - Authorised leave, holidays, exempted periods are never Missing Clock.
+                    var isExempt = isHoliday || isWeekend || isOnLeave || isFutureDay;
+
+                    var isAbsentDay = !isExempt && !isUnresolvedDay &&
+                                      (overview?.IsAbsent == true || (inDisplay == "Missing" && outDisplay == "Missing"));
+
+                    var isMissingClock = !isExempt && !isUnresolvedDay && !isAbsentDay &&
+                                         (overview?.IsMissingClock == true || inDisplay == "Missing" || outDisplay == "Missing");
+
+                    var isLate = !isExempt && !isUnresolvedDay && !isAbsentDay && !isMissingClock &&
+                                 overview?.IsLate == true;
+
+                    var isAttended = !isExempt && !isUnresolvedDay && !isAbsentDay && !isMissingClock && !isLate &&
+                                     (hasCheckIn || overview?.IsPresent == true);
+
+                    var stateClass = isFutureDay
+                        ? (isHoliday ? "bg-purple-100 text-purple-700 border border-purple-200" : isWeekend ? "bg-slate-100 text-slate-500" : "bg-slate-100 text-slate-400")
+                        : isHoliday
+                        ? "bg-purple-600 text-white"
+                        : isOnLeave
+                        ? "bg-blue-500 text-white"
+                        : isUnresolvedDay
+                        ? "bg-slate-500 text-white"
+                        : isAbsentDay
+                        ? "bg-red-500 text-white"
+                        : isMissingClock
+                        ? "bg-pink-700 text-white"
+                        : isLate
+                        ? "bg-amber-500 text-slate-900"
+                        : isAttended
+                        ? "bg-green-500 text-white"
+                        : isWeekend
+                        ? "bg-slate-100 text-slate-600"
+                        : overview?.EligibilityMessage != null
+                        ? "bg-slate-100 text-slate-500"
+                        : "bg-slate-100 text-slate-500";
+
+                    var tooltip = isMissingClock
+                        ? (overview?.IsLate == true ? $"Missing Clock (Late {overview.LateMinutes} min)" : "Missing Clock")
+                        : isLate
+                        ? $"Late {overview?.LateMinutes} min"
+                        : isAbsentDay
+                        ? "Absent"
+                        : isHoliday
+                        ? "Holiday"
+                        : isOnLeave
+                        ? $"Leave · {overview?.LeaveTypeName ?? "Approved"}"
+                        : isAttended
+                        ? "Attended"
+                        : null;
 
                     <div class="flex min-w-0 flex-col items-center">
 
                         <!-- Day Card -->
-                        <div class="
-                            @stateClass
-                            relative flex h-28 w-full
-                            flex-col items-center justify-center
-                            rounded-lg px-2 py-3 text-center
-                            transition-all duration-200
-                            hover:-translate-y-0.5 hover:shadow-md" title="@(overview?.IsLate == true ? $"Late {overview.LateMinutes} min" : null)">
-
+                        <div class="@stateClass flex flex-col items-center justify-center text-center gap-0.5 px-1 py-1.5 rounded-md min-h-0 w-full transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md cursor-default" title="@tooltip">
 
                             <!-- Date -->
-                            <div class="mb-2 text-[11px] font-medium opacity-90">
+                            <span class="text-xs font-bold leading-tight">
                                 @day.ToString("dd MMM")
-                            </div>
-
+                            </span>
 
                             @if (isFutureDay)
                             {
-                                <!-- Future day -->
                                 @if (isHoliday)
                                 {
-                                    <span class="text-sm font-semibold">Holiday</span>
-                                    <span class="mt-1 text-[10px] opacity-80">Public Holiday</span>
+                                    <span class="text-xs font-semibold leading-tight">Holiday</span>
                                 }
                                 else if (isWeekend)
                                 {
                                     <span class="text-xs font-semibold leading-tight">Happy Week End</span>
-                                    <span class="mt-1 text-[10px] opacity-80">Weekend</span>
                                 }
                                 else
                                 {
-                                    <span class="text-sm font-semibold">
-                                        --
-                                    </span>
-
-                                    <span class="mt-1 text-[10px] opacity-80">
-                                        Upcoming
-                                    </span>
+                                    <span class="text-xs font-medium leading-tight">--</span>
+                                    <span class="text-xs font-semibold leading-tight opacity-80">Upcoming</span>
                                 }
                             }
                             else if (isHoliday)
                             {
-                                <span class="text-sm font-semibold">Holiday</span>
-                                <span class="mt-1 text-[10px] opacity-80">Public Holiday</span>
+                                <span class="text-xs font-semibold leading-tight">Holiday</span>
                             }
                             else if (isOnLeave)
                             {
-                                <span class="text-sm font-semibold">Leave</span>
+                                <span class="text-xs font-semibold leading-tight">Leave</span>
+                                @if (!string.IsNullOrWhiteSpace(overview?.LeaveTypeName))
+                                {
+                                    <span class="text-[10px] font-medium leading-tight opacity-90 truncate max-w-full">@overview.LeaveTypeName</span>
+                                }
                             }
-                            else if (overview?.EligibilityMessage is string eligibilityMessage)
-                            {
-                                <span class="text-xs font-semibold">@eligibilityMessage</span>
-                            }
-                            else if (overview?.IsLate == true && !isPresent)
-                            {
-                                <span class="text-sm font-semibold">Late</span>
-                                <span class="mt-1 text-[10px]">Check in overdue by @overview.LateMinutes min</span>
-                            }
-                            else if (isWeekend && !hasLogs)
+                            else if (isWeekend && !hasCheckIn && !hasCheckOut)
                             {
                                 <span class="text-xs font-semibold leading-tight">Happy Week End</span>
-                                <span class="mt-1 text-[10px] opacity-80">Weekend</span>
-                            }
-                            else if (isPresent)
-                            {
-                                <!-- Present: show nothing here, times will show below -->
                             }
                             else if (isUnresolvedDay)
                             {
-                                <!-- Logs exist but no useful resolution -->
-
-                                <span class="text-sm font-semibold">
-                                    Unresolved
-                                </span>
-
-                                <span class="mt-1 text-[10px] opacity-80">
-                                    @dayLogs.Count event@(dayLogs.Count == 1 ? "" : "s")
-                                </span>
+                                <span class="text-xs font-semibold leading-tight">Unresolved</span>
+                                <span class="text-[10px] font-medium leading-tight opacity-80">@dayLogs.Count event@(dayLogs.Count == 1 ? "" : "s")</span>
+                            }
+                            else if (isAbsentDay)
+                            {
+                                <span class="text-xs font-medium leading-tight">IN: Missing</span>
+                                <span class="text-xs font-medium leading-tight">OUT: Missing</span>
+                            }
+                            else if (overview?.EligibilityMessage is string eligibilityMessage && !hasCheckIn && !hasCheckOut)
+                            {
+                                <span class="text-xs font-semibold leading-tight">@eligibilityMessage</span>
                             }
                             else
                             {
-                                <!-- No attendance logs -->
-
-                                <span class="text-sm font-semibold">
-                                    @(isAbsent ? "Absent" : overview?.EligibilityMessage ?? "Attendance not required")
-                                </span>
-
-                                <span class="mt-1 text-xs opacity-80">
-                                    --
-                                </span>
-                            }
-
-                            @if (!isFutureDay)
-                            {
-                                <div class="mt-1 flex flex-wrap items-center justify-center gap-x-0.5">
-                                    <span class="text-[10px] uppercase opacity-75">In</span>
-                                    <span class="text-sm font-semibold tabular-nums">@(displayedCheckIn?.ToString("HH:mm") ?? "--")</span>
-                                </div>
-                                <div class="mt-0.5 flex flex-wrap items-center justify-center gap-x-0.5">
-                                    <span class="text-[10px] uppercase opacity-75">Out</span>
-                                    <span class="text-sm font-medium tabular-nums">@(displayedCheckOut?.ToString("HH:mm") ?? "--")</span>
-                                </div>
-
-                                @if (overview?.IsLate == true)
-                                {
-                                    <div class="mt-1 text-[10px] font-medium text-amber-600">
-                                        Late(@overview.LateMinutes)
-                                    </div>
-                                }
+                                <!-- Compact vertically stacked check-in & check-out -->
+                                <span class="text-xs font-medium leading-tight">IN: @inDisplay</span>
+                                <span class="text-xs font-medium leading-tight">OUT: @outDisplay</span>
                             }
 
                         </div>
 
-
                         <!-- Day Name -->
-                        <span class="
-                            mt-2 text-xs font-medium
-                            @(day.Date == DateTime.Today
-                                ? "text-blue-600"
-                                : isFutureDay
-                                    ? "text-slate-400"
-                                    : "text-slate-600")">
-
+                        <span class="mt-1 text-xs font-medium @(isToday ? "text-blue-600 font-bold" : isFutureDay ? "text-slate-400" : "text-slate-600")">
                             @day.ToString("ddd")
-
                         </span>
 
-
                         <!-- Today indicator -->
-                        @if (day.Date == DateTime.Today)
+                        @if (isToday)
                         {
-                            <span class="mt-0.5 text-[10px] font-medium text-blue-500">
+                            <span class="text-[10px] font-medium text-blue-500">
                                 Today
-                            </span>
-                        }
-                        else
-                        {
-                            <!-- Keeps row height consistent -->
-                            <span class="mt-0.5 text-[10px]">
-                                &nbsp;
                             </span>
                         }
 
