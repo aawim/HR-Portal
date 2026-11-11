@@ -3,29 +3,29 @@
 @using HRM.DTOs.Leave
 
 <BaseCard Title="Leave Request Details">
-    <section aria-label="Leave request details" aria-busy="@Busy" class="p-6 space-y-5">
-        <div class="flex flex-wrap justify-between items-start gap-3">
+    <section aria-label="Leave request details" aria-busy="@Busy" class="p-2 space-y-2">
+        <div class="flex flex-wrap justify-between items-start gap-2">
             <div>
-                <h2 class="text-lg font-semibold text-slate-800">@Item.Applicant</h2>
-                <p class="text-sm text-slate-500">@Item.Reference · @Item.LeaveType</p>
+                <h2 class="text-sm font-semibold text-slate-800">@Item.Applicant</h2>
+                <p class="text-xs text-slate-500">@Item.Reference · @Item.LeaveType</p>
             </div>
-            <button type="button" disabled="@Busy" class="border rounded px-3 py-2 text-sm disabled:opacity-50" @onclick="OnClose">Close details</button>
+            <button type="button" disabled="@Busy" class="border rounded px-2.5 py-1 text-xs disabled:opacity-50" @onclick="OnClose">Close details</button>
         </div>
-        <div class="rounded-lg border bg-slate-50 p-4 space-y-1">
-            <p class="font-medium">@Item.FromDate.ToString("dd MMM yyyy") – @Item.ToDate.ToString("dd MMM yyyy") · @Item.Duration days</p>
-            <p class="text-sm text-amber-700">@(Item.IsProcessing ? "Processing · " : "")@Item.Status</p>
+        <div class="rounded-lg border bg-slate-50 p-2 space-y-1">
+            <p class="font-medium text-xs">@Item.FromDate.ToString("dd MMM yyyy") – @Item.ToDate.ToString("dd MMM yyyy") · @Item.Duration days</p>
+            <p class="text-xs text-amber-700">@(Item.IsProcessing ? "Processing · " : "")@Item.Status</p>
         </div>
-        <dl class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+        <dl class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
             <div class="sm:col-span-2"><HRM.Components.Leave.LeaveSubtypeEvidence LeaveId="Item.LeaveId" /></div>
-            <div><dt class="font-medium text-slate-500">Reason</dt><dd class="mt-1">@Display(Item.Reason)</dd></div>
-            <div><dt class="font-medium text-slate-500">Contact</dt><dd class="mt-1">@Display(Item.Contact)</dd></div>
-            <div class="sm:col-span-2"><dt class="font-medium text-slate-500">Additional details</dt><dd class="mt-1 whitespace-pre-wrap break-words">@Display(Item.Explanation)</dd></div>
-            <div class="sm:col-span-2"><dt class="font-medium text-slate-500">Leave address</dt><dd class="mt-1 whitespace-pre-wrap break-words">@Display(Item.Address)</dd></div>
-            <div class="sm:col-span-2"><dt class="font-medium text-slate-500">Work handover</dt><dd class="mt-1">@Item.HandoverStatus
-                @if (Item.HasHandover) { <span class="text-xs font-semibold text-slate-600 mt-1 block">Work handover assigned</span> }
+            <div><dt class="font-medium text-slate-500">Reason</dt><dd class="mt-0.5">@Display(Item.Reason)</dd></div>
+            <div><dt class="font-medium text-slate-500">Contact</dt><dd class="mt-0.5">@Display(Item.Contact)</dd></div>
+            <div class="sm:col-span-2"><dt class="font-medium text-slate-500">Additional details</dt><dd class="mt-0.5 whitespace-pre-wrap break-words">@Display(Item.Explanation)</dd></div>
+            <div class="sm:col-span-2"><dt class="font-medium text-slate-500">Leave address</dt><dd class="mt-0.5 whitespace-pre-wrap break-words">@Display(Item.Address)</dd></div>
+            <div class="sm:col-span-2"><dt class="font-medium text-slate-500">Work handover</dt><dd class="mt-0.5">@Item.HandoverStatus
+                @if (Item.HasHandover) { <span class="text-[10px] font-semibold text-slate-600 mt-0.5 block">Work handover assigned</span> }
             </dd></div>
         </dl>
-        <div class="border-t pt-4 space-y-3">
+        <div class="border-t pt-2 space-y-2">
             <h3 class="font-semibold">Request actions</h3>
             @if (Item.IsOwnLeave)
             {
