@@ -24,6 +24,7 @@ public sealed class OrganisationCalendarResolver(IDbContextFactory<HrmTeContext>
         if (to < from) (from, to) = (to, from);
 
         await using var db = await factory.CreateDbContextAsync();
+        await OrganisationCalendarSchemaBootstrapper.EnsureSchemaAsync(db);
 
         // 1. Load active exceptions covering range
         var query = db.OrganisationCalendarExceptions.AsNoTracking()

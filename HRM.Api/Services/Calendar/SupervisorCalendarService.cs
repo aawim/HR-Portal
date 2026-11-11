@@ -27,6 +27,7 @@ public sealed class SupervisorCalendarService(
         var actor = await access.RequireContextAsync();
         var today = Today;
         await using var db = await factory.CreateDbContextAsync();
+        await OrganisationCalendarSchemaBootstrapper.EnsureSchemaAsync(db);
 
         var supervisedTeamIds = await db.TeamStaffs.AsNoTracking()
             .Where(x => x.StaffId == actor.IndividualId && x.IsSuperVisor && x.IsValid &&
@@ -58,6 +59,7 @@ public sealed class SupervisorCalendarService(
         to = to.Date;
 
         await using var db = await factory.CreateDbContextAsync();
+        await OrganisationCalendarSchemaBootstrapper.EnsureSchemaAsync(db);
 
         // 1. Resolve supervised team IDs
         var supervisedTeamIds = await db.TeamStaffs.AsNoTracking()

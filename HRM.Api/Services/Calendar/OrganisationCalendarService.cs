@@ -36,6 +36,7 @@ public sealed class OrganisationCalendarService(
         var workdays = await resolver.ResolveRangeAsync(org, start, end);
 
         await using var db = await factory.CreateDbContextAsync();
+        await OrganisationCalendarSchemaBootstrapper.EnsureSchemaAsync(db);
 
         // Load published events
         var events = await db.OrganisationEvents.AsNoTracking()
@@ -111,6 +112,7 @@ public sealed class OrganisationCalendarService(
         var workday = await resolver.ResolveAsync(org, curDate);
 
         await using var db = await factory.CreateDbContextAsync();
+        await OrganisationCalendarSchemaBootstrapper.EnsureSchemaAsync(db);
 
         var events = await db.OrganisationEvents.AsNoTracking()
             .Include(x => x.Audiences)

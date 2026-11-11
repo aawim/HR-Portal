@@ -93,6 +93,7 @@ public sealed class OrganisationEventService(IDbContextFactory<HrmTeContext> fac
         var end = (to ?? start.AddMonths(13)).Date.AddDays(1);
         if ((end - start).TotalDays > 800) throw new InvalidOperationException("Choose a date range of at most about two years.");
         await using var db = await factory.CreateDbContextAsync();
+        await OrganisationCalendarSchemaBootstrapper.EnsureSchemaAsync(db);
         var q = db.OrganisationEvents.AsNoTracking().Include(x => x.Audiences).Include(x => x.Recurrence)
             .Where(x => x.OrganisationBusinessEntityId == org && x.IsValid && x.StartDateTime < end && x.EndDateTime >= start);
         if (!string.IsNullOrWhiteSpace(category)) q = q.Where(x => x.Category == category);
