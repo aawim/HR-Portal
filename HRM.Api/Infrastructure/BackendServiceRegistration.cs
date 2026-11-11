@@ -205,6 +205,11 @@ public static class BackendServiceRegistration
         services.AddScoped<RequestTransitionSettingsService>();
         services.AddScoped<HRM.Services.Leave.LeaveHandoverService>();
         services.AddScoped<HRM.Services.Leave.LeaveCalendarService>();
+        services.AddScoped<HRM.Services.Calendar.OrganisationEventService>();
+        services.AddScoped<HRM.Services.Calendar.Contracts.IOrganisationCalendarResolver, HRM.Services.Calendar.OrganisationCalendarResolver>();
+        services.AddScoped<HRM.Services.Calendar.OrganisationCalendarService>();
+        services.AddScoped<HRM.Services.Calendar.SupervisorCalendarService>();
+        services.AddScoped<HRM.Services.Calendar.CalendarImpactService>();
         services.AddScoped<HRM.Services.OrganisationWorkspaceService>();
         services.AddScoped<IUserTodoService, UserTodoService>();
         services.AddScoped<ILeaveChangeService, HRM.Services.Leave.LeaveChangeService>();

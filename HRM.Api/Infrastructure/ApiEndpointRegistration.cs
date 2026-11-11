@@ -54,6 +54,15 @@ public static class ApiEndpointRegistration
         services.TryAddScoped<global::HRM.Services.Leave.LeaveHandoverService>();
         services.TryAddScoped<global::HRM.Services.Leave.Contracts.LeaveHandoverServiceContracts.IOperations>(provider => provider.GetRequiredService<global::HRM.Services.Leave.LeaveHandoverService>());
         services.TryAddScoped<global::HRM.Services.Leave.LeaveCalendarService>();
+        services.TryAddScoped<global::HRM.Services.Calendar.OrganisationEventService>();
+        services.TryAddScoped<global::HRM.Services.Calendar.Contracts.OrganisationEventServiceContracts.IOperations>(provider => provider.GetRequiredService<global::HRM.Services.Calendar.OrganisationEventService>());
+        services.TryAddScoped<global::HRM.Services.Calendar.Contracts.IOrganisationCalendarResolver, global::HRM.Services.Calendar.OrganisationCalendarResolver>();
+        services.TryAddScoped<global::HRM.Services.Calendar.OrganisationCalendarService>();
+        services.TryAddScoped<global::HRM.Services.Calendar.Contracts.OrganisationCalendarServiceContracts.IOperations>(p => p.GetRequiredService<global::HRM.Services.Calendar.OrganisationCalendarService>());
+        services.TryAddScoped<global::HRM.Services.Calendar.SupervisorCalendarService>();
+        services.TryAddScoped<global::HRM.Services.Calendar.Contracts.SupervisorCalendarServiceContracts.IOperations>(p => p.GetRequiredService<global::HRM.Services.Calendar.SupervisorCalendarService>());
+        services.TryAddScoped<global::HRM.Services.Calendar.CalendarImpactService>();
+        services.TryAddScoped<global::HRM.Services.Calendar.Contracts.CalendarImpactServiceContracts.IOperations>(p => p.GetRequiredService<global::HRM.Services.Calendar.CalendarImpactService>());
         services.TryAddScoped<global::HRM.Services.Leave.Contracts.LeaveCalendarServiceContracts.IOperations>(provider => provider.GetRequiredService<global::HRM.Services.Leave.LeaveCalendarService>());
         services.TryAddScoped<global::HRM.Services.LeaveConfigurationSettingsService>();
         services.TryAddScoped<global::HRM.Services.Contracts.LeaveConfigurationSettingsServiceContracts.IOperations>(provider => provider.GetRequiredService<global::HRM.Services.LeaveConfigurationSettingsService>());
