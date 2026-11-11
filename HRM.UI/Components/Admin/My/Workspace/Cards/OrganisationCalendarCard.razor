@@ -108,7 +108,10 @@
                         <div class="space-y-1 my-1 overflow-hidden">
                             @foreach (var ev in day.Events.Take(2))
                             {
-                                <div class="text-[10px] truncate px-1 py-0.5 rounded font-medium @(ev.CalendarImpactType != "None" ? "bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200" : "bg-blue-100 text-blue-900 dark:bg-blue-950 dark:text-blue-200")" title="@ev.Title">
+                                <div @onclick:stopPropagation="true"
+                                     @onclick="() => selectedEventModal = ev"
+                                     class="text-[10px] truncate px-1 py-0.5 rounded font-medium cursor-pointer transition hover:opacity-80 @(ev.CalendarImpactType != "None" ? "bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200" : "bg-blue-100 text-blue-900 dark:bg-blue-950 dark:text-blue-200")"
+                                     title="@($"{ev.Title} (Click to view details)")">
                                     @ev.Title
                                 </div>
                             }
@@ -176,7 +179,7 @@
                                 @selectedDayDetail.WorkdayResolution.StatusDescription
                             </p>
                         </div>
-                        @if (selectedDayDetail.WorkdayResolution.IsWorkingDay && selectedDayDetail.WorkdayResolution.EffectiveStartTime.HasValue)
+                        @if (selectedDayDetail.WorkdayResolution.IsWorkingDay && selectedDayDetail.WorkdayResolution.EffectiveStartTime.HasValue && selectedDayDetail.WorkdayResolution.EffectiveEndTime.HasValue)
                         {
                             <span class="rounded-md bg-slate-100 dark:bg-slate-800 px-2 py-0.5 text-xs font-mono font-semibold text-slate-700 dark:text-slate-300">
                                 @selectedDayDetail.WorkdayResolution.EffectiveStartTime.Value.ToString(@"hh\:mm") – @selectedDayDetail.WorkdayResolution.EffectiveEndTime.Value.ToString(@"hh\:mm")
@@ -196,10 +199,14 @@
                             <div class="space-y-2">
                                 @foreach (var ev in selectedDayDetail.Events)
                                 {
-                                    <div class="p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 text-xs space-y-1">
+                                    <div class="p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 text-xs space-y-1 cursor-pointer transition hover:border-purple-300 dark:hover:border-purple-700 hover:shadow-2xs"
+                                         @onclick="() => selectedEventModal = ev">
                                         <div class="flex items-center justify-between font-bold text-slate-900 dark:text-slate-100">
                                             <span>@ev.Title</span>
-                                            <span class="text-[10px] px-1.5 py-0.5 rounded font-medium bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300">@ev.Category</span>
+                                            <div class="flex items-center gap-1.5">
+                                                <span class="text-[10px] px-1.5 py-0.5 rounded font-medium bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300">@ev.Category</span>
+                                                <span class="text-[10px] text-purple-600 dark:text-purple-400 font-semibold">View →</span>
+                                            </div>
                                         </div>
                                         @if (!string.IsNullOrWhiteSpace(ev.Description))
                                         {
@@ -269,10 +276,185 @@
     </div>
 </div>
 
+@if (selectedEventModal != null)
+{
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 overflow-y-auto"
+         role="dialog"
+         aria-modal="true"
+         aria-labelledby="org-event-modal-title"
+         @onclick="() => selectedEventModal = null">
+        <div class="relative w-full max-w-lg rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xl p-6 text-slate-800 dark:text-slate-100 max-h-[90vh] overflow-y-auto space-y-4"
+             @onclick:stopPropagation="true">
+            <!-- Modal Header -->
+            <div class="flex items-start justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3">
+                <div class="space-y-1.5">
+                    <div class="flex items-center gap-1.5 flex-wrap">
+                        <span class="rounded-full bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800 px-2.5 py-0.5 text-xs font-semibold">
+                            🏛️ @selectedEventModal.Category
+                        </span>
+                        @if (selectedEventModal.CalendarImpactType != "None")
+                        {
+                            <span class="rounded-full bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800 px-2.5 py-0.5 text-xs font-semibold">
+                                ⚑ @selectedEventModal.CalendarImpactType
+                            </span>
+                        }
+                        <span class="rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 px-2.5 py-0.5 text-xs font-semibold">
+                            @(selectedEventModal.AttendanceRequirement == "Mandatory" ? "⚠️ Mandatory" : selectedEventModal.AttendanceRequirement == "Optional" ? "Optional" : "Info Only")
+                        </span>
+                    </div>
+                    <h3 id="org-event-modal-title" class="text-base font-bold text-slate-900 dark:text-slate-100">
+                        @selectedEventModal.Title
+                    </h3>
+                    @if (!string.IsNullOrWhiteSpace(selectedEventModal.EventCode))
+                    {
+                        <p class="text-[11px] text-slate-400 font-mono">Code: @selectedEventModal.EventCode</p>
+                    }
+                </div>
+                <button type="button"
+                        aria-label="Close modal"
+                        class="rounded-lg p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+                        @onclick="() => selectedEventModal = null">
+                    <span class="text-lg leading-none font-bold">✕</span>
+                </button>
+            </div>
+
+            <!-- Modal Body Details -->
+            <div class="space-y-3 text-xs">
+                <!-- Date & Time Card -->
+                <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 p-3 space-y-1">
+                    <div class="flex items-center gap-1.5 font-bold text-slate-700 dark:text-slate-300">
+                        <span>🗓 Date &amp; Time</span>
+                    </div>
+                    <div class="text-slate-900 dark:text-slate-100 font-medium">
+                        @if (selectedEventModal.StartDateTime.Date == selectedEventModal.EndDateTime.Date)
+                        {
+                            <div>@selectedEventModal.StartDateTime.ToString("dddd, dd MMMM yyyy")</div>
+                            <div class="text-slate-500 dark:text-slate-400 text-[11px] mt-0.5">
+                                @(selectedEventModal.IsAllDay ? "All-Day Event" : $"{selectedEventModal.StartDateTime:HH:mm} – {selectedEventModal.EndDateTime:HH:mm} ({selectedEventModal.TimeZoneId})")
+                            </div>
+                        }
+                        else
+                        {
+                            <div>From: @selectedEventModal.StartDateTime.ToString("dd MMM yyyy, HH:mm")</div>
+                            <div>To: @selectedEventModal.EndDateTime.ToString("dd MMM yyyy, HH:mm")</div>
+                            <div class="text-slate-500 dark:text-slate-400 text-[11px] mt-0.5">(@selectedEventModal.TimeZoneId)</div>
+                        }
+                    </div>
+                </div>
+
+                <!-- Location & Online Meeting -->
+                @if (!string.IsNullOrWhiteSpace(selectedEventModal.VenueName) || !string.IsNullOrWhiteSpace(selectedEventModal.VenueAddress) || !string.IsNullOrWhiteSpace(selectedEventModal.MeetingUrl))
+                {
+                    <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 p-3 space-y-1">
+                        <div class="flex items-center gap-1.5 font-bold text-slate-700 dark:text-slate-300">
+                            <span>📍 Location &amp; Online Access</span>
+                        </div>
+                        @if (!string.IsNullOrWhiteSpace(selectedEventModal.VenueName))
+                        {
+                            <div class="font-medium text-slate-900 dark:text-slate-100">
+                                @selectedEventModal.VenueName
+                            </div>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(selectedEventModal.VenueAddress))
+                        {
+                            <div class="text-slate-600 dark:text-slate-400 text-[11px]">
+                                @selectedEventModal.VenueAddress
+                            </div>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(selectedEventModal.MeetingUrl))
+                        {
+                            <div class="pt-1">
+                                <a href="@selectedEventModal.MeetingUrl"
+                                   target="_blank"
+                                   rel="noopener noreferrer"
+                                   class="inline-flex items-center gap-1 font-bold text-blue-600 dark:text-blue-400 hover:underline">
+                                    <span>🔗 Join Online Meeting</span>
+                                    <span>↗</span>
+                                </a>
+                            </div>
+                        }
+                    </div>
+                }
+
+                <!-- Description -->
+                @if (!string.IsNullOrWhiteSpace(selectedEventModal.Description))
+                {
+                    <div>
+                        <h4 class="font-bold text-slate-700 dark:text-slate-300 mb-1">Description</h4>
+                        <p class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">
+                            @selectedEventModal.Description
+                        </p>
+                    </div>
+                }
+
+                <!-- Attendance Instructions / Dress Code / Required Items -->
+                @if (!string.IsNullOrWhiteSpace(selectedEventModal.DressCode) || !string.IsNullOrWhiteSpace(selectedEventModal.RequiredItems))
+                {
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        @if (!string.IsNullOrWhiteSpace(selectedEventModal.DressCode))
+                        {
+                            <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 p-2.5">
+                                <div class="text-[11px] font-semibold text-slate-500 dark:text-slate-400">👔 Dress Code</div>
+                                <div class="font-medium text-slate-900 dark:text-slate-100 mt-0.5">@selectedEventModal.DressCode</div>
+                            </div>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(selectedEventModal.RequiredItems))
+                        {
+                            <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 p-2.5">
+                                <div class="text-[11px] font-semibold text-slate-500 dark:text-slate-400">🎒 Required Items</div>
+                                <div class="font-medium text-slate-900 dark:text-slate-100 mt-0.5">@selectedEventModal.RequiredItems</div>
+                            </div>
+                        }
+                    </div>
+                }
+
+                @if (!string.IsNullOrWhiteSpace(selectedEventModal.AttendanceInstructions))
+                {
+                    <div>
+                        <h4 class="font-bold text-slate-700 dark:text-slate-300 mb-1">Attendance Instructions</h4>
+                        <p class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-2.5 text-slate-700 dark:text-slate-300 whitespace-pre-wrap">
+                            @selectedEventModal.AttendanceInstructions
+                        </p>
+                    </div>
+                }
+
+                <!-- Contact & Notes -->
+                @if (!string.IsNullOrWhiteSpace(selectedEventModal.ContactInformation))
+                {
+                    <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 p-2.5">
+                        <div class="text-[11px] font-semibold text-slate-500 dark:text-slate-400">📞 Contact &amp; Organizer</div>
+                        <div class="font-medium text-slate-900 dark:text-slate-100 mt-0.5">@selectedEventModal.ContactInformation</div>
+                    </div>
+                }
+
+                @if (!string.IsNullOrWhiteSpace(selectedEventModal.AdditionalNotes))
+                {
+                    <div>
+                        <h4 class="font-bold text-slate-700 dark:text-slate-300 mb-1">Additional Notes</h4>
+                        <p class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-2.5 text-slate-700 dark:text-slate-300 whitespace-pre-wrap">
+                            @selectedEventModal.AdditionalNotes
+                        </p>
+                    </div>
+                }
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="flex items-center justify-end border-t border-slate-100 dark:border-slate-800 pt-3">
+                <button type="button"
+                        class="rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition"
+                        @onclick="() => selectedEventModal = null">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     private DateTime month = new(DateTime.Today.Year, DateTime.Today.Month, 1);
     private List<OrganisationCalendarDaySummaryDto> days = [];
     private OrganisationCalendarDaySummaryDto? selectedDayDetail;
+    private OrganisationEventDto? selectedEventModal;
     private DateTime? selectedDate;
     private bool busy;
     private int leadingOffset;

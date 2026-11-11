@@ -175,13 +175,13 @@
                                      (hasCheckIn || overview?.IsPresent == true);
 
                     var stateClass = isFutureDay
-                        ? (isHoliday ? "bg-purple-100 text-purple-700 border border-purple-200" : isWeekend ? "bg-slate-100 text-slate-500" : "bg-slate-100 text-slate-400")
+                        ? (isHoliday ? "bg-purple-100 text-purple-800 border border-purple-200" : isWeekend ? "bg-slate-100 text-slate-600 border border-slate-200" : "bg-slate-100 text-slate-600 border border-slate-200")
                         : isHoliday
                         ? "bg-purple-600 text-white"
                         : isOnLeave
                         ? "bg-blue-500 text-white"
                         : isUnresolvedDay
-                        ? "bg-slate-500 text-white"
+                        ? "bg-slate-600 text-white"
                         : isAbsentDay
                         ? "bg-red-500 text-white"
                         : isMissingClock
@@ -191,10 +191,10 @@
                         : isAttended
                         ? "bg-green-500 text-white"
                         : isWeekend
-                        ? "bg-slate-100 text-slate-600"
+                        ? "bg-slate-100 text-slate-700 border border-slate-200"
                         : overview?.EligibilityMessage != null
-                        ? "bg-slate-100 text-slate-500"
-                        : "bg-slate-100 text-slate-500";
+                        ? "bg-slate-100 text-slate-700 border border-slate-200"
+                        : "bg-slate-100 text-slate-700 border border-slate-200";
 
                     var tooltip = isMissingClock
                         ? (overview?.IsLate == true ? $"Missing Clock (Late {overview.LateMinutes} min)" : "Missing Clock")
@@ -212,8 +212,8 @@
 
                     <div class="flex min-w-0 flex-col items-center">
 
-                        <!-- Day Card -->
-                        <div class="@stateClass flex flex-col items-center justify-center text-center gap-0.5 px-1 py-1.5 rounded-md min-h-0 w-full transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md cursor-default" title="@tooltip">
+                        <!-- Day Card: Uniform height across all 7 days -->
+                        <div class="@stateClass h-20 w-full flex flex-col items-center justify-center text-center gap-0.5 px-1 py-1 rounded-md transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md cursor-default" title="@tooltip">
 
                             <!-- Date -->
                             <span class="text-xs font-bold leading-tight">
@@ -225,32 +225,35 @@
                                 @if (isHoliday)
                                 {
                                     <span class="text-xs font-semibold leading-tight">Holiday</span>
+                                    <span class="text-[10px] font-medium leading-tight opacity-80">--</span>
                                 }
                                 else if (isWeekend)
                                 {
                                     <span class="text-xs font-semibold leading-tight">Happy Week End</span>
+                                    <span class="text-[10px] font-medium leading-tight opacity-80">--</span>
                                 }
                                 else
                                 {
-                                    <span class="text-xs font-medium leading-tight">--</span>
-                                    <span class="text-xs font-semibold leading-tight opacity-80">Upcoming</span>
+                                    <span class="text-xs font-semibold leading-tight opacity-90">Upcoming</span>
+                                    <span class="text-[10px] font-medium leading-tight opacity-80">--</span>
                                 }
                             }
                             else if (isHoliday)
                             {
                                 <span class="text-xs font-semibold leading-tight">Holiday</span>
+                                <span class="text-[10px] font-medium leading-tight opacity-80">--</span>
                             }
                             else if (isOnLeave)
                             {
                                 <span class="text-xs font-semibold leading-tight">Leave</span>
-                                @if (!string.IsNullOrWhiteSpace(overview?.LeaveTypeName))
-                                {
-                                    <span class="text-[10px] font-medium leading-tight opacity-90 truncate max-w-full">@overview.LeaveTypeName</span>
-                                }
+                                <span class="text-[10px] font-medium leading-tight opacity-90 truncate max-w-full">
+                                    @(string.IsNullOrWhiteSpace(overview?.LeaveTypeName) ? "--" : overview.LeaveTypeName)
+                                </span>
                             }
                             else if (isWeekend && !hasCheckIn && !hasCheckOut)
                             {
                                 <span class="text-xs font-semibold leading-tight">Happy Week End</span>
+                                <span class="text-[10px] font-medium leading-tight opacity-80">--</span>
                             }
                             else if (isUnresolvedDay)
                             {
@@ -259,12 +262,13 @@
                             }
                             else if (isAbsentDay)
                             {
-                                <span class="text-xs font-medium leading-tight">IN: Missing</span>
-                                <span class="text-xs font-medium leading-tight">OUT: Missing</span>
+                                <span class="text-xs font-semibold leading-tight">Absent</span>
+                                <span class="text-[10px] font-medium leading-tight opacity-80">--</span>
                             }
                             else if (overview?.EligibilityMessage is string eligibilityMessage && !hasCheckIn && !hasCheckOut)
                             {
                                 <span class="text-xs font-semibold leading-tight">@eligibilityMessage</span>
+                                <span class="text-[10px] font-medium leading-tight opacity-80">--</span>
                             }
                             else
                             {

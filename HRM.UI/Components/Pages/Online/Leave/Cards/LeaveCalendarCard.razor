@@ -1,5 +1,7 @@
 @using HRM.DTOs.Leave
+@using HRM.DTOs.Calendar
 @inject HRM.Services.Leave.Contracts.LeaveCalendarServiceContracts.IOperations CalendarService
+@inject HRM.Services.Calendar.Contracts.OrganisationEventServiceContracts.IOperations EventService
 @inject ILogger<LeaveCalendarCard> Logger
 
 <section class="min-w-0 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
@@ -8,7 +10,7 @@
             <h3 class="text-sm font-semibold text-slate-800 dark:text-slate-100">
                 @(ApplicantJobId.HasValue ? "Staff leave calendar" : IncludeTeam ? "My and team leave calendar" : "My leave calendar")
             </h3>
-            <p class="text-xs text-slate-500 dark:text-slate-400">Plans and submitted leave</p>
+            <p class="text-xs text-slate-500 dark:text-slate-400">Plans, submitted leave, and organisation events</p>
         </div>
         <div class="flex items-center gap-2">
             <button type="button" aria-label="Previous month" disabled="@busy" class="rounded p-2 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50" @onclick="() => MoveAsync(-1)">‹</button>
@@ -27,12 +29,24 @@
             {
                 var day = month.AddDays(i - 1);
                 var events = OnDay(day).ToList();
-                <button type="button" disabled="@busy" aria-label="@(day.ToString("dd MMM yyyy") + ", " + events.Count + " leave entries")" aria-pressed="@(selected == day)" class="@DayClass(day, events)" @onclick="() => Select(day)">
+                var dayOrgEvents = EventsOnDay(day).ToList();
+                var isSelected = selected == day;
+                <button type="button" disabled="@busy" aria-label="@(day.ToString("dd MMM yyyy") + ", " + events.Count + " leave entries, " + dayOrgEvents.Count + " organisation events")" aria-pressed="@isSelected" class="@DayClass(day, events, dayOrgEvents)" @onclick="() => Select(day)">
                     <span>@i</span>
                     <span class="flex h-1.5 justify-center gap-0.5" aria-hidden="true">
-                        @if (events.Any(x => x.IsPlan)) { <span class="h-1.5 w-1.5 rounded-full bg-amber-500"></span> }
-                        @if (events.Any(x => !x.IsPlan)) { <span class="h-1.5 w-1.5 rounded-full bg-blue-600"></span> }
+                        @if (events.Any(x => x.IsPlan)) { <span class="h-1.5 w-1.5 rounded-full bg-amber-500" title="Planned leave"></span> }
+                        @if (events.Any(x => !x.IsPlan)) { <span class="h-1.5 w-1.5 rounded-full bg-blue-600" title="Submitted/approved leave"></span> }
+                        @if (dayOrgEvents.Count > 0) { <span class="h-1.5 w-1.5 rounded-full bg-purple-600" title="Organisation event"></span> }
                     </span>
+                    @foreach (var ev in dayOrgEvents)
+                    {
+                        <span @onclick:stopPropagation="true"
+                              @onclick="() => OpenEventModal(ev)"
+                              class="w-full truncate rounded px-1 py-0.5 text-[9px] leading-tight font-semibold border cursor-pointer transition shadow-2xs @(isSelected ? "bg-white text-purple-900 border-white hover:bg-purple-100" : "bg-purple-100 text-purple-900 border-purple-300 dark:bg-purple-950/90 dark:text-purple-200 dark:border-purple-800 hover:bg-purple-200 dark:hover:bg-purple-900")"
+                              title="@($"🏛️ {ev.Title} (Click to view details)")">
+                            🏛️ @ev.Title
+                        </span>
+                    }
                     @foreach (var boundary in events.Where(x => x.From.Date == day.Date || x.To.Date == day.Date))
                     {
                         var label = boundary.From.Date == boundary.To.Date ? "Starts and ends" : boundary.From.Date == day.Date ? "Starts" : "Ends";
@@ -45,29 +59,107 @@
                 </button>
             }
         </div>
-        <div class="flex flex-wrap gap-3 text-xs text-slate-500 dark:text-slate-400"><span>🟠 Planned</span><span>🔵 Submitted / approved</span><span>Outline: today</span></div>
+        <div class="flex flex-wrap gap-3 text-xs text-slate-500 dark:text-slate-400">
+            <span>🟠 Planned</span>
+            <span>🔵 Submitted / approved</span>
+            <span>🟣 Organisation Event</span>
+            <span>Outline: today</span>
+        </div>
         @if (selected.HasValue)
         {
-            <div class="space-y-2 border-t border-slate-100 dark:border-slate-800 pt-3">
-                <h4 class="text-sm font-semibold text-slate-800 dark:text-slate-100">@selected.Value.ToString("dd MMM yyyy")</h4>
-                @if (!OnDay(selected.Value).Any()) { <p class="text-xs text-slate-500 dark:text-slate-400">No leave entries for this date.</p> }
-                @foreach (var entry in OnDay(selected.Value))
+            var selectedOrgEvents = EventsOnDay(selected.Value).ToList();
+            var selectedLeaves = OnDay(selected.Value).ToList();
+            <div class="space-y-3 border-t border-slate-100 dark:border-slate-800 pt-3">
+                <div class="flex items-center justify-between">
+                    <h4 class="text-sm font-semibold text-slate-800 dark:text-slate-100">@selected.Value.ToString("dd MMM yyyy")</h4>
+                    @if (selectedOrgEvents.Count > 0)
+                    {
+                        <span class="rounded-full bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800 px-2 py-0.5 text-[11px] font-semibold">
+                            @selectedOrgEvents.Count Event@(selectedOrgEvents.Count == 1 ? "" : "s")
+                        </span>
+                    }
+                </div>
+
+                @if (selectedOrgEvents.Count > 0)
                 {
-                    <div class="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-2 text-xs">
-                        <p class="break-words font-semibold text-slate-800 dark:text-slate-100">@(entry.IsOwner ? "You" : entry.Person) · @entry.Title</p>
-                        <p class="mt-1 text-slate-500 dark:text-slate-400">@entry.Status · @entry.From.ToString("dd MMM") – @entry.To.ToString("dd MMM yyyy")</p>
-                        @if (entry.IsPlan && entry.IsOwner)
-                        {
-                            @if (removeId == entry.Id)
+                    <div class="space-y-2">
+                        <div class="text-xs font-bold uppercase tracking-wider text-purple-800 dark:text-purple-300">
+                            Organisation Events
+                        </div>
+                        <div class="grid grid-cols-1 gap-2">
+                            @foreach (var ev in selectedOrgEvents)
                             {
-                                <p class="mt-2 text-slate-800 dark:text-slate-200">Remove this plan?</p>
-                                <button type="button" disabled="@busy" class="mr-2 mt-1 text-red-700 dark:text-red-400 font-semibold" @onclick="() => RemoveAsync(entry.Id)">Confirm removal</button>
-                                <button type="button" disabled="@busy" class="text-slate-600 dark:text-slate-400" @onclick="() => removeId = null">Cancel</button>
+                                <div class="flex items-center justify-between rounded-xl border border-purple-200 dark:border-purple-800/60 bg-purple-50/70 dark:bg-purple-950/40 p-2.5 text-xs transition hover:border-purple-300 dark:hover:border-purple-700 shadow-2xs">
+                                    <div class="min-w-0 pr-3 space-y-1">
+                                        <div class="flex items-center gap-1.5 flex-wrap">
+                                            <span class="font-bold text-slate-900 dark:text-slate-100 text-xs">@ev.Title</span>
+                                            <span class="rounded px-1.5 py-0.2 text-[10px] font-semibold bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200">
+                                                @ev.Category
+                                            </span>
+                                            @if (ev.CalendarImpactType != "None")
+                                            {
+                                                <span class="rounded px-1.5 py-0.2 text-[10px] font-semibold bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300">
+                                                    ⚑ @ev.CalendarImpactType
+                                                </span>
+                                            }
+                                        </div>
+                                        <div class="text-[11px] text-slate-600 dark:text-slate-400 flex flex-wrap items-center gap-x-2.5 gap-y-0.5">
+                                            <span>🗓 @(ev.IsAllDay ? "All-day" : $"{ev.StartDateTime:HH:mm} – {ev.EndDateTime:HH:mm}")</span>
+                                            @if (!string.IsNullOrWhiteSpace(ev.VenueName))
+                                            {
+                                                <span>📍 @ev.VenueName</span>
+                                            }
+                                        </div>
+                                    </div>
+                                    <button type="button"
+                                            class="shrink-0 inline-flex items-center gap-1 rounded-lg bg-purple-700 hover:bg-purple-800 text-white px-3 py-1.5 text-xs font-semibold shadow-2xs transition"
+                                            @onclick="() => OpenEventModal(ev)">
+                                        <span>View</span>
+                                        <span>→</span>
+                                    </button>
+                                </div>
                             }
-                            else { <button type="button" disabled="@busy" class="mt-2 text-red-700 dark:text-red-400 font-semibold" @onclick="() => removeId = entry.Id">Remove plan</button> }
+                        </div>
+                    </div>
+                }
+
+                @if (!selectedLeaves.Any() && selectedOrgEvents.Count == 0)
+                {
+                    <p class="text-xs text-slate-500 dark:text-slate-400">No leave or event entries for this date.</p>
+                }
+                else if (!selectedLeaves.Any() && selectedOrgEvents.Count > 0)
+                {
+                    <p class="text-xs text-slate-400 dark:text-slate-500 italic">No staff leave entries for this date.</p>
+                }
+
+                @if (selectedLeaves.Any())
+                {
+                    <div class="space-y-1.5">
+                        @if (selectedOrgEvents.Count > 0)
+                        {
+                            <div class="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400 pt-1">
+                                Staff Leaves
+                            </div>
                         }
-                        @if (entry.IsPlan && (entry.IsOwner || ApplicantJobId.HasValue) && OnPlanSelected.HasDelegate)
-                        { <button type="button" disabled="@busy" class="ml-2 mt-2 text-blue-700 dark:text-blue-400 font-semibold" @onclick="() => OnPlanSelected.InvokeAsync(entry)">Use dates in application</button> }
+                        @foreach (var entry in selectedLeaves)
+                        {
+                            <div class="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-2 text-xs">
+                                <p class="break-words font-semibold text-slate-800 dark:text-slate-100">@(entry.IsOwner ? "You" : entry.Person) · @entry.Title</p>
+                                <p class="mt-1 text-slate-500 dark:text-slate-400">@entry.Status · @entry.From.ToString("dd MMM") – @entry.To.ToString("dd MMM yyyy")</p>
+                                @if (entry.IsPlan && entry.IsOwner)
+                                {
+                                    @if (removeId == entry.Id)
+                                    {
+                                        <p class="mt-2 text-slate-800 dark:text-slate-200">Remove this plan?</p>
+                                        <button type="button" disabled="@busy" class="mr-2 mt-1 text-red-700 dark:text-red-400 font-semibold" @onclick="() => RemoveAsync(entry.Id)">Confirm removal</button>
+                                        <button type="button" disabled="@busy" class="text-slate-600 dark:text-slate-400" @onclick="() => removeId = null">Cancel</button>
+                                    }
+                                    else { <button type="button" disabled="@busy" class="mt-2 text-red-700 dark:text-red-400 font-semibold" @onclick="() => removeId = entry.Id">Remove plan</button> }
+                                }
+                                @if (entry.IsPlan && (entry.IsOwner || ApplicantJobId.HasValue) && OnPlanSelected.HasDelegate)
+                                { <button type="button" disabled="@busy" class="ml-2 mt-2 text-blue-700 dark:text-blue-400 font-semibold" @onclick="() => OnPlanSelected.InvokeAsync(entry)">Use dates in application</button> }
+                            </div>
+                        }
                     </div>
                 }
             </div>
@@ -90,6 +182,180 @@
     </div>
 </section>
 
+@if (selectedEventModal != null)
+{
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 overflow-y-auto"
+         role="dialog"
+         aria-modal="true"
+         aria-labelledby="event-modal-title"
+         @onclick="CloseEventModal">
+        <div class="relative w-full max-w-lg rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xl p-6 text-slate-800 dark:text-slate-100 max-h-[90vh] overflow-y-auto space-y-4"
+             @onclick:stopPropagation="true">
+            <!-- Modal Header -->
+            <div class="flex items-start justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3">
+                <div class="space-y-1.5">
+                    <div class="flex items-center gap-1.5 flex-wrap">
+                        <span class="rounded-full bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800 px-2.5 py-0.5 text-xs font-semibold">
+                            🏛️ @selectedEventModal.Category
+                        </span>
+                        @if (selectedEventModal.CalendarImpactType != "None")
+                        {
+                            <span class="rounded-full bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800 px-2.5 py-0.5 text-xs font-semibold">
+                                ⚑ @selectedEventModal.CalendarImpactType
+                            </span>
+                        }
+                        <span class="rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 px-2.5 py-0.5 text-xs font-semibold">
+                            @(selectedEventModal.AttendanceRequirement == "Mandatory" ? "⚠️ Mandatory" : selectedEventModal.AttendanceRequirement == "Optional" ? "Optional" : "Info Only")
+                        </span>
+                    </div>
+                    <h3 id="event-modal-title" class="text-base font-bold text-slate-900 dark:text-slate-100">
+                        @selectedEventModal.Title
+                    </h3>
+                    @if (!string.IsNullOrWhiteSpace(selectedEventModal.EventCode))
+                    {
+                        <p class="text-[11px] text-slate-400 font-mono">Code: @selectedEventModal.EventCode</p>
+                    }
+                </div>
+                <button type="button"
+                        aria-label="Close modal"
+                        class="rounded-lg p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+                        @onclick="CloseEventModal">
+                    <span class="text-lg leading-none font-bold">✕</span>
+                </button>
+            </div>
+
+            <!-- Modal Body Details -->
+            <div class="space-y-3 text-xs">
+                <!-- Date & Time Card -->
+                <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 p-3 space-y-1">
+                    <div class="flex items-center gap-1.5 font-bold text-slate-700 dark:text-slate-300">
+                        <span>🗓 Date &amp; Time</span>
+                    </div>
+                    <div class="text-slate-900 dark:text-slate-100 font-medium">
+                        @if (selectedEventModal.StartDateTime.Date == selectedEventModal.EndDateTime.Date)
+                        {
+                            <div>@selectedEventModal.StartDateTime.ToString("dddd, dd MMMM yyyy")</div>
+                            <div class="text-slate-500 dark:text-slate-400 text-[11px] mt-0.5">
+                                @(selectedEventModal.IsAllDay ? "All-Day Event" : $"{selectedEventModal.StartDateTime:HH:mm} – {selectedEventModal.EndDateTime:HH:mm} ({selectedEventModal.TimeZoneId})")
+                            </div>
+                        }
+                        else
+                        {
+                            <div>From: @selectedEventModal.StartDateTime.ToString("dd MMM yyyy, HH:mm")</div>
+                            <div>To: @selectedEventModal.EndDateTime.ToString("dd MMM yyyy, HH:mm")</div>
+                            <div class="text-slate-500 dark:text-slate-400 text-[11px] mt-0.5">(@selectedEventModal.TimeZoneId)</div>
+                        }
+                    </div>
+                </div>
+
+                <!-- Location & Online Meeting -->
+                @if (!string.IsNullOrWhiteSpace(selectedEventModal.VenueName) || !string.IsNullOrWhiteSpace(selectedEventModal.VenueAddress) || !string.IsNullOrWhiteSpace(selectedEventModal.MeetingUrl))
+                {
+                    <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 p-3 space-y-1">
+                        <div class="flex items-center gap-1.5 font-bold text-slate-700 dark:text-slate-300">
+                            <span>📍 Location &amp; Online Access</span>
+                        </div>
+                        @if (!string.IsNullOrWhiteSpace(selectedEventModal.VenueName))
+                        {
+                            <div class="font-medium text-slate-900 dark:text-slate-100">
+                                @selectedEventModal.VenueName
+                            </div>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(selectedEventModal.VenueAddress))
+                        {
+                            <div class="text-slate-600 dark:text-slate-400 text-[11px]">
+                                @selectedEventModal.VenueAddress
+                            </div>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(selectedEventModal.MeetingUrl))
+                        {
+                            <div class="pt-1">
+                                <a href="@selectedEventModal.MeetingUrl"
+                                   target="_blank"
+                                   rel="noopener noreferrer"
+                                   class="inline-flex items-center gap-1 font-bold text-blue-600 dark:text-blue-400 hover:underline">
+                                    <span>🔗 Join Online Meeting</span>
+                                    <span>↗</span>
+                                </a>
+                            </div>
+                        }
+                    </div>
+                }
+
+                <!-- Description -->
+                @if (!string.IsNullOrWhiteSpace(selectedEventModal.Description))
+                {
+                    <div>
+                        <h4 class="font-bold text-slate-700 dark:text-slate-300 mb-1">Description</h4>
+                        <p class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">
+                            @selectedEventModal.Description
+                        </p>
+                    </div>
+                }
+
+                <!-- Attendance Instructions / Dress Code / Required Items -->
+                @if (!string.IsNullOrWhiteSpace(selectedEventModal.DressCode) || !string.IsNullOrWhiteSpace(selectedEventModal.RequiredItems))
+                {
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        @if (!string.IsNullOrWhiteSpace(selectedEventModal.DressCode))
+                        {
+                            <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 p-2.5">
+                                <div class="text-[11px] font-semibold text-slate-500 dark:text-slate-400">👔 Dress Code</div>
+                                <div class="font-medium text-slate-900 dark:text-slate-100 mt-0.5">@selectedEventModal.DressCode</div>
+                            </div>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(selectedEventModal.RequiredItems))
+                        {
+                            <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 p-2.5">
+                                <div class="text-[11px] font-semibold text-slate-500 dark:text-slate-400">🎒 Required Items</div>
+                                <div class="font-medium text-slate-900 dark:text-slate-100 mt-0.5">@selectedEventModal.RequiredItems</div>
+                            </div>
+                        }
+                    </div>
+                }
+
+                @if (!string.IsNullOrWhiteSpace(selectedEventModal.AttendanceInstructions))
+                {
+                    <div>
+                        <h4 class="font-bold text-slate-700 dark:text-slate-300 mb-1">Attendance Instructions</h4>
+                        <p class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-2.5 text-slate-700 dark:text-slate-300 whitespace-pre-wrap">
+                            @selectedEventModal.AttendanceInstructions
+                        </p>
+                    </div>
+                }
+
+                <!-- Contact & Notes -->
+                @if (!string.IsNullOrWhiteSpace(selectedEventModal.ContactInformation))
+                {
+                    <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 p-2.5">
+                        <div class="text-[11px] font-semibold text-slate-500 dark:text-slate-400">📞 Contact &amp; Organizer</div>
+                        <div class="font-medium text-slate-900 dark:text-slate-100 mt-0.5">@selectedEventModal.ContactInformation</div>
+                    </div>
+                }
+
+                @if (!string.IsNullOrWhiteSpace(selectedEventModal.AdditionalNotes))
+                {
+                    <div>
+                        <h4 class="font-bold text-slate-700 dark:text-slate-300 mb-1">Additional Notes</h4>
+                        <p class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-2.5 text-slate-700 dark:text-slate-300 whitespace-pre-wrap">
+                            @selectedEventModal.AdditionalNotes
+                        </p>
+                    </div>
+                }
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="flex items-center justify-end border-t border-slate-100 dark:border-slate-800 pt-3">
+                <button type="button"
+                        class="rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition"
+                        @onclick="CloseEventModal">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     [Parameter] public int MonthOffset { get; set; }
     [Parameter] public int? ApplicantJobId { get; set; }
@@ -103,11 +369,14 @@
     private DateTime month, from = Today, to = Today;
     private DateTime? selected;
     private List<LeaveCalendarEntry> entries = [];
+    private List<OrganisationEventDto> orgEvents = [];
+    private OrganisationEventDto? selectedEventModal;
     private bool busy, initialized;
     private int lastRefresh;
     private int? removeId;
     private string title = "Planned leave";
     private string? message;
+
     protected override async Task OnParametersSetAsync()
     {
         if (!initialized) { month = new DateTime(Today.Year, Today.Month, 1).AddMonths(MonthOffset); initialized = true; }
@@ -115,19 +384,55 @@
         lastRefresh = RefreshKey;
         await LoadAsync();
     }
+
     private IEnumerable<LeaveCalendarEntry> OnDay(DateTime day) => entries.Where(x => x.From.Date <= day.Date && x.To.Date >= day.Date);
-    private string DayClass(DateTime day, List<LeaveCalendarEntry> events) => "flex min-h-10 min-w-0 flex-col items-center justify-center gap-1 rounded-md border py-1 text-xs transition " +
+    private IEnumerable<OrganisationEventDto> EventsOnDay(DateTime day) => orgEvents.Where(x => x.StartDateTime.Date <= day.Date && x.EndDateTime.Date >= day.Date);
+
+    private string DayClass(DateTime day, List<LeaveCalendarEntry> events, List<OrganisationEventDto> dayOrgEvents) => "flex min-h-10 min-w-0 flex-col items-center justify-center gap-1 rounded-md border py-1 text-xs transition " +
         (selected == day ? "border-blue-600 bg-blue-600 text-white dark:border-blue-500 dark:bg-blue-600 font-bold " : day == Today ? "border-blue-400 dark:border-blue-400 font-bold " : "border-slate-200/80 dark:border-slate-800 ") +
-        (events.Count > 0 ? "font-semibold text-slate-900 dark:text-slate-100 " : day.DayOfWeek is DayOfWeek.Friday or DayOfWeek.Saturday ? "bg-slate-50/70 dark:bg-slate-800/50 text-slate-400 dark:text-slate-500 " : "text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-900 ") + "hover:bg-blue-50 dark:hover:bg-slate-800";
+        (events.Count > 0 || dayOrgEvents.Count > 0 ? "font-semibold text-slate-900 dark:text-slate-100 " : day.DayOfWeek is DayOfWeek.Friday or DayOfWeek.Saturday ? "bg-slate-50/70 dark:bg-slate-800/50 text-slate-400 dark:text-slate-500 " : "text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-900 ") + "hover:bg-blue-50 dark:hover:bg-slate-800";
+
     private void Select(DateTime day) { selected = day; from = to = day; removeId = null; }
     private async Task MoveAsync(int direction) { month = month.AddMonths(direction); selected = null; await LoadAsync(); }
+
+    private void OpenEventModal(OrganisationEventDto ev)
+    {
+        selectedEventModal = ev;
+    }
+
+    private void CloseEventModal()
+    {
+        selectedEventModal = null;
+    }
+
     private async Task LoadAsync()
     {
         busy = true;
-        try { entries = await CalendarService.LoadAsync(month, IncludeTeam, ApplicantJobId); }
-        catch (Exception ex) { entries = []; Logger.LogError(ex, "Could not load leave calendar."); message = "The calendar could not be loaded. Try Refresh."; }
+        try 
+        { 
+            entries = await CalendarService.LoadAsync(month, IncludeTeam, ApplicantJobId); 
+        }
+        catch (Exception ex) 
+        { 
+            entries = []; 
+            Logger.LogError(ex, "Could not load leave calendar."); 
+            message = "The calendar could not be loaded. Try Refresh."; 
+        }
+
+        try
+        {
+            var startOfMonth = new DateTime(month.Year, month.Month, 1);
+            var endOfMonth = startOfMonth.AddMonths(1).AddDays(1);
+            orgEvents = await EventService.ListAsync(startOfMonth, endOfMonth, null, "Published", null, null, false);
+        }
+        catch (Exception ex)
+        {
+            orgEvents = [];
+            Logger.LogWarning(ex, "Could not load organisation events for staff calendar.");
+        }
         finally { busy = false; }
     }
+
     private async Task SaveAsync()
     {
         if (busy) return;
@@ -137,6 +442,7 @@
         catch (Exception ex) { Logger.LogError(ex, "Could not save leave plan."); message = "The plan could not be saved. Refresh before trying again."; }
         finally { busy = false; }
     }
+
     private async Task RemoveAsync(int id)
     {
         if (busy) return;
