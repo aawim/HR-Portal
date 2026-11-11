@@ -37,16 +37,10 @@
     <Authorized>
         @if (loading)
         {
-            <div class="flex items-center justify-center ">
-                <div class="text-center">
-
-                    <div class="w-14 h-14 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
-
-                    <p class="mt-4 text-slate-500">
-                        Loading Dashboard...
-                    </p>
-
-                </div>
+            <div class="flex flex-col items-center justify-center p-12 my-6 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs">
+                <div class="w-12 h-12 border-4 border-teal-600 border-t-transparent rounded-full animate-spin"></div>
+                <p class="mt-4 text-sm font-semibold text-slate-700 dark:text-slate-200">Loading Dashboard...</p>
+                <p class="text-xs text-slate-400 mt-0.5">Fetching attendance, leave balances, and employee services</p>
             </div>
         }
         else if (contextUnavailable)
@@ -61,40 +55,34 @@
         {
             <div class="dashboard-layout w-full space-y-2 p-2">
                 <!-- Header -->
-                 <header class="staff-items-header sticky top-0 z-30 m-0 flex w-full min-w-0 flex-wrap items-center justify-between gap-3 border-b border-slate-200  px-3 py-3 shadow-sm">
-                    <div>
-                        <div class="flex items-center gap-2">
-                            <h2 class="text-lg font-bold text-slate-900">
-
+                <!-- Top Header Area Matching Admin Workspace Standard -->
+                <div class="my-workspace-header staff-overview-no-print flex flex-col gap-2 p-2 border-b border-slate-200 dark:border-slate-800 pb-3">
+                    <div class="flex items-center justify-between flex-wrap gap-2">
+                        <div>
+                            <h1 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
                                 User Dashboard
-                            </h2>
-                    
+                            </h1>
+                            <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                Personal workforce portal for time attendance, leave balances, official events, and employee services.
+                            </p>
                         </div>
-                
+                        <div class="flex items-center gap-2">
+                            <a href="/admin/my/workspace"
+                               class="inline-flex items-center gap-1.5 rounded-lg border border-teal-300 dark:border-teal-700 bg-teal-50 dark:bg-teal-950/50 px-3 py-1.5 text-xs font-semibold text-teal-700 dark:text-teal-300 shadow-xs hover:bg-teal-100 dark:hover:bg-teal-900/60 transition"
+                               title="Open Admin Workspace">
+                                <span>Admin Workspace</span>
+                                <span>&rarr;</span>
+                            </a>
+                            <button type="button"
+                                    class="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200 shadow-xs hover:bg-slate-50 dark:hover:bg-slate-700 transition"
+                                    disabled="@refreshing"
+                                    @onclick="RefreshDashboardAsync">
+                                <span class="@(refreshing ? "animate-spin" : "")">↻</span>
+                                <span>Refresh</span>
+                            </button>
+                        </div>
                     </div>
-                    <div class="flex flex-wrap items-center gap-2">
-                        <!-- Full Page Width Toggle Button -->
-                        <button type="button"
-                                class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50 transition-colors"
-                                title="@(isFullWidth ? "Shrink to standard layout" : "Expand to full page width")"
-                                @onclick="ToggleFullWidth">
-                            @if (isFullWidth)
-                            {
-                                <AppIcon Name="fullscreen_exit" Class="h-4 w-4 text-slate-600 text-base" />
-                                <span>Shrink View</span>
-                            }
-                            else
-                            {
-                                <AppIcon Name="fullscreen" Class="h-4 w-4 text-slate-600 text-base" />
-                                <span>Full Width</span>
-                            }
-                        </button>
-
-              
-
-              
-                    </div>
-                </header>
+                </div>
 
 
 
@@ -380,9 +368,10 @@
         await InvokeAsync(StateHasChanged);
     }
 
+    private bool refreshing;
     private async Task RefreshDashboardAsync()
     {
-        if (AuthState == null)
+        if (AuthState == null || refreshing)
             return;
 
         var auth = await AuthState;
@@ -390,16 +379,21 @@
         if (auth.User.Identity?.IsAuthenticated != true)
             return;
 
-        await LoadDisplayNameAsync();
-        if (contextUnavailable) return;
-
+        refreshing = true;
         try
         {
+            await LoadDisplayNameAsync();
+            if (contextUnavailable) return;
+
             await LoadAttendance();
             if (contextUnavailable) return;
             await Task.WhenAll(LoadLeaveBalances(), LoadJobHistory());
         }
         catch (UnauthorizedAccessException) { ClearDashboardContext(); }
+        finally
+        {
+            refreshing = false;
+        }
 
         await InvokeAsync(StateHasChanged);
     }
