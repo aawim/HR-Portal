@@ -1,5 +1,37 @@
 $ErrorActionPreference = 'Stop'
 $taskRepository = Split-Path -Parent $PSScriptRoot
+
+function Invoke-LockedDotNetRestore {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Target,
+
+        [Parameter(Mandatory = $true)]
+        [string] $FailureMessage
+    )
+
+    $taskMaximumAttempts = 3
+    $taskRestoreExitCode = 0
+
+    for ($taskAttempt = 1; $taskAttempt -le $taskMaximumAttempts; $taskAttempt++) {
+        Write-Output "Locked .NET restore attempt $taskAttempt of $taskMaximumAttempts for $Target."
+        dotnet restore $Target --locked-mode --disable-parallel --verbosity normal
+        $taskRestoreExitCode = $LASTEXITCODE
+
+        if ($taskRestoreExitCode -eq 0) {
+            return
+        }
+
+        if ($taskAttempt -lt $taskMaximumAttempts) {
+            $taskRetryDelaySeconds = 5 * $taskAttempt
+            Write-Warning "Locked restore exited with code $taskRestoreExitCode. Retrying in $taskRetryDelaySeconds seconds."
+            Start-Sleep -Seconds $taskRetryDelaySeconds
+        }
+    }
+
+    throw "$FailureMessage Target: $Target. Exit code: $taskRestoreExitCode. See the dotnet restore output above for the NuGet error."
+}
+
 Push-Location -LiteralPath $taskRepository
 try {
     python tools/check_deployment_configuration.py
@@ -10,8 +42,7 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'CSS build failed.' }
     npm audit --audit-level=low
     if ($LASTEXITCODE -ne 0) { throw 'npm reported a vulnerability or could not complete its audit.' }
-    dotnet restore HRM.sln --locked-mode
-    if ($LASTEXITCODE -ne 0) { throw 'Locked .NET restore failed.' }
+    Invoke-LockedDotNetRestore -Target 'HRM.sln' -FailureMessage 'Locked .NET restore failed.'
     $taskNugetOutput = dotnet list HRM.sln package --vulnerable --include-transitive --format json
     if ($LASTEXITCODE -ne 0) { throw 'NuGet advisory audit could not complete.' }
     $taskNugetAudit = $taskNugetOutput | ConvertFrom-Json
@@ -26,8 +57,7 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Application build or analyzer checks failed.' }
     dotnet run --project Tests/ApplicationContracts/ApplicationContracts.csproj
     if ($LASTEXITCODE -ne 0) { throw 'Application contract boundary checks failed.' }
-    dotnet restore Tests/HRM.Api.UnitTests/HRM.Api.UnitTests.csproj --locked-mode
-    if ($LASTEXITCODE -ne 0) { throw 'API unit-test dependency restore failed.' }
+    Invoke-LockedDotNetRestore -Target 'Tests/HRM.Api.UnitTests/HRM.Api.UnitTests.csproj' -FailureMessage 'API unit-test dependency restore failed.'
     dotnet test Tests/HRM.Api.UnitTests/HRM.Api.UnitTests.csproj --no-restore --verbosity minimal
     if ($LASTEXITCODE -ne 0) { throw 'API unit and endpoint checks failed.' }
     dotnet test Tests/HRM.UI.UnitTests/HRM.UI.UnitTests.csproj --no-restore --verbosity minimal

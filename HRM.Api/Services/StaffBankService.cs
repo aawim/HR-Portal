@@ -14,7 +14,6 @@ namespace HRM.Services;
 
 public sealed class StaffBankService(
     IDbContextFactory<HrmTeContext> factory,
-    IUserAccessService access,
     ILogger<StaffBankService> logger) : StaffBankServiceContracts.IOperations
 {
     private static bool _tableEnsured;

@@ -688,6 +688,28 @@ sealed class TestRenderer : Renderer
         return frames.Array.Take(frames.Count).Where(x => x.FrameType == RenderTreeFrameType.Attribute && x.AttributeName == "value")
             .Select(x => x.AttributeValue?.ToString() ?? "").ToList();
     }
+    public List<string> RootOptionValues(string selectId)
+    {
+        var frames = GetCurrentRenderTreeFrames(root);
+        var values = new List<string>();
+        for (var i = 0; i < frames.Count; i++)
+        {
+            var select = frames.Array[i];
+            if (select.FrameType != RenderTreeFrameType.Element || select.ElementName != "select") continue;
+            var selectAttributes = frames.Array.Skip(i + 1).TakeWhile(x => x.FrameType == RenderTreeFrameType.Attribute);
+            if (!selectAttributes.Any(x => x.AttributeName == "id" && x.AttributeValue?.ToString() == selectId)) continue;
+            var end = i + select.ElementSubtreeLength;
+            for (var optionIndex = i + 1; optionIndex < end; optionIndex++)
+            {
+                if (frames.Array[optionIndex].FrameType != RenderTreeFrameType.Element || frames.Array[optionIndex].ElementName != "option") continue;
+                var value = frames.Array.Skip(optionIndex + 1).TakeWhile(x => x.FrameType == RenderTreeFrameType.Attribute)
+                    .FirstOrDefault(x => x.AttributeName == "value");
+                values.Add(value.AttributeValue?.ToString() ?? "");
+            }
+            break;
+        }
+        return values;
+    }
     public int RootDateInputCount()
     {
         var frames = GetCurrentRenderTreeFrames(root);

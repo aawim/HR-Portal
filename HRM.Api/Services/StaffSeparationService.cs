@@ -20,8 +20,7 @@ namespace HRM.Services;
 
 public sealed class StaffSeparationService(
     IDbContextFactory<HrmTeContext> factory,
-    IUserAccessService access,
-    IOperationLogService logs)
+    IUserAccessService access)
     : global::HRM.Services.Contracts.StaffSeparationServiceContracts,
       global::HRM.Services.Contracts.StaffSeparationServiceContracts.IOperations
 {
@@ -216,7 +215,7 @@ public sealed class StaffSeparationService(
         var query = db.StaffSeparations
             .AsNoTracking()
             .Include(s => s.SeparationType)
-            .Include(s => s.WorkHandover)!.ThenInclude(h => h.Items)
+            .Include(s => s.WorkHandover).ThenInclude(h => h!.Items)
             .Include(s => s.ClearanceTasks)
             .Include(s => s.AssetClearances)!.ThenInclude(a => a.AssetItem)
             .Include(s => s.FinanceItems)
@@ -835,7 +834,7 @@ public sealed class StaffSeparationService(
         await using var db = await factory.CreateDbContextAsync();
 
         var sep = await db.StaffSeparations
-            .Include(s => s.WorkHandover)!.ThenInclude(h => h.Items)
+            .Include(s => s.WorkHandover).ThenInclude(h => h!.Items)
             .FirstOrDefaultAsync(s => s.StaffSeparationId == input.StaffSeparationId);
 
         if (sep == null || sep.WorkHandover == null)

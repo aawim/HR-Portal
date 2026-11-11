@@ -13,11 +13,13 @@ public static class ErrorLoggingExtensions
     /// </summary>
     public static IServiceCollection AddHrmErrorLogging(
         this IServiceCollection services,
-        string applicationSource = "HRM.Api")
+        string applicationSource = "HRM.Api",
+        bool includeBackgroundProcessor = true)
     {
         // High-performance bounded channel queue and batch background processor
         services.AddSingleton<IErrorLogQueue, ChannelErrorLogQueue>();
-        services.AddHostedService<ErrorLogBackgroundProcessor>();
+        if (includeBackgroundProcessor)
+            services.AddHostedService<ErrorLogBackgroundProcessor>();
 
         services.AddSingleton<IErrorLogService>(sp =>
         {

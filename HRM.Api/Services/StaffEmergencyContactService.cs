@@ -14,7 +14,6 @@ namespace HRM.Services;
 
 public sealed class StaffEmergencyContactService(
     IDbContextFactory<HrmTeContext> factory,
-    IUserAccessService access,
     ILogger<StaffEmergencyContactService> logger) : StaffEmergencyContactServiceContracts.IOperations
 {
     private static bool _tableEnsured;

@@ -31,8 +31,9 @@ public partial class TeamService
             if (!await CanManageProjectAsync(db, p)) continue;
             result.Add(new ProjectLookupDto
             {
-                ProjectId = p.ProjectId, Reference = p.Reference, Name = p.Name, Description = p.Description,
-                Status = p.Status, TeamName = p.Team?.Name ?? "", ProjectManagerName = p.ProjectManagerName,
+                ProjectId = p.ProjectId, Reference = p.Reference ?? string.Empty, Name = p.Name ?? string.Empty,
+                Description = p.Description ?? string.Empty, Status = p.Status ?? string.Empty,
+                TeamName = p.Team?.Name ?? string.Empty, ProjectManagerName = p.ProjectManagerName ?? string.Empty,
                 StartDate = p.StartDate, PlannedEndDate = p.PlannedEndDate
             });
         }

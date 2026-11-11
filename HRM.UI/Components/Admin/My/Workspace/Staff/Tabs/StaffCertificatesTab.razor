@@ -157,7 +157,7 @@
                                     <!-- Draft Certificate Statement Preview -->
                                     <div class="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 p-3 space-y-1.5 text-[11px] text-slate-700 dark:text-slate-300">
                                         <div class="font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wider">
-                                            Draft Preview — @selectedReviewDetail.CurrentDraftSnapshot.CertificateTitle
+                                            Draft Preview — @selectedReviewDetail.CurrentDraftSnapshot!.CertificateTitle
                                         </div>
                                         <p>@selectedReviewDetail.CurrentDraftSnapshot.IntroductoryText</p>
                                         <p>@selectedReviewDetail.CurrentDraftSnapshot.ServiceStatement</p>
@@ -441,11 +441,13 @@
             var detail = await CertificateService.GetRequestDetailAsync(certificateRequestId);
             selectedReviewDetail = detail;
             reviewAddressedTo = detail.Summary.AddressedTo ?? "TO WHOM IT MAY CONCERN";
-            reviewSignatoryName = detail.CurrentDraftSnapshot.SignatoryName;
-            reviewSignatoryTitle = detail.CurrentDraftSnapshot.SignatoryTitle;
-            reviewIncludeResp = detail.CurrentDraftSnapshot.Positions.Any(p => p.Responsibilities.Count > 0);
-            reviewIncludeProj = detail.CurrentDraftSnapshot.Projects.Count > 0;
-            reviewIncludeSalary = detail.CurrentDraftSnapshot.BasicSalary.HasValue;
+            var draft = detail.CurrentDraftSnapshot
+                ?? throw new InvalidOperationException("The certificate draft is unavailable.");
+            reviewSignatoryName = draft.SignatoryName;
+            reviewSignatoryTitle = draft.SignatoryTitle;
+            reviewIncludeResp = draft.Positions.Any(p => p.Responsibilities.Count > 0);
+            reviewIncludeProj = draft.Projects.Count > 0;
+            reviewIncludeSalary = draft.BasicSalary.HasValue;
             reviewReason = "";
         }
         catch (Exception ex)

@@ -94,7 +94,15 @@ public static class ApplicationContractCatalog
         typeof(global::HRM.Application.Contracts.Pages.IEnterprisePayroll),
         typeof(global::HRM.Services.Contracts.StaffBankServiceContracts.IOperations),
         typeof(global::HRM.Services.Contracts.StaffEmergencyContactServiceContracts.IOperations),
-        typeof(global::HRM.Services.Contracts.StaffIdentityDocumentServiceContracts.IOperations),
-        typeof(global::HRM.Services.Interfaces.IAttendanceDeductionService)
+        typeof(global::HRM.Services.Contracts.StaffIdentityDocumentServiceContracts.IOperations)
     ]);
+
+    /// <summary>Reviewed DTO-only contracts served by dedicated HTTP clients instead of the generated v1 transport.</summary>
+    public static IReadOnlyList<Type> DedicatedHttpClients { get; } = Array.AsReadOnly<Type>(
+    [
+        typeof(global::HRM.Application.Contracts.Pages.IGoodsLoanService)
+    ]);
+
+    public static IReadOnlyList<Type> Reviewed { get; } = Array.AsReadOnly(
+        All.Concat(DedicatedHttpClients).ToArray());
 }

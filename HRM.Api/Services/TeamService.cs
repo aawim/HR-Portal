@@ -257,16 +257,16 @@ public partial class TeamService(IDbContextFactory<HrmTeContext> factory, IUserA
             ProjectName = task.Project?.Name ?? "General Project",
             TaskReference = task.TaskReference,
             Title = task.Title,
-            Description = task.Description,
+            Description = task.Description ?? string.Empty,
             AssignedStaffId = task.AssignedStaffId,
-            AssignedStaffName = task.AssignedStaffName,
+            AssignedStaffName = task.AssignedStaffName ?? string.Empty,
             StartDate = task.StartDate,
             ExpectedEndDate = task.ExpectedEndDate,
             ActualCompletionDate = task.ActualCompletionDate,
             Status = task.Status,
             Priority = task.Priority,
             Progress = task.Progress,
-            Remarks = task.Remarks
+            Remarks = task.Remarks ?? string.Empty
         };
     }
 
@@ -395,7 +395,8 @@ public partial class TeamService(IDbContextFactory<HrmTeContext> factory, IUserA
             {
                 ProjectMemberId = m.ProjectMemberId, ProjectId = m.ProjectId, ProjectReference = m.Project.Reference,
                 ProjectName = m.Project.Name, ProjectStatus = m.Project.Status, Role = m.Role, AssignedDate = m.AssignedDate,
-                ExpectedEndDate = m.ExpectedEndDate, RemovedAt = m.RemovedAt, Remarks = m.Remarks, IsActive = m.IsActive,
+                ExpectedEndDate = m.ExpectedEndDate, RemovedAt = m.RemovedAt,
+                Remarks = m.Remarks ?? string.Empty, IsActive = m.IsActive,
                 CanManage = m.IsActive && await CanManageProjectAsync(db, m.Project)
             });
 
@@ -408,16 +409,16 @@ public partial class TeamService(IDbContextFactory<HrmTeContext> factory, IUserA
                 ProjectName = t.Project?.Name ?? "Project",
                 TaskReference = t.TaskReference,
                 Title = t.Title,
-                Description = t.Description,
+                Description = t.Description ?? string.Empty,
                 AssignedStaffId = t.AssignedStaffId,
-                AssignedStaffName = t.AssignedStaffName,
+                AssignedStaffName = t.AssignedStaffName ?? string.Empty,
                 StartDate = t.StartDate,
                 ExpectedEndDate = t.ExpectedEndDate,
                 ActualCompletionDate = t.ActualCompletionDate,
                 Status = t.Status,
                 Priority = t.Priority,
                 Progress = t.Progress,
-                Remarks = t.Remarks
+                Remarks = t.Remarks ?? string.Empty
             }).ToList();
         }
 
@@ -831,13 +832,13 @@ public partial class TeamService(IDbContextFactory<HrmTeContext> factory, IUserA
             ProjectId = p.ProjectId,
             Reference = p.Reference,
             Name = p.Name,
-            Description = p.Description,
+            Description = p.Description ?? string.Empty,
             TeamId = p.TeamId,
             TeamName = p.Team?.Name ?? "General Team",
             OrganisationStructureId = p.OrganisationStructureId,
             OrganisationStructureName = p.OrganisationStructure?.Name ?? "",
             ProjectManagerStaffId = p.ProjectManagerStaffId,
-            ProjectManagerName = p.ProjectManagerName,
+            ProjectManagerName = p.ProjectManagerName ?? string.Empty,
             StartDate = p.StartDate,
             PlannedEndDate = p.PlannedEndDate,
             ActualEndDate = p.ActualEndDate,
@@ -852,11 +853,11 @@ public partial class TeamService(IDbContextFactory<HrmTeContext> factory, IUserA
                 ProjectMemberId = m.ProjectMemberId,
                 ProjectId = m.ProjectId,
                 StaffId = m.StaffId,
-                StaffName = m.StaffName,
+                StaffName = m.StaffName ?? string.Empty,
                 Role = m.Role,
                 AssignedDate = m.AssignedDate,
                 ExpectedEndDate = m.ExpectedEndDate,
-                Remarks = m.Remarks,
+                Remarks = m.Remarks ?? string.Empty,
                 IsActive = m.IsActive
             }).ToList(),
             Tasks = p.Tasks.Select(t => new TeamProjectTaskDto
@@ -866,16 +867,16 @@ public partial class TeamService(IDbContextFactory<HrmTeContext> factory, IUserA
                 ProjectName = p.Name,
                 TaskReference = t.TaskReference,
                 Title = t.Title,
-                Description = t.Description,
+                Description = t.Description ?? string.Empty,
                 AssignedStaffId = t.AssignedStaffId,
-                AssignedStaffName = t.AssignedStaffName,
+                AssignedStaffName = t.AssignedStaffName ?? string.Empty,
                 StartDate = t.StartDate,
                 ExpectedEndDate = t.ExpectedEndDate,
                 ActualCompletionDate = t.ActualCompletionDate,
                 Status = t.Status,
                 Priority = t.Priority,
                 Progress = t.Progress,
-                Remarks = t.Remarks
+                Remarks = t.Remarks ?? string.Empty
             }).ToList()
         };
     }

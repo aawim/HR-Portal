@@ -239,7 +239,7 @@ namespace HRM.Services.Attendance
 
             var effectiveCheckIn =
                 HRM.Helpers.AttendanceTiming.Closest(
-                    resolvedEvents.Where(x =>
+                    allResolvedEvents.Where(x =>
                         x.ClockType ==
                         AttendanceClockType.CheckIn),
                     x => x.LogDateTime,
