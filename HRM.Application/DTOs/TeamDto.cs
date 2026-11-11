@@ -11,6 +11,7 @@ namespace HRM.DTOs
         public DateTime? ToDate { get; set; }
         public bool IsValid { get; set; }
         public bool IsSuperVisor { get; set; }
+        public int SubTeamCount { get; set; }
 
         public List<TeamStaffDto> Staffs { get; set; } = new();
     }

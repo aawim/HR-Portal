@@ -33,8 +33,19 @@ public partial class TeamService
         data.Structures = await db.OrganisationStructures.AsNoTracking()
             .Where(x => x.OrganisationBusinessEntityID == scope.Parent.OrganisationId && x.OrganisationStructureStateId == 3)
             .OrderBy(x => x.Name).Select(x => new SubTeamOptionDto(x.OrganisationStructureId, x.Name)).ToListAsync(ct);
+
+        var assignedSubTeamStaffIds = await db.TeamStaffs.AsNoTracking()
+            .Where(ts => db.Teams.Any(t => t.ParentTeamId == parentTeamId && t.IsValid == true && t.TeamId == ts.TeamId) &&
+                         ts.IsValid &&
+                         ts.StartDate <= TeamToday &&
+                         (!ts.EndDate.HasValue || ts.EndDate >= TeamToday))
+            .Select(ts => ts.StaffId)
+            .Distinct()
+            .ToListAsync(ct);
+
         data.Staff = await db.Jobs.AsNoTracking().Where(x => x.OrganisationID == scope.Parent.OrganisationId && x.JobStateId == 4 &&
-                x.JoinedDate <= TeamToday && (!x.TerminatedDate.HasValue || x.TerminatedDate > TeamToday))
+                x.JoinedDate <= TeamToday && (!x.TerminatedDate.HasValue || x.TerminatedDate > TeamToday) &&
+                !assignedSubTeamStaffIds.Contains(x.IndividualID))
             .OrderBy(x => x.Individual.FirstNameEnglish).Select(x => new SubTeamOptionDto(x.IndividualID,
                 (x.Individual.FirstNameEnglish + " " + (x.Individual.MiddleNameEnglish ?? "") + " " + (x.Individual.LastNameEnglish ?? "")).Trim()))
             .Distinct().ToListAsync(ct);
@@ -94,6 +105,22 @@ public partial class TeamService
         await RequireParentTeamAsync(db, team.ParentTeamId!.Value, ct);
         if (!await db.Jobs.AnyAsync(x => x.IndividualID == model.StaffId && x.OrganisationID == team.OrganisationId && x.JobStateId == 4, ct))
             throw new ArgumentException("Select active staff from this organisation.");
+
+        var parentTeamId = team.ParentTeamId.Value;
+        var isAlreadyInAnotherSubTeam = await db.TeamStaffs.AnyAsync(ts =>
+            ts.StaffId == model.StaffId &&
+            ts.TeamId != model.TeamId &&
+            ts.IsValid &&
+            ts.StartDate <= TeamToday &&
+            (!ts.EndDate.HasValue || ts.EndDate >= TeamToday) &&
+            db.Teams.Any(t => t.TeamId == ts.TeamId && t.ParentTeamId == parentTeamId && t.IsValid == true),
+            ct);
+
+        if (isAlreadyInAnotherSubTeam)
+        {
+            throw new InvalidOperationException("This staff member already belongs to another sub-team under this team.");
+        }
+
         var row = await db.TeamStaffs.SingleOrDefaultAsync(x => x.TeamId == model.TeamId && x.StaffId == model.StaffId && x.IsValid, ct);
         var audit = await logs.CreateAsync(db, row == null ? SharedConfig.OperationLogActionTypes.TEAM_STAFF_CREATE : SharedConfig.OperationLogActionTypes.TEAM_STAFF_UPDATE,
             $"Assigned staff {model.StaffId} to sub-team {model.TeamId} as {role}.");

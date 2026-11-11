@@ -85,6 +85,7 @@ public partial class TeamService(IDbContextFactory<HrmTeContext> factory, IUserA
             {
                 TeamId = x.TeamId, ParentTeamId = x.ParentTeamId, OrganisationStructureId = x.OrganisationStructureId,
                 Name = x.Name, NameDhivehi = x.NameDhivehi ?? "",
+                SubTeamCount = db.Teams.Count(st => st.ParentTeamId == x.TeamId && st.IsValid == true && (st.StartDate == null || st.StartDate <= today) && (st.EndDate == null || st.EndDate >= today)),
                 Staffs = x.TeamStaffs.Where(m => m.IsValid && m.StartDate <= today && (m.EndDate == null || m.EndDate >= today) &&
                     db.Jobs.Any(j => j.IndividualID == m.StaffId && j.OrganisationID == organisationId &&
                         j.JobStateId == SharedConfig.JobStates.APPROVED && j.TerminatedDate == null && j.JoinedDate <= today))
@@ -168,6 +169,8 @@ public partial class TeamService(IDbContextFactory<HrmTeContext> factory, IUserA
         staffs = staffs.GroupBy(x => x.StaffId).Select(x => x.OrderByDescending(m => m.IsSuperVisor).First())
             .OrderByDescending(x => x.IsSuperVisor).ThenBy(x => x.FullName).ToList();
 
+        var subTeamCount = await db.Teams.CountAsync(st => st.ParentTeamId == team.TeamId && st.IsValid == true && (st.StartDate == null || st.StartDate <= today) && (st.EndDate == null || st.EndDate >= today), ct);
+
         return new TeamDto
         {
             TeamId = team.TeamId,
@@ -178,6 +181,7 @@ public partial class TeamService(IDbContextFactory<HrmTeContext> factory, IUserA
             FromDate = team.StartDate,
             ToDate = team.EndDate,
             IsValid = team.IsValid ?? true,
+            SubTeamCount = subTeamCount,
             Staffs = staffs
         };
     }
@@ -810,6 +814,8 @@ public partial class TeamService(IDbContextFactory<HrmTeContext> factory, IUserA
                 FullName = (m.Staff.Individual.FirstNameEnglish + " " + (m.Staff.Individual.MiddleNameEnglish ?? "") + " " + (m.Staff.Individual.LastNameEnglish ?? "")).Trim()
             }).ToListAsync(ct);
 
+        var subTeamCount = await db.Teams.CountAsync(st => st.ParentTeamId == team.TeamId && st.IsValid == true && (st.StartDate == null || st.StartDate <= today) && (st.EndDate == null || st.EndDate >= today), ct);
+
         return new TeamDto
         {
             TeamId = team.TeamId,
@@ -817,6 +823,7 @@ public partial class TeamService(IDbContextFactory<HrmTeContext> factory, IUserA
             NameDhivehi = team.NameDhivehi ?? "",
             FromDate = team.StartDate,
             IsValid = team.IsValid ?? true,
+            SubTeamCount = subTeamCount,
             Staffs = staffs
         };
     }
