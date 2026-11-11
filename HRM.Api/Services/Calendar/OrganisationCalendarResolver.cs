@@ -67,7 +67,7 @@ public sealed class OrganisationCalendarResolver(IDbContextFactory<HrmTeContext>
                 WorkDate = curDate,
                 NormalWeekday = weekday,
                 IsWorkingDay = isNormallyWorking,
-                IsHoliday = isNormallyWeekend,
+                IsHoliday = false,
                 IsSpecialWorkingDay = false,
                 AttendanceRequired = isNormallyWorking,
                 LeaveChargeable = isNormallyWorking,
@@ -165,7 +165,7 @@ public sealed class OrganisationCalendarResolver(IDbContextFactory<HrmTeContext>
             WorkDate = date,
             NormalWeekday = date.DayOfWeek,
             IsWorkingDay = !isWeekend,
-            IsHoliday = isWeekend,
+            IsHoliday = false,
             AttendanceRequired = !isWeekend,
             LeaveChargeable = !isWeekend,
             StatusDescription = isWeekend ? "Weekend / Rest Day" : "Normal Working Day"

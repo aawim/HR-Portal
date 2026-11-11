@@ -31,9 +31,14 @@
                 Absent
             </span>
 
+            <span class="flex items-center gap-1">
+                <span class="h-2.5 w-2.5 rounded-full bg-purple-500"></span>
+                Holiday
+            </span>
+
               <span class="flex items-center gap-1">
                 <span class="h-2.5 w-2.5 rounded-full bg-slate-300"></span>
-                Upcomming
+                Upcoming
             </span>
 
 
@@ -129,9 +134,10 @@
                     }
                     var displayedCheckIn = overview != null ? overview.FirstCheckIn : checkIn?.Date;
                     var displayedCheckOut = overview != null ? overview.LastCheckOut : checkOut?.Date;
+                    var isHoliday = overview?.IsHoliday == true;
                     var isWeekend = overview?.IsRestDay ?? (day.DayOfWeek == DayOfWeek.Friday || day.DayOfWeek == DayOfWeek.Saturday);
                     var isOnLeave = overview?.IsOnLeave == true;
-                    var isAbsent = overview?.IsAbsent == true;
+                    var isAbsent = overview?.IsAbsent == true && !isHoliday && !isWeekend;
 
 
                     // ------------------------------------------------
@@ -139,7 +145,9 @@
                     // ------------------------------------------------
                     var stateClass =
                     isFutureDay
-                    ? "bg-slate-100 text-slate-400"
+                    ? (isHoliday ? "bg-purple-100 text-purple-700 border border-purple-200" : isWeekend ? "bg-slate-100 text-slate-500" : "bg-slate-100 text-slate-400")
+                    : isHoliday
+                    ? "bg-purple-100 text-purple-800 border border-purple-300"
                     : overview?.EligibilityMessage != null && !isOnLeave
                     ? "bg-slate-100 text-slate-500"
                     : isOnLeave
@@ -151,7 +159,7 @@
                     : isUnresolvedDay
                     ? "bg-slate-500 text-white"
                     : isWeekend
-                    ? "bg-slate-100 text-slate-500"
+                    ? "bg-slate-100 text-slate-600"
                     : isAbsent ? "bg-red-500 text-white" : "bg-slate-100 text-slate-500";
 
 
@@ -176,14 +184,31 @@
                             @if (isFutureDay)
                             {
                                 <!-- Future day -->
+                                @if (isHoliday)
+                                {
+                                    <span class="text-sm font-semibold">Holiday</span>
+                                    <span class="mt-1 text-[10px] opacity-80">Public Holiday</span>
+                                }
+                                else if (isWeekend)
+                                {
+                                    <span class="text-xs font-semibold leading-tight">Happy Week End</span>
+                                    <span class="mt-1 text-[10px] opacity-80">Weekend</span>
+                                }
+                                else
+                                {
+                                    <span class="text-sm font-semibold">
+                                        --
+                                    </span>
 
-                                <span class="text-sm font-semibold">
-                                    --
-                                </span>
-
-                                <span class="mt-1 text-[10px] opacity-80">
-                                    Upcoming
-                                </span>
+                                    <span class="mt-1 text-[10px] opacity-80">
+                                        Upcoming
+                                    </span>
+                                }
+                            }
+                            else if (isHoliday)
+                            {
+                                <span class="text-sm font-semibold">Holiday</span>
+                                <span class="mt-1 text-[10px] opacity-80">Public Holiday</span>
                             }
                             else if (isOnLeave)
                             {
@@ -200,7 +225,8 @@
                             }
                             else if (isWeekend && !hasLogs)
                             {
-                                <span class="text-sm font-semibold">@(HRM.Helpers.SchedulePattern.IsWeekend(day) ? "Weekend" : "Rest day")</span>
+                                <span class="text-xs font-semibold leading-tight">Happy Week End</span>
+                                <span class="mt-1 text-[10px] opacity-80">Weekend</span>
                             }
                             else if (isPresent)
                             {

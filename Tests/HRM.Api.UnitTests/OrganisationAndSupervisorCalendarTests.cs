@@ -20,7 +20,8 @@ public sealed class OrganisationAndSupervisorCalendarTests
 
         Assert.Equal(DayOfWeek.Friday, result.NormalWeekday);
         Assert.False(result.IsWorkingDay);
-        Assert.True(result.IsHoliday);
+        Assert.True(result.IsWeekend);
+        Assert.False(result.IsHoliday);
         Assert.False(result.AttendanceRequired);
         Assert.False(result.LeaveChargeable);
     }

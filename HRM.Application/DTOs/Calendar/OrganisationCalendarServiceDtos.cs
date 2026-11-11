@@ -9,6 +9,7 @@ public sealed class EffectiveWorkdayResolutionDto
     public DayOfWeek NormalWeekday { get; set; }
     public bool IsWorkingDay { get; set; }
     public bool IsHoliday { get; set; }
+    public bool IsWeekend => NormalWeekday is DayOfWeek.Friday or DayOfWeek.Saturday;
     public bool IsSpecialWorkingDay { get; set; }
     public bool AttendanceRequired { get; set; }
     public bool LeaveChargeable { get; set; }

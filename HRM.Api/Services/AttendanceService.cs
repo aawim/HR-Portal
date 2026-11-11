@@ -806,6 +806,19 @@ namespace HRM.Services
 
             var eligibility = await HRM.Helpers.AttendanceEligibilityCalendar.LoadAsync(db, individualId,
                 yearStart, yearEndExclusive.AddDays(-1), organisationId, ct: cancellationToken);
+
+            var holidayExceptions = await db.OrganisationCalendarExceptions.AsNoTracking()
+                .Where(x => x.CalendarImpactType == "MarkAsNonWorkingDay" && x.IsActive &&
+                            (!organisationId.HasValue || x.OrganisationBusinessEntityId == organisationId.Value) &&
+                            x.EffectiveDate < yearEndExclusive && x.EffectiveEndDate >= yearStart)
+                .ToListAsync(cancellationToken);
+            var holidayEvents = await db.OrganisationEvents.AsNoTracking()
+                .Where(x => (x.CalendarImpactType == "MarkAsNonWorkingDay" || x.Category == "Holiday") &&
+                            x.Status == "Published" && x.IsValid &&
+                            (!organisationId.HasValue || x.OrganisationBusinessEntityId == organisationId.Value) &&
+                            x.StartDateTime < yearEndExclusive && x.EndDateTime >= yearStart)
+                .ToListAsync(cancellationToken);
+
             var scheduleFacts = await HRM.Helpers.AttendanceScheduleFacts.LoadAsync(db, individualId,
                 yearStart, queryEnd.Date, organisationId, cancellationToken, logs);
             var schedulesByDay = scheduleFacts.GroupBy(s => s.Date).ToDictionary(g => g.Key, g => g.ToList());
@@ -1097,9 +1110,13 @@ namespace HRM.Services
 
                 // Only official working days can be absent. Official shift patterns
                 // override the normal Sunday–Thursday working week; supplemental duty does not.
+                var isHoliday = holidayExceptions.Any(x => x.EffectiveDate.Date <= date && x.EffectiveEndDate.Date >= date &&
+                    (x.TargetScope == "Organisation" || (x.TargetScope == "Individual" && x.TargetEntityId == individualId)))
+                    || holidayEvents.Any(x => x.StartDateTime.Date <= date && x.EndDateTime.Date >= date);
+
                 var isRestDay = eligibility[date].HasActiveSchedule && !eligibility[date].IsScheduledDay;
                 var isAbsent =
-                    eligibility[date].CanBeAbsent && !isRestDay && !isOnLeave &&
+                    eligibility[date].CanBeAbsent && !isRestDay && !isOnLeave && !isHoliday &&
                     !isPresent &&
                     !isUnresolved;
 
@@ -1211,7 +1228,7 @@ namespace HRM.Services
                             isOnLeave,
 
                         IsHoliday =
-                            false
+                            isHoliday
                     });
             }
 
