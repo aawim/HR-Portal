@@ -3,18 +3,18 @@
 @inject IUserAccessService Access
 @inject ILogger<ProfileCard> Logger
 
-<div class="relative flex flex-col items-center overflow-hidden rounded-xl border border-slate-100 bg-white p-5 shadow-sm">
+<div class="relative flex flex-col items-center overflow-hidden rounded-xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 p-2 shadow-sm">
     <div class="absolute left-0 top-0 h-24 w-full bg-gradient-to-r from-blue-500 to-blue-600 opacity-10"></div>
     @if (!string.IsNullOrWhiteSpace(user?.ImageUrl))
     {
-        <img src="@user.ImageUrl" alt="@DisplayName" class="z-10 h-20 w-20 rounded-full border-4 border-white shadow-md object-cover" />
+        <img src="@user.ImageUrl" alt="@DisplayName" class="z-10 h-16 w-16 rounded-full border-2 border-white shadow-md object-cover" />
     }
     else
     {
-        <div aria-hidden="true" class="z-10 flex h-20 w-20 items-center justify-center rounded-full border-4 border-white bg-blue-100 text-2xl font-bold text-blue-700 shadow-md">@Initial</div>
+        <div aria-hidden="true" class="z-10 flex h-16 w-16 items-center justify-center rounded-full border-2 border-white bg-blue-100 text-xl font-bold text-blue-700 shadow-md">@Initial</div>
     }
-    <h2 class="mt-3 text-lg font-bold text-slate-800 text-center">@DisplayName</h2>
-    @if (!string.IsNullOrWhiteSpace(user?.ActiveJob?.PositionName)) { <p class="mb-3 text-sm font-medium text-blue-600 text-center">@user.ActiveJob.PositionName</p> }
+    <h2 class="mt-2 text-base font-bold text-slate-800 dark:text-slate-100 text-center">@DisplayName</h2>
+    @if (!string.IsNullOrWhiteSpace(user?.ActiveJob?.PositionName)) { <p class="mb-2 text-xs font-medium text-blue-600 dark:text-blue-400 text-center">@user.ActiveJob.PositionName</p> }
 
     <!-- Urgent Expiry Alert Pill on Profile Card -->
     @{
@@ -22,7 +22,7 @@
     }
     @if (alert != null)
     {
-        <div class="w-full mb-3 rounded-lg border p-2 text-xs flex items-center gap-2 @alert.ContainerClass">
+        <div class="w-full mb-2 rounded-lg border p-2 text-xs flex items-center gap-2 @alert.ContainerClass">
             <span class="text-sm">@alert.Icon</span>
             <div class="min-w-0 flex-1">
                 <span class="font-bold block leading-tight">@alert.Title</span>
