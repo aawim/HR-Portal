@@ -872,14 +872,31 @@
             </div>
 
             <!-- 3-Column Layout:
-                 Left:   Parent Teams with nested sub-teams (~22%)
-                 Center: Team Members, Projects & Details (~48%)
-                 Right:  360 View when open, or Creating Sub-Teams & Adding Staff when closed (~30%)
+                 Left:   Parent Teams with nested sub-teams (~22-25%)
+                 Center: Team Members, Projects & Details (~45-48%)
+                 Right:  360 View when open, or Creating Sub-Teams & Adding Staff when closed (~30-33%)
             -->
-            <div class="grid grid-cols-1 gap-2 p-2 lg:grid-cols-[minmax(0,22fr)_minmax(0,48fr)_minmax(0,30fr)] items-start">
+            <style>
+                @@media (min-width: 1024px) {
+                    .workspace-teams-grid {
+                        display: grid !important;
+                        grid-template-columns: minmax(220px, 2.5fr) minmax(360px, 5.5fr) minmax(280px, 4fr) !important;
+                    }
+                    .workspace-teams-col-left {
+                        grid-column: 1 !important;
+                    }
+                    .workspace-teams-col-center {
+                        grid-column: 2 !important;
+                    }
+                    .workspace-teams-col-right {
+                        grid-column: 3 !important;
+                    }
+                }
+            </style>
+            <div class="workspace-teams-grid grid grid-cols-1 lg:grid-cols-12 gap-2 p-2 items-start">
                 
                 <!-- COLUMN 1: Parent Teams on the left with Sub-Teams (~22% width) -->
-                <aside class="min-w-0 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-2 shadow-xs space-y-2">
+                <aside class="workspace-teams-col-left col-span-12 lg:col-span-3 min-w-0 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-2 shadow-xs space-y-2">
                     <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
                         <div>
                             <h3 class="text-xs font-bold text-slate-900 dark:text-slate-100 truncate" title="Teams Directory">
@@ -984,7 +1001,7 @@
                 </aside>
 
                 <!-- COLUMN 2: Selected Team Members & Projects (~48% width) -->
-                <section class="min-w-0 space-y-2">
+                <section class="workspace-teams-col-center col-span-12 lg:col-span-5 min-w-0 space-y-2">
                     @if (selectedTeam == null)
                     {
                         <div class="rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-12 text-center text-xs text-slate-500">
@@ -1932,49 +1949,51 @@
                 </section>
 
                 <!-- COLUMN 3: Right Panel: 360 View when open, or Creating Sub-Teams and Adding Staff when closed (~30% width) -->
-                @if (activeRightPanel == RightPanelType.Member360 && inspectedStaffId.HasValue)
-                {
-                    <Member360Panel StaffId="inspectedStaffId.Value"
-                                    OnClose="CloseRightPanel"
-                                    OnTaskClick="OpenTaskModal"
-                                    OnProjectClick="OpenProjectDetails"
-                                    OnAssignProject="() => OpenAssignment(AssignmentModal.AssignmentMode.Project, inspectedStaffId!.Value, inspectedStaffName)"
-                                    OnAssignTask="() => OpenAssignment(AssignmentModal.AssignmentMode.Task, inspectedStaffId!.Value, inspectedStaffName)"
-                                    OnAssignmentsChanged="RefreshAssignmentViewsAsync"
-                                    OnOpenEvaluation="id => OpenMemberEvaluation(id, inspectedStaffName)"
-                                    RefreshVersion="assignmentRefresh" />
-                }
-                else if (activeRightPanel == RightPanelType.Evaluation && evalStaffId.HasValue)
-                {
-                    <MemberEvaluationPanel StaffId="evalStaffId.Value"
-                                           StaffName="@evalStaffName"
-                                           OnClose="CloseRightPanel"
-                                           OnEvaluationSaved="RefreshRequestsAsync" />
-                }
-                else if (activeRightPanel == RightPanelType.ProjectDetails && selectedProjectId.HasValue)
-                {
-                    <ProjectDetailPanel ProjectId="selectedProjectId.Value"
+                <aside class="workspace-teams-col-right col-span-12 lg:col-span-4 min-w-0 space-y-2">
+                    @if (activeRightPanel == RightPanelType.Member360 && inspectedStaffId.HasValue)
+                    {
+                        <Member360Panel StaffId="inspectedStaffId.Value"
                                         OnClose="CloseRightPanel"
                                         OnTaskClick="OpenTaskModal"
-                                        OnAssignmentsChanged="RefreshAssignmentViewsAsync" />
-                }
-                else if (selectedTeam != null && !selectedTeam.ParentTeamId.HasValue)
-                {
-                    <!-- When 360 view is closed: Show Creating Sub-Teams and Adding Staff in Compact Mode -->
-                    <div class="min-w-0 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-2 shadow-xs">
-                        <SubTeamManagement ParentTeamId="selectedTeam.TeamId"
-                                           SelectedSubTeamId="selectedSubTeamId"
-                                           CompactMode="true"
-                                           OnSubTeamSelected="HandleRightPanelSubTeamSelected"
-                                           OnSubTeamsChanged="OnSubTeamsChangedAsync" />
-                    </div>
-                }
-                else
-                {
-                    <div class="min-w-0 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 text-center text-xs text-slate-400">
-                        Select a team to manage sub-teams and view 360 profile.
-                    </div>
-                }
+                                        OnProjectClick="OpenProjectDetails"
+                                        OnAssignProject="() => OpenAssignment(AssignmentModal.AssignmentMode.Project, inspectedStaffId!.Value, inspectedStaffName)"
+                                        OnAssignTask="() => OpenAssignment(AssignmentModal.AssignmentMode.Task, inspectedStaffId!.Value, inspectedStaffName)"
+                                        OnAssignmentsChanged="RefreshAssignmentViewsAsync"
+                                        OnOpenEvaluation="id => OpenMemberEvaluation(id, inspectedStaffName)"
+                                        RefreshVersion="assignmentRefresh" />
+                    }
+                    else if (activeRightPanel == RightPanelType.Evaluation && evalStaffId.HasValue)
+                    {
+                        <MemberEvaluationPanel StaffId="evalStaffId.Value"
+                                               StaffName="@evalStaffName"
+                                               OnClose="CloseRightPanel"
+                                               OnEvaluationSaved="RefreshRequestsAsync" />
+                    }
+                    else if (activeRightPanel == RightPanelType.ProjectDetails && selectedProjectId.HasValue)
+                    {
+                        <ProjectDetailPanel ProjectId="selectedProjectId.Value"
+                                            OnClose="CloseRightPanel"
+                                            OnTaskClick="OpenTaskModal"
+                                            OnAssignmentsChanged="RefreshAssignmentViewsAsync" />
+                    }
+                    else if (selectedTeam != null && !selectedTeam.ParentTeamId.HasValue)
+                    {
+                        <!-- When 360 view is closed: Show Creating Sub-Teams and Adding Staff in Compact Mode -->
+                        <div class="min-w-0 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-2 shadow-xs">
+                            <SubTeamManagement ParentTeamId="selectedTeam.TeamId"
+                                               SelectedSubTeamId="selectedSubTeamId"
+                                               CompactMode="true"
+                                               OnSubTeamSelected="HandleRightPanelSubTeamSelected"
+                                               OnSubTeamsChanged="OnSubTeamsChangedAsync" />
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="min-w-0 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 text-center text-xs text-slate-400">
+                            Select a team to manage sub-teams and view 360 profile.
+                        </div>
+                    }
+                </aside>
 
             </div>
 
