@@ -16,44 +16,47 @@
         @if (CompactMode)
         {
             <div class="space-y-2">
-                <!-- Header / Quick Selector in Compact Mode -->
-                <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
+                <!-- Header / Quick Selector in Compact Mode with Close Button -->
+                <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2 gap-2">
                     <div class="min-w-0 pr-1">
-                        <h3 class="font-bold text-slate-800 dark:text-slate-100 text-xs truncate">
-                            @(selected != null ? $"Sub-Team: {selected.Name}" : "Create Sub-Team")
-                        </h3>
+                        <div class="flex items-center gap-1.5 flex-wrap">
+                            <h3 class="font-bold text-slate-800 dark:text-slate-100 text-xs truncate">
+                                @(CreateModeOnly || selected == null ? "Create Sub-Team" : selected.Name)
+                            </h3>
+                            <span class="rounded-full bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-400 border border-teal-200 dark:border-teal-800/40 px-2 py-0.2 text-[10px] font-semibold">
+                                @(CreateModeOnly || selected == null ? "New Creator" : "Sub-Team")
+                            </span>
+                        </div>
                         <p class="text-[10px] text-slate-500 truncate">Under @data.ParentTeamName</p>
                     </div>
-                    @if (data.CanManage)
-                    {
-                        <button type="button"
-                                class="rounded-lg bg-teal-700 px-2 py-1 text-[10px] font-semibold text-white hover:bg-teal-800 shrink-0"
-                                @onclick="NewTeam">
-                            + New Sub-Team
-                        </button>
-                    }
-                </div>
-
-                @if (data.SubTeams.Count > 0)
-                {
-                    <div class="flex flex-wrap items-center gap-1 pb-1">
-                        @foreach (var team in data.SubTeams)
+                    <div class="flex items-center gap-1 shrink-0">
+                        @if (data.CanManage && selected != null && !CreateModeOnly)
                         {
-                            var isCurrent = selected?.TeamId == team.TeamId;
-                            <button type="button" @onclick="() => Select(team)"
-                                    class="rounded-lg px-2 py-0.5 text-[11px] font-semibold transition @(isCurrent ? "bg-teal-700 text-white shadow-2xs" : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700")">
-                                @team.Name (@team.Members.Count)
+                            <button type="button"
+                                    class="rounded-lg bg-teal-700 px-2 py-1 text-[10px] font-semibold text-white hover:bg-teal-800"
+                                    @onclick="NewTeam"
+                                    title="Create another sub-team">
+                                + New
+                            </button>
+                        }
+                        @if (OnClose.HasDelegate)
+                        {
+                            <button type="button"
+                                    class="rounded-lg p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+                                    @onclick="CloseAsync"
+                                    title="Close sub-team panel">
+                                ✕
                             </button>
                         }
                     </div>
-                }
+                </div>
 
-                @if (data.CanManage && editing)
+                @if (CreateModeOnly || (data.CanManage && editing && selected == null))
                 {
-                    <!-- Create / Edit Sub-Team Form -->
+                    <!-- Create Sub-Team Creator Form -->
                     <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-2.5 shadow-xs space-y-2">
                         <h4 class="font-bold text-slate-800 dark:text-slate-100 text-xs">
-                            @(draft.TeamId == 0 ? "Create New Sub-Team" : "Edit Sub-Team Settings")
+                            New Sub-Team Creator
                         </h4>
                         <div class="space-y-1.5">
                             <label class="block text-xs font-medium text-slate-700 dark:text-slate-300">
@@ -86,22 +89,34 @@
                                 </div>
                             }
                         </div>
-                        <button disabled="@busy"
+                        <button disabled="@(busy || string.IsNullOrWhiteSpace(draft.Name))"
                                 class="rounded-lg bg-teal-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-teal-800 disabled:opacity-50"
                                 @onclick="SaveTeam">
-                            @(draft.TeamId == 0 ? "Create Sub-Team" : "Save Changes")
+                            Create Sub-Team
                         </button>
                     </div>
                 }
-
-                @if (selected != null)
+                else if (selected != null)
                 {
+                    @if (data.SubTeams.Count > 1)
+                    {
+                        <div class="flex flex-wrap items-center gap-1 pb-1">
+                            @foreach (var team in data.SubTeams)
+                            {
+                                var isCurrent = selected?.TeamId == team.TeamId;
+                                <button type="button" @onclick="() => Select(team)"
+                                        class="rounded-lg px-2 py-0.5 text-[11px] font-semibold transition @(isCurrent ? "bg-teal-700 text-white shadow-2xs" : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700")">
+                                    @team.Name (@team.Members.Count)
+                                </button>
+                            }
+                        </div>
+                    }
                     <!-- Adding Staff & Managing Members -->
                     <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-2.5 shadow-xs space-y-2">
                         <div class="flex items-center justify-between">
                             <div>
-                                <h4 class="font-bold text-slate-800 dark:text-slate-100 text-xs">Members of @selected.Name</h4>
-                                <p class="text-[10px] text-slate-500">@selected.Members.Count assigned staff</p>
+                                <h4 class="font-bold text-slate-800 dark:text-slate-100 text-xs">Members of @(selected?.Name ?? "Sub-Team")</h4>
+                                <p class="text-[10px] text-slate-500">@(selected?.Members.Count ?? 0) assigned staff</p>
                             </div>
                         </div>
 
@@ -311,6 +326,8 @@
     [Parameter] public int ParentTeamId { get; set; }
     [Parameter] public int? SelectedSubTeamId { get; set; }
     [Parameter] public bool CompactMode { get; set; }
+    [Parameter] public bool CreateModeOnly { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
     [Parameter] public EventCallback OnSubTeamsChanged { get; set; }
     [Parameter] public EventCallback<int?> OnSubTeamSelected { get; set; }
     private int loadedTeamId; private bool loading; private bool busy; private bool editing; private string? error;
@@ -322,15 +339,27 @@
         if (ParentTeamId > 0 && loadedTeamId != ParentTeamId)
         {
             loadedTeamId = ParentTeamId;
-            await Load(SelectedSubTeamId);
+            await Load(CreateModeOnly ? null : SelectedSubTeamId);
+            if (CreateModeOnly) NewTeam();
         }
-        else if (SelectedSubTeamId.HasValue && selected?.TeamId != SelectedSubTeamId.Value && data != null)
+        else if (CreateModeOnly && (selected != null || !editing))
+        {
+            NewTeam();
+        }
+        else if (!CreateModeOnly && SelectedSubTeamId.HasValue && selected?.TeamId != SelectedSubTeamId.Value && data != null)
         {
             var match = data.SubTeams.FirstOrDefault(x => x.TeamId == SelectedSubTeamId.Value);
             if (match != null) Select(match);
         }
     }
-    private async Task Load(int? selectId=null){ loading=true;error=null;try{data=await TeamService.LoadSubTeamsAsync(ParentTeamId);selected=data.SubTeams.FirstOrDefault(x=>x.TeamId==(selectId??selected?.TeamId))??data.SubTeams.FirstOrDefault();if(selected!=null)Select(selected);}catch(Exception ex){error=ex.Message;}finally{loading=false;} }
+    private async Task CloseAsync()
+    {
+        if (OnClose.HasDelegate)
+        {
+            await OnClose.InvokeAsync();
+        }
+    }
+    private async Task Load(int? selectId=null){ loading=true;error=null;try{data=await TeamService.LoadSubTeamsAsync(ParentTeamId);selected=data.SubTeams.FirstOrDefault(x=>x.TeamId==(selectId??selected?.TeamId))??data.SubTeams.FirstOrDefault();if(selected!=null&&!CreateModeOnly)Select(selected);}catch(Exception ex){error=ex.Message;}finally{loading=false;} }
     private void NewTeam()
     {
         selected = null;
@@ -363,7 +392,7 @@
         }
     }
     private async Task Run(Func<Task> action,string success){busy=true;error=null;try{await action();Toasts.Success(success);if(OnSubTeamsChanged.HasDelegate)await OnSubTeamsChanged.InvokeAsync();}catch(Exception ex){error=ex.Message;Toasts.Error(ex.Message);}finally{busy=false;}}
-    private async Task SaveTeam(){var id=0;await Run(async()=>id=await TeamService.SaveSubTeamAsync(draft),"Sub-team saved.");if(id>0)await Load(id);}
+    private async Task SaveTeam(){var id=0;await Run(async()=>{id=await TeamService.SaveSubTeamAsync(draft);CreateModeOnly=false;},"Sub-team saved.");if(id>0)await Load(id);}
     private async Task SaveMember(){if(selected==null)return;await Run(()=>TeamService.SaveSubTeamMemberAsync(new(){TeamId=selected.TeamId,StaffId=memberStaffId,Role=memberRole,StartDate=DateTime.Today}),"Member assigned.");await Load(selected.TeamId);}
     private async Task RemoveMember(int staffId){if(selected==null)return;await Run(()=>TeamService.RemoveSubTeamMemberAsync(selected.TeamId,staffId),"Member removed.");await Load(selected.TeamId);}
     private async Task SaveAdjustment(){if(selected==null)return;TimeSpan? start=TimeSpan.TryParse(checkIn,out var s)?s:null;TimeSpan? end=TimeSpan.TryParse(checkOut,out var e)?e:null;await Run(()=>TeamService.SaveTeamScheduleAdjustmentAsync(new(){TeamId=selected.TeamId,WorkDate=adjustmentDate,RevisedCheckIn=start,RevisedCheckOut=end,Reason=adjustmentReason}),"Schedule adjustment saved.");checkIn=checkOut=adjustmentReason="";await Load(selected.TeamId);}

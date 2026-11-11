@@ -878,9 +878,13 @@
             -->
             <style>
                 @@media (min-width: 1024px) {
-                    .workspace-teams-grid {
+                    .workspace-teams-grid-3col {
                         display: grid !important;
-                        grid-template-columns: minmax(220px, 2.5fr) minmax(360px, 5.5fr) minmax(280px, 4fr) !important;
+                        grid-template-columns: minmax(220px, 2.8fr) minmax(360px, 5.2fr) minmax(280px, 4fr) !important;
+                    }
+                    .workspace-teams-grid-2col {
+                        display: grid !important;
+                        grid-template-columns: minmax(220px, 2.8fr) minmax(0, 9.2fr) !important;
                     }
                     .workspace-teams-col-left {
                         grid-column: 1 !important;
@@ -893,7 +897,7 @@
                     }
                 }
             </style>
-            <div class="workspace-teams-grid grid grid-cols-1 lg:grid-cols-12 gap-2 p-2 items-start">
+            <div class="@(activeRightPanel != RightPanelType.None ? "workspace-teams-grid-3col" : "workspace-teams-grid-2col") grid grid-cols-1 lg:grid-cols-12 gap-2 p-2 items-start">
                 
                 <!-- COLUMN 1: Parent Teams on the left with Sub-Teams (~22% width) -->
                 <aside class="workspace-teams-col-left col-span-12 lg:col-span-3 min-w-0 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-2 shadow-xs space-y-2">
@@ -956,7 +960,7 @@
                                                 {
                                                     <button type="button"
                                                             class="text-[10px] font-semibold text-teal-700 dark:text-teal-400 hover:underline"
-                                                            @onclick='() => SetTeamCenterSubTab("subteams")'>
+                                                            @onclick="OpenCreateSubTeam">
                                                         + New
                                                     </button>
                                                 }
@@ -975,7 +979,7 @@
                                             else
                                             {
                                                 <button type="button"
-                                                        class="w-full text-left px-2 py-1 rounded-lg text-[11px] font-semibold transition cursor-pointer flex items-center justify-between @(!selectedSubTeamId.HasValue ? "bg-teal-700 text-white shadow-2xs" : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800")"
+                                                        class="w-full text-left px-2 py-1 rounded-lg text-[11px] font-semibold transition cursor-pointer flex items-center justify-between @(!selectedSubTeamId.HasValue && activeRightPanel != RightPanelType.SubTeamStaff ? "bg-teal-700 text-white shadow-2xs" : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800")"
                                                         @onclick="ClearSubTeamSelection">
                                                     <span>All Members</span>
                                                     <span class="text-[10px] opacity-80">@team.Staffs.Count</span>
@@ -983,10 +987,10 @@
 
                                                 @foreach (var st in currentSubTeamWorkspace.SubTeams)
                                                 {
-                                                    var isSubSelected = selectedSubTeamId == st.TeamId;
+                                                    var isSubSelected = selectedSubTeamId == st.TeamId && activeRightPanel == RightPanelType.SubTeamStaff;
                                                     <button type="button" @key="st.TeamId"
                                                             class="w-full text-left px-2 py-1 rounded-lg text-[11px] font-semibold transition cursor-pointer flex items-center justify-between @(isSubSelected ? "bg-teal-700 text-white shadow-2xs" : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800")"
-                                                            @onclick="() => SelectSubTeam(st.TeamId)">
+                                                            @onclick="() => OpenSubTeamStaff(st.TeamId)">
                                                         <span class="truncate pr-1" title="@st.Name">@st.Name</span>
                                                         <span class="text-[10px] opacity-80 shrink-0">@st.Members.Count</span>
                                                     </button>
@@ -1000,8 +1004,8 @@
                     }
                 </aside>
 
-                <!-- COLUMN 2: Selected Team Members & Projects (~48% width) -->
-                <section class="workspace-teams-col-center col-span-12 lg:col-span-5 min-w-0 space-y-2">
+                <!-- COLUMN 2: Selected Team Members & Projects -->
+                <section class="workspace-teams-col-center col-span-12 @(activeRightPanel != RightPanelType.None ? "lg:col-span-5" : "lg:col-span-9") min-w-0 space-y-2">
                     @if (selectedTeam == null)
                     {
                         <div class="rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-12 text-center text-xs text-slate-500">
@@ -1043,14 +1047,6 @@
                                             @onclick='() => SetTeamCenterSubTab("projects")'>
                                         Projects (@currentTeamProjects.Count)
                                     </button>
-                                    @if (!selectedTeam.ParentTeamId.HasValue)
-                                    {
-                                        <button type="button"
-                                                class="rounded-md px-3 py-1 font-semibold transition @(teamCenterSubTab == "subteams" ? "bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-400 shadow-2xs" : "text-slate-600 dark:text-slate-400")"
-                                                @onclick='() => SetTeamCenterSubTab("subteams")'>
-                                            Sub-teams (@(currentSubTeamWorkspace?.SubTeams.Count ?? 0))
-                                        </button>
-                                    }
                                     <button type="button"
                                             class="rounded-md px-3 py-1 font-semibold transition flex items-center gap-1.5 @(teamCenterSubTab is "attendance" or "attendace" ? "bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-400 shadow-2xs" : "text-slate-600 dark:text-slate-400")"
                                             @onclick='() => SetTeamCenterSubTab("attendance")'>
@@ -1197,11 +1193,6 @@
                                         </table>
                                     </div>
                                 }
-                            }
-
-                            @if (teamCenterSubTab == "subteams" && !selectedTeam.ParentTeamId.HasValue)
-                            {
-                                <SubTeamManagement ParentTeamId="selectedTeam.TeamId" OnSubTeamsChanged="OnSubTeamsChangedAsync" />
                             }
 
                             <!-- SUB-TAB 2: PROJECTS LIST -->
@@ -1948,52 +1939,61 @@
                     }
                 </section>
 
-                <!-- COLUMN 3: Right Panel: 360 View when open, or Creating Sub-Teams and Adding Staff when closed (~30% width) -->
-                <aside class="workspace-teams-col-right col-span-12 lg:col-span-4 min-w-0 space-y-2">
-                    @if (activeRightPanel == RightPanelType.Member360 && inspectedStaffId.HasValue)
-                    {
-                        <Member360Panel StaffId="inspectedStaffId.Value"
-                                        OnClose="CloseRightPanel"
-                                        OnTaskClick="OpenTaskModal"
-                                        OnProjectClick="OpenProjectDetails"
-                                        OnAssignProject="() => OpenAssignment(AssignmentModal.AssignmentMode.Project, inspectedStaffId!.Value, inspectedStaffName)"
-                                        OnAssignTask="() => OpenAssignment(AssignmentModal.AssignmentMode.Task, inspectedStaffId!.Value, inspectedStaffName)"
-                                        OnAssignmentsChanged="RefreshAssignmentViewsAsync"
-                                        OnOpenEvaluation="id => OpenMemberEvaluation(id, inspectedStaffName)"
-                                        RefreshVersion="assignmentRefresh" />
-                    }
-                    else if (activeRightPanel == RightPanelType.Evaluation && evalStaffId.HasValue)
-                    {
-                        <MemberEvaluationPanel StaffId="evalStaffId.Value"
-                                               StaffName="@evalStaffName"
-                                               OnClose="CloseRightPanel"
-                                               OnEvaluationSaved="RefreshRequestsAsync" />
-                    }
-                    else if (activeRightPanel == RightPanelType.ProjectDetails && selectedProjectId.HasValue)
-                    {
-                        <ProjectDetailPanel ProjectId="selectedProjectId.Value"
+                <!-- COLUMN 3: Right Panel: 360 View, Sub-Team Staff, or New Sub-Team Creator (~30% width) -->
+                @if (activeRightPanel != RightPanelType.None)
+                {
+                    <aside class="workspace-teams-col-right col-span-12 lg:col-span-4 min-w-0 space-y-2">
+                        @if (activeRightPanel == RightPanelType.Member360 && inspectedStaffId.HasValue)
+                        {
+                            <Member360Panel StaffId="inspectedStaffId.Value"
                                             OnClose="CloseRightPanel"
                                             OnTaskClick="OpenTaskModal"
-                                            OnAssignmentsChanged="RefreshAssignmentViewsAsync" />
-                    }
-                    else if (selectedTeam != null && !selectedTeam.ParentTeamId.HasValue)
-                    {
-                        <!-- When 360 view is closed: Show Creating Sub-Teams and Adding Staff in Compact Mode -->
-                        <div class="min-w-0 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-2 shadow-xs">
-                            <SubTeamManagement ParentTeamId="selectedTeam.TeamId"
-                                               SelectedSubTeamId="selectedSubTeamId"
-                                               CompactMode="true"
-                                               OnSubTeamSelected="HandleRightPanelSubTeamSelected"
-                                               OnSubTeamsChanged="OnSubTeamsChangedAsync" />
-                        </div>
-                    }
-                    else
-                    {
-                        <div class="min-w-0 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 text-center text-xs text-slate-400">
-                            Select a team to manage sub-teams and view 360 profile.
-                        </div>
-                    }
-                </aside>
+                                            OnProjectClick="OpenProjectDetails"
+                                            OnAssignProject="() => OpenAssignment(AssignmentModal.AssignmentMode.Project, inspectedStaffId!.Value, inspectedStaffName)"
+                                            OnAssignTask="() => OpenAssignment(AssignmentModal.AssignmentMode.Task, inspectedStaffId!.Value, inspectedStaffName)"
+                                            OnAssignmentsChanged="RefreshAssignmentViewsAsync"
+                                            OnOpenEvaluation="id => OpenMemberEvaluation(id, inspectedStaffName)"
+                                            RefreshVersion="assignmentRefresh" />
+                        }
+                        else if (activeRightPanel == RightPanelType.Evaluation && evalStaffId.HasValue)
+                        {
+                            <MemberEvaluationPanel StaffId="evalStaffId.Value"
+                                                   StaffName="@evalStaffName"
+                                                   OnClose="CloseRightPanel"
+                                                   OnEvaluationSaved="RefreshRequestsAsync" />
+                        }
+                        else if (activeRightPanel == RightPanelType.ProjectDetails && selectedProjectId.HasValue)
+                        {
+                            <ProjectDetailPanel ProjectId="selectedProjectId.Value"
+                                                OnClose="CloseRightPanel"
+                                                OnTaskClick="OpenTaskModal"
+                                                OnAssignmentsChanged="RefreshAssignmentViewsAsync" />
+                        }
+                        else if (activeRightPanel == RightPanelType.SubTeamStaff && selectedTeam != null)
+                        {
+                            <div class="min-w-0 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-2 shadow-xs">
+                                <SubTeamManagement ParentTeamId="selectedTeam.TeamId"
+                                                   SelectedSubTeamId="selectedSubTeamId"
+                                                   CompactMode="true"
+                                                   CreateModeOnly="false"
+                                                   OnClose="CloseRightPanel"
+                                                   OnSubTeamSelected="HandleRightPanelSubTeamSelected"
+                                                   OnSubTeamsChanged="OnSubTeamsChangedAsync" />
+                            </div>
+                        }
+                        else if (activeRightPanel == RightPanelType.CreateSubTeam && selectedTeam != null)
+                        {
+                            <div class="min-w-0 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-2 shadow-xs">
+                                <SubTeamManagement ParentTeamId="selectedTeam.TeamId"
+                                                   CompactMode="true"
+                                                   CreateModeOnly="true"
+                                                   OnClose="CloseRightPanel"
+                                                   OnSubTeamSelected="HandleRightPanelSubTeamSelected"
+                                                   OnSubTeamsChanged="OnSubTeamsChangedAsync" />
+                            </div>
+                        }
+                    </aside>
+                }
 
             </div>
 
@@ -3309,22 +3309,48 @@
             .FirstOrDefault(st => st.Members.Any(m => m.StaffId == staffId))?.Name;
     }
 
-    private void SelectSubTeam(int subTeamId)
+    private void OpenSubTeamStaff(int subTeamId)
     {
-        selectedSubTeamId = selectedSubTeamId == subTeamId ? null : subTeamId;
-        subTeamMemberSearchTerm = "";
+        if (selectedSubTeamId == subTeamId && activeRightPanel == RightPanelType.SubTeamStaff)
+        {
+            CloseRightPanel();
+        }
+        else
+        {
+            selectedSubTeamId = subTeamId;
+            subTeamMemberSearchTerm = "";
+            activeRightPanel = RightPanelType.SubTeamStaff;
+        }
+    }
+
+    private void OpenCreateSubTeam()
+    {
+        selectedSubTeamId = null;
+        activeRightPanel = RightPanelType.CreateSubTeam;
     }
 
     private void ClearSubTeamSelection()
     {
         selectedSubTeamId = null;
         subTeamMemberSearchTerm = "";
+        if (activeRightPanel is RightPanelType.SubTeamStaff or RightPanelType.CreateSubTeam)
+        {
+            activeRightPanel = RightPanelType.None;
+        }
     }
 
     private void HandleRightPanelSubTeamSelected(int? subTeamId)
     {
         selectedSubTeamId = subTeamId;
         subTeamMemberSearchTerm = "";
+        if (subTeamId.HasValue)
+        {
+            activeRightPanel = RightPanelType.SubTeamStaff;
+        }
+        else
+        {
+            activeRightPanel = RightPanelType.CreateSubTeam;
+        }
     }
 
     private async Task LoadSubTeamsForCurrentTeamAsync()
@@ -3422,7 +3448,7 @@
     private List<UserTodoDto> todoItems = new();
 
     // Contextual Panel Management
-    private enum RightPanelType { None, Member360, Evaluation, ProjectDetails }
+    private enum RightPanelType { None, Member360, Evaluation, ProjectDetails, SubTeamStaff, CreateSubTeam }
     private RightPanelType activeRightPanel = RightPanelType.None;
     private WorkspaceSearchResult? selectedEntityItem;
     private int? inspectedStaffId;
@@ -4702,6 +4728,7 @@
         inspectedStaffId = null;
         evalStaffId = null;
         selectedProjectId = null;
+        selectedSubTeamId = null;
         UpdateUrl();
     }
 
