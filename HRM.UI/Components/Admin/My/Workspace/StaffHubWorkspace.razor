@@ -871,19 +871,31 @@
                 </div>
             </div>
 
-            <!-- Master-Detail Grid Layout:
-                 When right panel is open:   lg:grid-cols-[minmax(0,12fr)_minmax(0,20fr)_minmax(0,38fr)_minmax(0,30fr)]
-                 When right panel is closed: lg:grid-cols-[minmax(0,20fr)_minmax(0,25fr)_minmax(0,55fr)]
+            <!-- 3-Column Layout:
+                 Left:   Parent Teams with nested sub-teams (~22%)
+                 Center: Team Members, Projects & Details (~48%)
+                 Right:  360 View when open, or Creating Sub-Teams & Adding Staff when closed (~30%)
             -->
-            <div class="grid grid-cols-1 gap-2 p-2 @(activeRightPanel != RightPanelType.None ? "lg:grid-cols-[minmax(0,12fr)_minmax(0,20fr)_minmax(0,38fr)_minmax(0,30fr)]" : "lg:grid-cols-[minmax(0,20fr)_minmax(0,25fr)_minmax(0,55fr)]") items-start">
+            <div class="grid grid-cols-1 gap-2 p-2 lg:grid-cols-[minmax(0,22fr)_minmax(0,48fr)_minmax(0,30fr)] items-start">
                 
-                <!-- COLUMN 1: Team Directory (~20% width default, ~12% compact when 360 View open) -->
+                <!-- COLUMN 1: Parent Teams on the left with Sub-Teams (~22% width) -->
                 <aside class="min-w-0 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-2 shadow-xs space-y-2">
                     <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
-                        <h3 class="text-xs font-bold text-slate-900 dark:text-slate-100 truncate" title="Teams Directory">
-                            @(isCompactDirectory ? "Teams" : "Teams Directory")
-                        </h3>
-                        <span class="text-[10px] text-slate-400 shrink-0">@myTeams.Count teams</span>
+                        <div>
+                            <h3 class="text-xs font-bold text-slate-900 dark:text-slate-100 truncate" title="Teams Directory">
+                                Parent Teams
+                            </h3>
+                            <p class="text-[10px] text-slate-400">@myTeams.Count team@(myTeams.Count == 1 ? "" : "s")</p>
+                        </div>
+                        @if (selectedSubTeamId.HasValue)
+                        {
+                            <button type="button"
+                                    class="text-[10px] font-semibold text-teal-600 dark:text-teal-400 hover:underline px-1.5 py-0.5 rounded border border-teal-200 dark:border-teal-800 bg-teal-50/50 dark:bg-teal-950/40"
+                                    @onclick="ClearSubTeamSelection"
+                                    title="Clear sub-team filter">
+                                Clear filter ✕
+                            </button>
+                        }
                     </div>
 
                     @if (myTeams.Count == 0)
@@ -892,181 +904,86 @@
                     }
                     else
                     {
-                        <div class="space-y-1.5 max-h-[36rem] overflow-y-auto pr-1">
+                        <div class="space-y-1.5 max-h-[42rem] overflow-y-auto pr-1">
                             @foreach (var team in myTeams)
                             {
-                                <button type="button" @key="team.TeamId"
-                                        class="w-full text-left p-2 rounded-xl border text-xs transition cursor-pointer flex flex-col gap-1 @(selectedTeamId == team.TeamId ? "border-teal-500 bg-teal-50/70 dark:bg-teal-950/40 shadow-xs ring-1 ring-teal-500" : "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-700")"
-                                        @onclick="() => SelectTeamAsync(team.TeamId)">
-                                    <div class="flex items-center justify-between gap-1">
-                                        <h4 class="font-bold text-slate-900 dark:text-slate-100 truncate text-xs" title="@team.Name">@team.Name</h4>
-                                        <span class="rounded bg-teal-100 dark:bg-teal-950/60 text-teal-800 dark:text-teal-300 px-1.5 py-0.2 text-[10px] font-bold shrink-0 whitespace-nowrap">
-                                            @team.SubTeamCount @(isCompactDirectory ? "sub" : (team.SubTeamCount == 1 ? "sub-team" : "sub-teams"))
-                                        </span>
-                                    </div>
-                                    @if (!isCompactDirectory && !string.IsNullOrWhiteSpace(team.NameDhivehi))
-                                    {
-                                        <p lang="dv" dir="rtl" class="text-[10px] text-slate-400 truncate">@team.NameDhivehi</p>
-                                    }
-                                    <div class="flex items-center justify-between text-[10px] text-slate-500">
-                                        <span>@team.Staffs.Count member@(team.Staffs.Count == 1 ? "" : "s")</span>
-                                        @if (!isCompactDirectory)
+                                var isTeamSelected = selectedTeamId == team.TeamId;
+                                <div @key="team.TeamId" class="rounded-xl border transition @(isTeamSelected ? "border-teal-500 bg-teal-50/30 dark:bg-teal-950/20 shadow-xs ring-1 ring-teal-500/50" : "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-700")">
+                                    <!-- Parent Team Header / Button -->
+                                    <button type="button"
+                                            class="w-full text-left p-2 rounded-t-xl text-xs transition cursor-pointer flex flex-col gap-1"
+                                            @onclick="() => SelectTeamAsync(team.TeamId)">
+                                        <div class="flex items-center justify-between gap-1">
+                                            <h4 class="font-bold text-slate-900 dark:text-slate-100 truncate text-xs" title="@team.Name">@team.Name</h4>
+                                            <span class="rounded bg-teal-100 dark:bg-teal-950/60 text-teal-800 dark:text-teal-300 px-1.5 py-0.2 text-[10px] font-bold shrink-0 whitespace-nowrap">
+                                                @team.SubTeamCount @(team.SubTeamCount == 1 ? "sub-team" : "sub-teams")
+                                            </span>
+                                        </div>
+                                        @if (!string.IsNullOrWhiteSpace(team.NameDhivehi))
                                         {
+                                            <p lang="dv" dir="rtl" class="text-[10px] text-slate-400 truncate">@team.NameDhivehi</p>
+                                        }
+                                        <div class="flex items-center justify-between text-[10px] text-slate-500">
+                                            <span>@team.Staffs.Count member@(team.Staffs.Count == 1 ? "" : "s")</span>
                                             <span>@team.Staffs.Count(s => s.IsSuperVisor) sup</span>
-                                        }
-                                    </div>
-                                </button>
-                            }
-                        </div>
-                    }
-                </aside>
-
-                <!-- COLUMN 2: Sub-Teams & Members Drill-Down Panel (~25% width default, ~20% when 360 View open) -->
-                <aside class="min-w-0 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-2 shadow-xs space-y-2">
-                    @if (selectedTeam == null)
-                    {
-                        <div class="py-8 text-center text-xs text-slate-500">
-                            Select a team to view sub-teams.
-                        </div>
-                    }
-                    else
-                    {
-                        <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
-                            <div class="min-w-0 pr-1">
-                                <h3 class="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">
-                                    @(selectedSubTeam != null ? selectedSubTeam.Name : "Sub-Teams")
-                                </h3>
-                                <p class="text-[10px] text-slate-400 truncate">Under @selectedTeam.Name</p>
-                            </div>
-                            <div class="flex items-center gap-1 shrink-0">
-                                @if (selectedSubTeam != null)
-                                {
-                                    <button type="button"
-                                            class="text-[10px] font-semibold text-teal-600 dark:text-teal-400 hover:underline px-1.5 py-0.5 rounded border border-teal-200 dark:border-teal-800 bg-teal-50/50 dark:bg-teal-950/40"
-                                            @onclick="ClearSubTeamSelection"
-                                            title="Back to all sub-teams">
-                                        ← All
+                                        </div>
                                     </button>
-                                }
-                                else if (currentSubTeamWorkspace?.CanManage == true)
-                                {
-                                    <button type="button"
-                                            class="inline-flex items-center rounded-lg bg-teal-700 px-2 py-0.5 text-[10px] font-semibold text-white hover:bg-teal-800 transition"
-                                            @onclick='() => SetTeamCenterSubTab("subteams")'>
-                                        + New
-                                    </button>
-                                }
-                                <span class="rounded bg-teal-100 dark:bg-teal-950/60 text-teal-800 dark:text-teal-300 px-1.5 py-0.2 text-[10px] font-bold">
-                                    @(selectedSubTeam != null ? selectedSubTeam.Members.Count : (currentSubTeamWorkspace?.SubTeams.Count ?? 0))
-                                </span>
-                            </div>
-                        </div>
 
-                        @if (loadingSubTeams)
-                        {
-                            <div class="py-6 text-center text-xs text-slate-500">Loading sub-teams…</div>
-                        }
-                        else if (selectedSubTeam != null)
-                        {
-                            <!-- Drill-down: Members belonging to this sub-team -->
-                            <div class="space-y-1.5">
-                                <div class="relative">
-                                    <input type="text"
-                                           placeholder="Filter members…"
-                                           class="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-2.5 py-1 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-teal-500"
-                                           @bind="subTeamMemberSearchTerm"
-                                           @bind:event="oninput" />
-                                </div>
-                                @{
-                                    var filteredSubMembers = selectedSubTeam.Members
-                                        .Where(m => string.IsNullOrWhiteSpace(subTeamMemberSearchTerm) ||
-                                                    m.StaffName.Contains(subTeamMemberSearchTerm, StringComparison.OrdinalIgnoreCase))
-                                        .ToList();
-                                }
-                                @if (filteredSubMembers.Count == 0)
-                                {
-                                    <p class="py-4 text-center text-[11px] text-slate-400">
-                                        @(selectedSubTeam.Members.Count == 0 ? "No members in this sub-team." : "No matching members.")
-                                    </p>
-                                }
-                                else
-                                {
-                                    <div class="space-y-1 max-h-[30rem] overflow-y-auto pr-1">
-                                        @foreach (var m in filteredSubMembers)
-                                        {
-                                            <div @key="m.StaffId"
-                                                 class="p-2 rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 hover:bg-white dark:hover:bg-slate-800 transition text-xs flex items-center justify-between gap-1.5">
-                                                <div class="min-w-0">
-                                                    <a href="@($"/admin/my/workspace/staff/{m.StaffId}/overview")"
-                                                       class="font-semibold text-slate-900 dark:text-slate-100 hover:text-teal-600 truncate block text-[11px]">
-                                                        @m.StaffName
-                                                    </a>
-                                                    <span class="inline-block rounded px-1.5 py-0.2 text-[9px] font-semibold @(m.Role is "Supervisor" or "TeamLead" ? "bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300" : "bg-slate-200/60 dark:bg-slate-700 text-slate-600 dark:text-slate-400")">
-                                                        @(m.Role == "TeamLead" ? "Team Lead" : m.Role)
-                                                    </span>
+                                    <!-- Nested Sub-Teams under Selected Parent Team -->
+                                    @if (isTeamSelected)
+                                    {
+                                        <div class="border-t border-slate-100 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-950/30 p-1.5 rounded-b-xl space-y-1">
+                                            <div class="flex items-center justify-between px-1 pb-1">
+                                                <span class="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Sub-teams</span>
+                                                @if (currentSubTeamWorkspace?.CanManage == true)
+                                                {
+                                                    <button type="button"
+                                                            class="text-[10px] font-semibold text-teal-700 dark:text-teal-400 hover:underline"
+                                                            @onclick='() => SetTeamCenterSubTab("subteams")'>
+                                                        + New
+                                                    </button>
+                                                }
+                                            </div>
+
+                                            @if (loadingSubTeams)
+                                            {
+                                                <div class="py-2 text-center text-[10px] text-slate-400">Loading sub-teams…</div>
+                                            }
+                                            else if (currentSubTeamWorkspace?.SubTeams == null || currentSubTeamWorkspace.SubTeams.Count == 0)
+                                            {
+                                                <div class="py-2 text-center text-[10px] text-slate-400">
+                                                    No sub-teams yet.
                                                 </div>
+                                            }
+                                            else
+                                            {
                                                 <button type="button"
-                                                        class="shrink-0 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-0.5 text-[10px] font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition"
-                                                        @onclick="() => OpenMember360(m.StaffId)"
-                                                        title="View 360 Summary">
-                                                    360°
+                                                        class="w-full text-left px-2 py-1 rounded-lg text-[11px] font-semibold transition cursor-pointer flex items-center justify-between @(!selectedSubTeamId.HasValue ? "bg-teal-700 text-white shadow-2xs" : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800")"
+                                                        @onclick="ClearSubTeamSelection">
+                                                    <span>All Members</span>
+                                                    <span class="text-[10px] opacity-80">@team.Staffs.Count</span>
                                                 </button>
-                                            </div>
-                                        }
-                                    </div>
-                                }
-                            </div>
-                        }
-                        else
-                        {
-                            <!-- Sub-Teams List -->
-                            @if (currentSubTeamWorkspace?.SubTeams == null || currentSubTeamWorkspace.SubTeams.Count == 0)
-                            {
-                                <div class="py-6 text-center text-xs text-slate-500 space-y-1.5">
-                                    <p>No sub-teams created.</p>
-                                    @if (currentSubTeamWorkspace?.CanManage == true)
-                                    {
-                                        <button type="button"
-                                                class="text-[11px] font-semibold text-teal-600 dark:text-teal-400 hover:underline"
-                                                @onclick='() => SetTeamCenterSubTab("subteams")'>
-                                            + Create First Sub-Team
-                                        </button>
+
+                                                @foreach (var st in currentSubTeamWorkspace.SubTeams)
+                                                {
+                                                    var isSubSelected = selectedSubTeamId == st.TeamId;
+                                                    <button type="button" @key="st.TeamId"
+                                                            class="w-full text-left px-2 py-1 rounded-lg text-[11px] font-semibold transition cursor-pointer flex items-center justify-between @(isSubSelected ? "bg-teal-700 text-white shadow-2xs" : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800")"
+                                                            @onclick="() => SelectSubTeam(st.TeamId)">
+                                                        <span class="truncate pr-1" title="@st.Name">@st.Name</span>
+                                                        <span class="text-[10px] opacity-80 shrink-0">@st.Members.Count</span>
+                                                    </button>
+                                                }
+                                            }
+                                        </div>
                                     }
                                 </div>
                             }
-                            else
-                            {
-                                <div class="space-y-1.5 max-h-[36rem] overflow-y-auto pr-1">
-                                    @foreach (var st in currentSubTeamWorkspace.SubTeams)
-                                    {
-                                        <button type="button" @key="st.TeamId"
-                                                class="w-full text-left p-2 rounded-xl border text-xs transition cursor-pointer flex flex-col gap-0.5 @(selectedSubTeamId == st.TeamId ? "border-teal-500 bg-teal-50/70 dark:bg-teal-950/40 shadow-xs ring-1 ring-teal-500" : "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-700")"
-                                                @onclick="() => SelectSubTeam(st.TeamId)">
-                                            <div class="flex items-center justify-between gap-1">
-                                                <h4 class="font-bold text-slate-900 dark:text-slate-100 truncate" title="@st.Name">@st.Name</h4>
-                                                <span class="rounded bg-teal-100 dark:bg-teal-950/60 text-teal-800 dark:text-teal-300 px-1.5 py-0.2 text-[10px] font-bold shrink-0">
-                                                    @st.Members.Count members
-                                                </span>
-                                            </div>
-                                            @if (!string.IsNullOrWhiteSpace(st.OrganisationStructureName))
-                                            {
-                                                <span class="text-[10px] text-slate-500 truncate block">@st.OrganisationStructureName</span>
-                                            }
-                                            @if (st.OvertimeEnabled)
-                                            {
-                                                <span class="inline-flex self-start rounded-full bg-emerald-100 dark:bg-emerald-950/60 px-1.5 py-0.2 text-[9px] font-semibold text-emerald-800 dark:text-emerald-300 mt-0.5">
-                                                    OT Enabled · @st.MaximumWeeklyOvertimeHours h/wk
-                                                </span>
-                                            }
-                                        </button>
-                                    }
-                                </div>
-                            }
-                        }
+                        </div>
                     }
                 </aside>
 
-                <!-- COLUMN 3: Selected Team Members & Projects (~55% width default, ~38% when 360 View open) -->
+                <!-- COLUMN 2: Selected Team Members & Projects (~48% width) -->
                 <section class="min-w-0 space-y-2">
                     @if (selectedTeam == null)
                     {
@@ -2014,7 +1931,7 @@
                     }
                 </section>
 
-                <!-- RIGHT: Shared Contextual Detail Panel (Only One Active at a Time) -->
+                <!-- COLUMN 3: Right Panel: 360 View when open, or Creating Sub-Teams and Adding Staff when closed (~30% width) -->
                 @if (activeRightPanel == RightPanelType.Member360 && inspectedStaffId.HasValue)
                 {
                     <Member360Panel StaffId="inspectedStaffId.Value"
@@ -2040,6 +1957,23 @@
                                         OnClose="CloseRightPanel"
                                         OnTaskClick="OpenTaskModal"
                                         OnAssignmentsChanged="RefreshAssignmentViewsAsync" />
+                }
+                else if (selectedTeam != null && !selectedTeam.ParentTeamId.HasValue)
+                {
+                    <!-- When 360 view is closed: Show Creating Sub-Teams and Adding Staff in Compact Mode -->
+                    <div class="min-w-0 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-2 shadow-xs">
+                        <SubTeamManagement ParentTeamId="selectedTeam.TeamId"
+                                           SelectedSubTeamId="selectedSubTeamId"
+                                           CompactMode="true"
+                                           OnSubTeamSelected="HandleRightPanelSubTeamSelected"
+                                           OnSubTeamsChanged="OnSubTeamsChangedAsync" />
+                    </div>
+                }
+                else
+                {
+                    <div class="min-w-0 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 text-center text-xs text-slate-400">
+                        Select a team to manage sub-teams and view 360 profile.
+                    </div>
                 }
 
             </div>
@@ -3365,6 +3299,12 @@
     private void ClearSubTeamSelection()
     {
         selectedSubTeamId = null;
+        subTeamMemberSearchTerm = "";
+    }
+
+    private void HandleRightPanelSubTeamSelected(int? subTeamId)
+    {
+        selectedSubTeamId = subTeamId;
         subTeamMemberSearchTerm = "";
     }
 
