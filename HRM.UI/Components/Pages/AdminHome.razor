@@ -12,7 +12,7 @@
 <section class="executive-dashboard" aria-busy="@busy">
     <header class="executive-heading">
         <div><span class="eyebrow">Government HR Platform · People analytics</span><h1>Organisation Overview</h1><p>@(organisation?.Name ?? "Current organisation")</p></div>
-        <div class="heading-actions"><span class="sync-label">@(loadedAt?.ToString("dd MMM yyyy · HH:mm") ?? "Not refreshed")</span><button type="button" disabled="@busy" @onclick="LoadAsync"><i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Refresh</button></div>
+        <div class="heading-actions"><span class="sync-label">@(loadedAt?.ToString("dd MMM yyyy · HH:mm") ?? "Not refreshed")</span><button type="button" disabled="@busy" @onclick="LoadAsync"><i class="bi bi-arrow-clockwise @(busy ? "inline-block animate-spin" : "")" aria-hidden="true"></i> Refresh</button></div>
     </header>
     <div class="executive-toolbar">
         <label>Department / structure<select @bind="selectedDepartment"><option value="0">All approved structures</option>@foreach(var d in organisation?.Departments ?? []) { <option value="@d.Id">@d.Name (@d.Members)</option> }</select></label>
@@ -22,7 +22,14 @@
         <span class="scope-label">Current workforce · @DateTime.UtcNow.AddHours(5).ToString("dd MMM yyyy")</span>
     </div>
     @if(error != null) { <p role="alert" class="dashboard-alert">@error</p> }
-    @if(busy && organisation == null) { <p role="status">Loading organisation overview…</p> }
+    @if(busy && organisation == null)
+    {
+        <div class="flex flex-col items-center justify-center p-12 my-6 rounded-xl border border-slate-200 bg-white shadow-xs">
+            <div class="w-12 h-12 border-4 border-teal-600 border-t-transparent rounded-full animate-spin"></div>
+            <p class="mt-4 text-sm font-semibold text-slate-700">Loading Dashboard...</p>
+            <p class="text-xs text-slate-400 mt-0.5">Fetching organisation workforce and analytics</p>
+        </div>
+    }
     @if(organisation != null)
     {
         <section class="executive-kpis" aria-label="Executive summary">

@@ -30,7 +30,7 @@
             </span>
 
             <span class="flex items-center gap-1">
-                <span class="h-2.5 w-2.5 rounded-full bg-green-300 border border-green-400"></span>
+                <span class="h-2.5 w-2.5 rounded-full bg-emerald-200 bg-green-300 border border-emerald-400"></span>
                 Missing Clock
             </span>
 
@@ -160,7 +160,10 @@
                     // - If either IN or OUT is missing, classify as Missing Clock.
                     // - When a card contains both Late and Missing Clock conditions, Missing Clock takes colour priority.
                     // - Authorised leave, holidays, exempted periods are never Missing Clock.
-                    var isExempt = isHoliday || isWeekend || isOnLeave || isFutureDay;
+                    var isExempt = (isHoliday && !hasCheckIn && !hasCheckOut)
+                        || (isWeekend && !hasCheckIn && !hasCheckOut)
+                        || isOnLeave
+                        || isFutureDay;
 
                     var isAbsentDay = !isExempt && !isUnresolvedDay &&
                                       (overview?.IsAbsent == true || (inDisplay == "Missing" && outDisplay == "Missing"));
@@ -175,7 +178,7 @@
                                      (hasCheckIn || overview?.IsPresent == true);
 
                     var stateClass = isFutureDay
-                        ? (isHoliday ? "bg-purple-100 text-purple-800 border border-purple-200" : isWeekend ? "bg-slate-100 text-slate-600 border border-slate-200" : "bg-slate-100 text-slate-600 border border-slate-200")
+                        ? (isHoliday ? "bg-purple-100 text-purple-800 border border-purple-200" : isWeekend ? "bg-slate-200/80 text-slate-700 border border-slate-300" : "bg-slate-200/80 text-slate-700 border border-slate-300")
                         : isHoliday
                         ? "bg-purple-600 text-white"
                         : isOnLeave
@@ -185,16 +188,18 @@
                         : isAbsentDay
                         ? "bg-red-500 text-white"
                         : isMissingClock
-                        ? "bg-green-300 text-slate-900"
+                        ? "bg-emerald-200 bg-green-300 text-emerald-950 border border-emerald-300"
                         : isLate
                         ? "bg-amber-500 text-slate-900"
                         : isAttended
                         ? "bg-green-500 text-white"
                         : isWeekend
-                        ? "bg-slate-100 text-slate-700 border border-slate-200"
+                        ? "bg-slate-200/80 text-slate-700 border border-slate-300"
+                        : isToday
+                        ? "bg-slate-200/90 text-slate-700 border border-blue-300 ring-1 ring-blue-300/50"
                         : overview?.EligibilityMessage != null
-                        ? "bg-slate-100 text-slate-700 border border-slate-200"
-                        : "bg-slate-100 text-slate-700 border border-slate-200";
+                        ? "bg-slate-200/80 text-slate-700 border border-slate-300"
+                        : "bg-slate-200/80 text-slate-700 border border-slate-300";
 
                     var tooltip = isMissingClock
                         ? (overview?.IsLate == true ? $"Missing Clock (Late {overview.LateMinutes} min)" : "Missing Clock")

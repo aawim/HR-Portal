@@ -459,7 +459,17 @@
     <!-- ======================================================== -->
     @if (activeWorkspaceTab == "Home")
     {
-        <div class="grid grid-cols-1 gap-2 p-2 xl:grid-cols-[minmax(0,23fr)_minmax(0,54fr)_minmax(0,23fr)] items-start">
+        @if (loading && myTeams.Count == 0)
+        {
+            <div class="flex flex-col items-center justify-center p-12 my-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs">
+                <div class="w-12 h-12 border-4 border-teal-600 border-t-transparent rounded-full animate-spin"></div>
+                <p class="mt-4 text-sm font-semibold text-slate-700 dark:text-slate-200">Loading Workspace Dashboard...</p>
+                <p class="text-xs text-slate-400 mt-0.5">Fetching supervised teams, tasks, and requests</p>
+            </div>
+        }
+        else
+        {
+            <div class="grid grid-cols-1 gap-2 p-2 xl:grid-cols-[minmax(0,23fr)_minmax(0,54fr)_minmax(0,23fr)] items-start">
             
             <!-- LEFT COLUMN (23%): My Team(s), Help Desk & Service Desk Team, My Team Requests -->
             <aside class="min-w-0 m-0 p-0 flex flex-col gap-2">
@@ -723,11 +733,6 @@
                                         </div>
                                     </div>
                                     <div class="flex items-center gap-1.5 shrink-0">
-                                        <a href="@($"/admin/my/workspace/staff/{staff.StaffId}/overview")"
-                                           class="rounded-lg border border-teal-300 dark:border-teal-700 bg-teal-50 dark:bg-teal-950/50 px-2 py-1 text-[11px] font-semibold text-teal-700 dark:text-teal-300 hover:bg-teal-100 dark:hover:bg-teal-900/60 transition"
-                                           title="Open Staff Workspace">
-                                            Staff Workspace &gt;
-                                        </a>
                                         <button type="button"
                                                 class="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-[11px] font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50"
                                                 @onclick="() => OpenMember360(staff.StaffId)">
@@ -833,6 +838,7 @@
             </aside>
 
         </div>
+        }
     }
 
     <!-- ======================================================== -->
@@ -1180,11 +1186,6 @@
                                                                         @onclick="() => OpenAssignment(AssignmentModal.AssignmentMode.Task, member.StaffId, member.FullName)">
                                                                     Assign Task
                                                                 </button>
-                                                                <a href="@($"/admin/my/workspace/staff/{member.StaffId}/overview")"
-                                                                   class="inline-flex items-center gap-1 rounded-lg border border-teal-300 dark:border-teal-700 bg-teal-50 dark:bg-teal-950/50 px-2 py-1 text-[11px] font-semibold text-teal-700 dark:text-teal-300 shadow-2xs hover:bg-teal-100 dark:hover:bg-teal-900/60 transition"
-                                                                   title="Open Staff Workspace">
-                                                                    Staff Workspace &gt;
-                                                                </a>
                                                             </div>
                                                         </td>
                                                     </tr>
