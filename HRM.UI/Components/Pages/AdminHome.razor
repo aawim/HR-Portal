@@ -10,10 +10,25 @@
 
 <PageTitle>Organisation Overview</PageTitle>
 <section class="executive-dashboard" aria-busy="@busy">
-    <header class="executive-heading">
-        <div><span class="eyebrow">Government HR Platform · People analytics</span><h1>Organisation Overview</h1><p>@(organisation?.Name ?? "Current organisation")</p></div>
-        <div class="heading-actions"><span class="sync-label">@(loadedAt?.ToString("dd MMM yyyy · HH:mm") ?? "Not refreshed")</span><button type="button" disabled="@busy" @onclick="LoadAsync"><i class="bi bi-arrow-clockwise @(busy ? "inline-block animate-spin" : "")" aria-hidden="true"></i> Refresh</button></div>
-    </header>
+    <!-- Top Header Area Matching Admin Workspace Standard -->
+    <div class="my-workspace-header staff-overview-no-print flex flex-col gap-2 p-2">
+        <div class="flex items-center justify-between flex-wrap gap-2">
+            <div>
+                <h1 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">Organisation Overview</h1>
+                <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">@(organisation?.Name ?? "Current organisation") · People analytics, workforce structure, and HR requests.</p>
+            </div>
+            <div class="flex items-center gap-2">
+                <span class="text-xs text-slate-500 dark:text-slate-400">@(loadedAt?.ToString("dd MMM yyyy · HH:mm") ?? "Not refreshed")</span>
+                <button type="button"
+                        class="ws-header-btn inline-flex items-center gap-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200 shadow-xs hover:bg-slate-50 dark:hover:bg-slate-700 transition"
+                        disabled="@busy"
+                        @onclick="LoadAsync">
+                    <span class="@(busy ? "animate-spin" : "")">↻</span>
+                    <span>Refresh</span>
+                </button>
+            </div>
+        </div>
+    </div>
     <div class="executive-toolbar">
         <label>Department / structure<select @bind="selectedDepartment"><option value="0">All approved structures</option>@foreach(var d in organisation?.Departments ?? []) { <option value="@d.Id">@d.Name (@d.Members)</option> }</select></label>
         <label>Find unit<input type="search" placeholder="Search departments or teams" @bind="search" @bind:event="oninput" /></label>
