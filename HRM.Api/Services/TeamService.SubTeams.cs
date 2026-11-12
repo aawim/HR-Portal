@@ -43,11 +43,13 @@ public partial class TeamService
             .Distinct()
             .ToListAsync(ct);
 
-        data.Staff = await db.Jobs.AsNoTracking().Where(x => x.OrganisationID == scope.Parent.OrganisationId && x.JobStateId == 4 &&
-                x.JoinedDate <= TeamToday && (!x.TerminatedDate.HasValue || x.TerminatedDate > TeamToday) &&
-                !assignedSubTeamStaffIds.Contains(x.IndividualID))
-            .OrderBy(x => x.Individual.FirstNameEnglish).Select(x => new SubTeamOptionDto(x.IndividualID,
-                (x.Individual.FirstNameEnglish + " " + (x.Individual.MiddleNameEnglish ?? "") + " " + (x.Individual.LastNameEnglish ?? "")).Trim()))
+        data.Staff = await db.TeamStaffs.AsNoTracking()
+            .Where(x => x.TeamId == parentTeamId && x.IsValid && x.StartDate <= TeamToday &&
+                (!x.EndDate.HasValue || x.EndDate >= TeamToday) && !assignedSubTeamStaffIds.Contains(x.StaffId))
+            .OrderBy(x => x.Staff.Individual.FirstNameEnglish)
+            .Select(x => new SubTeamOptionDto(x.StaffId,
+                (x.Staff.Individual.FirstNameEnglish + " " + (x.Staff.Individual.MiddleNameEnglish ?? "") + " " +
+                    (x.Staff.Individual.LastNameEnglish ?? "")).Trim()))
             .Distinct().ToListAsync(ct);
         data.SubTeams = await db.Teams.AsNoTracking().Where(x => x.ParentTeamId == parentTeamId)
             .OrderBy(x => x.Name).Select(x => new SubTeamDto
@@ -103,8 +105,9 @@ public partial class TeamService
         var team = await db.Teams.SingleOrDefaultAsync(x => x.TeamId == model.TeamId && x.ParentTeamId.HasValue, ct)
             ?? throw new KeyNotFoundException("Sub-team not found.");
         await RequireParentTeamAsync(db, team.ParentTeamId!.Value, ct);
-        if (!await db.Jobs.AnyAsync(x => x.IndividualID == model.StaffId && x.OrganisationID == team.OrganisationId && x.JobStateId == 4, ct))
-            throw new ArgumentException("Select active staff from this organisation.");
+        if (!await db.TeamStaffs.AnyAsync(x => x.TeamId == team.ParentTeamId && x.StaffId == model.StaffId &&
+            x.IsValid && x.StartDate <= TeamToday && (!x.EndDate.HasValue || x.EndDate >= TeamToday), ct))
+            throw new ArgumentException("Select an active staff member from the parent team.");
 
         var parentTeamId = team.ParentTeamId.Value;
         var isAlreadyInAnotherSubTeam = await db.TeamStaffs.AnyAsync(ts =>
