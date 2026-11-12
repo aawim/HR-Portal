@@ -370,53 +370,76 @@
 
 @if (showMemberModal && data != null && selected != null)
 {
-    <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-2 backdrop-blur-sm" role="presentation" @onclick="CloseMemberModal">
-        <div class="flex max-h-[min(42rem,calc(100vh-1rem))] w-full max-w-2xl flex-col gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl dark:border-slate-700 dark:bg-slate-900" role="dialog" aria-modal="true" aria-labelledby="add-subteam-staff-title" @onclick:stopPropagation>
-            <div class="flex items-start justify-between gap-2 border-b border-slate-200 p-2 dark:border-slate-800">
+    <div class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-900/60 p-2 backdrop-blur-xs" role="dialog" aria-modal="true" aria-labelledby="add-subteam-staff-title">
+        <div class="fixed inset-0" aria-hidden="true" @onclick="CloseMemberModal"></div>
+        <div class="relative z-10 flex max-h-[85vh] w-full max-w-xl flex-col gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl dark:border-slate-800 dark:bg-slate-900" @onclick:stopPropagation>
+            <div class="flex items-start justify-between border-b border-slate-100 pb-2 dark:border-slate-800">
                 <div>
                     <h3 id="add-subteam-staff-title" class="text-sm font-bold text-slate-900 dark:text-slate-100">Add staff to @selected.Name</h3>
-                    <p class="text-[11px] text-slate-500 dark:text-slate-400">Only unassigned staff from @data.ParentTeamName are available.</p>
+                    <p class="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Only staff in @data.ParentTeamName who are not assigned to a sub-team are shown.</p>
                 </div>
-                <button type="button" class="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800 dark:hover:bg-slate-800 dark:hover:text-slate-100" aria-label="Close" @onclick="CloseMemberModal">✕</button>
+                <button type="button" class="rounded-lg p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-200" aria-label="Close dialog" @onclick="CloseMemberModal"><AppIcon Name="close" Class="h-5 w-5 text-xl" /></button>
             </div>
 
-            <div class="flex flex-col gap-2 p-2 sm:flex-row sm:items-center sm:justify-between">
-                <input class="w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-600/20 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 sm:max-w-sm" placeholder="Search parent-team staff…" @bind="memberSearch" @bind:event="oninput" />
+            <div class="relative w-full">
+                <span class="pointer-events-none absolute inset-y-0 left-2.5 flex items-center text-slate-400 dark:text-slate-500"><AppIcon Name="search" Class="h-4 w-4 text-base" /></span>
+                <input class="w-full rounded-lg border border-slate-300 bg-white py-1.5 pl-9 pr-8 text-xs text-slate-900 outline-none placeholder:text-slate-400 focus:border-teal-600 focus:ring-1 focus:ring-teal-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100" placeholder="Search parent-team staff..." @bind="memberSearch" @bind:event="oninput" autofocus />
+                @if (!string.IsNullOrWhiteSpace(memberSearch))
+                {
+                    <button type="button" class="absolute inset-y-0 right-2.5 flex items-center text-xs font-bold text-slate-400 hover:text-slate-600" @onclick="() => memberSearch = string.Empty">✕</button>
+                }
+            </div>
+
+            <div class="flex items-center justify-between gap-2 px-2 text-[11px]">
+                <span class="text-slate-500 dark:text-slate-400">@selectedMemberIds.Count selected</span>
                 <div class="flex items-center gap-2 text-[11px]">
-                    <span class="text-slate-500 dark:text-slate-400">@selectedMemberIds.Count selected</span>
                     <button type="button" class="font-semibold text-teal-700 hover:text-teal-800 dark:text-teal-400" @onclick="SelectVisibleStaff">Select visible</button>
                     <button type="button" class="font-semibold text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white" @onclick="ClearSelectedStaff">Clear</button>
                 </div>
             </div>
 
-            <div class="min-h-0 flex-1 overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-700">
+            <div class="min-h-[12rem] max-h-80 flex-1 overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-700">
                 @if (!FilteredParentStaff.Any())
                 {
                     <p class="p-2 text-center text-xs text-slate-500 dark:text-slate-400">@(data.Staff.Count == 0 ? "All parent-team staff are already assigned to sub-teams." : "No staff match your search.")</p>
                 }
                 else
                 {
-                    <div class="flex flex-col gap-2 p-2">
+                    <table class="w-full text-left text-xs">
+                        <thead class="sticky top-0 border-b border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                            <tr><th class="p-2 font-semibold">Staff</th><th class="w-40 p-2 font-semibold">Staff type</th></tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
                         @foreach (var staff in FilteredParentStaff)
                         {
                             var isSelected = selectedMemberIds.Contains(staff.Id);
-                            <div class="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-2 rounded-lg border border-slate-200 p-2 dark:border-slate-700 sm:grid-cols-[auto_minmax(0,1fr)_10rem]">
-                                <input type="checkbox" class="h-4 w-4 rounded border-slate-300 text-teal-700 focus:ring-teal-600 dark:border-slate-600 dark:bg-slate-800" checked="@isSelected" @onchange="e => ToggleStaff(staff.Id, e.Value is true)" />
-                                <button type="button" class="min-w-0 text-left text-xs font-medium text-slate-800 dark:text-slate-100" @onclick="() => ToggleStaff(staff.Id, !isSelected)">@staff.Name</button>
-                                <select aria-label="Staff type for @staff.Name" disabled="@(!isSelected)" value="@GetMemberRole(staff.Id)" @onchange="e => SetMemberRole(staff.Id, e.Value?.ToString())" class="col-start-2 rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 sm:col-start-3">
+                            <tr @key="staff.Id" class="transition hover:bg-slate-50 dark:hover:bg-slate-800/60">
+                                <td class="p-2">
+                                    <label class="flex cursor-pointer items-center gap-2">
+                                        <input type="checkbox" class="h-4 w-4 rounded border-slate-300 text-teal-700 focus:ring-teal-600 dark:border-slate-600 dark:bg-slate-800" checked="@isSelected" @onchange="e => ToggleStaff(staff.Id, e)" />
+                                        <span class="min-w-0 font-medium text-slate-800 dark:text-slate-100">@staff.Name</span>
+                                    </label>
+                                </td>
+                                <td class="p-2">
+                                    <select aria-label="Staff type for @staff.Name" disabled="@(!isSelected)" value="@GetMemberRole(staff.Id)" @onchange="e => SetMemberRole(staff.Id, e.Value?.ToString())" class="w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100">
                                     <option value="Member">Member</option>
                                     <option value="Supervisor">Supervisor</option>
                                     <option value="TeamLead">Team Lead</option>
                                 </select>
-                            </div>
+                                </td>
+                            </tr>
                         }
-                    </div>
+                        </tbody>
+                    </table>
                 }
             </div>
 
-            <div class="flex items-center justify-end gap-2 border-t border-slate-200 p-2 dark:border-slate-800">
+            <div class="flex items-center justify-between gap-2 border-t border-slate-100 pt-2 text-xs dark:border-slate-800">
+                <span class="text-[11px] text-slate-400">@FilteredParentStaff.Count() available</span>
+                <div class="flex items-center gap-2">
                 <button type="button" disabled="@busy" class="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800" @onclick="CloseMemberModal">Cancel</button>
                 <button type="button" disabled="@(busy || selectedMemberIds.Count == 0)" class="rounded-lg bg-teal-700 px-3 py-2 text-xs font-semibold text-white hover:bg-teal-800 disabled:opacity-50" @onclick="SaveMembers">@(busy ? "Adding…" : $"Add {selectedMemberIds.Count} staff")</button>
+                </div>
             </div>
         </div>
     </div>
@@ -498,6 +521,7 @@
         string.IsNullOrWhiteSpace(memberSearch) || x.Name.Contains(memberSearch, StringComparison.OrdinalIgnoreCase)) ?? [];
     private void OpenMemberModal(){memberSearch="";selectedMemberIds.Clear();selectedMemberRoles.Clear();showMemberModal=true;}
     private void CloseMemberModal(){if(busy)return;showMemberModal=false;}
+    private void ToggleStaff(int staffId,ChangeEventArgs change){var value=change.Value is bool checkedValue?checkedValue:string.Equals(change.Value?.ToString(),"true",StringComparison.OrdinalIgnoreCase);ToggleStaff(staffId,value);}
     private void ToggleStaff(int staffId,bool value){if(value){selectedMemberIds.Add(staffId);selectedMemberRoles.TryAdd(staffId,"Member");}else{selectedMemberIds.Remove(staffId);selectedMemberRoles.Remove(staffId);}}
     private string GetMemberRole(int staffId)=>selectedMemberRoles.GetValueOrDefault(staffId,"Member");
     private void SetMemberRole(int staffId,string? role){if(selectedMemberIds.Contains(staffId))selectedMemberRoles[staffId]=role is "Supervisor" or "TeamLead"?role:"Member";}
@@ -509,11 +533,11 @@
         var teamId=selected.TeamId;var count=selectedMemberIds.Count;busy=true;error=null;
         try
         {
-            foreach(var staffId in selectedMemberIds)
+            foreach(var staffId in selectedMemberIds.ToList())
                 await TeamService.SaveSubTeamMemberAsync(new(){TeamId=teamId,StaffId=staffId,Role=GetMemberRole(staffId),StartDate=DateTime.Today});
-            showMemberModal=false;Toasts.Success(count==1?"Staff member assigned.":$"{count} staff members assigned.");
-            if(OnSubTeamsChanged.HasDelegate)await OnSubTeamsChanged.InvokeAsync();
             await Load(teamId);
+            if(OnSubTeamsChanged.HasDelegate)await OnSubTeamsChanged.InvokeAsync();
+            showMemberModal=false;Toasts.Success(count==1?"Staff member assigned.":$"{count} staff members assigned.");
         }
         catch(Exception ex){error=ex.Message;Toasts.Error(ex.Message);}
         finally{busy=false;}
