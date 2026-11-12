@@ -202,21 +202,28 @@
     [data-theme="dark"] tbody tr:hover { background-color: #334155 !important; }
     [data-theme="dark"] tbody td { border-color: #2d3d52; }
 
-    /* Workspace and section tabs in dark mode */
-    [data-theme="dark"] .workspace-tabs button[aria-pressed="true"] {
+    /* Workspace and section folder tabs across all three portals (Admin, Developer, Online) */
+    :is(.my-workspace-tabs, .developer-workspace-tabs, .online-workspace-tabs, .workspace-tabs) nav button {
+        transition: color 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
+    }
+    :is(.my-workspace-tabs, .developer-workspace-tabs, .online-workspace-tabs, .workspace-tabs) nav button:not([class*="text-white"]):hover {
+        color: #0f172a !important;
+    }
+    [data-theme="dark"] :is(.my-workspace-tabs, .developer-workspace-tabs, .online-workspace-tabs, .workspace-tabs) nav button:not([class*="bg-teal-700"]):not([class*="bg-amber-600"]):not([class*="bg-blue-600"]):not([class*="dark:bg-teal-600"]):not([class*="dark:bg-amber-600"]):not([class*="dark:bg-blue-600"]) {
         background-color: #1e293b !important;
-        color: #93c5fd !important;
-        border-color: #3b4b63 !important;
-        border-bottom-color: #60a5fa !important;
-    }
-    [data-theme="dark"] .workspace-tabs button[aria-pressed="false"] {
-        background-color: #0f172a !important;
-        color: #b6c4d6 !important;
+        color: #cbd5e1 !important;
         border-color: #3b4b63 !important;
     }
-    [data-theme="dark"] .workspace-tabs button[aria-pressed="false"]:hover {
-        background-color: #243247 !important;
-        color: #f8fafc !important;
+    [data-theme="dark"] :is(.my-workspace-tabs, .developer-workspace-tabs, .online-workspace-tabs, .workspace-tabs) nav button:not([class*="bg-teal-700"]):not([class*="bg-amber-600"]):not([class*="bg-blue-600"]):not([class*="dark:bg-teal-600"]):not([class*="dark:bg-amber-600"]):not([class*="dark:bg-blue-600"]):hover {
+        background-color: #334155 !important;
+        color: #ffffff !important;
+        border-color: #52627a !important;
+    }
+    :is(.my-workspace-tabs, .developer-workspace-tabs, .online-workspace-tabs, .workspace-tabs) nav button:is([class*="bg-teal-700"], [class*="bg-amber-600"], [class*="bg-blue-600"], [class*="dark:bg-teal-600"], [class*="dark:bg-amber-600"], [class*="dark:bg-blue-600"]) {
+        color: #ffffff !important;
+    }
+    [data-theme="dark"] :is(.my-workspace-tabs, .developer-workspace-tabs, .online-workspace-tabs, .workspace-tabs) nav button:is([class*="bg-teal-700"], [class*="bg-amber-600"], [class*="bg-blue-600"], [class*="dark:bg-teal-600"], [class*="dark:bg-amber-600"], [class*="dark:bg-blue-600"]) {
+        color: #ffffff !important;
     }
 
     /* Status colours remain distinct, including blue approved-leave markers. */
@@ -254,3 +261,18 @@
 .border-green-400 { border-color: #4ade80 !important; }
 [data-theme="dark"] .bg-green-300 { background-color: #153e34 !important; }
 [data-theme="dark"] .border-green-400 { border-color: #1f6354 !important; }
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+@-webkit-keyframes spin {
+    0% { -webkit-transform: rotate(0deg); }
+    100% { -webkit-transform: rotate(360deg); }
+}
+
+.animate-spin {
+    -webkit-animation: spin 1s linear infinite !important;
+    animation: spin 1s linear infinite !important;
+    display: inline-block;
+}

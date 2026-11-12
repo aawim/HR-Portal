@@ -45,8 +45,13 @@
             </span>
 
             <span class="flex items-center gap-1">
-                <span class="h-2.5 w-2.5 rounded-full bg-slate-300"></span>
+                <span class="h-2.5 w-2.5 rounded-full bg-white border border-slate-300"></span>
                 Upcoming
+            </span>
+
+            <span class="flex items-center gap-1">
+                <span class="h-2.5 w-2.5 rounded-full bg-slate-300 border border-slate-400"></span>
+                Weekend
             </span>
 
             <span class="flex items-center gap-1">
@@ -157,9 +162,11 @@
 
                     // Classification:
                     // - If both IN and OUT are missing after scheduled working period, classify as Absent.
-                    // - If either IN or OUT is missing, classify as Missing Clock.
-                    // - When a card contains both Late and Missing Clock conditions, Missing Clock takes colour priority.
-                    // - Authorised leave, holidays, exempted periods are never Missing Clock.
+                    // - Authorised leave, holidays, exempted periods are never Missing Clock or Absent.
+                    // - Late: Employee is marked late (amber).
+                    // - Missing OUT with On time: Checked in on time, missing or pending OUT event (light green).
+                    // - Other missing clock: Light green.
+                    // - Attended: Both IN and OUT present on time (dark green).
                     var isExempt = (isHoliday && !hasCheckIn && !hasCheckOut)
                         || (isWeekend && !hasCheckIn && !hasCheckOut)
                         || isOnLeave
@@ -168,17 +175,22 @@
                     var isAbsentDay = !isExempt && !isUnresolvedDay &&
                                       (overview?.IsAbsent == true || (inDisplay == "Missing" && outDisplay == "Missing"));
 
-                    var isMissingClock = !isExempt && !isUnresolvedDay && !isAbsentDay &&
-                                         (overview?.IsMissingClock == true || inDisplay == "Missing" || outDisplay == "Missing");
+                    var isLateDay = !isExempt && !isUnresolvedDay && !isAbsentDay &&
+                                    (overview?.IsLate == true);
 
-                    var isLate = !isExempt && !isUnresolvedDay && !isAbsentDay && !isMissingClock &&
-                                 overview?.IsLate == true;
+                    var isMissingOutOnTime = !isExempt && !isUnresolvedDay && !isAbsentDay && !isLateDay &&
+                                             hasCheckIn && (!hasCheckOut || outDisplay == "Missing" || overview?.IsMissingClock == true);
 
-                    var isAttended = !isExempt && !isUnresolvedDay && !isAbsentDay && !isMissingClock && !isLate &&
+                    var isOtherMissingClock = !isExempt && !isUnresolvedDay && !isAbsentDay && !isLateDay && !isMissingOutOnTime &&
+                                              (overview?.IsMissingClock == true || inDisplay == "Missing" || outDisplay == "Missing");
+
+                    var isMissingClock = isMissingOutOnTime || isOtherMissingClock;
+
+                    var isAttended = !isExempt && !isUnresolvedDay && !isAbsentDay && !isLateDay && !isMissingClock &&
                                      (hasCheckIn || overview?.IsPresent == true);
 
                     var stateClass = isFutureDay
-                        ? (isHoliday ? "bg-purple-100 text-purple-800 border border-purple-200" : isWeekend ? "bg-slate-200/80 text-slate-700 border border-slate-300" : "bg-slate-200/80 text-slate-700 border border-slate-300")
+                        ? (isHoliday ? "bg-purple-100 text-purple-800 border border-purple-200" : isWeekend ? "bg-slate-200 text-slate-700 border border-slate-300" : "bg-white text-slate-700 border border-slate-200 shadow-2xs")
                         : isHoliday
                         ? "bg-purple-600 text-white"
                         : isOnLeave
@@ -187,24 +199,26 @@
                         ? "bg-slate-600 text-white"
                         : isAbsentDay
                         ? "bg-red-500 text-white"
+                        : isLateDay
+                        ? "bg-amber-500 text-slate-900"
                         : isMissingClock
                         ? "bg-emerald-200 bg-green-300 text-emerald-950 border border-emerald-300"
-                        : isLate
-                        ? "bg-amber-500 text-slate-900"
                         : isAttended
                         ? "bg-green-500 text-white"
                         : isWeekend
-                        ? "bg-slate-200/80 text-slate-700 border border-slate-300"
+                        ? "bg-slate-200 text-slate-700 border border-slate-300"
                         : isToday
-                        ? "bg-slate-200/90 text-slate-700 border border-blue-300 ring-1 ring-blue-300/50"
+                        ? "bg-slate-200 text-slate-700 border border-blue-400 ring-1 ring-blue-400/50"
                         : overview?.EligibilityMessage != null
-                        ? "bg-slate-200/80 text-slate-700 border border-slate-300"
-                        : "bg-slate-200/80 text-slate-700 border border-slate-300";
+                        ? "bg-slate-200 text-slate-700 border border-slate-300"
+                        : "bg-slate-200 text-slate-700 border border-slate-300";
 
-                    var tooltip = isMissingClock
-                        ? (overview?.IsLate == true ? $"Missing Clock (Late {overview.LateMinutes} min)" : "Missing Clock")
-                        : isLate
-                        ? $"Late {overview?.LateMinutes} min"
+                    var tooltip = isLateDay
+                        ? (overview?.IsMissingClock == true || outDisplay == "Missing" ? $"Late {overview?.LateMinutes} min (Missing OUT)" : $"Late {overview?.LateMinutes} min")
+                        : isMissingOutOnTime
+                        ? (!hasCheckOut && isToday ? "On Time · Checked In (Pending OUT)" : "On Time · Missing OUT Clock")
+                        : isMissingClock
+                        ? "Missing Clock"
                         : isAbsentDay
                         ? "Absent"
                         : isHoliday
@@ -213,6 +227,10 @@
                         ? $"Leave · {overview?.LeaveTypeName ?? "Approved"}"
                         : isAttended
                         ? "Attended"
+                        : isWeekend
+                        ? "Weekend"
+                        : isFutureDay
+                        ? "Upcoming"
                         : null;
 
                     <div class="flex min-w-0 flex-col items-center">

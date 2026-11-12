@@ -14,7 +14,9 @@
 @using HRM.Services.Interfaces.Leave
 @using HRM.Components.Pages.Online.Dashboard
 @using HRM.Services.Attendance.AttendancePlan
+@using HRM.UI.Services.Developer
 @using Microsoft.AspNetCore.Components.Authorization
+@implements IDisposable
 
 @inject IJSRuntime JS
 @inject IJobService JobService
@@ -26,6 +28,7 @@
 @inject IAttendancePlanService AttendancePlanService
 @inject ILogger<Index> Logger
 @inject IWorkTypeService WorkTypes
+@inject DeveloperTestClockService TestClockPreference
 
 
 <PageTitle>Dashboard</PageTitle>
@@ -38,7 +41,7 @@
         @if (loading)
         {
             <div class="flex flex-col items-center justify-center p-12 my-6 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs">
-                <div class="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                <div class="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" style="animation: spin 1s linear infinite; -webkit-animation: spin 1s linear infinite;"></div>
                 <p class="mt-4 text-sm font-semibold text-slate-700 dark:text-slate-200">Loading Dashboard...</p>
                 <p class="text-xs text-slate-400 mt-0.5">Fetching attendance, leave balances, and employee services</p>
             </div>
@@ -293,6 +296,7 @@
 
 
     private bool allowTestClock;
+    private bool canUseTestClock;
     private bool attendanceLoadFailed;
     private async Task RetryAttendanceAsync()
     {
@@ -301,6 +305,7 @@
     }
     protected override async Task OnInitializedAsync()
     {
+        TestClockPreference.OnChange += TestClockPreferenceChanged;
 
 
          
@@ -332,8 +337,36 @@
 
     private async Task LoadTestClockPermissionAsync()
     {
-        try { allowTestClock = await WorkTypes.CanClockAsync() && await AttendanceLogService.CanUseTestClockAsync(); }
+        try
+        {
+            var canClock = await WorkTypes.CanClockAsync();
+            canUseTestClock = canClock && await AttendanceLogService.CanUseTestClockAsync();
+            allowTestClock = canUseTestClock && TestClockPreference.IsInitialized && TestClockPreference.CurrentState;
+        }
         catch (Exception ex) { Logger.LogWarning(ex, "Could not load development clock permission"); }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                var savedFullWidth = await JS.InvokeAsync<string?>("localStorage.getItem", FullWidthSettingKey);
+                if (bool.TryParse(savedFullWidth, out var val))
+                {
+                    isFullWidth = val;
+                }
+
+                await TestClockPreference.InitializeAsync();
+                allowTestClock = canUseTestClock && TestClockPreference.CurrentState;
+                StateHasChanged();
+            }
+            catch
+            {
+                // Browser JS unavailable or test environment
+            }
+        }
     }
 
 
@@ -477,6 +510,21 @@
             await JS.InvokeVoidAsync("localStorage.setItem", FullWidthSettingKey, isFullWidth.ToString());
         }
         catch { }
+    }
+
+    private void TestClockPreferenceChanged()
+    {
+        _ = InvokeAsync(() =>
+        {
+            allowTestClock = canUseTestClock && TestClockPreference.CurrentState;
+            StateHasChanged();
+        });
+    }
+
+    public void Dispose()
+    {
+        if (TestClockPreference is not null)
+            TestClockPreference.OnChange -= TestClockPreferenceChanged;
     }
 
 }

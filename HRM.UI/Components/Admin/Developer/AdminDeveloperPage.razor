@@ -7,14 +7,18 @@
 @using HRM.Services.Interfaces
 @using HRM.Services
 @using HRM.Enum
+@using HRM.UI.Services.Developer
 @using Microsoft.AspNetCore.Components.Authorization
 @attribute [Authorize]
 @rendermode InteractiveServer
+@implements IDisposable
 
 @inject IUserAccessService UserAccess
 @inject PortalContext PortalContext
 @inject NavigationManager Navigation
 @inject ToastService ToastService
+@inject IJSRuntime JS
+@inject DeveloperTestClockService TestClockPreference
 @inject HRM.Services.Contracts.RequestTransitionSettingsServiceContracts.IOperations TransitionService
 
 <PageTitle>Developer Workspace - HR Portal</PageTitle>
@@ -80,12 +84,12 @@
                 <div class="developer-workspace-tabs staff-overview-no-print w-full border-b-2 border-amber-600 dark:border-amber-500 overflow-x-auto">
                     <nav class="flex items-end gap-1 min-w-max pb-0" aria-label="Developer Workspace Tabs">
                         <button type="button"
-                                class="rounded-t-xl px-4 py-2 font-bold text-xs md:text-sm transition-all border-t border-l border-r @(activeTab == "overview" ? "bg-amber-600 dark:bg-amber-600 text-white border-amber-600 dark:border-amber-500 shadow-sm" : "bg-[#fef3c7]/60 text-slate-800 dark:bg-slate-800 dark:text-slate-300 border-slate-300 dark:border-slate-700 hover:bg-[#fde68a]/60")"
+                                class="rounded-t-xl px-4 py-2 font-bold text-xs md:text-sm transition-all border-t border-l border-r @(activeTab == "overview" ? "bg-amber-600 dark:bg-amber-600 text-white border-amber-600 dark:border-amber-500 shadow-sm" : "bg-[#fef3c7]/60 text-slate-700 hover:text-slate-900 hover:bg-[#fde68a]/60 dark:bg-slate-800/90 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-700 border-slate-300 dark:border-slate-700")"
                                 @onclick="@(e => SetTab("overview"))">
                             Overview
                         </button>
                         <button type="button"
-                                class="rounded-t-xl px-4 py-2 font-bold text-xs md:text-sm transition-all border-t border-l border-r @(activeTab == "error-logs" ? "bg-amber-600 dark:bg-amber-600 text-white border-amber-600 dark:border-amber-500 shadow-sm" : "bg-[#fef3c7]/60 text-slate-800 dark:bg-slate-800 dark:text-slate-300 border-slate-300 dark:border-slate-700 hover:bg-[#fde68a]/60")"
+                                class="rounded-t-xl px-4 py-2 font-bold text-xs md:text-sm transition-all border-t border-l border-r @(activeTab == "error-logs" ? "bg-amber-600 dark:bg-amber-600 text-white border-amber-600 dark:border-amber-500 shadow-sm" : "bg-[#fef3c7]/60 text-slate-700 hover:text-slate-900 hover:bg-[#fde68a]/60 dark:bg-slate-800/90 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-700 border-slate-300 dark:border-slate-700")"
                                 @onclick="@(e => SetTab("error-logs"))">
                             <span class="inline-flex items-center gap-1.5">
                                 <span>Error Logs</span>
@@ -93,7 +97,7 @@
                             </span>
                         </button>
                         <button type="button"
-                                class="rounded-t-xl px-4 py-2 font-bold text-xs md:text-sm transition-all border-t border-l border-r @(activeTab == "request-types" ? "bg-amber-600 dark:bg-amber-600 text-white border-amber-600 dark:border-amber-500 shadow-sm" : "bg-[#fef3c7]/60 text-slate-800 dark:bg-slate-800 dark:text-slate-300 border-slate-300 dark:border-slate-700 hover:bg-[#fde68a]/60")"
+                                class="rounded-t-xl px-4 py-2 font-bold text-xs md:text-sm transition-all border-t border-l border-r @(activeTab == "request-types" ? "bg-amber-600 dark:bg-amber-600 text-white border-amber-600 dark:border-amber-500 shadow-sm" : "bg-[#fef3c7]/60 text-slate-700 hover:text-slate-900 hover:bg-[#fde68a]/60 dark:bg-slate-800/90 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-700 border-slate-300 dark:border-slate-700")"
                                 @onclick="@(e => SetTab("request-types"))">
                             Request Types
                             @if (requestTypesCount > 0)
@@ -104,22 +108,22 @@
                             }
                         </button>
                         <button type="button"
-                                class="rounded-t-xl px-4 py-2 font-bold text-xs md:text-sm transition-all border-t border-l border-r @(activeTab == "transitions" ? "bg-amber-600 dark:bg-amber-600 text-white border-amber-600 dark:border-amber-500 shadow-sm" : "bg-[#fef3c7]/60 text-slate-800 dark:bg-slate-800 dark:text-slate-300 border-slate-300 dark:border-slate-700 hover:bg-[#fde68a]/60")"
+                                class="rounded-t-xl px-4 py-2 font-bold text-xs md:text-sm transition-all border-t border-l border-r @(activeTab == "transitions" ? "bg-amber-600 dark:bg-amber-600 text-white border-amber-600 dark:border-amber-500 shadow-sm" : "bg-[#fef3c7]/60 text-slate-700 hover:text-slate-900 hover:bg-[#fde68a]/60 dark:bg-slate-800/90 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-700 border-slate-300 dark:border-slate-700")"
                                 @onclick="@(e => SetTab("transitions"))">
                             Transition States
                         </button>
                         <button type="button"
-                                class="rounded-t-xl px-4 py-2 font-bold text-xs md:text-sm transition-all border-t border-l border-r @(activeTab == "workflows" ? "bg-amber-600 dark:bg-amber-600 text-white border-amber-600 dark:border-amber-500 shadow-sm" : "bg-[#fef3c7]/60 text-slate-800 dark:bg-slate-800 dark:text-slate-300 border-slate-300 dark:border-slate-700 hover:bg-[#fde68a]/60")"
+                                class="rounded-t-xl px-4 py-2 font-bold text-xs md:text-sm transition-all border-t border-l border-r @(activeTab == "workflows" ? "bg-amber-600 dark:bg-amber-600 text-white border-amber-600 dark:border-amber-500 shadow-sm" : "bg-[#fef3c7]/60 text-slate-700 hover:text-slate-900 hover:bg-[#fde68a]/60 dark:bg-slate-800/90 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-700 border-slate-300 dark:border-slate-700")"
                                 @onclick="@(e => SetTab("workflows"))">
                             Approval Workflows
                         </button>
                         <button type="button"
-                                class="rounded-t-xl px-4 py-2 font-bold text-xs md:text-sm transition-all border-t border-l border-r @(activeTab == "health" ? "bg-amber-600 dark:bg-amber-600 text-white border-amber-600 dark:border-amber-500 shadow-sm" : "bg-[#fef3c7]/60 text-slate-800 dark:bg-slate-800 dark:text-slate-300 border-slate-300 dark:border-slate-700 hover:bg-[#fde68a]/60")"
+                                class="rounded-t-xl px-4 py-2 font-bold text-xs md:text-sm transition-all border-t border-l border-r @(activeTab == "health" ? "bg-amber-600 dark:bg-amber-600 text-white border-amber-600 dark:border-amber-500 shadow-sm" : "bg-[#fef3c7]/60 text-slate-700 hover:text-slate-900 hover:bg-[#fde68a]/60 dark:bg-slate-800/90 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-700 border-slate-300 dark:border-slate-700")"
                                 @onclick="@(e => SetTab("health"))">
                             Application Health
                         </button>
                         <button type="button"
-                                class="rounded-t-xl px-4 py-2 font-bold text-xs md:text-sm transition-all border-t border-l border-r @(activeTab == "diagnostics" ? "bg-amber-600 dark:bg-amber-600 text-white border-amber-600 dark:border-amber-500 shadow-sm" : "bg-[#fef3c7]/60 text-slate-800 dark:bg-slate-800 dark:text-slate-300 border-slate-300 dark:border-slate-700 hover:bg-[#fde68a]/60")"
+                                class="rounded-t-xl px-4 py-2 font-bold text-xs md:text-sm transition-all border-t border-l border-r @(activeTab == "diagnostics" ? "bg-amber-600 dark:bg-amber-600 text-white border-amber-600 dark:border-amber-500 shadow-sm" : "bg-[#fef3c7]/60 text-slate-700 hover:text-slate-900 hover:bg-[#fde68a]/60 dark:bg-slate-800/90 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-700 border-slate-300 dark:border-slate-700")"
                                 @onclick="@(e => SetTab("diagnostics"))">
                             System & Diagnostics
                         </button>
@@ -178,6 +182,46 @@
                                     <div>
                                         <p class="text-xs text-slate-500">Active Context</p>
                                         <p class="text-base font-bold text-amber-800">Developer (/developer)</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Diagnostic Toggles Card -->
+                            <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-xs">
+                                <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                                    <div class="flex items-start gap-3">
+                                        <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 text-xl font-bold border border-amber-200 dark:border-amber-800">
+                                            ⏱️
+                                        </div>
+                                        <div>
+                                            <div class="flex items-center gap-2">
+                                                <h3 class="font-bold text-sm text-slate-900 dark:text-slate-100">Test Attendance Time Card</h3>
+                                                @if (testClockEnabled)
+                                                {
+                                                    <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 px-2.5 py-0.5 text-xs font-bold text-emerald-700 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-800">
+                                                        <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
+                                                        Enabled
+                                                    </span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="inline-flex items-center gap-1.5 rounded-full bg-slate-100 dark:bg-slate-800 px-2.5 py-0.5 text-xs font-bold text-slate-600 dark:text-slate-400 border border-slate-300 dark:border-slate-700">
+                                                        <span class="h-1.5 w-1.5 rounded-full bg-slate-400"></span>
+                                                        Disabled
+                                                    </span>
+                                                }
+                                            </div>
+                                            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                                                Controls whether the custom attendance test clock card is displayed on the employee portal (<a href="/online" class="font-semibold text-blue-600 dark:text-blue-400 underline">/online</a>). Use to simulate check-in and check-out punches at arbitrary dates and times.
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center gap-2 shrink-0">
+                                        <button type="button"
+                                                class="inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-xs font-bold shadow-xs transition @(testClockEnabled ? "bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800" : "bg-emerald-600 hover:bg-emerald-700 text-white")"
+                                                @onclick="ToggleTestClockAsync">
+                                            <span>@(testClockEnabled ? "Disable Test Card" : "Enable Test Card")</span>
+                                        </button>
                                     </div>
                                 </div>
                             </div>
@@ -297,7 +341,48 @@
                     }
                     else if (activeTab == "diagnostics")
                     {
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="space-y-4">
+                            <!-- Diagnostic Feature Toggles -->
+                            <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-xs">
+                                <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                                    <div class="flex items-start gap-3">
+                                        <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 text-xl font-bold border border-amber-200 dark:border-amber-800">
+                                            ⏱️
+                                        </div>
+                                        <div>
+                                            <div class="flex items-center gap-2">
+                                                <h3 class="font-bold text-sm text-slate-900 dark:text-slate-100">Test Attendance Time Card</h3>
+                                                @if (testClockEnabled)
+                                                {
+                                                    <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 px-2.5 py-0.5 text-xs font-bold text-emerald-700 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-800">
+                                                        <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
+                                                        Enabled
+                                                    </span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="inline-flex items-center gap-1.5 rounded-full bg-slate-100 dark:bg-slate-800 px-2.5 py-0.5 text-xs font-bold text-slate-600 dark:text-slate-400 border border-slate-300 dark:border-slate-700">
+                                                        <span class="h-1.5 w-1.5 rounded-full bg-slate-400"></span>
+                                                        Disabled
+                                                    </span>
+                                                }
+                                            </div>
+                                            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                                                Controls whether the custom attendance test clock card is displayed on the employee portal (<a href="/online" class="font-semibold text-blue-600 dark:text-blue-400 underline">/online</a>). Use to simulate check-in and check-out punches at arbitrary dates and times.
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center gap-2 shrink-0">
+                                        <button type="button"
+                                                class="inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-xs font-bold shadow-xs transition @(testClockEnabled ? "bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800" : "bg-emerald-600 hover:bg-emerald-700 text-white")"
+                                                @onclick="ToggleTestClockAsync">
+                                            <span>@(testClockEnabled ? "Disable Test Card" : "Enable Test Card")</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs space-y-3">
                                 <h3 class="font-bold text-sm text-slate-900 border-b border-slate-100 pb-2">Developer Environment</h3>
                                 <dl class="divide-y divide-slate-100 text-xs">
@@ -345,6 +430,7 @@
                                 </ul>
                             </div>
                         </div>
+                        </div>
                     }
                 </div>
             </section>
@@ -360,12 +446,15 @@
     private bool isDeveloper;
     private bool loading;
     private bool isFullWidth;
+    private bool testClockEnabled = true;
     private string activeTab = "overview";
     private int requestTypesCount;
     private int statesCount;
 
     protected override async Task OnInitializedAsync()
     {
+        TestClockPreference.OnChange += TestClockPreferenceChanged;
+        testClockEnabled = TestClockPreference.CurrentState;
         var path = new Uri(Navigation.Uri).AbsolutePath;
         if (path.StartsWith("/admin/developer", StringComparison.OrdinalIgnoreCase))
         {
@@ -434,9 +523,65 @@
         }
     }
 
-    private void ToggleFullWidthAsync()
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                var savedFullWidth = await JS.InvokeAsync<string?>("localStorage.getItem", "hrm.developer.full-width");
+                if (bool.TryParse(savedFullWidth, out var val))
+                {
+                    isFullWidth = val;
+                }
+                await TestClockPreference.InitializeAsync();
+                testClockEnabled = TestClockPreference.CurrentState;
+                StateHasChanged();
+            }
+            catch
+            {
+                // Browser JS unavailable or test environment
+            }
+        }
+    }
+
+    private async Task ToggleTestClockAsync()
+    {
+        testClockEnabled = !testClockEnabled;
+        await TestClockPreference.SetEnabledAsync(testClockEnabled);
+        if (testClockEnabled)
+        {
+            ToastService.Success("Test Time Clock card enabled on Employee Portal.");
+        }
+        else
+        {
+            ToastService.Info("Test Time Clock card disabled on Employee Portal.");
+        }
+        StateHasChanged();
+    }
+
+    private void TestClockPreferenceChanged()
+    {
+        _ = InvokeAsync(() =>
+        {
+            testClockEnabled = TestClockPreference.CurrentState;
+            StateHasChanged();
+        });
+    }
+
+    public void Dispose()
+    {
+        TestClockPreference.OnChange -= TestClockPreferenceChanged;
+    }
+
+    private async Task ToggleFullWidthAsync()
     {
         isFullWidth = !isFullWidth;
+        try
+        {
+            await JS.InvokeVoidAsync("localStorage.setItem", "hrm.developer.full-width", isFullWidth ? "true" : "false");
+        }
+        catch { }
     }
 
     private async Task RefreshAsync()
