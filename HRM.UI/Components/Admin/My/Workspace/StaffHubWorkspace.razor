@@ -3036,9 +3036,7 @@
     <!-- ======================================================== -->
     @if (activeWorkspaceTab == "LeaveLog")
     {
-        <div class="rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-2 gap-2 flex flex-col shadow-xs">
-            <HRM.Components.Admin.My.Workspace.Staff.Tabs.StaffLeave StaffId="@(inspectedStaffId ?? CurrentTeamStaffList.FirstOrDefault()?.StaffId ?? 0)" />
-        </div>
+        <HRM.Components.Admin.My.Workspace.Staff.Tabs.StaffLeave StaffId="@(inspectedStaffId ?? CurrentTeamStaffList.FirstOrDefault()?.StaffId ?? 0)" />
     }
 
     <!-- ======================================================== -->
@@ -3056,9 +3054,7 @@
     <!-- ======================================================== -->
     @if (activeWorkspaceTab == "TimeChange")
     {
-        <div class="rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-2 gap-2 flex flex-col shadow-xs">
-            <OrganisationTimeChangeWorkspacePanel />
-        </div>
+        <OrganisationTimeChangeWorkspacePanel />
     }
 
     <!-- ======================================================== -->
@@ -3293,7 +3289,22 @@
     {
         get
         {
-            var baseList = selectedTeamId.HasValue ? allTeamStaff.Where(s => s.TeamId == selectedTeamId.Value) : allTeamStaff;
+            if (selectedTeam == null)
+            {
+                return [];
+            }
+
+            // The selected team's DTO is the source of truth for the main members table.
+            // Also include sub-team memberships so legacy sub-team records remain visible
+            // even when the parent-team membership was not created in older data.
+            var parentMembers = selectedTeam.Staffs.Select(s => new TeamStaffFlattened(
+                s.StaffId, s.FullName, s.IsSuperVisor, selectedTeam.TeamId, selectedTeam.Name));
+            var subTeamMembers = currentSubTeamWorkspace?.SubTeams.SelectMany(st => st.Members.Select(m =>
+                new TeamStaffFlattened(m.StaffId, m.StaffName, m.Role is "Supervisor" or "TeamLead", selectedTeam.TeamId, selectedTeam.Name)))
+                ?? Enumerable.Empty<TeamStaffFlattened>();
+            var baseList = parentMembers.Concat(subTeamMembers)
+                .GroupBy(s => s.StaffId)
+                .Select(g => g.OrderByDescending(s => s.IsSuperVisor).First());
             if (selectedSubTeamId.HasValue && selectedSubTeam != null)
             {
                 var subStaffIds = selectedSubTeam.Members.Select(m => m.StaffId).ToHashSet();
@@ -4021,8 +4032,6 @@
             }
             allTeamStaff = myTeams
                 .SelectMany(t => t.Staffs.Select(s => new TeamStaffFlattened(s.StaffId, s.FullName, s.IsSuperVisor, t.TeamId, t.Name)))
-                .GroupBy(s => s.StaffId)
-                .Select(g => g.First())
                 .ToList();
 
             if (selectedTeamId == null && myTeams.Count > 0)
@@ -4638,6 +4647,7 @@
         }
 
         UpdateUrl();
+        await LoadSubTeamsForCurrentTeamAsync();
         await LoadTeamProjectsAsync(teamId);
     }
 
