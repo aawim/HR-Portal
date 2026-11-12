@@ -158,7 +158,9 @@ public partial class TeamService(IDbContextFactory<HrmTeContext> factory, IUserA
         var team = await db.Teams.AsNoTracking().FirstOrDefaultAsync(t => t.TeamId == teamId && (t.OrganisationId == orgId || actor.IsSuperAdministrator), ct);
         if (team == null) return null;
 
-        var staffs = await db.TeamStaffs.AsNoTracking().Where(m => m.TeamId == teamId && m.IsValid && m.StartDate <= today && (m.EndDate == null || m.EndDate >= today))
+        var staffs = await db.TeamStaffs.AsNoTracking().Where(m => m.TeamId == teamId && m.IsValid && m.StartDate <= today &&
+            (m.EndDate == null || m.EndDate >= today) &&
+            FormerStaffPolicy.CurrentJobs(db).Any(j => j.IndividualID == m.StaffId && j.OrganisationID == team.OrganisationId))
             .Select(m => new TeamStaffDto
             {
                 StaffId = m.StaffId,

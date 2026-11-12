@@ -1,43 +1,18 @@
 @using HRM.DTOs.StaffSchedule
 
-<div class="overflow-hidden rounded-xl border border-slate-200
-            bg-white shadow-sm">
+<div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xs dark:border-slate-800 dark:bg-slate-900">
 
     <!-- Header -->
-    <div class="flex flex-col gap-4 border-b border-slate-200
-                px-5 py-4 sm:flex-row sm:items-center
+    <div class="flex flex-col gap-2 border-b border-slate-200 p-2 dark:border-slate-800 sm:flex-row sm:items-center
                 sm:justify-between">
 
-        <div class="flex items-center gap-3">
-
-            <div class="flex h-10 w-10 shrink-0 items-center
-                        justify-center rounded-lg bg-amber-50
-                        text-amber-600">
-
-                <svg xmlns="http://www.w3.org/2000/svg"
-                     fill="none"
-                     viewBox="0 0 24 24"
-                     stroke-width="1.5"
-                     stroke="currentColor"
-                     class="h-5 w-5">
-
-                    <path stroke-linecap="round"
-                          stroke-linejoin="round"
-                          d="M12 6v6h4.5m4.5 0a9 9 0
-                             1 1-18 0 9 9 0 0 1 18 0Z" />
-                </svg>
-
-            </div>
+        <div class="flex items-center gap-2">
+            <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-700"><AppIcon Name="calendar-event" Class="text-base" /></div>
 
             <div>
 
-                <h3 class="text-sm font-semibold text-slate-900">
-                    Manual Work Assignments
-                </h3>
-
-                <p class="mt-0.5 text-xs text-slate-500">
-                    Assign a schedule for a specific date or exception.
-                </p>
+                <h3 class="text-sm font-bold text-slate-900 dark:text-slate-100">Duty exceptions</h3>
+                <p class="mt-0.5 text-xs text-slate-500">One-off work, temporary schedule changes and special duties.</p>
 
             </div>
 
@@ -46,26 +21,8 @@
         <button type="button"
                 disabled="@IsDisabled"
                 @onclick="HandleAssignRequestedAsync"
-                class="inline-flex items-center justify-center gap-2
-                       rounded-lg bg-amber-600 px-3.5 py-2
-                       text-sm font-medium text-white transition
-                       hover:bg-amber-700
-                       disabled:cursor-not-allowed
-                       disabled:bg-slate-300">
-
-            <svg xmlns="http://www.w3.org/2000/svg"
-                 fill="none"
-                 viewBox="0 0 24 24"
-                 stroke-width="1.5"
-                 stroke="currentColor"
-                 class="h-4 w-4">
-
-                <path stroke-linecap="round"
-                      stroke-linejoin="round"
-                      d="M12 4.5v15m7.5-7.5h-15" />
-            </svg>
-
-            Assign Work
+                class="app-button app-button-secondary app-button-sm">
+            <AppIcon Name="add" Class="text-sm" /> Add exception
 
         </button>
 
@@ -74,91 +31,14 @@
     <!-- Information -->
     @if (CurrentTemplate is null)
     {
-        <div class="border-b border-amber-200 bg-amber-50 px-5 py-4">
-
-            <div class="flex flex-col gap-4 sm:flex-row
-                    sm:items-center sm:justify-between">
-
-                <div class="flex items-start gap-3">
-
-                    <div class="flex h-9 w-9 shrink-0 items-center
-                            justify-center rounded-lg bg-amber-100
-                            text-amber-700">
-
-                        <svg xmlns="http://www.w3.org/2000/svg"
-                             fill="none"
-                             viewBox="0 0 24 24"
-                             stroke-width="1.5"
-                             stroke="currentColor"
-                             class="h-5 w-5">
-
-                            <path stroke-linecap="round"
-                                  stroke-linejoin="round"
-                                  d="M12 9v3.75m9-.75a9 9 0 1
-                                 1-18 0 9 9 0 0 1 18 0Zm-9
-                                 3.75h.008v.008H12v-.008Z" />
-
-                        </svg>
-
-                    </div>
-
-                    <div>
-
-                        <p class="text-sm font-semibold text-amber-900">
-                            No work template assigned
-                        </p>
-
-                        <p class="mt-1 max-w-xl text-xs leading-5
-                              text-amber-700">
-                            You can add a one-day duty using an available template.
-                            Set recurring working hours separately when needed.
-                        </p>
-
-                    </div>
-
-                </div>
-
-                @if (CurrentTemplate is null)
-                {
-                    <button type="button"
-                            disabled="@IsDisabled"
-                            @onclick="HandleAssignTemplateRequestedAsync"
-                            class="mt-4 rounded-lg border border-amber-300
-                   bg-white px-3.5 py-2 text-sm
-                   font-medium text-amber-700
-                   hover:bg-amber-50
-                   disabled:cursor-not-allowed
-                   disabled:opacity-50">
-
-                        Assign Work Template
-
-                    </button>
-                }
-                else
-                {
-                    <button type="button"
-                            disabled="@IsDisabled"
-                            @onclick="HandleAssignRequestedAsync"
-                            class="mt-4 rounded-lg border border-amber-200
-                   bg-white px-3.5 py-2 text-sm
-                   font-medium text-amber-700
-                   hover:bg-amber-50
-                   disabled:cursor-not-allowed
-                   disabled:opacity-50">
-
-                        Create Manual Assignment
-
-                    </button>
-                }
-
-            </div>
-
+        <div class="m-2 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
+            <div><p class="font-semibold">Default working hours are required</p><p class="mt-0.5">Set the baseline hours before creating an exception.</p></div>
+            <button type="button" disabled="@IsDisabled" @onclick="HandleAssignTemplateRequestedAsync" class="app-button app-button-secondary app-button-sm">Set default hours</button>
         </div>
     }
 
     <!-- Filters -->
-    <div class="flex flex-col gap-3 border-b border-slate-200
-                bg-slate-50/60 px-5 py-3 sm:flex-row
+    <div class="flex flex-col gap-2 border-b border-slate-200 bg-slate-50/60 p-2 dark:border-slate-800 dark:bg-slate-800/40 sm:flex-row
                 sm:items-center sm:justify-between">
 
         <div class="inline-flex rounded-lg border border-slate-200
@@ -194,7 +74,7 @@
     </div>
 
     <!-- Content -->
-    <div class="p-5">
+    <div class="p-2">
 
         @if (FilteredAssignments.Count == 0)
         {
@@ -252,16 +132,15 @@
         }
         else
         {
-            <div class="space-y-3">
+            <div class="space-y-2">
 
                 @foreach (var assignment in FilteredAssignments)
                 {
-                    <div class="rounded-lg border border-slate-200
-                                bg-white p-4 transition
+                    <div class="rounded-xl border border-slate-200 bg-white p-2 transition dark:border-slate-800 dark:bg-slate-900
                                 hover:border-slate-300
                                 hover:shadow-sm">
 
-                        <div class="flex flex-col gap-4
+                        <div class="flex flex-col gap-2
                                     sm:flex-row sm:items-start
                                     sm:justify-between">
 

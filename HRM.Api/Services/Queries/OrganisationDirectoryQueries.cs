@@ -20,7 +20,7 @@ public sealed class OrganisationDirectoryQueries(IDbContextFactory<HrmTeContext>
         await using var db = await factory.CreateDbContextAsync(ct);
         return await db.Teams.AsNoTracking().Where(t => t.OrganisationId == org).OrderBy(t => t.Name)
             .Select(t => new OrganisationUnitSummary(t.TeamId, OrganisationUnitKind.Team, org, t.Name, t.NameDhivehi, null,
-                t.StartDate, t.EndDate, t.IsValid == true, t.OperationLogId ?? 0)).ToListAsync(ct);
+                t.StartDate, t.EndDate, t.IsValid == true, t.OperationLogId ?? 0, t.ParentTeamId, t.OrganisationStructureId)).ToListAsync(ct);
     }
     public async Task<OrganisationUnitDetails?> GetDetailsAsync(OrganisationUnitKey unit, CancellationToken ct = default)
     {

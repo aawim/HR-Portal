@@ -96,6 +96,7 @@
                 @if (Project.CanManageAssignments)
                 {
                     <div class="flex items-center gap-1 flex-wrap">
+                        <button type="button" class="app-button app-button-secondary app-button-sm" @onclick="OpenEditProjectAsync">Edit Project</button>
                         <button type="button" class="rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-[10px] font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition" @onclick="OpenAddMemberAsync">Add Member</button>
                         <button type="button" class="rounded-lg bg-teal-700 dark:bg-teal-600 hover:bg-teal-800 dark:hover:bg-teal-500 text-white px-2 py-1 text-[10px] font-semibold transition shadow-xs" @onclick="OpenCreateTask">+ Add Task</button>
                         <button type="button" class="rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-[10px] font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition disabled:opacity-50" disabled="@(Project.Members.Count == 0)" @onclick="OpenAssignTask">Assign Task</button>
@@ -184,6 +185,8 @@
 
         <AssignmentModal Visible="showAssign" Mode="assignMode" ProjectId="ProjectId" StaffOptions="assignStaffOptions"
                          OnSaved="OnAssignedAsync" OnClose="() => showAssign = false" />
+        <EditProjectModal Visible="showEditProject" Project="Project" Teams="editTeams" Departments="editDepartments"
+                          StaffOptions="editStaffOptions" OnSaved="OnProjectSavedAsync" OnClose="() => showEditProject = false" />
         <CreateTaskModal Visible="showCreateTask" ProjectId="ProjectId" ProjectName="@Project?.Name"
                          StaffOptions="GetTaskAssigneeOptions()" OnSaved="OnTaskCreatedAsync" OnClose="() => showCreateTask = false" />
         <!-- Tasks Grouped by Category -->
@@ -375,9 +378,12 @@
     private static readonly string[] Roles = ["Member", "Lead", "Coordinator", "Contributor", "Reviewer"];
     private TeamProjectDto? Project;
     private bool loading = true;
-    private bool showAssign, busy, showHistory, showCreateTask;
+    private bool showAssign, busy, showHistory, showCreateTask, showEditProject;
     private AssignmentModal.AssignmentMode assignMode;
     private List<TeamStaffDto> assignStaffOptions = new();
+    private List<TeamDto> editTeams = new();
+    private List<OrganisationStructureDropdownDto> editDepartments = new();
+    private List<CreateProjectModal.StaffOptionDto> editStaffOptions = new();
     private List<AssignmentHistoryDto> history = new();
     private int? editingId, removeConfirmId;
     private string editRole = "Member", editRemarks = "";
@@ -424,6 +430,42 @@
         }
         catch (Exception ex) { Logger.LogWarning(ex, "Failed to load team members for project {ProjectId}", ProjectId); }
         showAssign = true;
+    }
+
+    private async Task OpenEditProjectAsync()
+    {
+        if (Project == null) return;
+        try
+        {
+            editTeams = await TeamService.GetMyTeamsAsync() ?? new();
+            editDepartments = await TeamService.GetOrganisationStructuresAsync() ?? new();
+            if (Project.TeamId is int teamId)
+            {
+                var team = await TeamService.GetTeamByIdAsync(teamId);
+                editStaffOptions = team?.Staffs.Select(s => new CreateProjectModal.StaffOptionDto
+                {
+                    StaffId = s.StaffId,
+                    FullName = s.FullName
+                }).ToList() ?? new();
+            }
+            else
+            {
+                editStaffOptions = new();
+            }
+            showEditProject = true;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to open project editor for {ProjectId}", ProjectId);
+            ToastService.Error("Unable to load project editing options.");
+        }
+    }
+
+    private async Task OnProjectSavedAsync()
+    {
+        showEditProject = false;
+        await LoadProjectAsync();
+        await OnAssignmentsChanged.InvokeAsync();
     }
 
     private void OpenAssignTask()

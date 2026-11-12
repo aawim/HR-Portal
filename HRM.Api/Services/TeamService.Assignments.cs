@@ -59,6 +59,9 @@ public partial class TeamService
             ?? throw new ArgumentException("Project not found.");
         await RequireManageProjectAsync(db, project);
         RequireOpenProject(project);
+        if (!await FormerStaffPolicy.CurrentJobs(db).AnyAsync(j => j.IndividualID == request.StaffId &&
+            j.OrganisationID == project.OrganisationId, ct))
+            throw new InvalidOperationException("Only staff with an active job in this project's organisation can be assigned.");
         if (project.PlannedEndDate.HasValue && request.StartDate.Date > project.PlannedEndDate.Value.Date)
             throw new ArgumentException("Start date is after the project's planned end date.");
         await EnsureStaffInOrganisationAsync(db, request.StaffId, ct);
@@ -276,6 +279,9 @@ public partial class TeamService
         string? pmName = input.ProjectManagerName?.Trim();
         if (input.ProjectManagerStaffId.HasValue && input.ProjectManagerStaffId.Value > 0)
         {
+            if (!await FormerStaffPolicy.CurrentJobs(db).AnyAsync(j => j.IndividualID == input.ProjectManagerStaffId.Value &&
+                j.OrganisationID == project.OrganisationId, ct))
+                throw new InvalidOperationException("Select a project manager with an active job in this project's organisation.");
             var names = await StaffNamesAsync(db, [input.ProjectManagerStaffId.Value], ct);
             if (names.TryGetValue(input.ProjectManagerStaffId.Value, out var resolvedName))
             {
