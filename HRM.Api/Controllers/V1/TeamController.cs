@@ -298,6 +298,17 @@ public sealed class TeamController(global::HRM.Services.Interfaces.ITeam service
         public global::HRM.DTOs.SaveSubTeamDto model { get; set; } = default!;
     }
 
+    [HttpPost("delete-sub-team")]
+    public async Task<ActionResult<global::System.Boolean>> DeleteSubTeam([FromBody] TeamDeleteSubTeamRequest request)
+    {
+        return Ok(await service.DeleteSubTeamAsync(request.teamId, HttpContext.RequestAborted));
+    }
+
+    public sealed class TeamDeleteSubTeamRequest
+    {
+        public global::System.Int32 teamId { get; set; }
+    }
+
     [HttpPost("save-sub-team-member")]
     public async Task<ActionResult<global::System.Int32>> SaveSubTeamMember([FromBody] TeamSaveSubTeamMemberRequest request)
     {

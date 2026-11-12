@@ -38,6 +38,7 @@ namespace HRM.Services.Interfaces
         Task<List<AssignmentHistoryDto>> GetAssignmentHistoryAsync(int projectId, int? staffId, CancellationToken ct = default);
         Task<SubTeamWorkspaceDto> LoadSubTeamsAsync(int parentTeamId, CancellationToken ct = default);
         Task<int> SaveSubTeamAsync(SaveSubTeamDto model, CancellationToken ct = default);
+        Task<bool> DeleteSubTeamAsync(int teamId, CancellationToken ct = default);
         Task<int> SaveSubTeamMemberAsync(SaveSubTeamMemberDto model, CancellationToken ct = default);
         Task<bool> RemoveSubTeamMemberAsync(int teamId, int staffId, CancellationToken ct = default);
         Task<int> SaveTeamScheduleAdjustmentAsync(TeamScheduleAdjustmentDto model, CancellationToken ct = default);

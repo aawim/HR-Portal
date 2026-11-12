@@ -976,7 +976,7 @@
                                             {
                                                 <div class="py-2 text-center text-[10px] text-slate-400">Loading sub-teams…</div>
                                             }
-                                            else if (currentSubTeamWorkspace?.SubTeams == null || currentSubTeamWorkspace.SubTeams.Count == 0)
+                                            else if (currentSubTeamWorkspace?.SubTeams == null || !currentSubTeamWorkspace.SubTeams.Any(st => st.IsActive))
                                             {
                                                 <div class="py-2 text-center text-[10px] text-slate-400">
                                                     No sub-teams yet.
@@ -991,7 +991,7 @@
                                                     <span class="text-[10px] opacity-80">@team.Staffs.Count</span>
                                                 </button>
 
-                                                @foreach (var st in currentSubTeamWorkspace.SubTeams)
+                                                @foreach (var st in currentSubTeamWorkspace.SubTeams.Where(st => st.IsActive))
                                                 {
                                                     var isSubSelected = selectedSubTeamId == st.TeamId && activeRightPanel == RightPanelType.SubTeamStaff;
                                                     <button type="button" @key="st.TeamId"
@@ -1037,7 +1037,7 @@
                                         @CurrentTeamStaffList.Count assigned personnel · @currentTeamProjects.Count active projects
                                         @if (currentSubTeamWorkspace?.SubTeams != null)
                                         {
-                                            <span> · @currentSubTeamWorkspace.SubTeams.Count sub-teams</span>
+                                            <span> · @currentSubTeamWorkspace.SubTeams.Count(st => st.IsActive) sub-teams</span>
                                         }
                                     </p>
                                 </div>
@@ -1118,6 +1118,7 @@
                                                     <th class="p-2.5">Sub-Team</th>
                                                     <th class="p-2.5">Role</th>
                                                     <th class="p-2.5">Today Attendance</th>
+<th class="p-2.5">Projects</th>
                                                     <th class="p-2.5 text-right">Actions</th>
                                                 </tr>
                                             </thead>
@@ -1126,6 +1127,7 @@
                                                 {
                                                     var att = GetTodayAttendance(member.StaffId);
                                                     var subTeamName = GetMemberSubTeamName(member.StaffId);
+                                                    var memberProjects = GetMemberProjects(member.StaffId);
                                                     <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition">
                                                         <td class="p-2.5">
                                                             <div class="flex items-center gap-2">
@@ -1164,28 +1166,45 @@
                                                                 @(att != null ? att.Status.ToString() : "Not Clocked")
                                                             </span>
                                                         </td>
+                                                        <td class="p-2.5">
+                                                            @if (memberProjects.Count == 0)
+                                                            {
+                                                                <span class="text-slate-400 dark:text-slate-500">—</span>
+                                                            }
+                                                            else
+                                                            {
+                                                                <div class="flex flex-col gap-1">
+                                                                    @foreach (var project in memberProjects)
+                                                                    {
+                                                                        var assignment = project.Members.First(m => m.StaffId == member.StaffId);
+                                                                        <button type="button"
+                                                                                class="max-w-40 truncate text-left text-[11px] font-semibold text-teal-700 hover:underline dark:text-teal-300"
+                                                                                title="@($"{project.Name} · {assignment.Role}")"
+                                                                                @onclick="() => OpenProjectDetails(project.ProjectId)">
+                                                                            @project.Name <span class="font-normal text-slate-500 dark:text-slate-400">· @assignment.Role</span>
+                                                                        </button>
+                                                                    }
+                                                                </div>
+                                                            }
+                                                        </td>
                                                         <td class="p-2.5 text-right">
-                                                            <div class="inline-flex items-center gap-1">
+                                                            <div class="relative inline-flex">
                                                                 <button type="button"
-                                                                        class="inline-flex items-center gap-1 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-[11px] font-semibold text-slate-700 dark:text-slate-200 shadow-2xs hover:bg-slate-50 dark:hover:bg-slate-700 transition"
-                                                                        @onclick="() => OpenMember360(member.StaffId)">
-                                                                    View 360
+                                                                        class="app-button app-button-ghost app-button-sm app-button-icon"
+                                                                        aria-label="Actions for @member.FullName"
+                                                                        title="More actions"
+                                                                        @onclick="() => ToggleMemberActionsMenu(member.StaffId)">
+                                                                    <AppIcon Name="more_horiz" Class="text-base" />
                                                                 </button>
-                                                                <button type="button"
-                                                                        class="inline-flex items-center gap-1 rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-950/40 px-2 py-1 text-[11px] font-semibold text-amber-800 dark:text-amber-300 shadow-2xs hover:bg-amber-100 transition"
-                                                                        @onclick="() => OpenMemberEvaluation(member.StaffId, member.FullName)">
-                                                                    Evaluation
-                                                                </button>
-                                                                <button type="button"
-                                                                        class="inline-flex items-center gap-1 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-[11px] font-semibold text-slate-700 dark:text-slate-200 shadow-2xs hover:bg-slate-50 dark:hover:bg-slate-700 transition"
-                                                                        @onclick="() => OpenAssignment(AssignmentModal.AssignmentMode.Project, member.StaffId, member.FullName)">
-                                                                    Assign Project
-                                                                </button>
-                                                                <button type="button"
-                                                                        class="inline-flex items-center gap-1 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-[11px] font-semibold text-slate-700 dark:text-slate-200 shadow-2xs hover:bg-slate-50 dark:hover:bg-slate-700 transition"
-                                                                        @onclick="() => OpenAssignment(AssignmentModal.AssignmentMode.Task, member.StaffId, member.FullName)">
-                                                                    Assign Task
-                                                                </button>
+                                                                @if (memberActionsMenuStaffId == member.StaffId)
+                                                                {
+                                                                    <div class="absolute right-0 top-full z-30 mt-1 w-40 rounded-xl border border-slate-200 bg-white p-1 shadow-lg dark:border-slate-700 dark:bg-slate-900">
+                                                                        <button type="button" class="w-full rounded-lg px-2 py-1.5 text-left text-[11px] font-semibold text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800" @onclick="() => { memberActionsMenuStaffId = null; OpenMember360(member.StaffId); }">View 360</button>
+                                                                        <button type="button" class="w-full rounded-lg px-2 py-1.5 text-left text-[11px] font-semibold text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800" @onclick="() => { memberActionsMenuStaffId = null; OpenMemberEvaluation(member.StaffId, member.FullName); }">Evaluation</button>
+                                                                        <button type="button" class="w-full rounded-lg px-2 py-1.5 text-left text-[11px] font-semibold text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800" @onclick="() => { memberActionsMenuStaffId = null; OpenAssignment(AssignmentModal.AssignmentMode.Project, member.StaffId, member.FullName); }">Assign project</button>
+                                                                        <button type="button" class="w-full rounded-lg px-2 py-1.5 text-left text-[11px] font-semibold text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800" @onclick="() => { memberActionsMenuStaffId = null; OpenAssignment(AssignmentModal.AssignmentMode.Task, member.StaffId, member.FullName); }">Assign task</button>
+                                                                    </div>
+                                                                }
                                                             </div>
                                                         </td>
                                                     </tr>
@@ -1788,7 +1807,10 @@
                                                                     @(row.RequiresCheckout ? " · Checkout required" : "")
                                                                 </span>
                                                             </td>
-                                                            <td class="p-2.5 text-right">
+                                                            <td class="p-2.5">
+                                                             <span class="text-slate-400 dark:text-slate-500 text-xs">—</span>
+                                                         </td>
+                                                         <td class="p-2.5 text-right">
                                                                 <button type="button"
                                                                         class="inline-flex items-center gap-1 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-[11px] font-semibold text-slate-700 dark:text-slate-200 shadow-2xs hover:bg-slate-50 transition"
                                                                         @onclick="() => selectedTeamScheduleStaffId = row.IndividualId">
@@ -3294,17 +3316,11 @@
                 return [];
             }
 
-            // The selected team's DTO is the source of truth for the main members table.
-            // Also include sub-team memberships so legacy sub-team records remain visible
-            // even when the parent-team membership was not created in older data.
-            var parentMembers = selectedTeam.Staffs.Select(s => new TeamStaffFlattened(
+            // The parent team roster is already restricted to active staff by the API.
+            // Sub-team assignments only classify those staff; they must not add people
+            // who are no longer part of the parent team.
+            IEnumerable<TeamStaffFlattened> baseList = selectedTeam.Staffs.Select(s => new TeamStaffFlattened(
                 s.StaffId, s.FullName, s.IsSuperVisor, selectedTeam.TeamId, selectedTeam.Name));
-            var subTeamMembers = currentSubTeamWorkspace?.SubTeams.SelectMany(st => st.Members.Select(m =>
-                new TeamStaffFlattened(m.StaffId, m.StaffName, m.Role is "Supervisor" or "TeamLead", selectedTeam.TeamId, selectedTeam.Name)))
-                ?? Enumerable.Empty<TeamStaffFlattened>();
-            var baseList = parentMembers.Concat(subTeamMembers)
-                .GroupBy(s => s.StaffId)
-                .Select(g => g.OrderByDescending(s => s.IsSuperVisor).First());
             if (selectedSubTeamId.HasValue && selectedSubTeam != null)
             {
                 var subStaffIds = selectedSubTeam.Members.Select(m => m.StaffId).ToHashSet();
@@ -3427,6 +3443,7 @@
     private List<TeamProjectDto> currentTeamProjects = new();
     private bool loadingProjects;
     private int? selectedProjectId;
+    private int? memberActionsMenuStaffId;
     private TeamProjectTaskDto? selectedTaskModalItem;
     private bool showSearchTeamsModal;
 
@@ -4695,6 +4712,13 @@
             .ToList();
         return staff;
     }
+
+    private List<TeamProjectDto> GetMemberProjects(int staffId) => currentTeamProjects
+        .Where(project => project.Members.Any(member => member.StaffId == staffId && member.IsActive))
+        .ToList();
+
+    private void ToggleMemberActionsMenu(int staffId) => memberActionsMenuStaffId =
+        memberActionsMenuStaffId == staffId ? null : staffId;
 
     private void OpenAssignment(AssignmentModal.AssignmentMode mode, int staffId, string staffName)
     {

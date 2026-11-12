@@ -23,9 +23,10 @@ public sealed class IndividualRegistryService(
             throw new UnauthorizedAccessException("You do not have access to the selected organisation.");
 
         await using var DbContext = await factory.CreateDbContextAsync(ct);
-        // This registry view is for unattached individuals, including for Super Admin.
+        // Onboarding can start only for people without active employment: either they
+        // have never been attached to an organisation or their prior employment ended.
         var individuals = DbContext.Individuals.AsNoTracking().Where(ind =>
-            !DbContext.Jobs.Any(j => j.IndividualID == ind.BusinessEntityId) &&
+            !FormerStaffPolicy.CurrentJobs(DbContext).Any(j => j.IndividualID == ind.BusinessEntityId) &&
             (actor.IsSuperAdministrator || !DbContext.StaffOnboardingRequests.Any(r =>
                 r.IndividualId == ind.BusinessEntityId && r.IsOpen && r.OrganisationId != organisationId)));
 

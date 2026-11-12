@@ -106,7 +106,7 @@
                                 var isCurrent = selected?.TeamId == team.TeamId;
                                 <button type="button" @onclick="() => Select(team)"
                                         class="rounded-lg px-2 py-0.5 text-[11px] font-semibold transition @(isCurrent ? "bg-teal-700 text-white shadow-2xs" : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700")">
-                                    @team.Name (@team.Members.Count)
+                                    @team.Name (@team.Members.Count)@(team.IsActive ? "" : " · Inactive")
                                 </button>
                             }
                         </div>
@@ -137,6 +137,11 @@
                         {
                             <div class="space-y-1.5">
                                 <label class="block text-xs font-medium text-slate-700 dark:text-slate-300">
+                                    Sub-Team Name
+                                    <input class="mt-0.5 w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-1 text-xs"
+                                           @bind="draft.Name" />
+                                </label>
+                                <label class="block text-xs font-medium text-slate-700 dark:text-slate-300">
                                     Organisation Structure
                                     <select class="mt-0.5 w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-1 text-xs"
                                             @bind="draft.OrganisationStructureId">
@@ -148,6 +153,9 @@
                                     </select>
                                 </label>
                                 <div class="rounded-lg border border-teal-200 dark:border-teal-800/40 bg-teal-50/40 dark:bg-teal-950/20 p-2 space-y-1">
+                                    <label class="flex items-center gap-2 text-xs font-semibold text-slate-800 dark:text-slate-200">
+                                        <input type="checkbox" @bind="draft.IsActive" /> Active sub-team
+                                    </label>
                                     <label class="flex items-center gap-2 text-xs font-semibold text-slate-800 dark:text-slate-200">
                                         <input type="checkbox" @bind="draft.OvertimeEnabled" /> Allow Overtime for this sub-team
                                     </label>
@@ -172,11 +180,23 @@
                                         </div>
                                     }
                                 </div>
-                                <button disabled="@busy"
-                                        class="rounded-lg bg-teal-700 px-3 py-1 text-xs font-semibold text-white hover:bg-teal-800 disabled:opacity-50"
-                                        @onclick="SaveTeam">
-                                    Save Settings
-                                </button>
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <button disabled="@busy"
+                                            class="app-button app-button-primary app-button-sm"
+                                            @onclick="SaveTeam">
+                                        Save Settings
+                                    </button>
+                                    @if (deleteConfirmation)
+                                    {
+                                        <span class="text-[11px] text-rose-700 dark:text-rose-300">Archive this sub-team and remove its members?</span>
+                                        <button disabled="@busy" class="app-button app-button-danger app-button-sm" @onclick="DeleteTeam">Confirm delete</button>
+                                        <button disabled="@busy" class="app-button app-button-neutral app-button-sm" @onclick="() => deleteConfirmation = false">Cancel</button>
+                                    }
+                                    else
+                                    {
+                                        <button disabled="@busy" class="app-button app-button-danger app-button-sm" @onclick="() => deleteConfirmation = true">Delete sub-team</button>
+                                    }
+                                </div>
                             </div>
                         }
                     </div>
@@ -301,6 +321,7 @@
                                 <span class="rounded bg-teal-100 dark:bg-teal-950/60 text-teal-800 dark:text-teal-300 px-1.5 py-0.2 text-[10px] font-bold shrink-0">@team.Members.Count</span>
                             </div>
                             <span class="mt-0.5 block text-[11px] text-slate-500">@team.OrganisationStructureName</span>
+                            @if (!team.IsActive) { <span class="mt-1 inline-flex rounded-full bg-slate-100 dark:bg-slate-800 px-2 py-0.2 text-[10px] font-semibold text-slate-600 dark:text-slate-300">Inactive</span> }
                             @if (team.OvertimeEnabled) { <span class="mt-1 inline-flex rounded-full bg-emerald-100 dark:bg-emerald-950/60 px-2 py-0.2 text-[10px] font-semibold text-emerald-800 dark:text-emerald-300">OT enabled · @team.MaximumWeeklyOvertimeHours h/week</span> }
                         </button>
                     }
@@ -316,6 +337,7 @@
                                 <label class="block text-xs font-medium text-slate-700 dark:text-slate-300">Organisation structure<select class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-1 text-xs" @bind="draft.OrganisationStructureId"><option value="">Select structure</option>@foreach(var o in data.Structures){<option value="@o.Id">@o.Name</option>}</select></label>
                             </div>
                             <div class="rounded-xl border border-teal-200 dark:border-teal-800/40 bg-teal-50/40 dark:bg-teal-950/20 p-2.5 space-y-1.5">
+                                <label class="flex items-center gap-2 text-xs font-semibold text-slate-800 dark:text-slate-200"><input type="checkbox" @bind="draft.IsActive" /> Active sub-team</label>
                                 <label class="flex items-center gap-2 text-xs font-semibold text-slate-800 dark:text-slate-200"><input type="checkbox" @bind="draft.OvertimeEnabled" /> Allow OT through this sub-team</label>
                                 <p class="text-[11px] text-slate-600 dark:text-slate-400">This grants eligibility when the member's job type disallows OT. Evidence and the normal OT approval workflow still apply.</p>
                                 @if (draft.OvertimeEnabled)
@@ -326,7 +348,22 @@
                                     </div>
                                 }
                             </div>
-                            <button disabled="@busy" class="inline-flex items-center rounded-lg bg-teal-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-teal-800 disabled:opacity-50" @onclick="SaveTeam">Save sub-team</button>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <button disabled="@busy" class="app-button app-button-primary app-button-sm" @onclick="SaveTeam">Save sub-team</button>
+                                @if (draft.TeamId != 0)
+                                {
+                                    @if (deleteConfirmation)
+                                    {
+                                        <span class="text-[11px] text-rose-700 dark:text-rose-300">Archive this sub-team and remove its members?</span>
+                                        <button disabled="@busy" class="app-button app-button-danger app-button-sm" @onclick="DeleteTeam">Confirm delete</button>
+                                        <button disabled="@busy" class="app-button app-button-neutral app-button-sm" @onclick="() => deleteConfirmation = false">Cancel</button>
+                                    }
+                                    else
+                                    {
+                                        <button disabled="@busy" class="app-button app-button-danger app-button-sm" @onclick="() => deleteConfirmation = true">Delete sub-team</button>
+                                    }
+                                }
+                            </div>
                         </div>
                     }
 
@@ -453,7 +490,7 @@
     [Parameter] public EventCallback OnClose { get; set; }
     [Parameter] public EventCallback OnSubTeamsChanged { get; set; }
     [Parameter] public EventCallback<int?> OnSubTeamSelected { get; set; }
-    private int loadedTeamId; private bool loading; private bool busy; private bool editing; private string? error;
+    private int loadedTeamId; private bool loading; private bool busy; private bool editing; private bool deleteConfirmation; private string? error;
     private SubTeamWorkspaceDto? data; private SubTeamDto? selected; private SaveSubTeamDto draft = new();
     private bool showMemberModal; private string memberSearch = ""; private HashSet<int> selectedMemberIds = [];
     private Dictionary<int, string> selectedMemberRoles = []; private DateTime adjustmentDate = DateTime.Today;
@@ -487,6 +524,7 @@
     private void NewTeam()
     {
         selected = null;
+        deleteConfirmation = false;
         editing = true;
         draft = new() { ParentTeamId = ParentTeamId, IsActive = true, MaximumDailyOvertimeHours = 4, MaximumWeeklyOvertimeHours = 24 };
         if (OnSubTeamSelected.HasDelegate)
@@ -497,6 +535,7 @@
     private void Select(SubTeamDto team)
     {
         selected = team;
+        deleteConfirmation = false;
         editing = data?.CanManage == true;
         draft = new()
         {
@@ -517,6 +556,15 @@
     }
     private async Task Run(Func<Task> action,string success){busy=true;error=null;try{await action();Toasts.Success(success);if(OnSubTeamsChanged.HasDelegate)await OnSubTeamsChanged.InvokeAsync();}catch(Exception ex){error=ex.Message;Toasts.Error(ex.Message);}finally{busy=false;}}
     private async Task SaveTeam(){var id=0;await Run(async()=>{id=await TeamService.SaveSubTeamAsync(draft);CreateModeOnly=false;},"Sub-team saved.");if(id>0)await Load(id);}
+    private async Task DeleteTeam()
+    {
+        if (selected == null) return;
+        var teamId = selected.TeamId;
+        await Run(() => TeamService.DeleteSubTeamAsync(teamId), "Sub-team deleted.");
+        deleteConfirmation = false;
+        selected = null;
+        await Load();
+    }
     private IEnumerable<SubTeamOptionDto> FilteredParentStaff => data?.Staff.Where(x =>
         string.IsNullOrWhiteSpace(memberSearch) || x.Name.Contains(memberSearch, StringComparison.OrdinalIgnoreCase)) ?? [];
     private void OpenMemberModal(){memberSearch="";selectedMemberIds.Clear();selectedMemberRoles.Clear();showMemberModal=true;}

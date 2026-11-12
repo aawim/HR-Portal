@@ -30,6 +30,19 @@ public partial class TeamService
         await using var db = await factory.CreateDbContextAsync(ct);
         var scope = await RequireParentTeamAsync(db, parentTeamId, ct);
         var data = new SubTeamWorkspaceDto { ParentTeamId = parentTeamId, ParentTeamName = scope.Parent.Name, CanManage = scope.CanManage };
+        var activeStaffIds = db.Jobs.AsNoTracking()
+            .Where(x => x.OrganisationID == scope.Parent.OrganisationId &&
+                        x.JobStateId == SharedConfig.JobStates.APPROVED &&
+                        x.TerminatedDate == null &&
+                        x.JoinedDate <= TeamToday)
+            .Select(x => x.IndividualID);
+        var activeParentStaffIds = db.TeamStaffs.AsNoTracking()
+            .Where(x => x.TeamId == parentTeamId &&
+                        x.IsValid &&
+                        x.StartDate <= TeamToday &&
+                        (!x.EndDate.HasValue || x.EndDate >= TeamToday) &&
+                        activeStaffIds.Contains(x.StaffId))
+            .Select(x => x.StaffId);
         data.Structures = await db.OrganisationStructures.AsNoTracking()
             .Where(x => x.OrganisationBusinessEntityID == scope.Parent.OrganisationId && x.OrganisationStructureStateId == 3)
             .OrderBy(x => x.Name).Select(x => new SubTeamOptionDto(x.OrganisationStructureId, x.Name)).ToListAsync(ct);
@@ -38,28 +51,32 @@ public partial class TeamService
             .Where(ts => db.Teams.Any(t => t.ParentTeamId == parentTeamId && t.IsValid == true && t.TeamId == ts.TeamId) &&
                          ts.IsValid &&
                          ts.StartDate <= TeamToday &&
-                         (!ts.EndDate.HasValue || ts.EndDate >= TeamToday))
+                         (!ts.EndDate.HasValue || ts.EndDate >= TeamToday) &&
+                         activeParentStaffIds.Contains(ts.StaffId))
             .Select(ts => ts.StaffId)
             .Distinct()
             .ToListAsync(ct);
 
         data.Staff = await db.TeamStaffs.AsNoTracking()
             .Where(x => x.TeamId == parentTeamId && x.IsValid && x.StartDate <= TeamToday &&
-                (!x.EndDate.HasValue || x.EndDate >= TeamToday) && !assignedSubTeamStaffIds.Contains(x.StaffId))
+                (!x.EndDate.HasValue || x.EndDate >= TeamToday) &&
+                activeParentStaffIds.Contains(x.StaffId) &&
+                !assignedSubTeamStaffIds.Contains(x.StaffId))
             .OrderBy(x => x.Staff.Individual.FirstNameEnglish)
             .Select(x => new SubTeamOptionDto(x.StaffId,
                 (x.Staff.Individual.FirstNameEnglish + " " + (x.Staff.Individual.MiddleNameEnglish ?? "") + " " +
                     (x.Staff.Individual.LastNameEnglish ?? "")).Trim()))
             .Distinct().ToListAsync(ct);
         data.SubTeams = await db.Teams.AsNoTracking().Where(x => x.ParentTeamId == parentTeamId)
-            .OrderBy(x => x.Name).Select(x => new SubTeamDto
+            .OrderByDescending(x => x.IsValid).ThenBy(x => x.Name).Select(x => new SubTeamDto
             {
                 TeamId = x.TeamId, ParentTeamId = parentTeamId, Name = x.Name, NameDhivehi = x.NameDhivehi ?? "",
                 OrganisationId = x.OrganisationId, OrganisationStructureId = x.OrganisationStructureId,
                 OrganisationStructureName = db.OrganisationStructures.Where(s => s.OrganisationStructureId == x.OrganisationStructureId).Select(s => s.Name).FirstOrDefault() ?? "",
                 OvertimeEnabled = x.OvertimeEnabled, MaximumDailyOvertimeHours = x.MaximumDailyOvertimeHours,
                 MaximumWeeklyOvertimeHours = x.MaximumWeeklyOvertimeHours, IsActive = x.IsValid == true,
-                Members = x.TeamStaffs.Where(m => m.IsValid && m.StartDate <= TeamToday && (!m.EndDate.HasValue || m.EndDate >= TeamToday))
+                Members = x.TeamStaffs.Where(m => m.IsValid && m.StartDate <= TeamToday &&
+                    (!m.EndDate.HasValue || m.EndDate >= TeamToday) && activeParentStaffIds.Contains(m.StaffId))
                     .Select(m => new SubTeamMemberDto { StaffId = m.StaffId, Role = m.MemberRole,
                         StartDate = m.StartDate, StaffName = (m.Staff.Individual.FirstNameEnglish + " " + (m.Staff.Individual.LastNameEnglish ?? "")).Trim() }).ToList(),
                 Adjustments = db.TeamScheduleAdjustments.Where(a => a.TeamId == x.TeamId).OrderByDescending(a => a.WorkDate).Take(30)
@@ -91,11 +108,60 @@ public partial class TeamService
         var audit = await logs.CreateAsync(db, entity.TeamId == 0 ? SharedConfig.OperationLogActionTypes.TEAM_CREATE : SharedConfig.OperationLogActionTypes.TEAM_UPDATE,
             $"Saved sub-team {model.Name} under team {model.ParentTeamId}.");
         if (entity.TeamId == 0) db.Teams.Add(entity);
+        var deactivateMembers = !model.IsActive;
         entity.Name = model.Name; entity.NameDhivehi = model.NameDhivehi?.Trim(); entity.OrganisationStructureId = model.OrganisationStructureId;
-        entity.OvertimeEnabled = model.OvertimeEnabled; entity.MaximumDailyOvertimeHours = model.OvertimeEnabled ? model.MaximumDailyOvertimeHours : null;
-        entity.MaximumWeeklyOvertimeHours = model.OvertimeEnabled ? model.MaximumWeeklyOvertimeHours : null;
-        entity.IsValid = model.IsActive; entity.OperationLogId = audit.OperationLogId;
+        entity.OvertimeEnabled = model.IsActive && model.OvertimeEnabled;
+        entity.MaximumDailyOvertimeHours = entity.OvertimeEnabled ? model.MaximumDailyOvertimeHours : null;
+        entity.MaximumWeeklyOvertimeHours = entity.OvertimeEnabled ? model.MaximumWeeklyOvertimeHours : null;
+        entity.IsValid = model.IsActive; entity.EndDate = model.IsActive ? null : TeamToday; entity.OperationLogId = audit.OperationLogId;
+        // A deactivated sub-team returns its staff to the parent-team rules.
+        if (deactivateMembers)
+        {
+            var members = await db.TeamStaffs.Where(x => x.TeamId == entity.TeamId && x.IsValid).ToListAsync(ct);
+            foreach (var member in members)
+            {
+                member.IsValid = false;
+                member.EndDate = TeamToday;
+                member.OperationLogId = audit.OperationLogId;
+            }
+            var adjustments = await db.TeamScheduleAdjustments.Where(x => x.TeamId == entity.TeamId && x.IsActive).ToListAsync(ct);
+            foreach (var adjustment in adjustments)
+            {
+                adjustment.IsActive = false;
+                adjustment.OperationLogId = audit.OperationLogId;
+            }
+        }
         await db.SaveChangesAsync(ct); await tx.CommitAsync(ct); return entity.TeamId;
+    }
+
+    public async Task<bool> DeleteSubTeamAsync(int teamId, CancellationToken ct = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        var team = await db.Teams.SingleOrDefaultAsync(x => x.TeamId == teamId && x.ParentTeamId.HasValue, ct)
+            ?? throw new KeyNotFoundException("Sub-team not found.");
+        await RequireParentTeamAsync(db, team.ParentTeamId!.Value, ct);
+        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
+        var audit = await logs.CreateAsync(db, SharedConfig.OperationLogActionTypes.TEAM_UPDATE,
+            $"Archived sub-team {team.TeamId}: {team.Name}.");
+        team.IsValid = false;
+        team.EndDate = TeamToday;
+        team.OperationLogId = audit.OperationLogId;
+        var members = await db.TeamStaffs.Where(x => x.TeamId == teamId && x.IsValid).ToListAsync(ct);
+        foreach (var member in members)
+        {
+            member.IsValid = false;
+            member.EndDate = TeamToday;
+            member.OperationLogId = audit.OperationLogId;
+        }
+        var adjustments = await db.TeamScheduleAdjustments.Where(x => x.TeamId == teamId && x.IsActive).ToListAsync(ct);
+        foreach (var adjustment in adjustments)
+        {
+            adjustment.IsActive = false;
+            adjustment.OperationLogId = audit.OperationLogId;
+        }
+        await db.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
+        return true;
     }
 
     public async Task<int> SaveSubTeamMemberAsync(SaveSubTeamMemberDto model, CancellationToken ct = default)
@@ -104,10 +170,18 @@ public partial class TeamService
         await using var db = await factory.CreateDbContextAsync(ct);
         var team = await db.Teams.SingleOrDefaultAsync(x => x.TeamId == model.TeamId && x.ParentTeamId.HasValue, ct)
             ?? throw new KeyNotFoundException("Sub-team not found.");
-        await RequireParentTeamAsync(db, team.ParentTeamId!.Value, ct);
+        if (team.IsValid != true || (team.StartDate.HasValue && team.StartDate > TeamToday) ||
+            (team.EndDate.HasValue && team.EndDate < TeamToday))
+            throw new InvalidOperationException("Activate the sub-team before assigning staff.");
+        var scope = await RequireParentTeamAsync(db, team.ParentTeamId!.Value, ct);
         if (!await db.TeamStaffs.AnyAsync(x => x.TeamId == team.ParentTeamId && x.StaffId == model.StaffId &&
             x.IsValid && x.StartDate <= TeamToday && (!x.EndDate.HasValue || x.EndDate >= TeamToday), ct))
             throw new ArgumentException("Select an active staff member from the parent team.");
+        if (!await db.Jobs.AnyAsync(x => x.IndividualID == model.StaffId &&
+            x.OrganisationID == scope.Parent.OrganisationId &&
+            x.JobStateId == SharedConfig.JobStates.APPROVED &&
+            x.TerminatedDate == null && x.JoinedDate <= TeamToday, ct))
+            throw new ArgumentException("Select a staff member with an active job in the parent team's organisation.");
 
         var parentTeamId = team.ParentTeamId.Value;
         var isAlreadyInAnotherSubTeam = await db.TeamStaffs.AnyAsync(ts =>
