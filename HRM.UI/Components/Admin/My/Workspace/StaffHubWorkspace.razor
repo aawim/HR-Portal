@@ -15,7 +15,6 @@
 @using HRM.Components.Admin.My.Workspace.Cards
 @using HRM.Components.Admin.My.Workspace.Staff
 @using HRM.Components.Admin.My.Workspace.Staff.Tabs
-@using HRM.Components.Admin.My.Workspace.Tabs
 @using HRM.Components.Admin.My.Workspace.Teams
 @using HRM.Components.Admin.My.Workspace.Organisation
 @using static HRM.Services.Contracts.StaffPositionManagementServiceContracts
@@ -2039,7 +2038,7 @@
 
     @if (activeWorkspaceTab == "Structures")
     {
-        <OrganisationStructuresWorkspace />
+        <HRM.Components.Admin.My.Workspace.Tabs.OrganisationStructuresWorkspace />
     }
 
     <!-- ======================================================== -->
@@ -3313,7 +3312,6 @@
     private int? selectedSubTeamId;
     private SubTeamDto? selectedSubTeam => currentSubTeamWorkspace?.SubTeams.FirstOrDefault(st => st.TeamId == selectedSubTeamId);
     private bool loadingSubTeams;
-    private string subTeamMemberSearchTerm = "";
     private bool isCompactDirectory => activeRightPanel != RightPanelType.None;
 
     public sealed record TeamStaffFlattened(int StaffId, string FullName, bool IsSuperVisor, int TeamId, string TeamName);
@@ -3357,7 +3355,6 @@
         else
         {
             selectedSubTeamId = subTeamId;
-            subTeamMemberSearchTerm = "";
             activeRightPanel = RightPanelType.SubTeamStaff;
         }
     }
@@ -3371,7 +3368,6 @@
     private void ClearSubTeamSelection()
     {
         selectedSubTeamId = null;
-        subTeamMemberSearchTerm = "";
         if (activeRightPanel is RightPanelType.SubTeamStaff or RightPanelType.CreateSubTeam)
         {
             activeRightPanel = RightPanelType.None;
@@ -3381,7 +3377,6 @@
     private void HandleRightPanelSubTeamSelected(int? subTeamId)
     {
         selectedSubTeamId = subTeamId;
-        subTeamMemberSearchTerm = "";
         if (subTeamId.HasValue)
         {
             activeRightPanel = RightPanelType.SubTeamStaff;

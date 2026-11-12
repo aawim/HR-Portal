@@ -30,11 +30,11 @@ public sealed class OrganisationDirectoryQueries(IDbContextFactory<HrmTeContext>
         OrganisationUnitSummary? summary = unit.Kind switch
         {
             OrganisationUnitKind.Team => await db.Teams.AsNoTracking().Where(t => t.TeamId == unit.Id)
-                .Select(t => new OrganisationUnitSummary(t.TeamId, unit.Kind, t.OrganisationId, t.Name, t.NameDhivehi, null, t.StartDate, t.EndDate, t.IsValid == true, t.OperationLogId ?? 0)).SingleOrDefaultAsync(ct),
+                .Select(t => new OrganisationUnitSummary(t.TeamId, unit.Kind, t.OrganisationId, t.Name, t.NameDhivehi, null, t.StartDate, t.EndDate, t.IsValid == true, t.OperationLogId ?? 0, t.ParentTeamId, t.OrganisationStructureId)).SingleOrDefaultAsync(ct),
             OrganisationUnitKind.Group => await db.Groups.AsNoTracking().Where(g => g.GroupId == unit.Id)
-                .Select(g => new OrganisationUnitSummary(g.GroupId, unit.Kind, g.BusinessEntityOrganisationId, g.Name, null, g.GroupTypeId, null, null, true, g.OperationLogId)).SingleOrDefaultAsync(ct),
+                .Select(g => new OrganisationUnitSummary(g.GroupId, unit.Kind, g.BusinessEntityOrganisationId, g.Name, null, g.GroupTypeId, null, null, true, g.OperationLogId, null, null)).SingleOrDefaultAsync(ct),
             _ => await db.OrganisationStructures.AsNoTracking().Where(s => s.OrganisationStructureId == unit.Id && s.OrganisationStructureStateId == 3)
-                .Select(s => new OrganisationUnitSummary(s.OrganisationStructureId, unit.Kind, s.OrganisationBusinessEntityID, s.Name, null, s.OrganisationStructureTypeId, null, null, true, s.OperationLogId)).SingleOrDefaultAsync(ct)
+                .Select(s => new OrganisationUnitSummary(s.OrganisationStructureId, unit.Kind, s.OrganisationBusinessEntityID, s.Name, null, s.OrganisationStructureTypeId, null, null, true, s.OperationLogId, null, null)).SingleOrDefaultAsync(ct)
         };
         if (summary is null) return null;
         var org = await scope.OrganisationAsync(summary.OrganisationId);
