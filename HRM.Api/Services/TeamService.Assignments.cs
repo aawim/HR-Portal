@@ -280,7 +280,7 @@ public partial class TeamService
         if (input.ProjectManagerStaffId.HasValue && input.ProjectManagerStaffId.Value > 0)
         {
             if (!await FormerStaffPolicy.CurrentJobs(db).AnyAsync(j => j.IndividualID == input.ProjectManagerStaffId.Value &&
-                j.OrganisationID == project.OrganisationId, ct))
+                j.OrganisationID == orgId, ct))
                 throw new InvalidOperationException("Select a project manager with an active job in this project's organisation.");
             var names = await StaffNamesAsync(db, [input.ProjectManagerStaffId.Value], ct);
             if (names.TryGetValue(input.ProjectManagerStaffId.Value, out var resolvedName))
