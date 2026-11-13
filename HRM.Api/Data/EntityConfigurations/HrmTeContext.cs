@@ -399,10 +399,6 @@ public partial class HrmTeContext : DbContext
 
     public virtual DbSet<Service> Services { get; set; }
 
-    public virtual DbSet<ShiftSchedule> ShiftSchedules { get; set; }
-
-    public virtual DbSet<ShiftScheduleDay> ShiftScheduleDays { get; set; }
-
     public virtual DbSet<SickLeaveForm> SickLeaveForms { get; set; }
 
 
@@ -3618,50 +3614,6 @@ public partial class HrmTeContext : DbContext
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_Services_OperationLogs");
 
-        });
-
-        modelBuilder.Entity<ShiftSchedule>(entity =>
-        {
-            entity.HasKey(e => e.ScheduleId);
-
-            entity.Property(e => e.ScheduleId)
-                .ValueGeneratedNever()
-                .HasColumnName("ScheduleID");
-
-            entity.HasOne(d => d.Schedule).WithOne(p => p.ShiftSchedule)
-                .HasForeignKey<ShiftSchedule>(d => d.ScheduleId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_ShiftSchedules_Schedules");
-        });
-
-        modelBuilder.Entity<ShiftScheduleDay>(entity =>
-        {
-            entity.Property(e => e.ShiftScheduleDayId).HasColumnName("ShiftScheduleDayID");
-            entity.Property(e => e.Date).HasColumnType("datetime");
-            entity.Property(e => e.IsValid).HasDefaultValue(true);
-            entity.Property(e => e.OperationLogId).HasColumnName("OperationLogID");
-            entity.Property(e => e.ScheduleId).HasColumnName("ScheduleID");
-            entity.Property(e => e.SpecialDayTypeId).HasColumnName("SpecialDayTypeID");
-            entity.Property(e => e.WorkShiftId).HasColumnName("WorkShiftID");
-
-            entity.HasOne(d => d.OperationLog).WithMany(p => p.ShiftScheduleDays)
-                .HasForeignKey(d => d.OperationLogId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_ShiftScheduleDays_OperationLogs");
-
-            entity.HasOne(d => d.Schedule).WithMany(p => p.ShiftScheduleDays)
-                .HasForeignKey(d => d.ScheduleId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_ShiftScheduleDays_ShiftSchedules");
-
-            entity.HasOne(d => d.SpecialDayType).WithMany(p => p.ShiftScheduleDays)
-                .HasForeignKey(d => d.SpecialDayTypeId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_ShiftScheduleDays_SpecialDayTypes");
-
-            entity.HasOne(d => d.WorkShift).WithMany(p => p.ShiftScheduleDays)
-                .HasForeignKey(d => d.WorkShiftId)
-                .HasConstraintName("FK_ShiftScheduleDays_WorkShifts");
         });
 
         modelBuilder.Entity<SickLeaveForm>(entity =>

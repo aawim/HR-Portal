@@ -4,6 +4,7 @@
 @using HRM.Services
 
 @inject HRM.Services.Contracts.AttendanceLogServiceContracts.IOperations AttendanceLogService
+@inject ILogger<TeamAttendanceCard> Logger
  
 
 <section class="w-full space-y-2 p-2">
@@ -264,7 +265,7 @@
         loadError = null;
         try { Attendance = await AttendanceLogService.GetMyTeamAttendanceTodayAsync(includeAllStaff); }
         catch (UnauthorizedAccessException) { Attendance = []; loadError = "You do not have organisation-wide attendance access. Choose My teams / groups or ask an administrator for Attendance.View access."; includeAllStaff = false; }
-        catch { Attendance = []; loadError = "Attendance could not be loaded. Please try again."; }
+        catch (Exception ex) { Logger.LogError(ex, "Unable to load today's team attendance for {Scope}.", includeAllStaff ? "all staff" : "managed teams"); Attendance = []; loadError = "Attendance could not be loaded. Please try again."; }
         finally { loading = false; }
     }
 

@@ -137,20 +137,6 @@ namespace HRM.WorkPlanning.Services.Schedules
                     today,
                     cancellationToken);
 
-            schedule.CurrentShift =
-                await GetCurrentShiftAsync(
-                    db,
-                    activeJob.JobId,
-                    today,
-                    cancellationToken);
-
-            schedule.ShiftHistory =
-                await GetShiftHistoryAsync(
-                    db,
-                    activeJob.JobId,
-                    today,
-                    cancellationToken);
-
             schedule.ManualAssignments =
                 await GetManualAssignmentsAsync(
                     db,
@@ -285,32 +271,5 @@ namespace HRM.WorkPlanning.Services.Schedules
                 .ToListAsync(cancellationToken);
         }
 
-        private static Task<CurrentShiftAssignmentDto?>
-            GetCurrentShiftAsync(
-                HrmTeContext db,
-                int jobId,
-                DateTime effectiveDate,
-                CancellationToken cancellationToken)
-        {
-            /*
-             * Replace this with the existing legacy shift assignment query.
-             */
-            return Task.FromResult<CurrentShiftAssignmentDto?>(
-                null);
-        }
-
-        private static Task<List<ShiftAssignmentHistoryDto>>
-            GetShiftHistoryAsync(
-                HrmTeContext db,
-                int jobId,
-                DateTime effectiveDate,
-                CancellationToken cancellationToken)
-        {
-            /*
-             * Replace this with the existing legacy shift history query.
-             */
-            return Task.FromResult(
-                new List<ShiftAssignmentHistoryDto>());
-        }
     }
 }

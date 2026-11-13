@@ -8,7 +8,6 @@ namespace HRM.WorkPlanning.Services
     public sealed class PlanningProviderResolver : IPlanningProviderResolver
     {
         private readonly IDbContextFactory<HrmTeContext> _dbFactory;
-        private const string LegacyShiftCode = "LEGACY_SHIFT";
         private const string WorkPlanningCode = "WORK_PLANNING";
         public PlanningProviderResolver(
             IDbContextFactory<HrmTeContext> dbFactory)
@@ -49,10 +48,10 @@ namespace HRM.WorkPlanning.Services
                     setting.ProviderCode);
             }
 
-            var legacyProvider = await db.PlanningProviders
+            var workPlanningProvider = await db.PlanningProviders
                 .AsNoTracking()
                 .Where(x =>
-                    x.Code == LegacyShiftCode &&
+                    x.Code == WorkPlanningCode &&
                     x.IsActive)
                 .Select(x => new
                 {
@@ -61,15 +60,15 @@ namespace HRM.WorkPlanning.Services
                 })
                 .SingleOrDefaultAsync(cancellationToken);
 
-            if (legacyProvider == null)
+            if (workPlanningProvider == null)
             {
                 throw new InvalidOperationException(
-                    $"The '{LegacyShiftCode}' planning provider is missing or inactive.");
+                    $"The '{WorkPlanningCode}' planning provider is missing or inactive.");
             }
 
             return CreateResolution(
-                legacyProvider.PlanningProviderId,
-                legacyProvider.Code);
+                workPlanningProvider.PlanningProviderId,
+                workPlanningProvider.Code);
         }
 
         private static PlanningProviderResolution CreateResolution(

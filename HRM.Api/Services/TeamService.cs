@@ -108,10 +108,10 @@ public partial class TeamService(IDbContextFactory<HrmTeContext> factory, IUserA
         await using var db = await factory.CreateDbContextAsync();
         return await db.Jobs.AsNoTracking()
             .Where(x => x.JobId == actor.ActiveJob.JobId && x.IndividualID == actor.IndividualId &&
-                x.JobStateId == SharedConfig.JobStates.APPROVED && x.TerminatedDate == null && x.OrganisationStructureId.HasValue)
+                x.JobStateId == SharedConfig.JobStates.APPROVED && x.TerminatedDate == null && x.OrganisationStructureId > 0)
             .Select(x => new MyOrganisationStructureDto
             {
-                StructureId = x.OrganisationStructureId!.Value,
+                StructureId = x.OrganisationStructureId,
                 Name = x.OrganisationStructure!.Name,
                 TypeName = x.OrganisationStructure.OrganisationStructureType.TypeName
             })

@@ -27,12 +27,6 @@ namespace HRM.DTOs.StaffSchedule
             set;
         }
 
-        public CurrentShiftAssignmentDto? CurrentShift
-        {
-            get;
-            set;
-        }
-
         public List<ManualWorkAssignmentListDto> ManualAssignments
         {
             get;
@@ -45,10 +39,5 @@ namespace HRM.DTOs.StaffSchedule
             set;
         } = [];
 
-        public List<ShiftAssignmentHistoryDto> ShiftHistory
-        {
-            get;
-            set;
-        } = [];
     }
 }
