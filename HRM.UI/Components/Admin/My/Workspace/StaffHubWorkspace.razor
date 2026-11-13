@@ -9,6 +9,7 @@
 @using HRM.DTOs
 @using HRM.DTOs.Leave
 @using HRM.DTOs.WorkPlanning
+@using HRM.DTOs.Attendance
 @using HRM.Enum
 @using HRM.Services.Interfaces
 @using HRM.Services.Interfaces.Leave
@@ -26,6 +27,7 @@
 @inject HRM.Application.Contracts.Pages.IAttendanceRequestQueries AttendanceQueries
 @inject HRM.Application.Contracts.Pages.IAttendanceRequestReview AttendanceReviewService
 @inject HRM.Services.Contracts.AttendanceLogServiceContracts.IOperations AttendanceLogService
+@inject IAttendanceService AttendanceService
 @inject ILeaveChangeService Leaves
 @inject HRM.WorkPlanning.Services.Contracts.DutyRosterServiceContracts.IOperations Duties
 @inject HRM.Services.Contracts.StaffPositionManagementServiceContracts.IOperations PositionService
@@ -1353,11 +1355,20 @@
                                     </button>
                                 </div>
 
-                                <!-- Search & Quick Actions -->
+                                <!-- Date range, search & quick actions -->
                                 <div class="flex items-center justify-between flex-wrap gap-2 pt-1">
+                                    <div class="flex flex-wrap items-end gap-2">
+                                        <label class="flex flex-col gap-1 text-[11px] font-semibold text-slate-600 dark:text-slate-300">From
+                                            <input type="date" class="rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100" @bind="teamAttendanceFrom" max="@DateTime.Today.ToString("yyyy-MM-dd")" />
+                                        </label>
+                                        <label class="flex flex-col gap-1 text-[11px] font-semibold text-slate-600 dark:text-slate-300">To
+                                            <input type="date" class="rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100" @bind="teamAttendanceTo" max="@DateTime.Today.ToString("yyyy-MM-dd")" />
+                                        </label>
+                                        <button type="button" class="app-button app-button-secondary app-button-sm" disabled="@loadingTeamAttendance" @onclick="ApplyTeamAttendanceRangeAsync">@(loadingTeamAttendance ? "Loading…" : "Apply")</button>
+                                    </div>
                                     <div class="relative w-full max-w-xs">
                                         <input class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-1.5 text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400"
-                                               placeholder="Filter members..."
+                                               placeholder="Search team members..."
                                                @bind="teamAttendanceSearch"
                                                @bind:event="oninput" />
                                     </div>
@@ -1369,6 +1380,10 @@
                                         </button>
                                     }
                                 </div>
+                                @if (!string.IsNullOrWhiteSpace(teamAttendanceRangeError))
+                                {
+                                    <p class="rounded-xl border border-rose-200 bg-rose-50 p-2 text-xs text-rose-800 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-200">@teamAttendanceRangeError</p>
+                                }
 
                                 <!-- Attendance Table -->
                                 <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
@@ -1377,9 +1392,11 @@
                                             <tr>
                                                 <th class="p-2.5">Member</th>
                                                 <th class="p-2.5">Role</th>
-                                                <th class="p-2.5">Clock In</th>
-                                                <th class="p-2.5">Clock Out</th>
-                                                <th class="p-2.5">Status</th>
+                                                <th class="p-2.5">Present</th>
+                                                <th class="p-2.5">Late</th>
+                                                <th class="p-2.5">Absent</th>
+                                                <th class="p-2.5">Leave</th>
+                                                <th class="p-2.5">Latest status</th>
                                                 <th class="p-2.5 text-right">Actions</th>
                                             </tr>
                                         </thead>
@@ -1395,6 +1412,7 @@
                                                 )))
                                             {
                                                 var att = teamAttendance.FirstOrDefault(a => a.StaffID == member.StaffId) ?? GetTodayAttendance(member.StaffId);
+                                                teamAttendanceSummaries.TryGetValue(member.StaffId, out var summary);
                                                 <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition">
                                                     <td class="p-2.5">
                                                         <div class="flex items-center gap-2">
@@ -1417,14 +1435,16 @@
                                                         </span>
                                                     </td>
                                                     <td class="p-2.5">
-                                                        <span class="font-medium text-slate-800 dark:text-slate-200">
-                                                            @(att?.CheckIn.HasValue == true ? att.CheckIn.Value.ToString("hh:mm tt") : "—")
-                                                        </span>
+                                                        <span class="font-medium text-emerald-700 dark:text-emerald-300">@(summary?.PresentDays ?? (att?.Status == AttendanceStatus.Present ? 1 : 0))</span>
                                                     </td>
                                                     <td class="p-2.5">
-                                                        <span class="font-medium text-slate-800 dark:text-slate-200">
-                                                            @(att?.CheckOut.HasValue == true ? att.CheckOut.Value.ToString("hh:mm tt") : "—")
-                                                        </span>
+                                                        <span class="font-medium text-amber-700 dark:text-amber-300">@(summary?.LateDays ?? (att?.Status == AttendanceStatus.Late ? 1 : 0))</span>
+                                                    </td>
+                                                    <td class="p-2.5">
+                                                        <span class="font-medium text-rose-700 dark:text-rose-300">@(summary?.AbsentDays ?? (att?.Status == AttendanceStatus.Absent ? 1 : 0))</span>
+                                                    </td>
+                                                    <td class="p-2.5">
+                                                        <span class="font-medium text-purple-700 dark:text-purple-300">@(summary?.LeaveDays ?? (att?.Status is AttendanceStatus.Leave or AttendanceStatus.SickLeave or AttendanceStatus.FamilyLeave ? 1 : 0))</span>
                                                     </td>
                                                     <td class="p-2.5">
                                                         <span class="rounded-full px-2 py-0.5 text-[10px] font-semibold @GetAttendanceBadgeClass(att?.Status)">
@@ -3260,6 +3280,11 @@
     // Selected Team Subtab Filter States
     private string teamAttendanceFilter = "all";
     private string teamAttendanceSearch = "";
+    private DateTime teamAttendanceFrom = DateTime.Today;
+    private DateTime teamAttendanceTo = DateTime.Today;
+    private bool loadingTeamAttendance;
+    private string? teamAttendanceRangeError;
+    private Dictionary<int, TeamAttendanceRangeSummary> teamAttendanceSummaries = new();
     private string teamRequestFilter = "all";
     private DateTime teamScheduleDate = DateTime.Today;
     private List<DutyRosterRow> teamDutyRoster = new();
@@ -3282,6 +3307,7 @@
     private bool isCompactDirectory => activeRightPanel != RightPanelType.None;
 
     public sealed record TeamStaffFlattened(int StaffId, string FullName, bool IsSuperVisor, int TeamId, string TeamName);
+    private sealed record TeamAttendanceRangeSummary(int PresentDays, int LateDays, int AbsentDays, int LeaveDays);
     private List<TeamStaffFlattened> allTeamStaff = new();
     private List<TeamStaffFlattened> CurrentTeamStaffList
     {
@@ -4539,6 +4565,81 @@
             _ = LoadTeamScheduleAsync();
         }
         UpdateUrl();
+    }
+
+    private async Task ApplyTeamAttendanceRangeAsync()
+    {
+        var from = teamAttendanceFrom.Date;
+        var to = teamAttendanceTo.Date;
+        if (from > to)
+        {
+            teamAttendanceRangeError = "The From date must be on or before the To date.";
+            return;
+        }
+        if ((to - from).TotalDays > 31)
+        {
+            teamAttendanceRangeError = "Choose a date range of up to 31 days.";
+            return;
+        }
+
+        var members = CurrentTeamStaffList.ToList();
+        loadingTeamAttendance = true;
+        teamAttendanceRangeError = null;
+        try
+        {
+            var results = await Task.WhenAll(members.Select(async member => new
+            {
+                Member = member,
+                Days = await AttendanceService.GetStaffAttendanceRangeAsync(member.StaffId, from, to)
+            }));
+
+            teamAttendanceSummaries = results.ToDictionary(
+                result => result.Member.StaffId,
+                result => new TeamAttendanceRangeSummary(
+                    result.Days.Count(day => day.IsPresent && !day.IsLate),
+                    result.Days.Count(day => day.IsLate),
+                    result.Days.Count(day => day.IsAbsent),
+                    result.Days.Count(day => day.IsOnLeave)));
+            todayAttendance = results.Select(result =>
+            {
+                var day = result.Days.OrderByDescending(x => x.Date).FirstOrDefault();
+                return new TeamAttendanceDto
+                {
+                    StaffID = result.Member.StaffId,
+                    TeamID = result.Member.TeamId,
+                    TeamName = result.Member.TeamName,
+                    Name = result.Member.FullName,
+                    CheckIn = day?.FirstCheckIn,
+                    CheckOut = day?.LastCheckOut,
+                    Status = GetAttendanceStatus(day),
+                    StatusMessage = day?.EligibilityMessage
+                };
+            }).ToList();
+        }
+        catch (UnauthorizedAccessException)
+        {
+            teamAttendanceRangeError = "You do not have access to attendance for one or more team members.";
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Unable to load attendance for team {TeamId} from {From} to {To}.", selectedTeamId, from, to);
+            teamAttendanceRangeError = "Attendance could not be loaded. Please try again.";
+        }
+        finally
+        {
+            loadingTeamAttendance = false;
+        }
+    }
+
+    private static AttendanceStatus GetAttendanceStatus(YearlyAttendanceDayDto? day)
+    {
+        if (day == null || (!day.RequiresAttendance && !day.IsOnLeave && !day.IsRestDay)) return AttendanceStatus.Absent;
+        if (day.IsOnLeave) return AttendanceStatus.Leave;
+        if (!day.HasActiveSchedule) return AttendanceStatus.NoActiveSchedule;
+        if (!day.HasApprovedPosition) return AttendanceStatus.BeforePositionApproval;
+        if (day.IsRestDay) return AttendanceStatus.RestDay;
+        if (day.IsPresent) return day.IsLate ? AttendanceStatus.Late : day.IsMissingClock ? AttendanceStatus.MissingCheckout : AttendanceStatus.Present;
+        return AttendanceStatus.Absent;
     }
 
     private async Task LoadTeamScheduleAsync()
