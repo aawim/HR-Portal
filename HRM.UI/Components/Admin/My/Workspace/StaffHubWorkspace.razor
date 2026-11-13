@@ -476,7 +476,7 @@
         {
             <div class="grid grid-cols-1 gap-2 p-2 xl:grid-cols-[minmax(0,23fr)_minmax(0,54fr)_minmax(0,23fr)] items-start">
             
-            <!-- LEFT COLUMN (23%): My Team(s), Help Desk & Service Desk Team, My Team Requests -->
+            <!-- LEFT COLUMN (23%): My supervised teams and team requests -->
             <aside class="min-w-0 m-0 p-0 flex flex-col gap-2">
                 
                 <!-- Card 1: My Team(s) with clickable heading and clickable team items -->
@@ -486,7 +486,7 @@
                          title="Click to open Teams tab">
                         <div class="flex items-center gap-1.5">
                             <h2 class="text-xs font-bold text-slate-900 dark:text-slate-100 group-hover:text-teal-600 dark:group-hover:text-teal-400 transition">
-                                My Team(s)
+                                My supervised teams
                             </h2>
                             <span class="text-[10px] text-teal-600 dark:text-teal-400 font-semibold group-hover:underline">
                                 ↗ View Tab
@@ -496,6 +496,13 @@
                             @myTeams.Count
                         </span>
                     </div>
+                    @if (myOrganisationStructure is not null)
+                    {
+                        <div class="border-b border-slate-100 bg-teal-50/50 px-3.5 py-2 text-xs dark:border-slate-800 dark:bg-teal-950/20">
+                            <span class="text-[10px] font-semibold uppercase tracking-wide text-teal-700 dark:text-teal-300">My organisation structure</span>
+                            <p class="mt-0.5 font-semibold text-slate-800 dark:text-slate-100">@myOrganisationStructure.Name <span class="font-normal text-slate-500">· @myOrganisationStructure.TypeName</span></p>
+                        </div>
+                    }
                     @if (myTeams.Count == 0)
                     {
                         <p class="p-4 text-xs text-slate-500">No active supervised teams found.</p>
@@ -528,57 +535,7 @@
                     }
                 </div>
 
-                <!-- Card 2: Help Desk & Service Desk Team -->
-                <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-xs">
-                    <div class="bg-slate-50 dark:bg-slate-800/80 px-3.5 py-2.5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                        <div class="flex items-center gap-1.5">
-                            <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                            <h2 class="text-xs font-bold text-slate-900 dark:text-slate-100">
-                                @(helpDeskTeam?.Name ?? "Help Desk & Service Desk Team")
-                            </h2>
-                        </div>
-                        <span class="rounded-full bg-emerald-100 dark:bg-emerald-950/60 px-2 py-0.2 text-[10px] font-bold text-emerald-800 dark:text-emerald-300">
-                            Live Support
-                        </span>
-                    </div>
-                    @if (helpDeskTeam == null || helpDeskTeam.Staffs.Count == 0)
-                    {
-                        <div class="p-3 text-xs text-slate-500 space-y-1">
-                            <p class="font-medium text-slate-700 dark:text-slate-300">IT &amp; HR Service Desk</p>
-                            <p class="text-[11px] text-slate-400">Direct Extension: #8800 · support@hrm.gov.mv</p>
-                        </div>
-                    }
-                    else
-                    {
-                        <div class="divide-y divide-slate-100 dark:divide-slate-800 max-h-56 overflow-y-auto">
-                            @foreach (var member in helpDeskTeam.Staffs)
-                            {
-                                <div @key="member.StaffId" class="p-2.5 flex items-center justify-between text-xs hover:bg-slate-50 dark:hover:bg-slate-800/60 transition">
-                                    <div class="min-w-0 pr-2">
-                                        <div class="flex items-center gap-1.5">
-                                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                                            <span class="font-semibold text-slate-900 dark:text-slate-100 truncate block">
-                                                @member.FullName
-                                            </span>
-                                        </div>
-                                        <span class="text-[10px] text-slate-500 dark:text-slate-400 ml-3 block">
-                                            @(member.IsSuperVisor ? "Help Desk Lead" : "Support Officer")
-                                        </span>
-                                    </div>
-                                    <a href="@($"/admin/my/workspace?entityType=Staff&entityId={member.StaffId}")"
-                                       class="text-[10px] text-blue-600 dark:text-blue-400 hover:underline shrink-0">
-                                        Profile ↗
-                                    </a>
-                                </div>
-                            }
-                        </div>
-                    }
-                    <div class="p-2 bg-slate-50/60 dark:bg-slate-800/40 border-t border-slate-100 dark:border-slate-800 text-[11px] text-center text-slate-500">
-                        <span>Ext: <strong class="text-slate-700 dark:text-slate-300">8800</strong> · Hours: 08:00 - 16:00</span>
-                    </div>
-                </div>
-
-                <!-- Card 3: My Team Requests -->
+                <!-- Card 2: My Team Requests -->
                 <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-xs">
                     <div class="bg-slate-50 dark:bg-slate-800/80 px-3.5 py-2.5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
                         <h2 class="text-xs font-bold text-slate-900 dark:text-slate-100">My Team Requests</h2>
@@ -915,7 +872,7 @@
                     <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
                         <div>
                             <h3 class="text-xs font-bold text-slate-900 dark:text-slate-100 truncate" title="Teams Directory">
-                                Parent Teams
+                                My supervised teams
                             </h3>
                             <p class="text-[10px] text-slate-400">@myTeams.Count team@(myTeams.Count == 1 ? "" : "s")</p>
                         </div>
@@ -941,7 +898,7 @@
                             {
                                 var isTeamSelected = selectedTeamId == team.TeamId;
                                 <div @key="team.TeamId" class="rounded-xl border transition @(isTeamSelected ? "border-teal-500 bg-teal-50/30 dark:bg-teal-950/20 shadow-xs ring-1 ring-teal-500/50" : "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-700")">
-                                    <!-- Parent Team Header / Button -->
+                                    <!-- Team Header / Button -->
                                     <button type="button"
                                             class="w-full text-left p-2 rounded-t-xl text-xs transition cursor-pointer flex flex-col gap-1"
                                             @onclick="() => SelectTeamAsync(team.TeamId)">
@@ -980,6 +937,15 @@
                                             @if (loadingSubTeams)
                                             {
                                                 <div class="py-2 text-center text-[10px] text-slate-400">Loading sub-teams…</div>
+                                            }
+                                            else if (!string.IsNullOrWhiteSpace(subTeamLoadError))
+                                            {
+                                                <div class="rounded-xl border border-rose-200 bg-rose-50 p-2 text-[10px] text-rose-800 dark:border-rose-900/70 dark:bg-rose-950/30 dark:text-rose-200">
+                                                    <div class="flex items-center justify-between gap-2">
+                                                        <span>@subTeamLoadError</span>
+                                                        <button type="button" class="app-button app-button-ghost app-button-sm shrink-0" @onclick="LoadSubTeamsForCurrentTeamAsync">Retry</button>
+                                                    </div>
+                                                </div>
                                             }
                                             else if (currentSubTeamWorkspace?.SubTeams == null || !currentSubTeamWorkspace.SubTeams.Any(st => st.IsActive))
                                             {
@@ -3306,12 +3272,13 @@
     private List<TeamDto> myTeams = new();
     private int? selectedTeamId;
     private TeamDto? selectedTeam => myTeams.FirstOrDefault(t => t.TeamId == selectedTeamId);
-    private TeamDto? helpDeskTeam;
+    private MyOrganisationStructureDto? myOrganisationStructure;
 
     private SubTeamWorkspaceDto? currentSubTeamWorkspace;
     private int? selectedSubTeamId;
     private SubTeamDto? selectedSubTeam => currentSubTeamWorkspace?.SubTeams.FirstOrDefault(st => st.TeamId == selectedSubTeamId);
     private bool loadingSubTeams;
+    private string? subTeamLoadError;
     private bool isCompactDirectory => activeRightPanel != RightPanelType.None;
 
     public sealed record TeamStaffFlattened(int StaffId, string FullName, bool IsSuperVisor, int TeamId, string TeamName);
@@ -3389,12 +3356,14 @@
 
     private async Task LoadSubTeamsForCurrentTeamAsync()
     {
-        if (!selectedTeamId.HasValue)
+        if (!selectedTeamId.HasValue || selectedTeam?.ParentTeamId.HasValue == true)
         {
             currentSubTeamWorkspace = null;
+            subTeamLoadError = null;
             return;
         }
         loadingSubTeams = true;
+        subTeamLoadError = null;
         try
         {
             currentSubTeamWorkspace = await TeamService.LoadSubTeamsAsync(selectedTeamId.Value);
@@ -3403,9 +3372,11 @@
                 selectedTeam.SubTeamCount = currentSubTeamWorkspace.SubTeams.Count(st => st.IsActive);
             }
         }
-        catch
+        catch (Exception ex)
         {
             currentSubTeamWorkspace = null;
+            subTeamLoadError = "Sub-teams could not be loaded.";
+            Logger.LogWarning(ex, "Could not load sub-teams for team {TeamId}.", selectedTeamId.Value);
         }
         finally
         {
@@ -4049,12 +4020,17 @@
         {
             // 1. Teams & Staff
             myTeams = await TeamService.GetMyTeamsAsync() ?? new();
+            myOrganisationStructure = await TeamService.GetMyOrganisationStructureAsync();
             if (selectedTeamId.HasValue && !myTeams.Any(t => t.TeamId == selectedTeamId.Value))
             {
                 var discovered = await TeamService.GetTeamByIdAsync(selectedTeamId.Value);
                 if (discovered != null)
                 {
                     myTeams.Insert(0, discovered);
+                }
+                else
+                {
+                    selectedTeamId = null;
                 }
             }
             allTeamStaff = myTeams
@@ -4066,24 +4042,14 @@
                 selectedTeamId = myTeams[0].TeamId;
             }
 
-            // 2. Help Desk Team
-            try
-            {
-                helpDeskTeam = await TeamService.GetHelpDeskTeamAsync();
-            }
-            catch (Exception ex)
-            {
-                Logger.LogWarning(ex, "Could not load Help Desk team for workspace.");
-            }
-
-            // 3. Sub-Teams & Team Projects
+            // 2. Sub-Teams & Team Projects
             if (selectedTeamId.HasValue)
             {
                 await LoadSubTeamsForCurrentTeamAsync();
                 await LoadTeamProjectsAsync(selectedTeamId.Value);
             }
 
-            // 4. Attendance
+            // 3. Attendance
             try
             {
                 todayAttendance = await AttendanceLogService.GetMyTeamAttendanceTodayAsync() ?? new();

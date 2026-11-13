@@ -6,8 +6,8 @@ public sealed class SubTeamWorkspaceDto
     public string ParentTeamName { get; set; } = "";
     public bool CanManage { get; set; }
     public List<SubTeamDto> SubTeams { get; set; } = [];
-    public List<SubTeamOptionDto> Structures { get; set; } = [];
     public List<SubTeamOptionDto> Staff { get; set; } = [];
+    public List<SubTeamOptionDto> Structures { get; set; } = [];
 }
 
 public sealed record SubTeamOptionDto(int Id, string Name);

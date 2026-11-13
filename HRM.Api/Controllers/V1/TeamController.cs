@@ -12,6 +12,12 @@ public sealed class TeamController(global::HRM.Services.Interfaces.ITeam service
         return Ok(await service.GetMyTeamsAsync());
     }
 
+    [HttpGet("get-my-organisation-structure")]
+    public async Task<ActionResult<global::HRM.DTOs.MyOrganisationStructureDto?>> GetMyOrganisationStructure()
+    {
+        return Ok(await service.GetMyOrganisationStructureAsync());
+    }
+
     [HttpPost("create")]
     public async Task<ActionResult<global::System.Int32>> Create([FromBody] TeamCreateRequest request)
     {

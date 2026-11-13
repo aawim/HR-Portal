@@ -101,6 +101,23 @@ public partial class TeamService(IDbContextFactory<HrmTeContext> factory, IUserA
         return teams;
     }
 
+    public async Task<MyOrganisationStructureDto?> GetMyOrganisationStructureAsync()
+    {
+        var actor = await access.RequireContextAsync();
+        if (actor.ActiveJob == null) return null;
+        await using var db = await factory.CreateDbContextAsync();
+        return await db.Jobs.AsNoTracking()
+            .Where(x => x.JobId == actor.ActiveJob.JobId && x.IndividualID == actor.IndividualId &&
+                x.JobStateId == SharedConfig.JobStates.APPROVED && x.TerminatedDate == null && x.OrganisationStructureId.HasValue)
+            .Select(x => new MyOrganisationStructureDto
+            {
+                StructureId = x.OrganisationStructureId!.Value,
+                Name = x.OrganisationStructure!.Name,
+                TypeName = x.OrganisationStructure.OrganisationStructureType.TypeName
+            })
+            .SingleOrDefaultAsync();
+    }
+
     public async Task<List<TeamSearchItemDto>> SearchTeamsAsync(string? query, CancellationToken ct = default)
     {
         var actor = await access.RequireContextAsync();
