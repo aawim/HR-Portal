@@ -456,15 +456,6 @@ namespace HRM.Services
                     cancellationToken);
             }
 
-            if (provider.UsesLegacyShift)
-            {
-                // Use your existing GetPlanAsync database/legacy logic here.
-                return await GetPlanAsync(
-                    individualId,
-                    jobId,
-                    attendanceTime);
-            }
-
             return null;
         }
 

@@ -81,7 +81,7 @@ static class SecurityHardeningTests
         await Denied(() => types.CreateAsync(new HRM.DTOs.LeaveTypes.LeaveTypeCatalogueSaveRequest { Name = "Attempt" }));
         await Denied(() => types.UpdateAsync(new HRM.DTOs.LeaveTypes.LeaveTypeCatalogueSaveRequest { LeaveTypeId = 1, Name = "Attempt" }));
 
-        await using var db = new TestContext(new DbContextOptionsBuilder<HrmTeContext>().UseInMemoryDatabase(Guid.NewGuid().ToString(), o => o.EnableNullChecks(false)).Options);
+        await using var db = new HrmTeContext(new DbContextOptionsBuilder<HrmTeContext>().UseInMemoryDatabase(Guid.NewGuid().ToString(), o => o.EnableNullChecks(false)).Options);
         db.Jobs.AddRange(new Job { JobId = 1, IndividualID = 100, OrganisationID = 10 },
             new Job { JobId = 2, IndividualID = 200, OrganisationID = 20 },
             new Job { JobId = 3, IndividualID = 200, OrganisationID = 10 });

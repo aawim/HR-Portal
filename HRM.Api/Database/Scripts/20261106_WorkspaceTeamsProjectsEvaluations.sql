@@ -22,10 +22,16 @@ BEGIN
         Status nvarchar(50) NOT NULL CONSTRAINT DF_PR_Projects_Status DEFAULT(N'Active'),
         ProgressPercentage int NOT NULL CONSTRAINT DF_PR_Projects_Progress DEFAULT(0),
         CreatedAt datetime2 NOT NULL CONSTRAINT DF_PR_Projects_CreatedAt DEFAULT(SYSUTCDATETIME()),
+        OrganisationStructureId int NULL,
         CONSTRAINT FK_PR_Projects_Teams_TeamId FOREIGN KEY (TeamId) REFERENCES dbo.Teams (TeamId) ON DELETE SET NULL
     );
     CREATE INDEX IX_PR_Projects_OrganisationId_Status ON dbo.PR_Projects(OrganisationId, Status);
     CREATE INDEX IX_PR_Projects_TeamId ON dbo.PR_Projects(TeamId);
+END;
+
+IF COL_LENGTH(N'dbo.PR_Projects', N'OrganisationStructureId') IS NULL
+BEGIN
+    ALTER TABLE dbo.PR_Projects ADD OrganisationStructureId int NULL;
 END;
 
 -- 2. PR_ProjectMembers

@@ -14,7 +14,9 @@
 @using HRM.Services.Interfaces.Leave
 @using HRM.Components.Pages.Online.Dashboard
 @using HRM.Services.Attendance.AttendancePlan
+@using HRM.UI.Services.Developer
 @using Microsoft.AspNetCore.Components.Authorization
+@implements IDisposable
 
 @inject IJSRuntime JS
 @inject IJobService JobService
@@ -26,6 +28,7 @@
 @inject IAttendancePlanService AttendancePlanService
 @inject ILogger<Index> Logger
 @inject IWorkTypeService WorkTypes
+@inject DeveloperTestClockService TestClockPreference
 
 
 <PageTitle>Dashboard</PageTitle>
@@ -37,16 +40,10 @@
     <Authorized>
         @if (loading)
         {
-            <div class="flex items-center justify-center ">
-                <div class="text-center">
-
-                    <div class="w-14 h-14 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
-
-                    <p class="mt-4 text-slate-500">
-                        Loading Dashboard...
-                    </p>
-
-                </div>
+            <div class="flex flex-col items-center justify-center p-12 my-6 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs">
+                <div class="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" style="animation: spin 1s linear infinite; -webkit-animation: spin 1s linear infinite;"></div>
+                <p class="mt-4 text-sm font-semibold text-slate-700 dark:text-slate-200">Loading Dashboard...</p>
+                <p class="text-xs text-slate-400 mt-0.5">Fetching attendance, leave balances, and employee services</p>
             </div>
         }
         else if (contextUnavailable)
@@ -61,74 +58,80 @@
         {
             <div class="dashboard-layout w-full space-y-2 p-2">
                 <!-- Header -->
-                 <header class="staff-items-header sticky top-0 z-30 m-0 flex w-full min-w-0 flex-wrap items-center justify-between gap-3 border-b border-slate-200  px-3 py-3 shadow-sm">
-                    <div>
-                        <div class="flex items-center gap-2">
-                            <h2 class="text-lg font-bold text-slate-900">
-
+                <!-- Top Header Area Matching Admin Workspace Standard -->
+                <div class="my-workspace-header staff-overview-no-print flex flex-col gap-2 p-2 border-b border-slate-200 dark:border-slate-800 pb-3">
+                    <div class="flex items-center justify-between flex-wrap gap-2">
+                        <div>
+                            <h1 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
                                 User Dashboard
-                            </h2>
-                    
+                            </h1>
+                            <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                Personal workforce portal for time attendance, leave balances, official events, and employee services.
+                            </p>
                         </div>
-                
+                        <div class="flex items-center gap-2">
+                            <a href="/admin/my/workspace"
+                               class="inline-flex items-center gap-1.5 rounded-lg border border-teal-300 dark:border-teal-700 bg-teal-50 dark:bg-teal-950/50 px-3 py-1.5 text-xs font-semibold text-teal-700 dark:text-teal-300 shadow-xs hover:bg-teal-100 dark:hover:bg-teal-900/60 transition"
+                               title="Open Admin Workspace">
+                                <span>Admin Workspace</span>
+                                <span>&rarr;</span>
+                            </a>
+                            <button type="button"
+                                    class="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200 shadow-xs hover:bg-slate-50 dark:hover:bg-slate-700 transition"
+                                    disabled="@refreshing"
+                                    @onclick="RefreshDashboardAsync">
+                                <span class="@(refreshing ? "animate-spin" : "")">↻</span>
+                                <span>Refresh</span>
+                            </button>
+                        </div>
                     </div>
-                    <div class="flex flex-wrap items-center gap-2">
-                        <!-- Full Page Width Toggle Button -->
-                        <button type="button"
-                                class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50 transition-colors"
-                                title="@(isFullWidth ? "Shrink to standard layout" : "Expand to full page width")"
-                                @onclick="ToggleFullWidth">
-                            @if (isFullWidth)
-                            {
-                                <svg class="h-4 w-4 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 9L4 4m0 0l5 0m-5 0l0 5m11 11l5 5m0 0l-5 0m5 0l0-5M9 15l-5 5m0 0l5 0m-5 0l0-5m11-11l5-5m0 0l-5 0m5 0l0 5" />
-                                </svg>
-                                <span>Shrink View</span>
-                            }
-                            else
-                            {
-                                <svg class="h-4 w-4 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
-                                </svg>
-                                <span>Full Width</span>
-                            }
-                        </button>
+                </div>
 
-              
 
-              
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                @{
+                    var expiryAlert = GetIdentityExpiryAlert();
+                }
+                @if (expiryAlert != null)
+                {
+                    <div class="rounded-xl border p-3.5 text-xs flex items-center justify-between shadow-2xs @(expiryAlert.Value.IsExpired ? "border-rose-300 bg-rose-50/90 text-rose-900" : "border-amber-300 bg-amber-50/90 text-amber-900")">
+                        <div class="flex items-center gap-2.5">
+                            <span class="text-xl">@(expiryAlert.Value.IsExpired ? "🚨" : "⚠️")</span>
+                            <div>
+                                <strong class="font-bold">@expiryAlert.Value.Title:</strong>
+                                <span>@expiryAlert.Value.Message</span>
+                            </div>
+                        </div>
                     </div>
-                </header>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+                }
 
                 <!-- GRID -->
 
@@ -178,13 +181,13 @@
                      <!-- RIGHT -->
 
                     <div class="xl:col-span-3 min-w-0 space-y-2">
+                        <UpcomingOrganisationEventsCard />
                         <HRM.Components.Pages.Online.Leave.Cards.LeaveCalendarCard IncludeTeam="true" />
                         <TodaysWorkPlanCard RefreshKey="attendanceRefreshKey" />
 
                         <WeeklyWorkedHoursCard RefreshKey="attendanceRefreshKey" />
 
                         <WorkHandoverInboxCard />
-                        <LeaveBalanceCard />
 
                     </div>
 
@@ -270,6 +273,7 @@
 
 
     private string UserName = "";
+    private UserContextDto? userContext;
 
     private List<YearlyAttendanceDayDto> yearlyAttendanceDays = [];
 
@@ -292,6 +296,7 @@
 
 
     private bool allowTestClock;
+    private bool canUseTestClock;
     private bool attendanceLoadFailed;
     private async Task RetryAttendanceAsync()
     {
@@ -300,6 +305,7 @@
     }
     protected override async Task OnInitializedAsync()
     {
+        TestClockPreference.OnChange += TestClockPreferenceChanged;
 
 
          
@@ -331,8 +337,36 @@
 
     private async Task LoadTestClockPermissionAsync()
     {
-        try { allowTestClock = await WorkTypes.CanClockAsync() && await AttendanceLogService.CanUseTestClockAsync(); }
+        try
+        {
+            var canClock = await WorkTypes.CanClockAsync();
+            canUseTestClock = canClock && await AttendanceLogService.CanUseTestClockAsync();
+            allowTestClock = canUseTestClock && TestClockPreference.IsInitialized && TestClockPreference.CurrentState;
+        }
         catch (Exception ex) { Logger.LogWarning(ex, "Could not load development clock permission"); }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                var savedFullWidth = await JS.InvokeAsync<string?>("localStorage.getItem", FullWidthSettingKey);
+                if (bool.TryParse(savedFullWidth, out var val))
+                {
+                    isFullWidth = val;
+                }
+
+                await TestClockPreference.InitializeAsync();
+                allowTestClock = canUseTestClock && TestClockPreference.CurrentState;
+                StateHasChanged();
+            }
+            catch
+            {
+                // Browser JS unavailable or test environment
+            }
+        }
     }
 
 
@@ -367,9 +401,10 @@
         await InvokeAsync(StateHasChanged);
     }
 
+    private bool refreshing;
     private async Task RefreshDashboardAsync()
     {
-        if (AuthState == null)
+        if (AuthState == null || refreshing)
             return;
 
         var auth = await AuthState;
@@ -377,16 +412,21 @@
         if (auth.User.Identity?.IsAuthenticated != true)
             return;
 
-        await LoadDisplayNameAsync();
-        if (contextUnavailable) return;
-
+        refreshing = true;
         try
         {
+            await LoadDisplayNameAsync();
+            if (contextUnavailable) return;
+
             await LoadAttendance();
             if (contextUnavailable) return;
             await Task.WhenAll(LoadLeaveBalances(), LoadJobHistory());
         }
         catch (UnauthorizedAccessException) { ClearDashboardContext(); }
+        finally
+        {
+            refreshing = false;
+        }
 
         await InvokeAsync(StateHasChanged);
     }
@@ -396,15 +436,38 @@
         var context = await _access.GetContextAsync();
         if (context == null) { ClearDashboardContext(); return; }
         contextUnavailable = false;
+        userContext = context;
         UserName = !string.IsNullOrWhiteSpace(context.FullName) ? context.FullName.Trim()
             : !string.IsNullOrWhiteSpace(context.Username) ? context.Username.Trim() : "Employee";
     }
 
     private void ClearDashboardContext()
     {
-        contextUnavailable = true; loading = false; UserName = "";
+        contextUnavailable = true; loading = false; UserName = ""; userContext = null;
         weeklyLogs = []; yearlyAttendanceDays = []; leaveBalances = []; jobHistory = []; leaveRequests = []; unevenLogs = [];
         TodayCheckIn = null; TodayCheckOut = null; activeJob = null;
+    }
+
+    private (bool IsExpired, string Title, string Message)? GetIdentityExpiryAlert()
+    {
+        if (userContext == null) return null;
+        if (userContext.IdentityCardExpiryDate.HasValue)
+        {
+            var days = (userContext.IdentityCardExpiryDate.Value.Date - DateTime.Today).Days;
+            if (days < 0)
+                return (true, "National ID Card Expired", $"Your National ID Card expired {Math.Abs(days)} day(s) ago on {userContext.IdentityCardExpiryDate.Value:dd MMM yyyy}. Please submit renewal information to HR.");
+            if (days <= 60)
+                return (false, "National ID Card Expiring Soon", $"Your National ID Card expires in {days} day(s) on {userContext.IdentityCardExpiryDate.Value:dd MMM yyyy}. Please ensure it is renewed in time.");
+        }
+        if (userContext.PassportExpiryDate.HasValue)
+        {
+            var days = (userContext.PassportExpiryDate.Value.Date - DateTime.Today).Days;
+            if (days < 0)
+                return (true, "Passport Expired", $"Your Passport expired {Math.Abs(days)} day(s) ago on {userContext.PassportExpiryDate.Value:dd MMM yyyy}. Please update your official records.");
+            if (days <= 60)
+                return (false, "Passport Expiring Soon", $"Your Passport expires in {days} day(s) on {userContext.PassportExpiryDate.Value:dd MMM yyyy}.");
+        }
+        return null;
     }
 
     private async Task LoadAttendance()
@@ -447,6 +510,21 @@
             await JS.InvokeVoidAsync("localStorage.setItem", FullWidthSettingKey, isFullWidth.ToString());
         }
         catch { }
+    }
+
+    private void TestClockPreferenceChanged()
+    {
+        _ = InvokeAsync(() =>
+        {
+            allowTestClock = canUseTestClock && TestClockPreference.CurrentState;
+            StateHasChanged();
+        });
+    }
+
+    public void Dispose()
+    {
+        if (TestClockPreference is not null)
+            TestClockPreference.OnChange -= TestClockPreferenceChanged;
     }
 
 }

@@ -33,10 +33,47 @@ public static class ApiClientRegistration
         services.AddScoped<IUserService, UserProfileClient>();
         services.AddScoped<IGeographyService, GeographyClient>();
         services.AddScoped<HRM.Services.ToastService>();
+        services.AddScoped<HRM.UI.Services.WorkPlanning.IWorkforceScheduleApiClient>(provider =>
+        {
+            var origins = provider.GetRequiredService<BackendOrigins>();
+            var handler = new CircuitBackendHandler(provider.GetRequiredService<Microsoft.AspNetCore.Components.Authorization.AuthenticationStateProvider>(), provider.GetRequiredService<BackendSessionStore>(), provider.GetRequiredService<IHttpClientFactory>(), origins, provider.GetRequiredService<Microsoft.AspNetCore.DataProtection.IDataProtectionProvider>(), provider.GetRequiredService<ILogger<BackendSession>>());
+            return new HRM.UI.Services.WorkPlanning.WorkforceScheduleApiClient(new HttpClient(handler) { BaseAddress = origins.Api });
+        });
         services.AddScoped<HRM.Services.State.LeaveApplicationState>();
         services.AddScoped<HRM.Services.Stores.LeaveStore>();
         services.AddScoped<HRM.Helpers.NavigationTrail>(p => new(p.GetRequiredService<Microsoft.AspNetCore.Components.NavigationManager>().Uri));
         services.AddScoped<HRM.Services.PortalContext>();
+        services.AddScoped<HRM.UI.Services.Developer.DeveloperTestClockService>();
+        services.AddScoped<HRM.UI.Services.Diagnostics.IErrorLogApiClient>(provider =>
+        {
+            var origins = provider.GetRequiredService<BackendOrigins>();
+            var handler = new CircuitBackendHandler(
+                provider.GetRequiredService<Microsoft.AspNetCore.Components.Authorization.AuthenticationStateProvider>(),
+                provider.GetRequiredService<BackendSessionStore>(),
+                provider.GetRequiredService<IHttpClientFactory>(),
+                origins,
+                provider.GetRequiredService<Microsoft.AspNetCore.DataProtection.IDataProtectionProvider>(),
+                provider.GetRequiredService<ILogger<BackendSession>>());
+            var client = new HttpClient(handler) { BaseAddress = origins.Api };
+            return new HRM.UI.Services.Diagnostics.ErrorLogApiClient(
+                client,
+                provider.GetService<HRM.ErrorLogs.Services.IErrorLogService>(),
+                provider.GetService<ILogger<HRM.UI.Services.Diagnostics.ErrorLogApiClient>>());
+        });
+        services.AddScoped<HRM.UI.Services.Budget.BudgetApiClient>(provider =>
+        {
+            var origins = provider.GetRequiredService<BackendOrigins>();
+            var handler = new CircuitBackendHandler(
+                provider.GetRequiredService<Microsoft.AspNetCore.Components.Authorization.AuthenticationStateProvider>(),
+                provider.GetRequiredService<BackendSessionStore>(),
+                provider.GetRequiredService<IHttpClientFactory>(),
+                origins,
+                provider.GetRequiredService<Microsoft.AspNetCore.DataProtection.IDataProtectionProvider>(),
+                provider.GetRequiredService<ILogger<BackendSession>>());
+            var client = new HttpClient(handler) { BaseAddress = origins.Api };
+            return new HRM.UI.Services.Budget.BudgetApiClient(client);
+        });
+        services.AddScoped<HRM.Application.Interfaces.Budget.IBudgetService>(p => p.GetRequiredService<HRM.UI.Services.Budget.BudgetApiClient>());
         services.AddScoped<HRM.UI.Services.AttendanceDeductions.AttendanceDeductionClient>(provider =>
         {
             var origins = provider.GetRequiredService<BackendOrigins>();
@@ -50,6 +87,21 @@ public static class ApiClientRegistration
             var client = new HttpClient(handler) { BaseAddress = origins.Api };
             return new HRM.UI.Services.AttendanceDeductions.AttendanceDeductionClient(client);
         });
+        services.AddSingleton<HRM.Application.Features.GoodsLoans.IGoodsLoanScheduleCalculator, HRM.Application.Features.GoodsLoans.GoodsLoanScheduleCalculator>();
+        services.AddScoped<HRM.UI.Services.GoodsLoans.GoodsLoanApiClient>(provider =>
+        {
+            var origins = provider.GetRequiredService<BackendOrigins>();
+            var handler = new CircuitBackendHandler(
+                provider.GetRequiredService<Microsoft.AspNetCore.Components.Authorization.AuthenticationStateProvider>(),
+                provider.GetRequiredService<BackendSessionStore>(),
+                provider.GetRequiredService<IHttpClientFactory>(),
+                origins,
+                provider.GetRequiredService<Microsoft.AspNetCore.DataProtection.IDataProtectionProvider>(),
+                provider.GetRequiredService<ILogger<BackendSession>>());
+            var client = new HttpClient(handler) { BaseAddress = origins.Api };
+            return new HRM.UI.Services.GoodsLoans.GoodsLoanApiClient(client);
+        });
+        services.AddScoped<HRM.Application.Contracts.Pages.IGoodsLoanService>(p => p.GetRequiredService<HRM.UI.Services.GoodsLoans.GoodsLoanApiClient>());
         return services;
     }
 }

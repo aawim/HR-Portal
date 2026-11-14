@@ -13,9 +13,18 @@
     --app-table-header-bg: #f8fafc;
     --app-table-header-text: #475569;
     --app-table-row-hover: #f8fafc;
+    --app-muted-text: #64748b;
+    --app-elevated-bg: #ffffff;
+    --app-overlay: rgb(15 23 42 / .48);
+    --app-focus-ring: #2563eb;
+    --app-danger-bg: #fff1f2;
+    --app-danger-text: #9f1239;
     --select-bg: #ffffff; --select-text: #0f172a; --select-muted: #64748b;
     --select-popup-bg: #ffffff; --select-hover: #f1f5f9;
     --select-selected-bg: #dbeafe; --select-selected-text: #1e3a8a;
+    --app-scrollbar-track: #f1f5f9;
+    --app-scrollbar-thumb: #94a3b8;
+    --app-scrollbar-thumb-hover: #64748b;
 }
 :root[data-theme="dark"] {
     color-scheme: dark;
@@ -32,8 +41,33 @@
     --app-table-header-bg: #182438;
     --app-table-header-text: #cbd5e1;
     --app-table-row-hover: #334155;
+    --app-muted-text: #b6c4d6;
+    --app-elevated-bg: #1e293b;
+    --app-overlay: rgb(2 6 23 / .72);
+    --app-focus-ring: #93c5fd;
+    --app-danger-bg: #512735;
+    --app-danger-text: #fecdd3;
     --app-toast-bg: #1e293b; --app-toast-text: #f1f5f9; --app-toast-muted: #cbd5e1; --app-toast-hover: #334155;
+    --app-scrollbar-track: #172033;
+    --app-scrollbar-thumb: #52627a;
+    --app-scrollbar-thumb-hover: #71819a;
 }
+
+/* Compact, theme-aware scrollbars for the full application. */
+* { scrollbar-width: thin; scrollbar-color: var(--app-scrollbar-thumb) var(--app-scrollbar-track); }
+*::-webkit-scrollbar { width: .7rem; height: .7rem; }
+*::-webkit-scrollbar-track { background: var(--app-scrollbar-track); }
+*::-webkit-scrollbar-thumb { background: var(--app-scrollbar-thumb); border: 3px solid var(--app-scrollbar-track); border-radius: 9999px; }
+*::-webkit-scrollbar-thumb:hover { background: var(--app-scrollbar-thumb-hover); }
+*::-webkit-scrollbar-corner { background: var(--app-scrollbar-track); }
+
+/* Portal context colours: Admin green, Online blue, Developer orange. */
+.portal-admin { --app-scrollbar-track: #ecfdf5; --app-scrollbar-thumb: #16a34a; --app-scrollbar-thumb-hover: #15803d; }
+.portal-online { --app-scrollbar-track: #eff6ff; --app-scrollbar-thumb: #2563eb; --app-scrollbar-thumb-hover: #1d4ed8; }
+.portal-developer { --app-scrollbar-track: #fff7ed; --app-scrollbar-thumb: #ea580c; --app-scrollbar-thumb-hover: #c2410c; }
+[data-theme="dark"] .portal-admin { --app-scrollbar-track: #123524; --app-scrollbar-thumb: #22c55e; --app-scrollbar-thumb-hover: #4ade80; }
+[data-theme="dark"] .portal-online { --app-scrollbar-track: #172554; --app-scrollbar-thumb: #3b82f6; --app-scrollbar-thumb-hover: #60a5fa; }
+[data-theme="dark"] .portal-developer { --app-scrollbar-track: #431407; --app-scrollbar-thumb: #f97316; --app-scrollbar-thumb-hover: #fb923c; }
 .theme-toggle {
     display: inline-flex; align-items: center; justify-content: center;
     width: 2.5rem; height: 2.5rem; flex-shrink: 0;
@@ -42,10 +76,48 @@
 }
 .theme-toggle:hover { background: #e2e8f0; }
 .theme-toggle:disabled { opacity: .5; cursor: wait; }
-.theme-toggle:focus-visible { outline: 3px solid #60a5fa; outline-offset: 3px; }
+.theme-toggle:focus-visible { outline: 3px solid var(--app-focus-ring); outline-offset: 3px; }
 .theme-icon-light { display: none; }
 [data-theme="dark"] .theme-icon-light { display: block; }
 [data-theme="dark"] .theme-icon-dark { display: none; }
+[data-theme="dark"] .theme-toggle {
+    border-color: var(--app-input-border);
+    background: var(--app-surface-bg);
+    color: var(--app-text);
+}
+[data-theme="dark"] .theme-toggle:hover { background: var(--app-table-row-hover); }
+
+/* Stable semantic surfaces for new and migrated components. */
+.app-page { background: var(--app-page-bg); color: var(--app-text); }
+.app-surface { background: var(--app-surface-bg); color: var(--app-text); border-color: var(--app-border-color); }
+.app-surface-elevated { background: var(--app-elevated-bg); color: var(--app-text); border-color: var(--app-border-color); }
+.app-muted { color: var(--app-muted-text); }
+
+/* Blazor reconnect UI must remain readable in both themes. */
+#components-reconnect-modal {
+    max-width: min(28rem, calc(100vw - 2rem));
+    border: 1px solid var(--app-border-color);
+    border-radius: 1rem;
+    background: var(--app-elevated-bg);
+    color: var(--app-text);
+    box-shadow: 0 24px 64px rgb(15 23 42 / .28);
+}
+#components-reconnect-modal::backdrop {
+    background: var(--app-overlay);
+    backdrop-filter: blur(2px);
+}
+#components-reconnect-modal button {
+    border: 1px solid var(--action-border, var(--app-input-border));
+    border-radius: .5rem;
+    background: var(--action-primary, #2563eb);
+    color: #fff;
+    padding: .5rem .75rem;
+    font-weight: 600;
+}
+#components-reconnect-modal button:focus-visible {
+    outline: 3px solid var(--app-focus-ring);
+    outline-offset: 3px;
+}
 
 /* Shared palette covers existing Tailwind cards and Bootstrap forms and dialogs. */
 @media screen {
@@ -152,21 +224,28 @@
     [data-theme="dark"] tbody tr:hover { background-color: #334155 !important; }
     [data-theme="dark"] tbody td { border-color: #2d3d52; }
 
-    /* Workspace and section tabs in dark mode */
-    [data-theme="dark"] .workspace-tabs button[aria-pressed="true"] {
+    /* Workspace and section folder tabs across all three portals (Admin, Developer, Online) */
+    :is(.my-workspace-tabs, .developer-workspace-tabs, .online-workspace-tabs, .workspace-tabs) nav button {
+        transition: color 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
+    }
+    :is(.my-workspace-tabs, .developer-workspace-tabs, .online-workspace-tabs, .workspace-tabs) nav button:not([class*="text-white"]):hover {
+        color: #0f172a !important;
+    }
+    [data-theme="dark"] :is(.my-workspace-tabs, .developer-workspace-tabs, .online-workspace-tabs, .workspace-tabs) nav button:not([class*="bg-teal-700"]):not([class*="bg-amber-600"]):not([class*="bg-blue-600"]):not([class*="dark:bg-teal-600"]):not([class*="dark:bg-amber-600"]):not([class*="dark:bg-blue-600"]) {
         background-color: #1e293b !important;
-        color: #93c5fd !important;
-        border-color: #3b4b63 !important;
-        border-bottom-color: #60a5fa !important;
-    }
-    [data-theme="dark"] .workspace-tabs button[aria-pressed="false"] {
-        background-color: #0f172a !important;
-        color: #b6c4d6 !important;
+        color: #cbd5e1 !important;
         border-color: #3b4b63 !important;
     }
-    [data-theme="dark"] .workspace-tabs button[aria-pressed="false"]:hover {
-        background-color: #243247 !important;
-        color: #f8fafc !important;
+    [data-theme="dark"] :is(.my-workspace-tabs, .developer-workspace-tabs, .online-workspace-tabs, .workspace-tabs) nav button:not([class*="bg-teal-700"]):not([class*="bg-amber-600"]):not([class*="bg-blue-600"]):not([class*="dark:bg-teal-600"]):not([class*="dark:bg-amber-600"]):not([class*="dark:bg-blue-600"]):hover {
+        background-color: #334155 !important;
+        color: #ffffff !important;
+        border-color: #52627a !important;
+    }
+    :is(.my-workspace-tabs, .developer-workspace-tabs, .online-workspace-tabs, .workspace-tabs) nav button:is([class*="bg-teal-700"], [class*="bg-amber-600"], [class*="bg-blue-600"], [class*="dark:bg-teal-600"], [class*="dark:bg-amber-600"], [class*="dark:bg-blue-600"]) {
+        color: #ffffff !important;
+    }
+    [data-theme="dark"] :is(.my-workspace-tabs, .developer-workspace-tabs, .online-workspace-tabs, .workspace-tabs) nav button:is([class*="bg-teal-700"], [class*="bg-amber-600"], [class*="bg-blue-600"], [class*="dark:bg-teal-600"], [class*="dark:bg-amber-600"], [class*="dark:bg-blue-600"]) {
+        color: #ffffff !important;
     }
 
     /* Status colours remain distinct, including blue approved-leave markers. */
@@ -198,4 +277,24 @@
 @media print {
     :root[data-theme] { color-scheme: light; }
     .theme-toggle { display: none; }
+}
+
+.bg-green-300 { background-color: #86efac !important; }
+.border-green-400 { border-color: #4ade80 !important; }
+[data-theme="dark"] .bg-green-300 { background-color: #153e34 !important; }
+[data-theme="dark"] .border-green-400 { border-color: #1f6354 !important; }
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+@-webkit-keyframes spin {
+    0% { -webkit-transform: rotate(0deg); }
+    100% { -webkit-transform: rotate(360deg); }
+}
+
+.animate-spin {
+    -webkit-animation: spin 1s linear infinite !important;
+    animation: spin 1s linear infinite !important;
+    display: inline-block;
 }

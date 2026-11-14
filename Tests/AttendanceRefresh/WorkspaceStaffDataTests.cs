@@ -28,9 +28,11 @@ static class WorkspaceStaffDataTests
             db.LeaveTypes.Add(new LeaveType { LeaveTypeId = 1, Name = "Annual leave" });
             db.JobLeaveTypes.Add(new JobLeaveType { JobId = 906, LeaveTypeId = 1, IsValid = true, IsLeaveInfoUpdated = true, RemainingDays = 17.5m });
             db.Leaves.Add(new Leaf { JobId = 906, LeaveTypeId = 1, LeaveStateId = 4, FromDate = today.AddDays(-2), ToDate = today.AddDays(-2) });
+            db.WorkTemplateTypes.Add(new WorkTemplateType { WorkTemplateTypeId = 1, Name = "Office hours", Code = "OFFICE", IsActive = true });
             db.WorkPlans.Add(new WorkPlan { WorkPlanId = 880, IndividualId = 26, JobId = 906,
                 OrganisationBusinessEntityId = 3, WorkDate = punchedDay, IsValid = true });
             db.WorkAssignments.Add(new WorkAssignment { WorkAssignmentId = 880, WorkPlanId = 880,
+                WorkTemplateTypeId = 1,
                 SchedulePurpose = "Official", StartDateTime = punchedDay.AddHours(8),
                 EndDateTime = punchedDay.AddHours(14), RequiresAttendance = true, IsValid = true });
             db.AttendanceLogs.AddRange(
@@ -49,44 +51,12 @@ static class WorkspaceStaffDataTests
                 new AttendanceLog { IndividualId = 26, OrganisationId = 3, Date = punchedDay.AddHours(12), InOutModeId = 2, AttendanceLogStateId = 1,
                     AttendanceLogResolutions = [new() { IsValid = true, AttendanceClockTypeId = 2 }] });
             await db.SaveChangesAsync();
-            Console.WriteLine($"DEBUG counts assignments={await db.WorkAssignments.CountAsync()} plans={await db.WorkPlans.CountAsync()}");
-            var debugRaw = await db.WorkAssignments.AsNoTracking().Include(a => a.WorkPlan).ToListAsync();
-            Console.WriteLine("DEBUG raw: " + string.Join(" | ", debugRaw.Select(a => $"{a.WorkAssignmentId}:{a.SchedulePurpose}:{a.IsValid}:{a.CancelledDate}:{a.WorkPlan?.WorkDate}:{a.WorkPlan?.IndividualId}")));
-            var debugFacts = await HRM.Helpers.AttendanceScheduleFacts.LoadAsync(db, 26, punchedDay, punchedDay, null);
-            Console.WriteLine("DEBUG facts: " + string.Join(" | ", debugFacts.Select(x => $"{x.Date}:{x.Purpose}:{x.ScheduledStart}:{x.CheckIn}")));
-            var end = punchedDay.Date.AddDays(1);
-            Console.WriteLine($"DEBUG entity={db.Model.FindEntityType(typeof(WorkAssignment))?.Name ?? "NULL"}");
-            var debugCombined = await db.WorkAssignments.AsNoTracking()
-                .Include(a => a.WorkPlan).ThenInclude(p => p.WorkPlanSegments)
-                .Include(a => a.WorkTemplateType)
-                .Include(a => a.WorkAssignmentSegments).ThenInclude(s => s.WorkSegmentType)
-                .Where(a => a.IsValid && a.CancelledDate == null && a.WorkPlan.IsValid &&
-                    a.WorkPlan.WorkDate >= punchedDay.Date && a.WorkPlan.WorkDate < end &&
-                    (a.WorkAssignmentOwners.Any(o => o.IndividualId == 26 && o.IsValid && o.IsCurrentOwner &&
-                        o.EffectiveFrom <= a.StartDateTime && (o.EffectiveTo == null || o.EffectiveTo >= a.StartDateTime)) ||
-                     a.WorkPlan.IndividualId == 26 && !a.WorkAssignmentOwners.Any(o => o.IsValid && o.IsCurrentOwner && o.IndividualId != 26)))
-                .ToListAsync();
-            Console.WriteLine($"DEBUG combined={debugCombined.Count}");
-            Console.WriteLine($"DEBUG noTrack={await db.WorkAssignments.AsNoTracking().CountAsync(a => a.IsValid)} " +
-                $"noTrackPlan={await db.WorkAssignments.AsNoTracking().CountAsync(a => a.WorkPlan.IsValid)} " +
-                $"noTrackDate={await db.WorkAssignments.AsNoTracking().CountAsync(a => a.WorkPlan.WorkDate >= punchedDay.Date && a.WorkPlan.WorkDate < end)} " +
-                $"trackedCombined={await db.WorkAssignments.CountAsync(a => a.IsValid && a.CancelledDate == null && a.WorkPlan.IsValid && a.WorkPlan.WorkDate >= punchedDay.Date && a.WorkPlan.WorkDate < end)} " +
-                $"trackedOwner={await db.WorkAssignments.CountAsync(a => a.WorkPlan.IndividualId == 26 && !a.WorkAssignmentOwners.Any(o => o.IsValid && o.IsCurrentOwner && o.IndividualId != 26))} " +
-                $"noTrackOwner={await db.WorkAssignments.AsNoTracking().CountAsync(a => a.WorkPlan.IndividualId == 26 && !a.WorkAssignmentOwners.Any(o => o.IsValid && o.IsCurrentOwner && o.IndividualId != 26))} " +
-                $"noIncludes={await db.WorkAssignments.AsNoTracking().CountAsync(a => a.IsValid && a.CancelledDate == null && a.WorkPlan.IsValid && a.WorkPlan.WorkDate >= punchedDay.Date && a.WorkPlan.WorkDate < end && ((a.WorkPlan.IndividualId == 26) && !a.WorkAssignmentOwners.Any(o => o.IsValid && o.IsCurrentOwner && o.IndividualId != 26)))} " +
-                $"withIncludesOnly={await db.WorkAssignments.AsNoTracking().Include(a => a.WorkPlan).CountAsync(a => a.IsValid && a.WorkPlan.WorkDate >= punchedDay.Date && a.WorkPlan.WorkDate < end)} " +
-                $"segmentsInclude={await db.WorkAssignments.AsNoTracking().Include(a => a.WorkPlan).ThenInclude(p => p.WorkPlanSegments).CountAsync(a => a.IsValid && a.WorkPlan.WorkDate >= punchedDay.Date && a.WorkPlan.WorkDate < end)} " +
-                $"typeInclude={await db.WorkAssignments.AsNoTracking().Include(a => a.WorkTemplateType).CountAsync(a => a.IsValid)} " +
-                $"assignmentSegmentsInclude={await db.WorkAssignments.AsNoTracking().Include(a => a.WorkAssignmentSegments).ThenInclude(s => s.WorkSegmentType).CountAsync(a => a.IsValid)} " +
-                $"fullSimpleOwner={await db.WorkAssignments.AsNoTracking().Include(a => a.WorkPlan).ThenInclude(p => p.WorkPlanSegments).Include(a => a.WorkTemplateType).Include(a => a.WorkAssignmentSegments).ThenInclude(s => s.WorkSegmentType).CountAsync(a => a.IsValid && a.CancelledDate == null && a.WorkPlan.IsValid && a.WorkPlan.WorkDate >= punchedDay.Date && a.WorkPlan.WorkDate < end && a.WorkPlan.IndividualId == 26)} " +
-                $"fullOwnerNoIncludes={await db.WorkAssignments.AsNoTracking().CountAsync(a => a.IsValid && a.WorkPlan.IndividualId == 26 && !a.WorkAssignmentOwners.Any(o => o.IsValid && o.IsCurrentOwner && o.IndividualId != 26))}");
         }
         var attendance = new AttendanceService(factory, null!, null!, access, null!, NullLogger<AttendanceService>.Instance);
         var days = await attendance.GetStaffYearlyAttendanceAsync(26, today.Year);
         var present = days.Single(x => x.Date == day);
         Check(present.FirstCheckIn == day.AddHours(8) && present.LastCheckOut == day.AddHours(12) && present.ClockEventCount == 2, "Selected attendance mixed staff or tenants");
         var closest = days.Single(x => x.Date == punchedDay);
-        Console.WriteLine($"DEBUG workspace closest first={closest.FirstCheckIn} scheduled={closest.ScheduledStart} events={closest.ClockEventCount}");
         Check(closest.FirstCheckIn == punchedDay.AddHours(7).AddMinutes(30),
             "Attendance summary used an early punch instead of the clock event closest to the scheduled start");
         Check(days.All(x => x.Date >= today.AddDays(-10)), "Attendance marked dates before joining as absent");
@@ -106,7 +76,7 @@ static class WorkspaceStaffDataTests
         const System.Reflection.BindingFlags flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic;
         card.GetType().GetProperty("Attendance", flags)!.SetValue(card, attendance);
         await renderer.Dispatcher.InvokeAsync(async () => { renderer.Attach(card); await renderer.Render(); }); renderer.CheckErrors();
-        Check(renderer.RootText().Contains("Annual leave") && renderer.RootText().Contains("Clock events") && !renderer.RootText().Contains("could not be loaded"), "Workspace attendance did not render selected employee data");
+        Check(renderer.RootText().Contains("Annual leave") && renderer.RootText().Contains("Clock Events") && !renderer.RootText().Contains("could not be loaded"), "Workspace attendance did not render selected employee data");
         await using var managerRenderer = new TestRenderer(provider);
         var manager = new HRM.Components.Admin.My.Workspace.Staff.Tabs.LeaveAssignmentManager { StaffId = 26 };
         var managerType = manager.GetType();

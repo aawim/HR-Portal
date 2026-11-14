@@ -1,0 +1,29 @@
+@using HRM.WorkPlanning.Abstractions
+@inject HRM.UI.Services.WorkPlanning.IWorkforceScheduleApiClient ScheduleApi
+@inject HRM.Services.PortalContext Portal
+
+<div class="page-panels page-panels-standard">
+    <section class="page-panel-left rounded-2xl border border-slate-200 bg-white p-2 shadow-xs space-y-2">
+        <div><h2 class="font-bold text-slate-800">Roster draft</h2><p class="text-xs text-slate-500">Create a draft, add duties, assign staff, then validate before publishing.</p></div>
+        <div class="grid gap-2 sm:grid-cols-2">
+            <label class="block text-xs font-medium text-slate-700 p-1">Roster name<input class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1 text-xs" @bind="name" /></label>
+            <label class="block text-xs font-medium text-slate-700 p-1">Organisation ID<input type="number" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1 text-xs" @bind="organisationId" /></label>
+            <label class="block text-xs font-medium text-slate-700 p-1">Starts<input type="date" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1 text-xs" @bind="start" /></label>
+            <label class="block text-xs font-medium text-slate-700 p-1">Ends<input type="date" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1 text-xs" @bind="end" /></label>
+        </div>
+        <button class="app-button app-button-primary app-button-sm" @onclick="CreateDraftAsync">Create draft</button>
+        @if (versionId > 0)
+        {
+            <div class="rounded-xl border border-blue-200 bg-blue-50/40 p-2 space-y-2"><h3 class="font-bold text-slate-800">Add duty occurrence</h3>
+                <div class="grid gap-2 sm:grid-cols-2"><input placeholder="Duty type ID" type="number" class="rounded-lg border border-slate-300 p-1 text-xs" @bind="dutyTypeId" /><input placeholder="Required staff" type="number" class="rounded-lg border border-slate-300 p-1 text-xs" @bind="requiredStaff" /><input type="datetime-local" class="rounded-lg border border-slate-300 p-1 text-xs" @bind="dutyStart" /><input type="datetime-local" class="rounded-lg border border-slate-300 p-1 text-xs" @bind="dutyEnd" /></div>
+                <button class="app-button app-button-secondary app-button-sm" @onclick="AddOccurrenceAsync">Add duty</button>
+            </div>
+            <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-2 space-y-2"><h3 class="font-bold text-slate-800">Assign staff</h3><div class="grid gap-2 sm:grid-cols-2"><input placeholder="Duty occurrence ID" type="number" class="rounded-lg border border-slate-300 p-1 text-xs" @bind="occurrenceId" /><input placeholder="Job ID" type="number" class="rounded-lg border border-slate-300 p-1 text-xs" @bind="jobId" /><input placeholder="Individual ID" type="number" class="rounded-lg border border-slate-300 p-1 text-xs" @bind="individualId" /></div><button class="app-button app-button-secondary app-button-sm" @onclick="AssignAsync">Assign staff</button></div>
+            <button class="app-button app-button-success app-button-sm" @onclick="ValidateAsync">Validate roster</button>
+            @if (validation?.IsValid == true){<button class="app-button app-button-primary app-button-sm" @onclick="PublishAsync">Publish validated roster</button>}
+        }
+        @if (!string.IsNullOrWhiteSpace(message)){<p class="text-xs text-slate-600">@message</p>}
+    </section>
+    <aside class="page-panel-right rounded-2xl border border-slate-200 bg-white p-2 shadow-xs"><h2 class="font-bold text-slate-800">Validation</h2>@if(validation is null){<p class="mt-2 text-xs text-slate-500">Validate a draft to see coverage, overlap and leave results.</p>}else{<p class="mt-2 text-xs font-semibold @(validation.IsValid?"text-emerald-700":"text-rose-700")">@(validation.IsValid?"Ready to publish":"Action required")</p><ul class="mt-2 space-y-2 text-xs text-rose-700">@foreach(var issue in validation.Errors){<li class="rounded-lg border border-rose-200 bg-rose-50 p-2">@issue</li>}</ul><ul class="mt-2 space-y-2 text-xs text-amber-800">@foreach(var warning in validation.Warnings??[]){<li class="rounded-lg border border-amber-200 bg-amber-50 p-2">@warning</li>}</ul>}</aside>
+</div>
+@code { int organisationId; string name=""; DateTime start=DateTime.Today,end=DateTime.Today.AddDays(7),dutyStart=DateTime.Today.AddHours(8),dutyEnd=DateTime.Today.AddHours(16);int versionId,dutyTypeId,requiredStaff=1,occurrenceId,jobId,individualId;string? message;WorkforceRosterValidation? validation;protected override void OnInitialized()=>organisationId=Portal.CurrentOrganisationId??0;async Task CreateDraftAsync(){var r=await ScheduleApi.CreateDraftAsync(new(organisationId,name,DateOnly.FromDateTime(start),DateOnly.FromDateTime(end),0,0));versionId=r.RosterVersionId;message=$"Draft {r.RosterId} created.";}async Task AddOccurrenceAsync(){occurrenceId=(int)await ScheduleApi.AddOccurrenceAsync(new(versionId,organisationId,dutyTypeId,dutyStart,dutyEnd,requiredStaff,"Indian/Maldives",null,null,0));message=$"Duty {occurrenceId} added.";}async Task AssignAsync(){await ScheduleApi.AssignAsync(new(occurrenceId,organisationId,jobId,individualId,0,null,0));message="Staff assigned.";}async Task ValidateAsync()=>validation=await ScheduleApi.ValidateAsync(versionId);async Task PublishAsync(){await ScheduleApi.PublishAsync(versionId,0);message="Roster published and work plans will be generated.";}}

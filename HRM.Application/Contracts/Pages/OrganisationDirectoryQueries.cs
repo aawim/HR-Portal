@@ -5,7 +5,7 @@ public enum OrganisationUnitKind { Team = 1, Group = 2, Structure = 3 }
 public sealed record OrganisationUnitKey(OrganisationUnitKind Kind, int Id);
 public sealed record DirectoryOption(int Id, string Name);
 public sealed record OrganisationUnitSummary(int Id, OrganisationUnitKind Kind, int OrganisationId, string Name,
-    string? NameDhivehi, int? TypeId, DateTime? StartsOn, DateTime? EndsOn, bool IsActive, int Version);
+    string? NameDhivehi, int? TypeId, DateTime? StartsOn, DateTime? EndsOn, bool IsActive, int Version, int? ParentTeamId = null, int? OrganisationStructureId = null);
 public sealed record OrganisationMember(int StaffId, string Name, string? EmployeeNumber, DateTime StartsOn, DateTime? EndsOn, bool IsSupervisor);
 public sealed record OrganisationMembershipPeriod(DateOnly Month, int Joined, int Left, int ActiveStaff);
 public sealed record OrganisationUnitSchedule(int AssignmentId, int TemplateId, string Name, string Purpose,

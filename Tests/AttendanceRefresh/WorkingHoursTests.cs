@@ -214,7 +214,31 @@ static class WorkingHoursTests
         var change = new OrganisationScheduleAmendment { WorkDate = today, OriginalStart = TimeSpan.FromHours(8), RevisedStart = TimeSpan.FromHours(8.5), Reason = "Rain" };
         await f.Settings.SaveAmendmentAsync(change);
         await using (var db = f.Factory.CreateDbContext())
+        {
             Check(await db.StaffNotifications.AnyAsync(n => n.OrganisationId == 10 && n.Kind == "Schedule amendment"), "Affected staff did not receive an amendment notification");
+            db.WorkPlans.Add(new WorkPlan { JobId = 1, IndividualId = 100, OrganisationBusinessEntityId = 10, WorkDate = today, IsValid = true, IsFinalized = true });
+            await db.SaveChangesAsync();
+        }
+        change = (await f.Settings.LoadAsync()).Amendments.Single(a => a.WorkDate == today);
+        change.RevisedStart = TimeSpan.FromHours(9);
+        change.Reason = "Updated today";
+        await f.Settings.SaveAmendmentAsync(change);
+        await using (var db = f.Factory.CreateDbContext())
+            Check((await db.OrganisationScheduleAmendments.SingleAsync(a => a.Id == change.Id)).RevisedStart == TimeSpan.FromHours(9),
+                "Today's organisation schedule change could not be edited after attendance finalization");
+        var range = new HRM.DTOs.Contracts.OrganisationScheduleAmendmentRangeDto
+        {
+            FromDate = today.AddDays(1),
+            ToDate = today.AddDays(3),
+            OriginalStart = TimeSpan.FromHours(8),
+            RevisedStart = TimeSpan.FromHours(8.5),
+            Reason = "Organisation-wide schedule change"
+        };
+        await f.Settings.SaveAmendmentRangeAsync(range);
+        await using (var db = f.Factory.CreateDbContext())
+            Check(await db.OrganisationScheduleAmendments.CountAsync(a => a.OrganisationId == 10 && a.WorkDate >= range.FromDate && a.WorkDate <= range.ToDate) == 3,
+                "Organisation schedule range did not create one dated amendment for every selected day");
+        await Denied(() => f.Settings.SaveAmendmentRangeAsync(range), "An overlapping organisation schedule range was accepted");
         change.WorkDate = today.AddDays(-1);
         await Denied(() => f.Settings.SaveAmendmentAsync(change), "Historical schedule was amended through ordinary HR settings");
     }

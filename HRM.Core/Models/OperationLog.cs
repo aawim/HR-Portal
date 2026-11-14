@@ -169,8 +169,6 @@ public partial class OperationLog
 
     public virtual ICollection<Service> Services { get; set; } = new List<Service>();
 
-    public virtual ICollection<ShiftScheduleDay> ShiftScheduleDays { get; set; } = new List<ShiftScheduleDay>();
-
     public virtual ICollection<SickLeaveForm> SickLeaveForms { get; set; } = new List<SickLeaveForm>();
 
     public virtual ICollection<SpecialDayType> SpecialDayTypes { get; set; } = new List<SpecialDayType>();

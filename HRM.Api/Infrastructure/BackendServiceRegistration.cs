@@ -51,6 +51,8 @@ public static class BackendServiceRegistration
         services.AddHttpContextAccessor();
         services.AddScoped<Microsoft.AspNetCore.Components.Authorization.AuthenticationStateProvider, HRM.Api.Authentication.ApiAuthenticationStateProvider>();
         services.AddScoped<Microsoft.AspNetCore.Components.NavigationManager, HRM.Api.Authentication.ApiNavigationManager>();
+        services.AddScoped<HRM.Application.Interfaces.Budget.IBudgetService, HRM.Services.BudgetService>();
+        services.AddScoped<HRM.Services.BudgetService>();
         services.AddScoped<WorkingHoursSettingsService>();
         services.AddScoped<JobTypeOvertimeSettingsService>();
         services.AddScoped<ScopeScheduleSettingsService>();
@@ -159,6 +161,17 @@ public static class BackendServiceRegistration
         services.AddScoped<IWorkPlanBuilder,WorkPlanBuilder>();
 
         services.AddScoped<IPlanningProviderResolver, PlanningProviderResolver>();
+        services.AddScoped<IWorkforcePolicyResolver, WorkforcePolicyResolver>();
+        services.AddScoped<IWorkforcePolicyManagementService, WorkforcePolicyManagementService>();
+        services.AddScoped<IWorkforceConstraintService, WorkforceConstraintService>();
+        services.AddScoped<IWorkforceRosterService, WorkforceRosterService>();
+        services.AddScoped<IWorkforcePayrollExportService, WorkforcePayrollExportService>();
+        services.AddScoped<IDutyOperationService, DutyOperationService>();
+        services.AddHostedService<DutyOperationApprovalCompletionService>();
+        services.AddScoped<IWorkTimeLedgerService, WorkTimeLedgerService>();
+        services.AddScoped<IDutyAvailabilityService, DutyAvailabilityService>();
+        services.AddScoped<IWorkforceAttendanceSessionService, WorkforceAttendanceSessionService>();
+        services.AddScoped<IWorkforceScheduleReviewService, WorkforceScheduleReviewService>();
 
         services.AddScoped<IWorkPlanValidator, WorkPlanValidator>();
 
@@ -203,6 +216,11 @@ public static class BackendServiceRegistration
         services.AddScoped<RequestTransitionSettingsService>();
         services.AddScoped<HRM.Services.Leave.LeaveHandoverService>();
         services.AddScoped<HRM.Services.Leave.LeaveCalendarService>();
+        services.AddScoped<HRM.Services.Calendar.OrganisationEventService>();
+        services.AddScoped<HRM.Services.Calendar.Contracts.IOrganisationCalendarResolver, HRM.Services.Calendar.OrganisationCalendarResolver>();
+        services.AddScoped<HRM.Services.Calendar.OrganisationCalendarService>();
+        services.AddScoped<HRM.Services.Calendar.SupervisorCalendarService>();
+        services.AddScoped<HRM.Services.Calendar.CalendarImpactService>();
         services.AddScoped<HRM.Services.OrganisationWorkspaceService>();
         services.AddScoped<IUserTodoService, UserTodoService>();
         services.AddScoped<ILeaveChangeService, HRM.Services.Leave.LeaveChangeService>();
@@ -259,6 +277,10 @@ public static class BackendServiceRegistration
 
         // Attendance Deduction Service (Maldives Civil Service Regulation & Payroll Integration)
         services.AddScoped<HRM.Services.Interfaces.IAttendanceDeductionService, HRM.Services.Attendance.Deductions.AttendanceDeductionService>();
+
+        // Staff Goods Loan Management Services
+        services.AddSingleton<HRM.Application.Features.GoodsLoans.IGoodsLoanScheduleCalculator, HRM.Application.Features.GoodsLoans.GoodsLoanScheduleCalculator>();
+        services.AddScoped<HRM.Application.Contracts.Pages.IGoodsLoanService, HRM.Services.GoodsLoans.GoodsLoanService>();
 
         services.AddHrmApiEndpoints();
         services.AddAuthorization();

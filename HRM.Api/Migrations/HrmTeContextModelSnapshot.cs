@@ -2538,66 +2538,6 @@ namespace HRM.Migrations
                     b.ToTable("Services");
                 });
 
-            modelBuilder.Entity("HRM.Models.Archives.ShiftSchedule", b =>
-                {
-                    b.Property<int>("ScheduleId")
-                        .HasColumnType("int")
-                        .HasColumnName("ScheduleID");
-
-                    b.HasKey("ScheduleId");
-
-                    b.ToTable("ShiftSchedules");
-                });
-
-            modelBuilder.Entity("HRM.Models.Archives.ShiftScheduleDay", b =>
-                {
-                    b.Property<int>("ShiftScheduleDayId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
-                        .HasColumnName("ShiftScheduleDayID");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("ShiftScheduleDayId"));
-
-                    b.Property<DateTime?>("Date")
-                        .HasColumnType("datetime");
-
-                    b.Property<int?>("DayNumber")
-                        .HasColumnType("int");
-
-                    b.Property<bool>("IsValid")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bit")
-                        .HasDefaultValue(true);
-
-                    b.Property<int>("OperationLogId")
-                        .HasColumnType("int")
-                        .HasColumnName("OperationLogID");
-
-                    b.Property<int>("ScheduleId")
-                        .HasColumnType("int")
-                        .HasColumnName("ScheduleID");
-
-                    b.Property<int>("SpecialDayTypeId")
-                        .HasColumnType("int")
-                        .HasColumnName("SpecialDayTypeID");
-
-                    b.Property<int?>("WorkShiftId")
-                        .HasColumnType("int")
-                        .HasColumnName("WorkShiftID");
-
-                    b.HasKey("ShiftScheduleDayId");
-
-                    b.HasIndex("OperationLogId");
-
-                    b.HasIndex("ScheduleId");
-
-                    b.HasIndex("SpecialDayTypeId");
-
-                    b.HasIndex("WorkShiftId");
-
-                    b.ToTable("ShiftScheduleDays");
-                });
-
             modelBuilder.Entity("HRM.Models.Archives.SickLeaveForm", b =>
                 {
                     b.Property<int>("LeaveId")
@@ -13280,51 +13220,6 @@ namespace HRM.Migrations
                     b.Navigation("OperationLog");
                 });
 
-            modelBuilder.Entity("HRM.Models.Archives.ShiftSchedule", b =>
-                {
-                    b.HasOne("HRM.Models.Archives.Schedule", "Schedule")
-                        .WithOne("ShiftSchedule")
-                        .HasForeignKey("HRM.Models.Archives.ShiftSchedule", "ScheduleId")
-                        .IsRequired()
-                        .HasConstraintName("FK_ShiftSchedules_Schedules");
-
-                    b.Navigation("Schedule");
-                });
-
-            modelBuilder.Entity("HRM.Models.Archives.ShiftScheduleDay", b =>
-                {
-                    b.HasOne("HRM.Models.OperationLog", "OperationLog")
-                        .WithMany("ShiftScheduleDays")
-                        .HasForeignKey("OperationLogId")
-                        .IsRequired()
-                        .HasConstraintName("FK_ShiftScheduleDays_OperationLogs");
-
-                    b.HasOne("HRM.Models.Archives.ShiftSchedule", "Schedule")
-                        .WithMany("ShiftScheduleDays")
-                        .HasForeignKey("ScheduleId")
-                        .IsRequired()
-                        .HasConstraintName("FK_ShiftScheduleDays_ShiftSchedules");
-
-                    b.HasOne("HRM.Models.Archives.SpecialDayType", "SpecialDayType")
-                        .WithMany("ShiftScheduleDays")
-                        .HasForeignKey("SpecialDayTypeId")
-                        .IsRequired()
-                        .HasConstraintName("FK_ShiftScheduleDays_SpecialDayTypes");
-
-                    b.HasOne("HRM.Models.Archives.WorkShift", "WorkShift")
-                        .WithMany("ShiftScheduleDays")
-                        .HasForeignKey("WorkShiftId")
-                        .HasConstraintName("FK_ShiftScheduleDays_WorkShifts");
-
-                    b.Navigation("OperationLog");
-
-                    b.Navigation("Schedule");
-
-                    b.Navigation("SpecialDayType");
-
-                    b.Navigation("WorkShift");
-                });
-
             modelBuilder.Entity("HRM.Models.Archives.SickLeaveForm", b =>
                 {
                     b.HasOne("HRM.Models.Leaf", "Leave")
@@ -17419,7 +17314,6 @@ namespace HRM.Migrations
 
                     b.Navigation("ScheduleOwners");
 
-                    b.Navigation("ShiftSchedule");
                 });
 
             modelBuilder.Entity("HRM.Models.Archives.ScheduleType", b =>
@@ -17438,16 +17332,10 @@ namespace HRM.Migrations
                     b.Navigation("UserServiceRoles");
                 });
 
-            modelBuilder.Entity("HRM.Models.Archives.ShiftSchedule", b =>
-                {
-                    b.Navigation("ShiftScheduleDays");
-                });
-
             modelBuilder.Entity("HRM.Models.Archives.SpecialDayType", b =>
                 {
                     b.Navigation("Elements");
 
-                    b.Navigation("ShiftScheduleDays");
                 });
 
             modelBuilder.Entity("HRM.Models.Archives.SsouserState", b =>
@@ -17476,7 +17364,6 @@ namespace HRM.Migrations
                 {
                     b.Navigation("Elements");
 
-                    b.Navigation("ShiftScheduleDays");
                 });
 
             modelBuilder.Entity("HRM.Models.Archives.WorkType", b =>
@@ -17862,8 +17749,6 @@ namespace HRM.Migrations
                     b.Navigation("Schedules");
 
                     b.Navigation("Services");
-
-                    b.Navigation("ShiftScheduleDays");
 
                     b.Navigation("SickLeaveForms");
 

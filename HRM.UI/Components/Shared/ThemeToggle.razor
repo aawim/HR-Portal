@@ -1,9 +1,10 @@
 @inject HRM.Services.Contracts.UserPreferenceServiceContracts.IOperations Preferences
 @inject IJSRuntime JS
 @inject ILogger<ThemeToggle> Logger
+@implements IAsyncDisposable
 
 <div class="relative">
-    <button type="button" data-theme-toggle class="theme-toggle" disabled="@(!_ready || _saving)"
+    <button type="button" data-theme-toggle class="app-button app-button-icon app-button-neutral theme-toggle" disabled="@(!_ready || _saving)"
             @onclick="ToggleAsync" aria-label="Switch colour theme" title="Switch colour theme" aria-describedby="@(_error == null ? null : "theme-error")">
         <svg class="theme-icon-light" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
             <circle cx="12" cy="12" r="4" /><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5" />
@@ -24,11 +25,18 @@
 @code {
     private int? _userId;
     private bool _ready, _saving;
+    private bool _disposed;
     private string? _error;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (firstRender) { await LoadAsync(); StateHasChanged(); }
+        if (!firstRender) return;
+
+        await LoadAsync();
+        if (!_disposed)
+        {
+            await InvokeAsync(StateHasChanged);
+        }
     }
 
     private async Task LoadAsync()
@@ -42,6 +50,10 @@
             _ready = true;
             _error = null;
         }
+        catch (Exception ex) when (_disposed || ex is JSDisconnectedException || ex is TaskCanceledException || ex is ObjectDisposedException)
+        {
+            // Navigation can dispose a server-side circuit while preferences are loading.
+        }
         catch (Exception ex)
         {
             Logger.LogError(ex, "Could not load theme preference");
@@ -51,7 +63,7 @@
 
     private async Task ToggleAsync()
     {
-        if (!_ready || _saving) return;
+        if (_disposed || !_ready || _saving) return;
         _saving = true;
         _error = null;
         try
@@ -61,11 +73,24 @@
             if (_userId.HasValue) await Preferences.SaveThemeAsync(next, _userId.Value);
             await JS.InvokeVoidAsync("hrmTheme.set", next);
         }
+        catch (Exception ex) when (_disposed || ex is JSDisconnectedException || ex is TaskCanceledException || ex is ObjectDisposedException)
+        {
+            // The page is closing; there is no UI left to update.
+        }
         catch (Exception ex)
         {
             Logger.LogError(ex, "Could not save theme preference");
             _error = "Your theme setting could not be saved. Please try again or reload the page.";
         }
-        finally { _saving = false; }
+        finally
+        {
+            if (!_disposed) _saving = false;
+        }
+    }
+
+    public ValueTask DisposeAsync()
+    {
+        _disposed = true;
+        return ValueTask.CompletedTask;
     }
 }

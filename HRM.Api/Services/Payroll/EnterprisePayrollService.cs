@@ -511,6 +511,17 @@ public sealed class EnterprisePayrollService : IEnterprisePayroll
             db.PayrollInputSnapshots.RemoveRange(existingSnapshots);
         }
 
+        var ingestedAttendance = await db.AttendanceAdjustments
+            .Where(a => a.PayrollRunId == runId &&
+                        (a.PayrollProcessingStatus == "Ingested" || a.PayrollProcessingStatus == "Calculated"))
+            .ToListAsync();
+        foreach (var adjustment in ingestedAttendance)
+        {
+            adjustment.PayrollProcessingStatus = "Pending";
+            adjustment.PayrollRunId = null;
+            adjustment.UpdatedAtUtc = DateTime.UtcNow;
+        }
+
         await db.SaveChangesAsync();
 
         long jobId = await _queueService.EnqueueJobAsync(orgId, runId, PayrollJobType.CalculateBatch, priority: 10);

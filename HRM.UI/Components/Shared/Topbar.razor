@@ -3,7 +3,7 @@
 @inject ILogger<Topbar> Logger
 <header class="h-16 bg-white shadow-sm flex items-center justify-between px-6 relative z-50">
     <button type="button" class="mobile-menu-button" @onclick="OnMobileMenu" aria-label="Open navigation menu" aria-controls="portal-sidebar" title="Open navigation menu">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
+        <AppIcon Name="menu" />
     </button>
 
 
@@ -13,7 +13,7 @@
             <div class="flex-1 max-w-md hidden sm:block">
                 <div class="relative">
                     @* <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                        <AppIcon Name="search" Class="w-5 h-5 text-xl" />
                     </span> *@
                     @* <input type="text" class="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-slate-50" placeholder="Search employees, documents..." /> *@
                 </div>
@@ -42,14 +42,21 @@
 
                     <!-- Trigger Button -->
                     <button type="button" @onclick="ToggleProfileMenu" aria-label="Employee menu" aria-expanded="@isProfileMenuOpen.ToString().ToLowerInvariant()" aria-controls="employee-menu" class="flex items-center gap-3 focus:outline-none hover:bg-slate-50 p-1 pr-2 rounded-lg transition-colors relative z-50">
-                        <img src="https://i.pravatar.cc/150?img=32" alt="Profile" class="w-9 h-9 rounded-full border-2 border-blue-100 object-cover" />
+                        @if (!string.IsNullOrWhiteSpace(userPhotoUrl))
+                        {
+                            <img src="@userPhotoUrl" alt="Profile" class="w-9 h-9 rounded-full border-2 border-blue-100 object-cover" />
+                        }
+                        else
+                        {
+                            <div class="w-9 h-9 rounded-full border-2 border-blue-100 bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-sm select-none">
+                                @UserInitial
+                            </div>
+                        }
                         <div class="hidden md:block text-left">
                             <p class="max-w-[16rem] truncate text-sm font-semibold text-slate-700" title="@UserName">Hello, @UserName!</p>
                             <p class="max-w-[16rem] truncate text-xs text-slate-500" title="@UserGroupLabel">@UserGroupLabel</p>
                         </div>
-                        <svg class="w-4 h-4 text-slate-400 hidden md:block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-                        </svg>
+                        <AppIcon Name="chevron_down" Class="w-4 h-4 text-base text-slate-400 hidden md:block" />
                     </button>
 
                     <!-- Dropdown Menu -->
@@ -63,10 +70,10 @@
                         <div id="employee-menu" class="absolute right-0 top-full mt-2 w-48 bg-white rounded-lg shadow-lg border border-slate-100 py-1 z-50">
                             <div class="border-b border-slate-100 px-4 py-2 md:hidden"><p class="break-words text-sm font-semibold text-slate-700">@UserName</p><p class="mt-1 break-words text-xs text-slate-500">@UserGroupLabel</p></div>
                             <a href="/profile" @onclick="CloseProfileMenu" class="flex items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-blue-600 transition-colors">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                                <AppIcon Name="person" Class="w-4 h-4 text-base" />
                                 My Profile
                             </a>
-                            <a href="/online/chat" @onclick="CloseProfileMenu" class="flex items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"><svg aria-hidden="true" class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M21 10c0 3.866-4.03 7-9 7a12.4 12.4 0 01-3.3-.44L3 20l1.6-4.8C3.58 13.87 3 12.01 3 10c0-3.866 4.03-7 9-7s9 3.134 9 7z" /></svg>Chat</a>
+                            <a href="/online/chat" @onclick="CloseProfileMenu" class="flex items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"><AppIcon Name="chat" Class="h-4 w-4 text-base" />Chat</a>
                             <details class="px-4 py-2 text-sm text-slate-700">
                                 <summary class="cursor-pointer font-medium">Settings</summary>
                                 <div class="pt-3"><FontSizeSetting /></div>
@@ -75,7 +82,7 @@
                             <div class="border-t border-slate-100 my-1"></div>
 
                             <LogoutButton Class="w-full flex items-center gap-2 px-4 py-2 text-sm text-rose-600 hover:bg-rose-50 transition-colors text-left">
-                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+                                    <AppIcon Name="logout" Class="w-4 h-4 text-base" />
                                     Log Out
                             </LogoutButton>
                         </div>
@@ -108,6 +115,8 @@
     private (string Username, bool Access)? loadedIdentity;
     private int groupLoadVersion;
     private bool isProfileMenuOpen = false;
+    private string? userPhotoUrl;
+    private string UserInitial => !string.IsNullOrWhiteSpace(UserName) ? UserName.Trim().Substring(0, 1).ToUpperInvariant() : "U";
 
     protected override async Task OnParametersSetAsync()
     {
@@ -128,7 +137,11 @@
                 {
                     var context = await UserAccess.GetContextAsync();
                     var groups = context?.UserGroups.Select(g => g.GroupName).Distinct().OrderBy(g => g).ToList() ?? [];
-                    if (version == groupLoadVersion) userGroups = groups;
+                    if (version == groupLoadVersion)
+                    {
+                        userGroups = groups;
+                        userPhotoUrl = context?.ImageUrl;
+                    }
                 }
                 catch (Exception ex) { Logger.LogWarning(ex, "Could not load current user's group labels"); }
             }

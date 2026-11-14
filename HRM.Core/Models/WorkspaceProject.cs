@@ -15,6 +15,8 @@ public class Project
 
     public int? TeamId { get; set; }
 
+    public int? OrganisationStructureId { get; set; }
+
     [Required]
     [MaxLength(200)]
     public string Name { get; set; } = string.Empty;
@@ -45,6 +47,7 @@ public class Project
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public virtual Team? Team { get; set; }
+    public virtual OrganisationStructure? OrganisationStructure { get; set; }
     public virtual ICollection<ProjectMember> Members { get; set; } = new List<ProjectMember>();
     public virtual ICollection<ProjectTask> Tasks { get; set; } = new List<ProjectTask>();
 }

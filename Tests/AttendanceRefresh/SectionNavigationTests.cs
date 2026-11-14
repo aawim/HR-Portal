@@ -44,7 +44,7 @@ static class SectionNavigationTests
         Check(Selected(page) == null, "Organisation team URL retained a duplicate settings editor");
         page.Section = "permissions";
         Check(Selected(page) == "Organisation Permissions", "Back/forward within a category retained the previous section");
-        foreach (var (section, title) in new[] { ("manage", "Manage"), ("document-types", "Document Types"), ("types", "Manage type"), ("calendar", "Calendar"),
+        foreach (var (section, title) in new[] { ("manage", "Manage"), ("document-types", "Document Centre"), ("types", "Manage type"), ("calendar", "Calendar"),
             ("locations", "Locations"), ("location-types", "Location Types"), ("organisation-types", "Organisation Types"), ("requests", "Structure Request Types"), ("structure-request-types", "Structure Request Types") })
         {
             page.Section = section; Check(Selected(page) == title, $"Organisation section {section} did not restore");

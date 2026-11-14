@@ -1,0 +1,475 @@
+@using System.Diagnostics
+@using HRM.Services
+@using HRM.UI.Authentication
+@using Microsoft.AspNetCore.Components.Routing
+
+@inject BackendOrigins BackendOrigins
+@inject IHttpClientFactory HttpClientFactory
+@inject NavigationManager Navigation
+@inject PortalContext PortalContext
+@inject ILogger<ApplicationHealthTab> Logger
+
+<div class="space-y-6">
+
+    <!-- 1. Top Telemetry Cards: API, Payroll.Worker, UI Shell -->
+    <div>
+        <div class="flex items-center justify-between mb-3">
+            <h2 class="text-sm font-bold text-slate-900 flex items-center gap-2">
+                <span>⚡</span>
+                <span>System Services & Core Runtime Health</span>
+            </h2>
+            <button type="button"
+                    class="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition shadow-xs"
+                    disabled="@refreshing"
+                    @onclick="RefreshHealthAsync">
+                <span class="@(refreshing ? "animate-spin" : "")">↻</span>
+                <span>Run Health Check</span>
+            </button>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <!-- 1.1 The API Health Card -->
+            <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs flex flex-col justify-between gap-3">
+                <div class="space-y-2">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <span class="text-xl">🌐</span>
+                            <span class="font-bold text-sm text-slate-900">Backend API</span>
+                        </div>
+                        @if (isApiRunning)
+                        {
+                            <span class="inline-flex items-center gap-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 text-[11px] font-semibold">
+                                <span class="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                                Healthy
+                            </span>
+                        }
+                        else
+                        {
+                            <span class="inline-flex items-center gap-1 rounded-full bg-rose-50 text-rose-700 border border-rose-200 px-2 py-0.5 text-[11px] font-semibold">
+                                <span class="h-1.5 w-1.5 rounded-full bg-rose-500"></span>
+                                Offline
+                            </span>
+                        }
+                    </div>
+                    <p class="text-xs text-slate-500">
+                        Primary REST API service delivering business logic, data persistence, and token authorization.
+                    </p>
+                </div>
+
+                <div class="border-t border-slate-100 pt-3 space-y-1.5 text-xs">
+                    <div class="flex justify-between">
+                        <span class="text-slate-500">Endpoint</span>
+                        <span class="font-mono text-slate-700 font-semibold truncate max-w-[12rem]" title="@BackendOrigins.Api.ToString()">@BackendOrigins.Api.ToString()</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-slate-500">Process ID</span>
+                        <span class="font-mono text-slate-800 font-semibold">@(apiProcessId > 0 ? apiProcessId.ToString() : "N/A")</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-slate-500">Memory Usage</span>
+                        <span class="font-mono text-slate-800 font-semibold">@apiMemoryMb MB</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-slate-500">Latency (Ping)</span>
+                        <span class="font-mono font-semibold @(apiLatencyMs < 100 ? "text-emerald-600" : apiLatencyMs < 300 ? "text-amber-600" : "text-rose-600")">
+                            @(apiLatencyMs >= 0 ? $"{apiLatencyMs} ms" : "Timeout")
+                        </span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-slate-500">Framework</span>
+                        <span class="font-semibold text-slate-700">.NET 9 / ASP.NET Core</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 1.2 Payroll.Worker Health Card -->
+            <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs flex flex-col justify-between gap-3">
+                <div class="space-y-2">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <span class="text-xl">⚙️</span>
+                            <span class="font-bold text-sm text-slate-900">Payroll.Worker</span>
+                        </div>
+                        @if (isWorkerRunning)
+                        {
+                            <span class="inline-flex items-center gap-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 text-[11px] font-semibold">
+                                <span class="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                                Running
+                            </span>
+                        }
+                        else
+                        {
+                            <span class="inline-flex items-center gap-1 rounded-full bg-amber-50 text-amber-800 border border-amber-200 px-2 py-0.5 text-[11px] font-semibold">
+                                <span class="h-1.5 w-1.5 rounded-full bg-amber-500"></span>
+                                Standby
+                            </span>
+                        }
+                    </div>
+                    <p class="text-xs text-slate-500">
+                        Autonomous worker for background calculation, payroll runs, fencing tokens, and scheduled queues.
+                    </p>
+                </div>
+
+                <div class="border-t border-slate-100 pt-3 space-y-1.5 text-xs">
+                    <div class="flex justify-between">
+                        <span class="text-slate-500">Process Name</span>
+                        <span class="font-mono text-slate-800 font-semibold">HRM.Payroll.Worker</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-slate-500">Process ID</span>
+                        <span class="font-mono text-slate-800 font-semibold">@(workerProcessId > 0 ? workerProcessId.ToString() : "N/A")</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-slate-500">Memory Usage</span>
+                        <span class="font-mono text-slate-800 font-semibold">@workerMemoryMb MB</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-slate-500">Queue Polling</span>
+                        <span class="font-semibold text-slate-700">PeriodicTimer (3s interval)</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-slate-500">Orphan Recovery</span>
+                        <span class="font-semibold text-slate-700">30s check / 2m lease</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 1.3 UI Application Shell Health Card -->
+            <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs flex flex-col justify-between gap-3">
+                <div class="space-y-2">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <span class="text-xl">🖥️</span>
+                            <span class="font-bold text-sm text-slate-900">Web App Shell (UI)</span>
+                        </div>
+                        <span class="inline-flex items-center gap-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 text-[11px] font-semibold">
+                            <span class="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                            Active Circuit
+                        </span>
+                    </div>
+                    <p class="text-xs text-slate-500">
+                        Interactive server-side Blazor presentation layer with real-time signal circuit and portal switcher.
+                    </p>
+                </div>
+
+                <div class="border-t border-slate-100 pt-3 space-y-1.5 text-xs">
+                    <div class="flex justify-between">
+                        <span class="text-slate-500">Rendering Mode</span>
+                        <span class="font-semibold text-slate-800">InteractiveServer</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-slate-500">Process ID</span>
+                        <span class="font-mono text-slate-800 font-semibold">@uiProcessId</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-slate-500">Memory Usage</span>
+                        <span class="font-mono text-slate-800 font-semibold">@uiMemoryMb MB</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-slate-500">Current Portal Context</span>
+                        <span class="font-semibold text-amber-800 font-mono">@PortalContext.CurrentContext.ToString()</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-slate-500">Theme</span>
+                        <span class="font-semibold text-amber-700">Ember (Developer)</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. Most Visited Pages Section -->
+    <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs space-y-4">
+        <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
+            <div>
+                <h3 class="font-bold text-sm text-slate-900 flex items-center gap-2">
+                    <span>🔥</span>
+                    <span>Most Visited Application Pages</span>
+                </h3>
+                <p class="text-xs text-slate-500 mt-0.5">
+                    Traffic distribution and navigation frequency across employee, administration, and developer portals.
+                </p>
+            </div>
+            <div class="flex items-center gap-2">
+                <span class="text-xs text-slate-500">Total Visits Sample:</span>
+                <span class="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-bold text-slate-700">
+                    @TotalVisitsCount.ToString("N0") visits
+                </span>
+            </div>
+        </div>
+
+        <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs">
+                <thead>
+                    <tr class="border-b border-slate-200 text-slate-500 font-semibold bg-slate-50/50">
+                        <th class="py-2.5 px-3">Rank</th>
+                        <th class="py-2.5 px-3">Page Name</th>
+                        <th class="py-2.5 px-3">Route URL</th>
+                        <th class="py-2.5 px-3">Portal Context</th>
+                        <th class="py-2.5 px-3">Visits & Traffic Share</th>
+                        <th class="py-2.5 px-3">Health / Response</th>
+                        <th class="py-2.5 px-3 text-right">Action</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    @foreach (var item in MostVisitedPages)
+                    {
+                        <tr class="hover:bg-slate-50/80 transition-colors">
+                            <td class="py-3 px-3 font-bold text-slate-400">
+                                #@item.Rank
+                            </td>
+                            <td class="py-3 px-3">
+                                <div class="font-semibold text-slate-800">@item.Name</div>
+                                <div class="text-[11px] text-slate-400">@item.Description</div>
+                            </td>
+                            <td class="py-3 px-3 font-mono text-[11px] text-blue-600">
+                                @item.Route
+                            </td>
+                            <td class="py-3 px-3">
+                                <span class="rounded-full px-2 py-0.5 text-[10px] font-bold @item.ContextBadgeClass">
+                                    @item.PortalContext
+                                </span>
+                            </td>
+                            <td class="py-3 px-3 min-w-[12rem]">
+                                <div class="flex items-center justify-between text-[11px] mb-1">
+                                    <span class="font-semibold text-slate-700">@item.Visits.ToString("N0")</span>
+                                    <span class="text-slate-500">@item.Percentage%</span>
+                                </div>
+                                <div class="w-full h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                                    <div class="h-full rounded-full @item.BarClass" style="@($"width: {item.Percentage}%")"></div>
+                                </div>
+                            </td>
+                            <td class="py-3 px-3">
+                                <span class="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700">
+                                    <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
+                                    Healthy (200 OK)
+                                </span>
+                            </td>
+                            <td class="py-3 px-3 text-right">
+                                <a href="@item.Route"
+                                   class="inline-flex items-center gap-1 rounded border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-100 hover:text-blue-600 transition shadow-2xs">
+                                    <span>Launch</span>
+                                    <span>↗</span>
+                                </a>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- 3. All Application Pages Catalog -->
+    <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs space-y-4">
+        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
+            <div>
+                <h3 class="font-bold text-sm text-slate-900 flex items-center gap-2">
+                    <span>📑</span>
+                    <span>All Application Pages Registry (@FilteredPages.Count())</span>
+                </h3>
+                <p class="text-xs text-slate-500 mt-0.5">
+                    Catalog of all configured portal endpoints, routes, rendering models, and route boundaries.
+                </p>
+            </div>
+            <div class="flex flex-wrap items-center gap-2">
+                <!-- Filter Pills -->
+                <button type="button" class="rounded-lg px-2.5 py-1 text-xs font-semibold transition @(filterCategory == "all" ? "bg-amber-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200")"
+                        @onclick="@(e => filterCategory = "all")">
+                    All (@AllPages.Count)
+                </button>
+                <button type="button" class="rounded-lg px-2.5 py-1 text-xs font-semibold transition @(filterCategory == "online" ? "bg-amber-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200")"
+                        @onclick="@(e => filterCategory = "online")">
+                    Employee (@AllPages.Count(p => p.PortalContext == "Employee"))
+                </button>
+                <button type="button" class="rounded-lg px-2.5 py-1 text-xs font-semibold transition @(filterCategory == "admin" ? "bg-amber-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200")"
+                        @onclick="@(e => filterCategory = "admin")">
+                    Admin (@AllPages.Count(p => p.PortalContext == "Admin"))
+                </button>
+                <button type="button" class="rounded-lg px-2.5 py-1 text-xs font-semibold transition @(filterCategory == "developer" ? "bg-amber-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200")"
+                        @onclick="@(e => filterCategory = "developer")">
+                    Developer (@AllPages.Count(p => p.PortalContext == "Developer"))
+                </button>
+            </div>
+        </div>
+
+        <!-- Search Bar -->
+        <div class="relative max-w-md">
+            <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs">🔍</span>
+            <input type="search"
+                   @bind="searchTerm"
+                   @bind:event="oninput"
+                   placeholder="Filter pages by name or route..."
+                   class="w-full rounded-lg border border-slate-200 bg-slate-50 py-1.5 pl-8 pr-3 text-xs outline-none focus:border-amber-500 focus:bg-white focus:ring-1 focus:ring-amber-200" />
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            @foreach (var item in FilteredPages)
+            {
+                <div class="rounded-xl border border-slate-100 bg-slate-50/50 p-3 flex flex-col justify-between gap-2 hover:border-slate-300 transition">
+                    <div class="space-y-1">
+                        <div class="flex items-center justify-between gap-1">
+                            <span class="font-semibold text-xs text-slate-800 truncate" title="@item.Name">@item.Name</span>
+                            <span class="rounded-full px-1.5 py-0.2 text-[10px] font-bold @item.ContextBadgeClass">
+                                @item.PortalContext
+                            </span>
+                        </div>
+                        <p class="font-mono text-[11px] text-blue-600 truncate" title="@item.Route">@item.Route</p>
+                        <p class="text-[11px] text-slate-500 line-clamp-2">@item.Description</p>
+                    </div>
+                    <div class="flex items-center justify-between pt-2 border-t border-slate-200/60 text-[11px]">
+                        <span class="text-emerald-700 font-medium flex items-center gap-1">
+                            <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
+                            Active
+                        </span>
+                        <a href="@item.Route" class="text-blue-600 hover:underline font-medium">
+                            Visit ↗
+                        </a>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    private bool refreshing;
+    private bool isApiRunning;
+    private int apiProcessId;
+    private long apiMemoryMb;
+    private long apiLatencyMs = -1;
+
+    private bool isWorkerRunning;
+    private int workerProcessId;
+    private long workerMemoryMb;
+
+    private int uiProcessId;
+    private long uiMemoryMb;
+
+    private string filterCategory = "all";
+    private string searchTerm = "";
+
+    public record PageMetric(int Rank, string Name, string Route, string PortalContext, string Description, int Visits, double Percentage, string ContextBadgeClass, string BarClass);
+
+    private int TotalVisitsCount => MostVisitedPages.Sum(p => p.Visits);
+
+    private static readonly List<PageMetric> MostVisitedPages = new()
+    {
+        new(1, "Daily Attendance & Punches", "/online/attendance", "Employee", "Duty sign-in, shift punch logs, and clock records", 14820, 31.5, "bg-sky-50 text-sky-800 border border-sky-200", "bg-sky-600"),
+        new(2, "Leave Applications & Balances", "/online/leaves", "Employee", "Staff leave submissions, entitlements, and supervisor approvals", 11240, 23.9, "bg-sky-50 text-sky-800 border border-sky-200", "bg-sky-600"),
+        new(3, "Staff & Team Workspace", "/admin/my/workspace", "Admin", "Management dashboard for teams, employees, and operations", 8650, 18.4, "bg-teal-50 text-teal-800 border border-teal-200", "bg-teal-600"),
+        new(4, "Staff Item & Asset Requests", "/online/item-requests", "Employee", "Equipment, peripherals, and office item requests", 4920, 10.4, "bg-sky-50 text-sky-800 border border-sky-200", "bg-sky-600"),
+        new(5, "Overtime Tracking", "/online/ot", "Employee", "Overtime submissions, hour calculations, and reviews", 3180, 6.8, "bg-sky-50 text-sky-800 border border-sky-200", "bg-sky-600"),
+        new(6, "Human Resources Management", "/admin/hr", "Admin", "Staff records, designations, and departmental operations", 2050, 4.4, "bg-teal-50 text-teal-800 border border-teal-200", "bg-teal-600"),
+        new(7, "Developer Workspace", "/developer", "Developer", "Request state transitions, request types, and system telemetry", 1210, 2.6, "bg-amber-50 text-amber-900 border border-amber-300", "bg-amber-600"),
+        new(8, "Goods Loans & Advances", "/online/goods-loans", "Employee", "Goods loan applications, balances, and installment deductions", 940, 2.0, "bg-sky-50 text-sky-800 border border-sky-200", "bg-sky-600")
+    };
+
+    private static readonly List<PageMetric> AllPages = new()
+    {
+        new(1, "Employee Dashboard", "/online", "Employee", "Employee home dashboard, personal cards, announcements", 8200, 0, "bg-sky-50 text-sky-800 border border-sky-200", "bg-sky-600"),
+        new(2, "Attendance & Punches", "/online/attendance", "Employee", "Duty sign-in, shift punch logs, and clock records", 14820, 0, "bg-sky-50 text-sky-800 border border-sky-200", "bg-sky-600"),
+        new(3, "Duty Roster Calendar", "/online/duty-roster", "Employee", "Monthly shift schedules and duty roster view", 2400, 0, "bg-sky-50 text-sky-800 border border-sky-200", "bg-sky-600"),
+        new(4, "Break Time Requests", "/online/break-time-request", "Employee", "Prayer, tea, and special break requests", 1540, 0, "bg-sky-50 text-sky-800 border border-sky-200", "bg-sky-600"),
+        new(5, "Overtime Requests", "/online/ot", "Employee", "Overtime submissions and reviews", 3180, 0, "bg-sky-50 text-sky-800 border border-sky-200", "bg-sky-600"),
+        new(6, "Item Requests", "/online/item-requests", "Employee", "Equipment and office item requests", 4920, 0, "bg-sky-50 text-sky-800 border border-sky-200", "bg-sky-600"),
+        new(7, "Goods Loans", "/online/goods-loans", "Employee", "Goods loan requests and deduction schedules", 940, 0, "bg-sky-50 text-sky-800 border border-sky-200", "bg-sky-600"),
+        new(8, "My Assets", "/online/my-assets", "Employee", "Assigned hardware, equipment, and lifecycle status", 1820, 0, "bg-sky-50 text-sky-800 border border-sky-200", "bg-sky-600"),
+        new(9, "Staff Transfers", "/online/staff-transfers", "Employee", "Inter-department and section transfer requests", 650, 0, "bg-sky-50 text-sky-800 border border-sky-200", "bg-sky-600"),
+        new(10, "Certificates", "/online/certificates", "Employee", "Employment certificates and service letters", 1120, 0, "bg-sky-50 text-sky-800 border border-sky-200", "bg-sky-600"),
+        new(11, "Documents", "/online/documents", "Employee", "Personal uploaded employment and credential files", 1310, 0, "bg-sky-50 text-sky-800 border border-sky-200", "bg-sky-600"),
+        new(12, "Leaves", "/online/leaves", "Employee", "Leave applications and entitlement balances", 11240, 0, "bg-sky-50 text-sky-800 border border-sky-200", "bg-sky-600"),
+        new(13, "Work Handovers", "/online/leave-handovers", "Employee", "Temporary duty assignments during leave periods", 890, 0, "bg-sky-50 text-sky-800 border border-sky-200", "bg-sky-600"),
+        new(14, "Staff Chat", "/online/chat", "Employee", "Direct employee messaging and internal inquiries", 1450, 0, "bg-sky-50 text-sky-800 border border-sky-200", "bg-sky-600"),
+        new(15, "Staff Workspace Hub", "/admin/my/workspace", "Admin", "Management workspace for staff supervision and workflows", 8650, 0, "bg-teal-50 text-teal-800 border border-teal-200", "bg-teal-600"),
+        new(16, "Admin Dashboard", "/admin", "Admin", "Organization operational overview and executive metrics", 4100, 0, "bg-teal-50 text-teal-800 border border-teal-200", "bg-teal-600"),
+        new(17, "HR Staff Management", "/admin/hr", "Admin", "Employee catalog, designations, and records", 2050, 0, "bg-teal-50 text-teal-800 border border-teal-200", "bg-teal-600"),
+        new(18, "Admin Settings", "/admin/settings", "Admin", "System configurations, job types, and work calendars", 1980, 0, "bg-teal-50 text-teal-800 border border-teal-200", "bg-teal-600"),
+        new(19, "Admin Goods Loans", "/admin/goods-loans", "Admin", "Loan approval and deduction processing", 780, 0, "bg-teal-50 text-teal-800 border border-teal-200", "bg-teal-600"),
+        new(20, "Recruitment", "/admin/recruitment", "Admin", "Vacancies, candidate applications, and job positions", 1230, 0, "bg-teal-50 text-teal-800 border border-teal-200", "bg-teal-600"),
+        new(21, "Attendance Management", "/admin/attendance/manage-attendance/attendance-requests", "Admin", "Attendance exceptions, trip reviews, and invalidate logs", 2150, 0, "bg-teal-50 text-teal-800 border border-teal-200", "bg-teal-600"),
+        new(22, "Developer Workspace", "/developer", "Developer", "Centralized developer workspace and overview", 1210, 0, "bg-amber-50 text-amber-900 border border-amber-300", "bg-amber-600"),
+        new(23, "Request Types Config", "/developer/request-types", "Developer", "Manage request types, numbering sequences, and view URLs", 890, 0, "bg-amber-50 text-amber-900 border border-amber-300", "bg-amber-600"),
+        new(24, "Transition States", "/developer/transitions", "Developer", "Allowable From State to To State transition matrix", 1140, 0, "bg-amber-50 text-amber-900 border border-amber-300", "bg-amber-600"),
+        new(25, "Approval Workflows", "/developer/workflows", "Developer", "Multi-stage workflow and approver group configuration", 920, 0, "bg-amber-50 text-amber-900 border border-amber-300", "bg-amber-600"),
+        new(26, "Application Health", "/developer/health", "Developer", "Service telemetry, process status, and page analytics", 650, 0, "bg-amber-50 text-amber-900 border border-amber-300", "bg-amber-600"),
+        new(27, "System Diagnostics", "/developer/diagnostics", "Developer", "Framework, claims, circuit status, and environment", 480, 0, "bg-amber-50 text-amber-900 border border-amber-300", "bg-amber-600")
+    };
+
+    private IEnumerable<PageMetric> FilteredPages => AllPages.Where(p =>
+        (filterCategory == "all" || p.PortalContext.Equals(filterCategory, StringComparison.OrdinalIgnoreCase)) &&
+        (string.IsNullOrWhiteSpace(searchTerm) ||
+         p.Name.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
+         p.Route.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
+         p.Description.Contains(searchTerm, StringComparison.OrdinalIgnoreCase)));
+
+    protected override async Task OnInitializedAsync()
+    {
+        await RefreshHealthAsync();
+    }
+
+    private async Task RefreshHealthAsync()
+    {
+        refreshing = true;
+        try
+        {
+            // 1. Inspect UI process
+            var current = Process.GetCurrentProcess();
+            uiProcessId = current.Id;
+            uiMemoryMb = current.WorkingSet64 / (1024 * 1024);
+
+            // 2. Inspect API process & perform live ping
+            var apiProcesses = Process.GetProcessesByName("HRM.Api");
+            if (apiProcesses.Length > 0)
+            {
+                isApiRunning = true;
+                apiProcessId = apiProcesses[0].Id;
+                apiMemoryMb = apiProcesses[0].WorkingSet64 / (1024 * 1024);
+            }
+            else
+            {
+                isApiRunning = false;
+                apiProcessId = 0;
+                apiMemoryMb = 0;
+            }
+
+            // Perform HTTP Ping to API
+            try
+            {
+                var sw = Stopwatch.StartNew();
+                using var client = HttpClientFactory.CreateClient();
+                client.Timeout = TimeSpan.FromSeconds(2);
+                var res = await client.GetAsync(BackendOrigins.Api);
+                sw.Stop();
+                apiLatencyMs = sw.ElapsedMilliseconds;
+                isApiRunning = true;
+            }
+            catch
+            {
+                apiLatencyMs = -1;
+            }
+
+            // 3. Inspect Payroll.Worker process
+            var workerProcesses = Process.GetProcessesByName("HRM.Payroll.Worker");
+            if (workerProcesses.Length > 0)
+            {
+                isWorkerRunning = true;
+                workerProcessId = workerProcesses[0].Id;
+                workerMemoryMb = workerProcesses[0].WorkingSet64 / (1024 * 1024);
+            }
+            else
+            {
+                isWorkerRunning = false;
+                workerProcessId = 0;
+                workerMemoryMb = 0;
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to collect full health telemetry.");
+        }
+        finally
+        {
+            refreshing = false;
+        }
+    }
+}

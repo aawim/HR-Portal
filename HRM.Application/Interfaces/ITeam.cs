@@ -5,11 +5,12 @@ namespace HRM.Services.Interfaces
     public interface ITeam
     {
         Task<List<TeamDto>> GetMyTeamsAsync();
+        Task<MyOrganisationStructureDto?> GetMyOrganisationStructureAsync();
         Task<int> CreateAsync(int organisationId, string name, string? nameDhivehi, DateTime startDate, CancellationToken ct = default);
         Task<List<TeamDto>> GetMyTeamMembersAsync(int TeamId);
         Task<int> AddStaffAsync(int teamId, int staffId, DateTime startDate, bool isSupervisor = false, CancellationToken ct = default);
         Task<bool> RemoveStaffAsync(int teamId, int staffId, CancellationToken ct = default);
-        Task<List<TeamSearchItemDto>> SearchTeamsAsync(string query, CancellationToken ct = default);
+        Task<List<TeamSearchItemDto>> SearchTeamsAsync(string? query, CancellationToken ct = default);
         Task<TeamDto?> GetTeamByIdAsync(int teamId, CancellationToken ct = default);
         Task<List<TeamProjectDto>> GetTeamProjectsAsync(int teamId, CancellationToken ct = default);
         Task<TeamProjectDto?> GetProjectDetailsAsync(int projectId, CancellationToken ct = default);
@@ -21,11 +22,26 @@ namespace HRM.Services.Interfaces
         Task<bool> AcknowledgeEvaluationAsync(AcknowledgeEvaluationRequestDto request, CancellationToken ct = default);
         Task<List<EvaluationTemplateDto>> GetEvaluationTemplatesAsync(CancellationToken ct = default);
         Task<TeamDto?> GetHelpDeskTeamAsync(CancellationToken ct = default);
-        Task<List<ProjectLookupDto>> SearchAssignableProjectsAsync(string query, CancellationToken ct = default);
+        Task<List<ProjectLookupDto>> SearchAssignableProjectsAsync(string? query, CancellationToken ct = default);
         Task<int> AssignStaffToProjectAsync(AssignProjectRequestDto request, CancellationToken ct = default);
         Task<bool> UpdateProjectAssignmentAsync(UpdateProjectAssignmentRequestDto request, CancellationToken ct = default);
         Task<bool> RemoveProjectAssignmentAsync(int projectMemberId, string? remarks, CancellationToken ct = default);
         Task<bool> AssignTaskAsync(AssignTaskRequestDto request, CancellationToken ct = default);
+        Task<int> CreateProjectAsync(CreateProjectInputDto input, CancellationToken ct = default);
+        Task<bool> UpdateProjectAsync(UpdateProjectInputDto input, CancellationToken ct = default);
+        Task<bool> DeleteProjectAsync(int projectId, CancellationToken ct = default);
+        Task<List<TeamProjectDto>> GetAllProjectsAsync(int? organisationId = null, int? organisationStructureId = null, int? teamId = null, CancellationToken ct = default);
+        Task<List<TeamProjectDto>> GetDepartmentProjectsAsync(int organisationStructureId, CancellationToken ct = default);
+        Task<List<OrganisationStructureDropdownDto>> GetOrganisationStructuresAsync(int? organisationId = null, CancellationToken ct = default);
+        Task<int> CreateTaskAsync(CreateTaskInputDto input, CancellationToken ct = default);
+        Task<bool> UpdateTaskAsync(UpdateTaskInputDto input, CancellationToken ct = default);
+        Task<bool> DeleteTaskAsync(int taskId, CancellationToken ct = default);
         Task<List<AssignmentHistoryDto>> GetAssignmentHistoryAsync(int projectId, int? staffId, CancellationToken ct = default);
+        Task<SubTeamWorkspaceDto> LoadSubTeamsAsync(int parentTeamId, CancellationToken ct = default);
+        Task<int> SaveSubTeamAsync(SaveSubTeamDto model, CancellationToken ct = default);
+        Task<bool> DeleteSubTeamAsync(int teamId, CancellationToken ct = default);
+        Task<int> SaveSubTeamMemberAsync(SaveSubTeamMemberDto model, CancellationToken ct = default);
+        Task<bool> RemoveSubTeamMemberAsync(int teamId, int staffId, CancellationToken ct = default);
+        Task<int> SaveTeamScheduleAdjustmentAsync(TeamScheduleAdjustmentDto model, CancellationToken ct = default);
     }
 }

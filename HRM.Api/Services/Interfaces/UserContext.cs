@@ -26,6 +26,12 @@ public class UserContext(AuthenticationStateProvider auth, IDbContextFactory<Hrm
    .OrderByDescending(j => j.JoinedDate).ThenByDescending(j => j.JobId).Select(j => j.JobId).FirstOrDefaultAsync();
   // Portal admission and individual resource permissions are separate grants.
   var canAdmin = user.AdminPortalAccessEnabled && user.AdminPortalAccessOrganisationId == user.UserOrganisationId;
-  return new UserSessionDto { UserId = user.UserId, IndividualId = user.BusinessEntityID, JobId = jobId, OrganisationId = organisation?.Id, OrganisationName = organisation?.Name ?? "", CanAccessSystem = true, CanAccessAdminPortal = organisation != null && canAdmin };
+  var canDeveloper = await db.UserAssignedUserGroups.AsNoTracking().AnyAsync(x => x.UserId == user.UserId &&
+   x.User.IsActive && x.User.LocalUserStateId == 1 &&
+   (x.UserGroup.IsGlobal || x.UserGroup.UserOrganisationId == user.UserOrganisationId) &&
+   x.UserGroup.GroupName.ToUpper() == "DEVELOPER")
+   || await db.UserRoles.AsNoTracking().AnyAsync(x => x.UserId == user.UserId &&
+   x.Role.RoleKey.ToUpper() == "DEVELOPER" && x.IsActive);
+  return new UserSessionDto { UserId = user.UserId, IndividualId = user.BusinessEntityID, JobId = jobId, OrganisationId = organisation?.Id, OrganisationName = organisation?.Name ?? "", CanAccessSystem = true, CanAccessAdminPortal = organisation != null && canAdmin, CanAccessDeveloperPortal = canDeveloper };
  }
 }

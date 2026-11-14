@@ -1,6 +1,7 @@
 using HRM.Components.Shared;
 using HRM.DTOs.JobPosition;
 using HRM.DTOs.Profile;
+using HRM.DTOs.Staff;
 using HRM.DTOs.Profile.ProfileAccess;
 using HRM.DTOs.Team;
 using HRM.DTOs.UserContext;
@@ -47,7 +48,15 @@ namespace HRM.Services
         
             await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
             var actor = await _userAccessService.RequireContextAsync();
-            if (individualId != actor.IndividualId && !actor.IsSuperAdministrator && !await _userAccessService.HasPermissionAsync("Employee.View") && !await _userAccessService.HasPermissionAsync("Admin"))
+            if (individualId != actor.IndividualId &&
+                !actor.IsSuperAdministrator &&
+                !actor.IsOrganisationAdmin &&
+                !actor.IsHRHead &&
+                !actor.IsHRManager &&
+                !actor.IsHRStaff &&
+                !actor.IsSupervisor &&
+                !await _userAccessService.HasPermissionAsync("Employee.View") &&
+                !await _userAccessService.HasPermissionAsync("Admin"))
                 throw new UnauthorizedAccessException("Staff profile information requires permission.");
             await HRM.Helpers.StaffDataAccess.RequireIndividualAsync(db, _userAccessService, individualId);
 
@@ -64,8 +73,26 @@ namespace HRM.Services
                     return null;
                 }
 
-                var identityCardNumber =
-                    await LoadIdentityCardNumberAsync(
+                var (identityCardNumber, idCardExpiry) =
+                    await LoadIdCardInfoAsync(
+                        db,
+                        individualId,
+                        cancellationToken);
+
+                var (passportNumber, passportExpiry, passportIssued, passportCountry) =
+                    await LoadPassportInfoAsync(
+                        db,
+                        individualId,
+                        cancellationToken);
+
+                var bankAccounts =
+                    await LoadBankAccountsAsync(
+                        db,
+                        individualId,
+                        cancellationToken);
+
+                var emergencyContacts =
+                    await LoadEmergencyContactsAsync(
                         db,
                         individualId,
                         cancellationToken);
@@ -224,6 +251,27 @@ namespace HRM.Services
 
                     IdentityCardNumber =
                         identityCardNumber,
+
+                    IdentityCardExpiryDate =
+                        idCardExpiry,
+
+                    PassportNumber =
+                        passportNumber,
+
+                    PassportExpiryDate =
+                        passportExpiry,
+
+                    PassportIssuedDate =
+                        passportIssued,
+
+                    PassportCountryName =
+                        passportCountry,
+
+                    BankAccounts =
+                        bankAccounts,
+
+                    EmergencyContacts =
+                        emergencyContacts,
 
                     ProfileType =
                         profileType,
@@ -962,6 +1010,96 @@ namespace HRM.Services
                     value!.Trim()));
         }
 
+
+        private static async Task<(string? Number, DateTime? Expiry)> LoadIdCardInfoAsync(
+            HrmTeContext db,
+            int individualId,
+            CancellationToken ct)
+        {
+            if (individualId <= 0) return (null, null);
+            var card = await db.Idcards.AsNoTracking()
+                .Where(c => c.BusinessEntityId == individualId)
+                .OrderByDescending(c => c.IdcardId)
+                .Select(c => new { c.IdcardNumber, c.ExpiryDate })
+                .FirstOrDefaultAsync(ct);
+            return (card?.IdcardNumber, card?.ExpiryDate);
+        }
+
+        private static async Task<(string? Number, DateTime? Expiry, DateTime? Issued, string? Country)> LoadPassportInfoAsync(
+            HrmTeContext db,
+            int individualId,
+            CancellationToken ct)
+        {
+            if (individualId <= 0) return (null, null, null, null);
+            var p = await db.Passports.AsNoTracking()
+                .Where(x => x.BusinessEntityId == individualId)
+                .OrderByDescending(x => x.PassportId)
+                .Select(x => new { x.PassportNumber, x.ExpiryDate, x.IssuedDate, Country = x.Country.NameEnglish })
+                .FirstOrDefaultAsync(ct);
+            return (p?.PassportNumber, p?.ExpiryDate, p?.IssuedDate, p?.Country);
+        }
+
+        private static async Task<List<StaffBankAccountDto>> LoadBankAccountsAsync(
+            HrmTeContext db,
+            int individualId,
+            CancellationToken ct)
+        {
+            try
+            {
+                return await db.StaffBankAccounts.AsNoTracking()
+                    .Where(b => b.IndividualId == individualId)
+                    .OrderByDescending(b => b.IsPrimary)
+                    .ThenBy(b => b.BankName)
+                    .Select(b => new StaffBankAccountDto
+                    {
+                        Id = b.Id,
+                        IndividualId = b.IndividualId,
+                        BankName = b.BankName,
+                        BankCode = b.BankCode,
+                        BranchName = b.BranchName,
+                        AccountHolderName = b.AccountHolderName,
+                        AccountNumber = b.AccountNumber,
+                        Currency = b.Currency,
+                        IsPrimary = b.IsPrimary,
+                        Remarks = b.Remarks,
+                        CreatedAtUtc = b.CreatedAtUtc,
+                        UpdatedAtUtc = b.UpdatedAtUtc
+                    })
+                    .ToListAsync(ct);
+            }
+            catch { return []; }
+        }
+
+        private static async Task<List<StaffEmergencyContactDto>> LoadEmergencyContactsAsync(
+            HrmTeContext db,
+            int individualId,
+            CancellationToken ct)
+        {
+            try
+            {
+                return await db.StaffEmergencyContacts.AsNoTracking()
+                    .Where(c => c.IndividualId == individualId)
+                    .OrderByDescending(c => c.IsPrimary)
+                    .ThenBy(c => c.ContactName)
+                    .Select(c => new StaffEmergencyContactDto
+                    {
+                        Id = c.Id,
+                        IndividualId = c.IndividualId,
+                        ContactName = c.ContactName,
+                        Relationship = c.Relationship,
+                        PrimaryPhone = c.PrimaryPhone,
+                        SecondaryPhone = c.SecondaryPhone,
+                        Email = c.Email,
+                        Address = c.Address,
+                        IsPrimary = c.IsPrimary,
+                        Notes = c.Notes,
+                        CreatedAtUtc = c.CreatedAtUtc,
+                        UpdatedAtUtc = c.UpdatedAtUtc
+                    })
+                    .ToListAsync(ct);
+            }
+            catch { return []; }
+        }
 
         private static async Task<string?> LoadIdentityCardNumberAsync(
             HrmTeContext db,

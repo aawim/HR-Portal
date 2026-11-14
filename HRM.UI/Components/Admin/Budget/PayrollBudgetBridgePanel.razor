@@ -1,0 +1,427 @@
+@using HRM.Application.Contracts.Pages
+@using HRM.Application.DTOs.Budget
+@using HRM.Application.Interfaces.Budget
+@using HRM.Models.Payroll
+@inject IBudgetService BudgetService
+@inject IEnterprisePayroll Payroll
+
+<section class="payroll-budget-bridge w-full min-w-0 p-2 space-y-4">
+    <!-- Sticky Header -->
+    <header class="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur-xs px-4 py-3 shadow-xs rounded-xl flex flex-wrap items-center justify-between gap-3">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold text-xl shadow-xs">
+                🔗
+            </div>
+            <div>
+                <h1 class="text-lg font-bold text-slate-800 leading-tight">Payroll &amp; Budget Integration Bridge</h1>
+                <p class="text-xs text-slate-500">Automated Pre-Audit Encumbrance Check &amp; MoF COA Component Mapping</p>
+            </div>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2">
+            @if (payrollRuns is { Count: > 0 })
+            {
+                <div class="flex items-center gap-1.5">
+                    <label for="payroll-run-select" class="text-xs font-medium text-slate-700 p-1">Payroll Run:</label>
+                    <select id="payroll-run-select"
+                            class="rounded-lg border border-slate-300 bg-white p-1.5 text-xs text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            @bind="selectedPayrollRunId"
+                            @bind:after="OnSelectedRunChanged">
+                        @foreach (var run in payrollRuns)
+                        {
+                            <option value="@run.PayrollRunId">
+                                #@run.PayrollRunId — @run.Title (@FormatRunStatus(run.Status))
+                            </option>
+                        }
+                    </select>
+                </div>
+            }
+            else if (!isLoading)
+            {
+                <span class="rounded-full bg-amber-50 border border-amber-200 px-2.5 py-0.5 text-xs font-semibold text-amber-800">
+                    No Payroll Runs Found
+                </span>
+            }
+
+            <button type="button"
+                    class="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition"
+                    @onclick="OpenAddMappingModal">
+                <AppIcon Name="add" Class="w-4 h-4 text-emerald-600 text-base" />
+                <span>+ Add Mapping</span>
+            </button>
+
+            <button type="button"
+                    class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-emerald-700 disabled:opacity-50 transition"
+                    @onclick="RunPrePayrollCheckAsync"
+                    disabled="@(isValidating || selectedPayrollRunId <= 0)">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                <span>@(isValidating ? "Checking..." : "Run Pre-Payroll Budget Check")</span>
+            </button>
+        </div>
+    </header>
+
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 text-xs flex items-center justify-between">
+            <span>@errorMessage</span>
+            <button type="button" @onclick="() => errorMessage = null" class="text-rose-500 hover:text-rose-700 font-bold">&times;</button>
+        </div>
+    }
+    @if (!string.IsNullOrEmpty(successMessage))
+    {
+        <div class="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 text-xs flex items-center justify-between">
+            <span>@successMessage</span>
+            <button type="button" @onclick="() => successMessage = null" class="text-emerald-500 hover:text-emerald-700 font-bold">&times;</button>
+        </div>
+    }
+
+    @if (validationResult != null)
+    {
+        var hasLines = validationResult.LineChecks.Count > 0;
+        var cardBorderAndBg = validationResult.IsSolvent
+            ? "border-emerald-200 bg-emerald-50/70"
+            : hasLines
+                ? "border-rose-200 bg-rose-50/70"
+                : "border-amber-200 bg-amber-50/70";
+        var headingColor = validationResult.IsSolvent
+            ? "text-emerald-900"
+            : hasLines
+                ? "text-rose-900"
+                : "text-amber-900";
+        var headingTitle = validationResult.IsSolvent
+            ? "Pre-Payroll Budget Check: PASSED"
+            : hasLines
+                ? "Pre-Payroll Budget Check: DEFICIT DETECTED"
+                : "Pre-Payroll Budget Check: CANNOT VALIDATE";
+
+        <!-- Pre-Payroll Gate Results Card -->
+        <div class="p-4 rounded-xl border @cardBorderAndBg shadow-xs space-y-3">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+                <div class="flex items-center gap-2">
+                    <span class="text-xl">@(validationResult.IsSolvent ? "✅" : "⚠️")</span>
+                    <h3 class="text-sm font-bold @headingColor">
+                        @headingTitle
+                    </h3>
+                </div>
+                @if (hasLines)
+                {
+                    <span class="text-xs font-mono font-bold @(validationResult.IsSolvent ? "text-emerald-700" : "text-rose-700")">
+                        Required Emoluments: MVR @validationResult.TotalRequiredEmoluments.ToString("N2") | Available: MVR @validationResult.TotalAvailableEmoluments.ToString("N2")
+                    </span>
+                }
+            </div>
+            <p class="text-xs text-slate-700">@validationResult.Message</p>
+
+            @if (hasLines)
+            {
+                <div class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+                    <table class="w-full text-left border-collapse text-xs">
+                        <thead>
+                            <tr class="bg-slate-50 text-slate-600 font-bold border-b border-slate-200 text-[11px]">
+                                <th class="px-3 py-2">MoF Code</th>
+                                <th class="px-3 py-2">Line Item / Emolument Component</th>
+                                <th class="px-3 py-2 text-right">Batch Requirement</th>
+                                <th class="px-3 py-2 text-right">Available Allocation</th>
+                                <th class="px-3 py-2 text-center">Solvency Status</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            @foreach (var check in validationResult.LineChecks)
+                            {
+                                <tr>
+                                    <td class="px-3 py-2 font-mono font-semibold text-slate-700">@check.EconomicCode</td>
+                                    <td class="px-3 py-2 font-medium text-slate-800">@check.ComponentName</td>
+                                    <td class="px-3 py-2 text-right font-mono font-bold text-slate-800">MVR @check.RequiredAmount.ToString("N2")</td>
+                                    <td class="px-3 py-2 text-right font-mono text-slate-700">MVR @check.AvailableBalance.ToString("N2")</td>
+                                    <td class="px-3 py-2 text-center">
+                                        @if (check.IsSufficient && check.BudgetItemId > 0)
+                                        {
+                                            <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-100 text-emerald-800">
+                                                Sufficient
+                                            </span>
+                                        }
+                                        else if (check.BudgetItemId == 0)
+                                        {
+                                            <div class="inline-flex items-center gap-1.5">
+                                                <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-100 text-amber-800">
+                                                    Unmapped
+                                                </span>
+                                                <button type="button"
+                                                        @onclick="() => PreFillAndOpenMapping(check.ComponentName)"
+                                                        class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-500 hover:bg-amber-600 text-white shadow-2xs transition">
+                                                    <i class="bi bi-link-45deg"></i>
+                                                    <span>Map</span>
+                                                </button>
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-rose-100 text-rose-800">
+                                                Deficit: MVR @check.Deficit.ToString("N2")
+                                            </span>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    }
+
+    <!-- Mapping Matrix Table -->
+    <div class="rounded-xl border border-slate-200 bg-white shadow-xs overflow-hidden">
+        <div class="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+            <h3 class="text-sm font-bold text-slate-800">Payroll Component to Ministry of Finance COA Mapping</h3>
+            <span class="text-xs text-slate-400">Total: @(mappings?.Count ?? 0) Active Links</span>
+        </div>
+
+        @if (isLoading)
+        {
+            <div class="p-8 text-center text-slate-400">Loading payroll mapping matrix...</div>
+        }
+        else if (mappings == null || mappings.Count == 0)
+        {
+            <div class="p-8 text-center text-slate-400">No payroll mappings configured.</div>
+        }
+        else
+        {
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse text-xs">
+                    <thead>
+                        <tr class="bg-slate-50/80 border-b border-slate-200 text-slate-600 font-bold uppercase tracking-wider text-[11px]">
+                            <th class="px-3 py-2.5">Payroll / Allowance Component</th>
+                            <th class="px-3 py-2.5">Target MoF Economic Code</th>
+                            <th class="px-3 py-2.5">MoF Account Classification (ދިވެހި)</th>
+                            <th class="px-3 py-2.5 text-center">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100">
+                        @foreach (var m in mappings)
+                        {
+                            <tr class="hover:bg-slate-50/80 transition-colors">
+                                <td class="px-3 py-2.5 font-semibold text-slate-800">@m.ComponentName</td>
+                                <td class="px-3 py-2.5 font-mono font-bold text-blue-700">@m.EconomicCode</td>
+                                <td class="px-3 py-2.5 text-slate-700">@m.BudgetItemName</td>
+                                <td class="px-3 py-2.5 text-center">
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-100 text-emerald-800">
+                                        Active
+                                    </span>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+
+    @if (showAddMappingModal)
+    {
+        <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4">
+            <div class="bg-white rounded-2xl shadow-xl border border-slate-200 max-w-lg w-full p-6 space-y-4">
+                <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                    <h3 class="text-base font-bold text-slate-800">Map Payroll Component to MoF Economic Code</h3>
+                    <button type="button" @onclick="() => showAddMappingModal = false" class="text-slate-400 hover:text-slate-600 text-lg font-bold">&times;</button>
+                </div>
+                @if (!string.IsNullOrWhiteSpace(errorMessage))
+                {
+                    <div class="p-2.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
+                        <i class="bi bi-exclamation-triangle-fill shrink-0"></i>
+                        <span>@errorMessage</span>
+                    </div>
+                }
+                <div class="space-y-3 text-xs">
+                    <div>
+                        <label class="block font-semibold text-slate-700 p-1">Payroll / Allowance Component Name</label>
+                        <input type="text" @bind="newMappingComponentName" class="w-full border border-slate-300 rounded-lg p-2" placeholder="e.g. Employer Pension (7%) or Basic Salary" />
+                        <p class="text-[11px] text-slate-400 mt-1">Must match the payroll component code (e.g. PEN_EMPR) or title.</p>
+                    </div>
+                    <div>
+                        <label class="block font-semibold text-slate-700 p-1">Target MoF Economic Code</label>
+                        <select @bind="newMappingBudgetItemId" class="w-full border border-slate-300 rounded-lg p-2 bg-white">
+                            @foreach (var item in budgetItems)
+                            {
+                                <option value="@item.BudgetItemId">@item.DisplayText</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+                <div class="flex items-center justify-end gap-2 border-t border-slate-100 pt-3">
+                    <button type="button" @onclick="() => showAddMappingModal = false" class="px-3.5 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-50">Cancel</button>
+                    <button type="button" @onclick="SaveMappingAsync" class="px-4 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-semibold hover:bg-emerald-700 shadow-xs">Link Component</button>
+                </div>
+            </div>
+        </div>
+    }
+</section>
+
+@code {
+    private List<PayrollBudgetMappingDto>? mappings;
+    private List<BudgetItemDto> budgetItems = new();
+    private List<PayrollRunSummaryRow>? payrollRuns;
+    private int selectedPayrollRunId;
+    private PayrollBudgetValidationResult? validationResult;
+    private bool isLoading = true;
+    private bool isValidating = false;
+    private bool showAddMappingModal = false;
+    private string newMappingComponentName = "";
+    private int newMappingBudgetItemId;
+    private string? errorMessage;
+    private string? successMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        isLoading = true;
+        try
+        {
+            var mappingsTask = BudgetService.GetPayrollMappingsAsync(0);
+            var itemsTask = BudgetService.GetBudgetItemsAsync();
+            var runsTask = LoadPayrollRunsSafeAsync();
+            await Task.WhenAll(mappingsTask, itemsTask, runsTask);
+
+            mappings = await mappingsTask;
+            budgetItems = await itemsTask;
+            if (budgetItems.Count > 0 && newMappingBudgetItemId == 0)
+            {
+                newMappingBudgetItemId = budgetItems[0].BudgetItemId;
+            }
+            payrollRuns = await runsTask;
+            selectedPayrollRunId = payrollRuns
+                .OrderByDescending(r => r.PayrollRunId)
+                .FirstOrDefault()?.PayrollRunId ?? 0;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void OpenAddMappingModal()
+    {
+        errorMessage = null;
+        successMessage = null;
+        showAddMappingModal = true;
+    }
+
+    private void PreFillAndOpenMapping(string rawName)
+    {
+        errorMessage = null;
+        successMessage = null;
+
+        var cleanName = rawName;
+        if (rawName.Contains(" - "))
+        {
+            var parts = rawName.Split(new[] { " - " }, StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length > 1)
+            {
+                cleanName = parts[1].Trim();
+            }
+        }
+
+        newMappingComponentName = cleanName;
+
+        if (cleanName.Contains("Pension", StringComparison.OrdinalIgnoreCase) || rawName.Contains("PEN", StringComparison.OrdinalIgnoreCase))
+        {
+            var pensionItem = budgetItems.FirstOrDefault(b => b.EconomicCode == "213006" || b.DisplayText.Contains("213006") || b.BudgetItemId == 59);
+            if (pensionItem != null) newMappingBudgetItemId = pensionItem.BudgetItemId;
+        }
+        else if (cleanName.Contains("Salary", StringComparison.OrdinalIgnoreCase))
+        {
+            var salaryItem = budgetItems.FirstOrDefault(b => b.EconomicCode == "211001" || b.DisplayText.Contains("211001") || b.BudgetItemId == 24);
+            if (salaryItem != null) newMappingBudgetItemId = salaryItem.BudgetItemId;
+        }
+
+        showAddMappingModal = true;
+    }
+
+    private async Task SaveMappingAsync()
+    {
+        if (string.IsNullOrWhiteSpace(newMappingComponentName))
+        {
+            errorMessage = "Payroll component name is required.";
+            return;
+        }
+        if (newMappingBudgetItemId == 0)
+        {
+            errorMessage = "Target MoF economic code is required.";
+            return;
+        }
+
+        try
+        {
+            await BudgetService.SavePayrollMappingAsync(new CreatePayrollMappingRequest
+            {
+                ComponentName = newMappingComponentName.Trim(),
+                BudgetItemId = newMappingBudgetItemId,
+                CostCenterOrganisationId = 0
+            });
+            showAddMappingModal = false;
+            newMappingComponentName = "";
+            successMessage = "Payroll component mapping saved successfully.";
+            mappings = await BudgetService.GetPayrollMappingsAsync(0);
+
+            if (selectedPayrollRunId > 0)
+            {
+                await RunPrePayrollCheckAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+    }
+
+    private async Task<List<PayrollRunSummaryRow>> LoadPayrollRunsSafeAsync()
+    {
+        try
+        {
+            var runs = await Payroll.GetRunsAsync();
+            return runs.OrderByDescending(r => r.PayrollRunId).ToList();
+        }
+        catch
+        {
+            return new List<PayrollRunSummaryRow>();
+        }
+    }
+
+    private void OnSelectedRunChanged()
+    {
+        validationResult = null;
+    }
+
+    private async Task RunPrePayrollCheckAsync()
+    {
+        if (selectedPayrollRunId <= 0)
+        {
+            return;
+        }
+
+        isValidating = true;
+        try
+        {
+            validationResult = await BudgetService.ValidatePayrollRunBudgetAsync(selectedPayrollRunId, 0);
+        }
+        finally
+        {
+            isValidating = false;
+        }
+    }
+
+    private static string FormatRunStatus(int status) => (PayrollRunStatus)status switch
+    {
+        PayrollRunStatus.Draft => "Draft",
+        PayrollRunStatus.Queued => "Queued",
+        PayrollRunStatus.Calculating => "Calculating",
+        PayrollRunStatus.Calculated => "Calculated",
+        PayrollRunStatus.ValidationFailed => "Validation Issues",
+        PayrollRunStatus.UnderReview => "Under Review",
+        PayrollRunStatus.Approved => "Approved",
+        PayrollRunStatus.Finalised => "Finalised",
+        PayrollRunStatus.PaymentPrepared => "Payment Prepared",
+        PayrollRunStatus.Paid => "Paid",
+        PayrollRunStatus.Failed => "Failed",
+        _ => ((PayrollRunStatus)status).ToString()
+    };
+}

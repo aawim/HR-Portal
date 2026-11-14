@@ -1,0 +1,73 @@
+@using HRM.DTOs.Roles
+@using HRM.Services
+@inject HRM.Services.Contracts.PermissionSettingsServiceContracts.IOperations Settings
+@inject ToastService Toast
+
+<section class="w-full min-w-0 p-2 space-y-4">
+    <header class="sticky top-0 z-30 flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-white/95 px-3 py-3 shadow-xs backdrop-blur-xs">
+        <div><h2 class="text-lg font-bold text-slate-900">Staff attribute access</h2><p class="mt-0.5 text-xs text-slate-500">RBAC grants the action; these ABAC rules restrict which staff records the actor may see.</p></div>
+        <button type="button" class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50" @onclick="Load">↻ Refresh</button>
+    </header>
+    @if (error != null) { <div role="alert" class="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">@error</div> }
+    @if (loading) { <p class="rounded-2xl border border-slate-200 bg-white p-4 text-xs text-slate-500">Loading staff access rules…</p> }
+    else if (data != null)
+    {
+        <div class="grid grid-cols-1 gap-4 xl:grid-cols-2">
+            <div class="space-y-4">
+                <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs space-y-3">
+                    <div><h3 class="font-bold text-slate-800 p-1">Restricted classifications</h3><p class="px-1 text-xs text-slate-500">Mark classifications such as Political as restricted. Access is denied unless an explicit allow exists.</p></div>
+                    <label class="block text-xs font-medium text-slate-700 p-1">Position classification<select class="@Input" @bind="policy.PositionClassificationId"><option value="0">Select classification</option>@foreach (var x in data.Classifications) { <option value="@x.Id">@x.Name</option> }</select></label>
+                    <label class="flex items-center gap-2 text-xs"><input type="checkbox" @bind="policy.IsRestricted" /> Restricted</label>
+                    <label class="block text-xs font-medium text-slate-700 p-1">Description<textarea class="@Input" maxlength="1000" @bind="policy.Description"></textarea></label>
+                    <button disabled="@busy" class="@Primary" @onclick="SavePolicy">Save classification policy</button>
+                </section>
+                <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs space-y-3">
+                    <div><h3 class="font-bold text-slate-800 p-1">Explicit-only subjects</h3><p class="px-1 text-xs text-slate-500">Use this when a user or role should see only specifically granted staff or classifications.</p></div>
+                    <div class="grid grid-cols-2 gap-2"><label class="text-xs p-1">Subject type<select class="@Input" @bind="scope.SubjectType"><option>User</option><option>Role</option></select></label><label class="text-xs p-1">Subject<select class="@Input" @bind="scope.SubjectId"><option value="0">Select</option>@foreach (var x in SubjectOptions(scope.SubjectType)) { <option value="@x.Id">@x.Name</option> }</select></label></div>
+                    <label class="flex items-center gap-2 text-xs"><input type="checkbox" @bind="scope.RequireExplicitGrant" /> Require an explicit grant for every staff record</label>
+                    <button disabled="@busy" class="@Primary" @onclick="SaveScope">Save access scope</button>
+                </section>
+                <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs space-y-3">
+                    <div><h3 class="font-bold text-slate-800 p-1">Allow or deny grant</h3><p class="px-1 text-xs text-slate-500">Deny always wins. Grants may target a classification or one staff member.</p></div>
+                    <div class="grid grid-cols-2 gap-2"><label class="text-xs p-1">Subject type<select class="@Input" @bind="grant.SubjectType"><option>User</option><option>Role</option></select></label><label class="text-xs p-1">Subject<select class="@Input" @bind="grant.SubjectId"><option value="0">Select</option>@foreach (var x in SubjectOptions(grant.SubjectType)) { <option value="@x.Id">@x.Name</option> }</select></label></div>
+                    <div class="grid grid-cols-2 gap-2"><label class="text-xs p-1">Resource type<select class="@Input" @bind="grant.ResourceType"><option>Classification</option><option>Staff</option></select></label><label class="text-xs p-1">Resource<select class="@Input" @bind="grant.ResourceId"><option value="0">Select</option>@foreach (var x in ResourceOptions(grant.ResourceType)) { <option value="@x.Id">@x.Name</option> }</select></label></div>
+                    <label class="flex items-center gap-2 text-xs"><input type="checkbox" @bind="grant.IsAllowed" /> Allow (clear for explicit deny)</label>
+                    <label class="block text-xs font-medium text-slate-700 p-1">Reason<textarea class="@Input" maxlength="1000" @bind="grant.Reason"></textarea></label>
+                    <button disabled="@busy" class="@Primary" @onclick="SaveGrant">Save access grant</button>
+                </section>
+            </div>
+            <aside class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs space-y-4">
+                <div><h3 class="font-bold text-slate-800 p-1">Current rules</h3><p class="px-1 text-xs text-slate-500">Edit an entry by selecting it below, changing the form, and saving.</p></div>
+                <RuleTable Title="Classification policies" Empty="No restricted classifications configured.">
+                    @foreach (var x in data.Policies) { <button class="block w-full border-b border-slate-100 p-2.5 text-left text-xs hover:bg-slate-50" @onclick="() => policy = Copy(x)"><strong>@x.ClassificationName</strong><span class="ml-2 rounded-full px-2 py-0.5 @(x.IsRestricted ? "bg-rose-100 text-rose-800" : "bg-slate-100 text-slate-700")">@(x.IsRestricted ? "Restricted" : "Normal")</span><span class="block mt-1 text-slate-500">@x.Description</span></button> }
+                </RuleTable>
+                <RuleTable Title="Explicit-only scopes" Empty="No explicit-only subjects configured.">
+                    @foreach (var x in data.Scopes) { <button class="block w-full border-b border-slate-100 p-2.5 text-left text-xs hover:bg-slate-50" @onclick="() => scope = Copy(x)"><strong>@x.SubjectName</strong><span class="ml-2 text-slate-500">@x.SubjectType</span><span class="block mt-1">@(x.RequireExplicitGrant ? "Explicit grants only" : "Normal visibility")</span></button> }
+                </RuleTable>
+                <RuleTable Title="Grants and denials" Empty="No staff access grants configured.">
+                    @foreach (var x in data.Grants) { <button class="block w-full border-b border-slate-100 p-2.5 text-left text-xs hover:bg-slate-50" @onclick="() => grant = Copy(x)"><strong>@x.SubjectName</strong> → @x.ResourceName <span class="ml-2 rounded-full px-2 py-0.5 @(x.IsAllowed ? "bg-emerald-100 text-emerald-800" : "bg-rose-100 text-rose-800")">@(x.IsAllowed ? "Allow" : "Deny")</span><span class="block mt-1 text-slate-500">@x.Reason</span></button> }
+                </RuleTable>
+            </aside>
+        </div>
+    }
+</section>
+
+@code {
+    private StaffAccessSettingsData? data; private bool loading = true, busy; private string? error;
+    private StaffAccessPolicyDto policy = new() { IsRestricted = true };
+    private StaffAccessScopeDto scope = new() { RequireExplicitGrant = true };
+    private StaffAccessGrantDto grant = new() { IsAllowed = true };
+    private const string Input = "mt-1 w-full rounded-lg border border-slate-300 bg-white p-1 text-xs text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500";
+    private const string Primary = "inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 disabled:opacity-50";
+    protected override Task OnInitializedAsync() => Load();
+    private async Task Load() { loading = true; error = null; try { data = await Settings.LoadStaffAccessAsync(); } catch (Exception ex) { error = ex.Message; } finally { loading = false; } }
+    private IEnumerable<StaffAccessOption> SubjectOptions(string type) => type == "Role" ? data?.Groups ?? [] : data?.Users ?? [];
+    private IEnumerable<StaffAccessOption> ResourceOptions(string type) => type == "Staff" ? data?.Staff ?? [] : data?.Classifications ?? [];
+    private async Task SavePolicy() => await Save(() => Settings.SaveStaffAccessPolicyAsync(policy), "Classification policy saved.");
+    private async Task SaveScope() => await Save(() => Settings.SaveStaffAccessScopeAsync(scope), "Access scope saved.");
+    private async Task SaveGrant() => await Save(() => Settings.SaveStaffAccessGrantAsync(grant), "Access grant saved.");
+    private async Task Save(Func<Task<HRM.DTOs.ServiceResult>> action, string message) { busy = true; error = null; try { var result = await action(); if (!result.Success) { error = result.Message; return; } Toast.Show(message); await Load(); } catch (Exception ex) { error = ex.Message; } finally { busy = false; } }
+    private static StaffAccessPolicyDto Copy(StaffAccessPolicyDto x) => new() { Id=x.Id, PositionClassificationId=x.PositionClassificationId, ClassificationName=x.ClassificationName, IsRestricted=x.IsRestricted, IsActive=x.IsActive, Description=x.Description };
+    private static StaffAccessScopeDto Copy(StaffAccessScopeDto x) => new() { Id=x.Id, SubjectType=x.SubjectType, SubjectId=x.SubjectId, SubjectName=x.SubjectName, RequireExplicitGrant=x.RequireExplicitGrant, IsActive=x.IsActive };
+    private static StaffAccessGrantDto Copy(StaffAccessGrantDto x) => new() { Id=x.Id, SubjectType=x.SubjectType, SubjectId=x.SubjectId, SubjectName=x.SubjectName, ResourceType=x.ResourceType, ResourceId=x.ResourceId, ResourceName=x.ResourceName, IsAllowed=x.IsAllowed, IsActive=x.IsActive, ExpiresAtUtc=x.ExpiresAtUtc, Reason=x.Reason };
+}

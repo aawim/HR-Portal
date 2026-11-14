@@ -30,5 +30,4 @@ public partial class SpecialDayType
 
     public virtual OrganisationStructure OrganisationStructure { get; set; } = null!;
 
-    public virtual ICollection<ShiftScheduleDay> ShiftScheduleDays { get; set; } = new List<ShiftScheduleDay>();
 }

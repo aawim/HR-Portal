@@ -21,14 +21,14 @@
 
             <!-- Grid: 4 columns on large screens, 2 on medium -->
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                @foreach (var cat in mainCategories.Where(c => new[]{"user","org","requests","leaves","config","roles","positions","workplaning"}.Contains(c.Url)))
+                @foreach (var cat in mainCategories.Where(c => new[]{"user","org","requests","leaves","config","roles","positions","workplaning","projects"}.Contains(c.Url)))
                 {
                     <a href="/admin/settings/@cat.Url"
                        class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md hover:border-blue-400 hover:bg-slate-50 transition-all duration-200 group flex items-center gap-6">
 
                         <!-- Left: Icon Container -->
                         <div class="w-16 h-16 flex items-center justify-center rounded-lg bg-blue-50 text-3xl text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors duration-300 flex-shrink-0">
-                            @cat.Icon
+                            <i class="bi @cat.Icon" aria-hidden="true"></i>
                         </div>
 
                         <!-- Right: Text Content -->
@@ -39,7 +39,7 @@
 
                         <!-- Right: Arrow (Optional) -->
                         <div class="text-slate-300 group-hover:text-blue-600 transition-colors">
-                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                            <AppIcon Name="chevron_right" Class="w-6 h-6 text-2xl" />
                         </div>
                     </a>
                 }
@@ -50,20 +50,20 @@
         private record Category(string Title, string Url, string Icon, string Description);
 
         private List<Category> mainCategories = new() {
-            new("User", "user", "👥", "Manage user accounts and admin portal access."),
-            new("Organisation", "org", "🏢", "Configure organizational structure and hierarchy."),
-            new("Document Types", "documents", "📄", "Define system document classifications."),
-            new("Request Types", "requests", "📝", "Manage workflows for leave and internal requests."),
-            new("Teams", "teams", "🤝", "Manage departments and internal work teams."),
-            new("Schedules", "schedules", "⏰", "Configure work shifts, breaks, and special days."),
-            new("Leaves", "leaves", "🌴", "Setup leave types, sets, and global policies."),
-            new("Payroll", "payroll", "💰", "Manage periods, wage codes, and payroll items."),
-            new("Performance", "performance", "📈", "Define checklists and work priorities."),
-            new("Configurations", "config", "⚙️", "Manage job types, request approval flows and application configuration."),
-            new("Roles & Permissions", "roles", "🔐", "Manage roles (user groups) and grouped permissions."),
-            new("Positions", "positions", "💼", "Manage job positions and configurations."),
-            new("Work Planning", "workplaning","💼", "Manage work templates, schedules."
-        )
+            new("User", "user", "bi-people", "Manage user accounts and admin portal access."),
+            new("Organisation", "org", "bi-building", "Configure organizational structure and hierarchy."),
+            new("Document Types", "documents", "bi-file-earmark-text", "Define system document classifications."),
+            new("Request Types", "requests", "bi-ui-checks", "Manage workflows for leave and internal requests."),
+            new("Teams", "teams", "bi-people-fill", "Manage departments and internal work teams."),
+            new("Schedules", "schedules", "bi-clock-history", "Configure work shifts, breaks, and special days."),
+            new("Leaves", "leaves", "bi-calendar2-week", "Setup leave types, sets, and global policies."),
+            new("Payroll", "payroll", "bi-cash-stack", "Manage periods, wage codes, and payroll items."),
+            new("Performance", "performance", "bi-graph-up-arrow", "Define checklists and work priorities."),
+            new("Configurations", "config", "bi-gear", "Manage job types, request approval flows and application configuration."),
+            new("Roles & Permissions", "roles", "bi-shield-lock", "Manage roles (user groups) and grouped permissions."),
+            new("Positions", "positions", "bi-briefcase", "Manage job positions and configurations."),
+            new("Work Planning", "workplaning", "bi-calendar3", "Manage work templates, schedules."),
+            new("Projects & Tasks", "projects", "bi-kanban", "Manage organization projects, departments, deliverables, milestones, and task assignments.")
          };
         }
       

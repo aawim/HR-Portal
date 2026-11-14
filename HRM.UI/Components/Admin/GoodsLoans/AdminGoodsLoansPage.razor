@@ -1,0 +1,1465 @@
+@page "/admin/goods-loans"
+@page "/admin/hr/goods-loans"
+@namespace HRM.Components.Admin.GoodsLoans
+@using HRM.Application.Contracts.Pages
+@using HRM.DTOs
+@using HRM.DTOs.GoodsLoans
+@using HRM.Models.GoodsLoans
+@using HRM.Services
+@using HRM.Services.Interfaces
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@rendermode RenderMode.InteractiveServer
+@inject IGoodsLoanService LoanService
+@inject IUserAccessService AccessService
+@inject ToastService Toast
+@inject IJSRuntime JS
+
+<PageTitle>Staff Goods Loan Management - Admin Portal</PageTitle>
+
+<div class="mx-auto min-w-7xl max-w-full p-2 flex flex-col gap-3">
+    <!-- Header -->
+    <header class="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur-xs px-4 py-3 shadow-xs rounded-xl flex items-center justify-between flex-wrap gap-2">
+        <div>
+            <div class="flex items-center gap-2">
+                <h1 class="text-lg font-bold text-slate-900">Staff Goods Loan Management</h1>
+                <span class="rounded-full px-2.5 py-0.5 text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+                    HR & Finance Administration
+                </span>
+            </div>
+            <p class="text-xs text-slate-500 mt-0.5">
+                Manage merchant stores, organisation agreements, salary deduction policies, loan approvals, payroll schedules, and store settlements.
+            </p>
+        </div>
+        <div class="flex items-center gap-2">
+            <button type="button"
+                    class="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition"
+                    @onclick="ToggleFullWidth">
+                @if (isFullWidth)
+                {
+                    <AppIcon Name="fullscreen" Class="h-3.5 w-3.5 text-slate-500 text-sm" />
+                    <span>Shrink View</span>
+                }
+                else
+                {
+                    <AppIcon Name="fullscreen" Class="h-3.5 w-3.5 text-slate-500 text-sm" />
+                    <span>Full Width</span>
+                }
+            </button>
+
+            <button type="button"
+                    class="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition"
+                    @onclick="ReloadAllDataAsync"
+                    disabled="@isLoading">
+                <AppIcon Name="refresh" Class="h-3.5 w-3.5 text-slate-500 text-sm " />
+                <span>Refresh</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Top Summary Metrics Cards -->
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div class="rounded-xl border border-slate-200 bg-white p-3 shadow-xs">
+            <div class="text-[11px] font-medium text-slate-500">Active Loans</div>
+            <div class="text-lg font-bold text-slate-900 mt-1">@activeLoansCount</div>
+            <div class="text-[10px] text-slate-400 mt-0.5">Across all staff</div>
+        </div>
+        <div class="rounded-xl border border-slate-200 bg-white p-3 shadow-xs">
+            <div class="text-[11px] font-medium text-slate-500">Pending Approvals</div>
+            <div class="text-lg font-bold text-amber-600 mt-1">@pendingApprovalsCount</div>
+            <div class="text-[10px] text-slate-400 mt-0.5">Awaiting HR action</div>
+        </div>
+        <div class="rounded-xl border border-slate-200 bg-white p-3 shadow-xs">
+            <div class="text-[11px] font-medium text-slate-500">Total Disbursed</div>
+            <div class="text-lg font-bold text-blue-600 mt-1">MVR @totalDisbursed.ToString("N0")</div>
+            <div class="text-[10px] text-slate-400 mt-0.5">Purchase value</div>
+        </div>
+        <div class="rounded-xl border border-slate-200 bg-white p-3 shadow-xs">
+            <div class="text-[11px] font-medium text-slate-500">Total Repaid</div>
+            <div class="text-lg font-bold text-emerald-600 mt-1">MVR @totalRepaid.ToString("N0")</div>
+            <div class="text-[10px] text-slate-400 mt-0.5">Collected deductions</div>
+        </div>
+        <div class="rounded-xl border border-slate-200 bg-white p-3 shadow-xs">
+            <div class="text-[11px] font-medium text-slate-500">Total Outstanding</div>
+            <div class="text-lg font-bold text-amber-600 mt-1">MVR @totalOutstanding.ToString("N0")</div>
+            <div class="text-[10px] text-slate-400 mt-0.5">Active portfolio</div>
+        </div>
+        <div class="rounded-xl border border-slate-200 bg-white p-3 shadow-xs">
+            <div class="text-[11px] font-medium text-slate-500">Store Settlements</div>
+            <div class="text-lg font-bold text-slate-900 mt-1">@settlements.Count(s => s.Status == GoodsLoanSettlementStatus.Draft)</div>
+            <div class="text-[10px] text-slate-400 mt-0.5">Batches pending pay</div>
+        </div>
+    </div>
+
+    <!-- Admin Tabs -->
+    <div class="flex border-b border-slate-200 gap-1 overflow-x-auto text-xs font-semibold">
+        <button type="button"
+                class="px-4 py-2 border-b-2 transition flex items-center gap-1.5 @(activeTab == AdminTab.Approvals ? "border-blue-600 text-blue-600" : "border-transparent text-slate-500 hover:text-slate-800")"
+                @onclick="() => SetTab(AdminTab.Approvals)">
+            <span>Loan Approvals</span>
+            @if (pendingApprovalsCount > 0)
+            {
+                <span class="rounded-full bg-amber-500 text-white px-1.5 py-0.2 text-[10px] font-bold">
+                    @pendingApprovalsCount
+                </span>
+            }
+        </button>
+
+        <button type="button"
+                class="px-4 py-2 border-b-2 transition @(activeTab == AdminTab.Register ? "border-blue-600 text-blue-600" : "border-transparent text-slate-500 hover:text-slate-800")"
+                @onclick="() => SetTab(AdminTab.Register)">
+            Loan Register
+        </button>
+
+        <button type="button"
+                class="px-4 py-2 border-b-2 transition @(activeTab == AdminTab.Stores ? "border-blue-600 text-blue-600" : "border-transparent text-slate-500 hover:text-slate-800")"
+                @onclick="() => SetTab(AdminTab.Stores)">
+            Merchant Stores (@stores.Count)
+        </button>
+
+        <button type="button"
+                class="px-4 py-2 border-b-2 transition @(activeTab == AdminTab.Agreements ? "border-blue-600 text-blue-600" : "border-transparent text-slate-500 hover:text-slate-800")"
+                @onclick="() => SetTab(AdminTab.Agreements)">
+            Store Agreements (@agreements.Count)
+        </button>
+
+        <button type="button"
+                class="px-4 py-2 border-b-2 transition @(activeTab == AdminTab.Policy ? "border-blue-600 text-blue-600" : "border-transparent text-slate-500 hover:text-slate-800")"
+                @onclick="() => SetTab(AdminTab.Policy)">
+            Deduction Policy
+        </button>
+
+        <button type="button"
+                class="px-4 py-2 border-b-2 transition @(activeTab == AdminTab.Settlements ? "border-blue-600 text-blue-600" : "border-transparent text-slate-500 hover:text-slate-800")"
+                @onclick="() => SetTab(AdminTab.Settlements)">
+            Store Settlements
+        </button>
+
+        <button type="button"
+                class="px-4 py-2 border-b-2 transition @(activeTab == AdminTab.Reports ? "border-blue-600 text-blue-600" : "border-transparent text-slate-500 hover:text-slate-800")"
+                @onclick="() => SetTab(AdminTab.Reports)">
+            Reports & Statements
+        </button>
+    </div>
+
+    <!-- TAB CONTENTS -->
+    @switch (activeTab)
+    {
+        case AdminTab.Approvals:
+            @RenderApprovalsTab()
+            break;
+
+        case AdminTab.Register:
+            @RenderRegisterTab()
+            break;
+
+        case AdminTab.Stores:
+            @RenderStoresTab()
+            break;
+
+        case AdminTab.Agreements:
+            @RenderAgreementsTab()
+            break;
+
+        case AdminTab.Policy:
+            @RenderPolicyTab()
+            break;
+
+        case AdminTab.Settlements:
+            @RenderSettlementsTab()
+            break;
+
+        case AdminTab.Reports:
+            @RenderReportsTab()
+            break;
+    }
+</div>
+
+<!-- MODAL: ADD / EDIT STORE -->
+@if (showStoreModal)
+{
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4">
+        <div class="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-5 shadow-xl space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <h3 class="text-sm font-bold text-slate-900">@(storeEditModel.StoreID > 0 ? "Edit Store" : "Register New Merchant Store")</h3>
+                <button type="button" class="text-slate-400 hover:text-slate-600 font-bold" @onclick="() => showStoreModal = false">✕</button>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                <div>
+                    <label class="block font-semibold text-slate-800 p-1">Store Code *</label>
+                    <input type="text" class="w-full rounded-lg border border-slate-300 p-2 text-xs" placeholder="e.g. SONEESTORE" @bind="storeEditModel.StoreCode" />
+                </div>
+                <div>
+                    <label class="block font-semibold text-slate-800 p-1">Store Name *</label>
+                    <input type="text" class="w-full rounded-lg border border-slate-300 p-2 text-xs" placeholder="e.g. Sonee Hardware" @bind="storeEditModel.StoreName" />
+                </div>
+                <div>
+                    <label class="block font-semibold text-slate-800 p-1">Registration #</label>
+                    <input type="text" class="w-full rounded-lg border border-slate-300 p-2 text-xs" placeholder="e.g. C-0123/2005" @bind="storeEditModel.RegistrationNumber" />
+                </div>
+                <div>
+                    <label class="block font-semibold text-slate-800 p-1">Contact Person</label>
+                    <input type="text" class="w-full rounded-lg border border-slate-300 p-2 text-xs" placeholder="e.g. Ahmed Ali" @bind="storeEditModel.ContactPerson" />
+                </div>
+                <div>
+                    <label class="block font-semibold text-slate-800 p-1">Phone Number</label>
+                    <input type="text" class="w-full rounded-lg border border-slate-300 p-2 text-xs" placeholder="e.g. 3330000" @bind="storeEditModel.PhoneNumber" />
+                </div>
+                <div>
+                    <label class="block font-semibold text-slate-800 p-1">Email Address</label>
+                    <input type="email" class="w-full rounded-lg border border-slate-300 p-2 text-xs" placeholder="e.g. info@store.mv" @bind="storeEditModel.Email" />
+                </div>
+                <div class="sm:col-span-2">
+                    <label class="block font-semibold text-slate-800 p-1">Physical Address</label>
+                    <input type="text" class="w-full rounded-lg border border-slate-300 p-2 text-xs" placeholder="e.g. Boduthakurufaanu Magu, Male'" @bind="storeEditModel.Address" />
+                </div>
+            </div>
+            <div class="flex items-center justify-end gap-2 border-t border-slate-100 pt-3">
+                <button type="button" class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50" @onclick="() => showStoreModal = false">Cancel</button>
+                <button type="button" class="rounded-lg bg-blue-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50" disabled="@isActionPending" @onclick="SaveStoreAsync">Save Store</button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- MODAL: ADD / EDIT STORE AGREEMENT -->
+@if (showAgreementModal)
+{
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4">
+        <div class="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-5 shadow-xl space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <h3 class="text-sm font-bold text-slate-900">@(agreementEditModel.AgreementID > 0 ? "Edit Store Agreement" : "Create Store Agreement")</h3>
+                <button type="button" class="text-slate-400 hover:text-slate-600 font-bold" @onclick="() => showAgreementModal = false">✕</button>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                <div>
+                    <label class="block font-semibold text-slate-800 p-1">Store / Merchant *</label>
+                    <select class="w-full rounded-lg border border-slate-300 p-2 text-xs" @bind="agreementEditModel.StoreID">
+                        <option value="0">-- Select Store --</option>
+                        @foreach (var s in stores)
+                        {
+                            <option value="@s.StoreID">@s.StoreName (@s.StoreCode)</option>
+                        }
+                    </select>
+                </div>
+                <div>
+                    <label class="block font-semibold text-slate-800 p-1">Agreement Number *</label>
+                    <input type="text" class="w-full rounded-lg border border-slate-300 p-2 text-xs" placeholder="e.g. AGR-2026-SONEE-01" @bind="agreementEditModel.AgreementNumber" />
+                </div>
+                <div>
+                    <label class="block font-semibold text-slate-800 p-1">Minimum Repayment Months</label>
+                    <input type="number" min="1" max="60" class="w-full rounded-lg border border-slate-300 p-2 text-xs" @bind="agreementEditModel.MinimumMonths" />
+                </div>
+                <div>
+                    <label class="block font-semibold text-slate-800 p-1">Maximum Repayment Months</label>
+                    <input type="number" min="1" max="60" class="w-full rounded-lg border border-slate-300 p-2 text-xs" @bind="agreementEditModel.MaximumMonths" />
+                </div>
+                <div>
+                    <label class="block font-semibold text-slate-800 p-1">Maximum Loan Cap (MVR) *</label>
+                    <input type="number" step="1000" min="0" class="w-full rounded-lg border border-slate-300 p-2 text-xs" @bind="agreementEditModel.MaximumLoanAmount" />
+                </div>
+                <div>
+                    <label class="block font-semibold text-slate-800 p-1">Settlement Mode *</label>
+                    <select class="w-full rounded-lg border border-slate-300 p-2 text-xs" @bind="agreementEditModel.SettlementMode">
+                        <option value="@GoodsLoanSettlementMode.Monthly">MONTHLY (As Deducted From Staff)</option>
+                        <option value="@GoodsLoanSettlementMode.Upfront">UPFRONT (Upon Loan Approval)</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block font-semibold text-slate-800 p-1">Effective From Date *</label>
+                    <input type="date" class="w-full rounded-lg border border-slate-300 p-2 text-xs" @bind="agreementEditModel.EffectiveFrom" />
+                </div>
+                <div>
+                    <label class="block font-semibold text-slate-800 p-1">Effective To Date (Optional)</label>
+                    <input type="date" class="w-full rounded-lg border border-slate-300 p-2 text-xs" @bind="agreementEditModel.EffectiveTo" />
+                </div>
+            </div>
+            <div class="flex items-center justify-end gap-2 border-t border-slate-100 pt-3">
+                <button type="button" class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50" @onclick="() => showAgreementModal = false">Cancel</button>
+                <button type="button" class="rounded-lg bg-blue-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50" disabled="@isActionPending" @onclick="SaveAgreementAsync">Save Agreement</button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- MODAL: REVIEW LOAN APPLICATION -->
+@if (showReviewModal && loanUnderReview != null)
+{
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4">
+        <div class="w-full max-w-2xl rounded-2xl border border-slate-200 bg-white p-5 shadow-xl space-y-4 max-h-[90vh] overflow-y-auto">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div>
+                    <h3 class="text-sm font-bold text-slate-900">Review Goods Loan Application</h3>
+                    <span class="font-mono text-xs text-blue-700 font-bold">@loanUnderReview.LoanNumber</span>
+                </div>
+                <button type="button" class="text-slate-400 hover:text-slate-600 font-bold" @onclick="() => showReviewModal = false">✕</button>
+            </div>
+
+            <div class="grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-xs">
+                <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-2.5">
+                    <span class="text-slate-400 block text-[11px]">Employee</span>
+                    <span class="font-bold text-slate-900 mt-0.5 block">@loanUnderReview.EmployeeName</span>
+                    <span class="text-[10px] text-slate-500 font-mono">@loanUnderReview.EmployeeNumber</span>
+                </div>
+                <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-2.5">
+                    <span class="text-slate-400 block text-[11px]">Store</span>
+                    <span class="font-bold text-slate-900 mt-0.5 block">@loanUnderReview.StoreName</span>
+                    <span class="text-[10px] text-slate-500">Invoice: @loanUnderReview.InvoiceNumber</span>
+                </div>
+                <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-2.5">
+                    <span class="text-slate-400 block text-[11px]">Repayment Duration</span>
+                    <span class="font-bold text-slate-900 mt-0.5 block">@loanUnderReview.RepaymentMonths Months</span>
+                    <span class="text-[10px] text-slate-500">First: @loanUnderReview.FirstDeductionMonth.ToString("MMM yyyy")</span>
+                </div>
+                <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-2.5">
+                    <span class="text-slate-400 block text-[11px]">Principal Amount</span>
+                    <span class="font-bold text-blue-700 mt-0.5 block text-sm">MVR @loanUnderReview.PrincipalAmount.ToString("N2")</span>
+                </div>
+                <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-2.5">
+                    <span class="text-slate-400 block text-[11px]">Monthly Deduction</span>
+                    <span class="font-bold text-slate-900 mt-0.5 block text-sm">MVR @loanUnderReview.MonthlyDeductionAmount.ToString("N2")</span>
+                </div>
+                <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-2.5">
+                    <span class="text-slate-400 block text-[11px]">Interest Rate</span>
+                    <span class="font-bold text-emerald-600 mt-0.5 block text-sm">0.00%</span>
+                </div>
+            </div>
+
+            <!-- Goods Items Table -->
+            <div class="space-y-1.5">
+                <h4 class="text-xs font-bold text-slate-800">Items Purchased Under Loan</h4>
+                <div class="rounded-xl border border-slate-200 overflow-hidden">
+                    <table class="w-full text-left text-xs">
+                        <thead class="bg-slate-50 text-slate-700 font-semibold border-b border-slate-200">
+                            <tr>
+                                <th class="p-2">Description</th>
+                                <th class="p-2 text-center w-16">Qty</th>
+                                <th class="p-2 text-right w-28">Unit Price</th>
+                                <th class="p-2 text-right w-28">Total</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            @foreach (var itm in loanUnderReview.Items)
+                            {
+                                <tr>
+                                    <td class="p-2 font-medium text-slate-900">@itm.ItemDescription</td>
+                                    <td class="p-2 text-center text-slate-600">@itm.Quantity</td>
+                                    <td class="p-2 text-right text-slate-600">MVR @itm.UnitPrice.ToString("N2")</td>
+                                    <td class="p-2 text-right font-semibold text-slate-900">MVR @itm.TotalAmount.ToString("N2")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Review Actions & Remarks -->
+            <div class="space-y-2 pt-2 border-t border-slate-100">
+                <label class="block font-semibold text-slate-800 text-xs p-1">Approval / Rejection Remarks</label>
+                <textarea class="w-full rounded-lg border border-slate-300 p-2 text-xs"
+                          rows="2"
+                          placeholder="Provide approval decision notes or rejection reason..."
+                          @bind="reviewRemarks"></textarea>
+            </div>
+
+            <div class="flex items-center justify-end gap-2 border-t border-slate-100 pt-3">
+                <button type="button"
+                        class="rounded-lg border border-rose-300 bg-white px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-50"
+                        disabled="@isActionPending"
+                        @onclick="RejectLoanAsync">
+                    Reject Application
+                </button>
+                <button type="button"
+                        class="rounded-lg bg-emerald-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+                        disabled="@isActionPending"
+                        @onclick="ApproveLoanAsync">
+                    Approve Loan & Generate @loanUnderReview.RepaymentMonths Instalments
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- MODAL: SETTLEMENT BATCH GENERATION -->
+@if (showSettlementModal)
+{
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4">
+        <div class="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-xl space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <h3 class="text-sm font-bold text-slate-900">Generate Store Settlement Batch</h3>
+                <button type="button" class="text-slate-400 hover:text-slate-600 font-bold" @onclick="() => showSettlementModal = false">✕</button>
+            </div>
+            <div class="space-y-3 text-xs">
+                <div>
+                    <label class="block font-semibold text-slate-800 p-1">Select Store *</label>
+                    <select class="w-full rounded-lg border border-slate-300 p-2 text-xs" @bind="newSettlementStoreId">
+                        <option value="0">-- Select Merchant Store --</option>
+                        @foreach (var s in stores)
+                        {
+                            <option value="@s.StoreID">@s.StoreName (@s.StoreCode)</option>
+                        }
+                    </select>
+                </div>
+                <div>
+                    <label class="block font-semibold text-slate-800 p-1">Settlement Period Up To *</label>
+                    <input type="date" class="w-full rounded-lg border border-slate-300 p-2 text-xs" @bind="newSettlementDate" />
+                    <span class="text-[11px] text-slate-400 mt-0.5 block">
+                        Aggregates all unpaid deductions / approved upfront amounts up to this date.
+                    </span>
+                </div>
+            </div>
+            <div class="flex items-center justify-end gap-2 border-t border-slate-100 pt-3">
+                <button type="button" class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50" @onclick="() => showSettlementModal = false">Cancel</button>
+                <button type="button" class="rounded-lg bg-blue-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50" disabled="@(newSettlementStoreId <= 0 || isActionPending)" @onclick="GenerateSettlementBatchAsync">Generate Batch</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private enum AdminTab { Approvals, Register, Stores, Agreements, Policy, Settlements, Reports }
+
+    private AdminTab activeTab = AdminTab.Approvals;
+    private bool isFullWidth = false;
+    private bool isLoading = true;
+    private bool isActionPending = false;
+
+    private int activeOrganisationId;
+    private List<GoodsLoanDto> allLoans = new();
+    private List<GoodsLoanStoreDto> stores = new();
+    private List<GoodsLoanStoreAgreementDto> agreements = new();
+    private GoodsLoanDeductionPolicyDto currentPolicy = new();
+    private List<GoodsLoanStoreSettlementDto> settlements = new();
+
+    private int activeLoansCount => allLoans.Count(l => l.Status == GoodsLoanStatus.Active);
+    private int pendingApprovalsCount => allLoans.Count(l => l.Status == GoodsLoanStatus.PendingApproval);
+    private decimal totalDisbursed => allLoans.Sum(l => l.PrincipalAmount);
+    private decimal totalRepaid => allLoans.Sum(l => l.PaidAmount);
+    private decimal totalOutstanding => allLoans.Sum(l => l.OutstandingAmount);
+
+    // Filter states for Register
+    private string registerSearch = "";
+    private string registerStatusFilter = "ALL";
+    private int registerStoreFilter = 0;
+
+    // Modals
+    private bool showStoreModal = false;
+    private SaveGoodsLoanStoreRequest storeEditModel = new();
+
+    private bool showAgreementModal = false;
+    private SaveGoodsLoanStoreAgreementRequest agreementEditModel = new();
+
+    private bool showReviewModal = false;
+    private GoodsLoanDto? loanUnderReview;
+    private string reviewRemarks = "";
+
+    private bool showSettlementModal = false;
+    private int newSettlementStoreId = 0;
+    private DateTime newSettlementDate = DateTime.Today;
+
+    protected override async Task OnInitializedAsync()
+    {
+        activeOrganisationId = await AccessService.GetCurrentOrganisationIdAsync();
+        await ReloadAllDataAsync();
+    }
+
+    private void SetTab(AdminTab tab)
+    {
+        activeTab = tab;
+    }
+
+    private void ToggleFullWidth()
+    {
+        isFullWidth = !isFullWidth;
+    }
+
+    private async Task ReloadAllDataAsync()
+    {
+        isLoading = true;
+        try
+        {
+            stores = await LoanService.GetStoresAsync(activeOrganisationId);
+            agreements = await LoanService.GetAgreementsAsync(activeOrganisationId);
+            currentPolicy = await LoanService.GetActivePolicyAsync(activeOrganisationId) ?? new GoodsLoanDeductionPolicyDto
+            {
+                OrganisationBusinessEntityID = activeOrganisationId,
+                PolicyName = "Default Organization Loan Policy",
+                MaximumSalaryPercentage = 20.0m,
+                SalaryBasis = SalaryCalculationBasis.BasicSalary,
+                EffectiveFrom = DateTime.Today,
+                IsActive = true
+            };
+            allLoans = await LoanService.GetLoansAsync(new GoodsLoanFilterRequest
+            {
+                OrganisationBusinessEntityID = activeOrganisationId
+            });
+            settlements = await LoanService.GetStoreSettlementsAsync(activeOrganisationId);
+        }
+        catch (Exception ex)
+        {
+            Toast.Error(ex.Message, "Error Loading Admin Data");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    #region Tab Renderers
+
+    private RenderFragment RenderApprovalsTab() => builder =>
+    {
+        var pendingLoans = allLoans.Where(l => l.Status == GoodsLoanStatus.PendingApproval).ToList();
+
+        builder.OpenElement(0, "div");
+        builder.AddAttribute(1, "class", "space-y-3");
+
+        if (pendingLoans.Count == 0)
+        {
+            builder.OpenElement(2, "div");
+            builder.AddAttribute(3, "class", "rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center text-xs text-slate-500");
+            builder.AddContent(4, "No goods loan applications currently pending approval. All submitted applications have been processed.");
+            builder.CloseElement();
+        }
+        else
+        {
+            builder.OpenElement(5, "div");
+            builder.AddAttribute(6, "class", "overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-xs");
+            builder.OpenElement(7, "table");
+            builder.AddAttribute(8, "class", "w-full text-left text-xs");
+
+            builder.OpenElement(9, "thead");
+            builder.AddAttribute(10, "class", "bg-slate-50 text-slate-700 font-semibold border-b border-slate-200");
+            builder.AddContent(11, (MarkupString)"<tr><th class='p-3'>Loan #</th><th class='p-3'>Employee</th><th class='p-3'>Store</th><th class='p-3 text-right'>Principal</th><th class='p-3 text-center'>Duration</th><th class='p-3 text-right'>Monthly Deduction</th><th class='p-3'>Applied Date</th><th class='p-3 text-right'>Actions</th></tr>");
+            builder.CloseElement();
+
+            builder.OpenElement(12, "tbody");
+            builder.AddAttribute(13, "class", "divide-y divide-slate-100");
+
+            foreach (var ln in pendingLoans)
+            {
+                builder.OpenElement(14, "tr");
+                builder.AddAttribute(15, "class", "hover:bg-slate-50/50");
+
+                builder.OpenElement(16, "td");
+                builder.AddAttribute(17, "class", "p-3 font-mono font-bold text-blue-700");
+                builder.AddContent(18, ln.LoanNumber);
+                builder.CloseElement();
+
+                builder.OpenElement(19, "td");
+                builder.AddAttribute(20, "class", "p-3");
+                builder.OpenElement(21, "div");
+                builder.AddAttribute(22, "class", "font-bold text-slate-900");
+                builder.AddContent(23, ln.EmployeeName);
+                builder.CloseElement();
+                builder.OpenElement(24, "div");
+                builder.AddAttribute(25, "class", "text-[11px] text-slate-500 font-mono");
+                builder.AddContent(26, ln.EmployeeNumber);
+                builder.CloseElement();
+                builder.CloseElement();
+
+                builder.OpenElement(27, "td");
+                builder.AddAttribute(28, "class", "p-3");
+                builder.AddContent(29, ln.StoreName);
+                builder.CloseElement();
+
+                builder.OpenElement(30, "td");
+                builder.AddAttribute(31, "class", "p-3 text-right font-bold text-slate-900");
+                builder.AddContent(32, $"MVR {ln.PrincipalAmount:N2}");
+                builder.CloseElement();
+
+                builder.OpenElement(33, "td");
+                builder.AddAttribute(34, "class", "p-3 text-center font-medium text-slate-700");
+                builder.AddContent(35, $"{ln.RepaymentMonths} mos");
+                builder.CloseElement();
+
+                builder.OpenElement(36, "td");
+                builder.AddAttribute(37, "class", "p-3 text-right font-bold text-blue-700");
+                builder.AddContent(38, $"MVR {ln.MonthlyDeductionAmount:N2}");
+                builder.CloseElement();
+
+                builder.OpenElement(39, "td");
+                builder.AddAttribute(40, "class", "p-3 text-slate-500 text-[11px]");
+                builder.AddContent(41, ln.PurchaseDate.ToString("dd MMM yyyy"));
+                builder.CloseElement();
+
+                builder.OpenElement(42, "td");
+                builder.AddAttribute(43, "class", "p-3 text-right");
+                builder.OpenElement(44, "button");
+                builder.AddAttribute(45, "type", "button");
+                builder.AddAttribute(46, "class", "inline-flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-1 text-xs font-semibold text-white shadow-xs hover:bg-blue-700");
+                builder.AddAttribute(47, "onclick", EventCallback.Factory.Create(this, () => OpenReviewModal(ln)));
+                builder.AddContent(48, "Review & Approve");
+                builder.CloseElement();
+                builder.CloseElement();
+
+                builder.CloseElement(); // tr
+            }
+
+            builder.CloseElement(); // tbody
+            builder.CloseElement(); // table
+            builder.CloseElement(); // div
+        }
+
+        builder.CloseElement(); // container
+    };
+
+    private RenderFragment RenderRegisterTab() => builder =>
+    {
+        var filtered = allLoans.Where(l =>
+            (registerStatusFilter == "ALL" || string.Equals(l.Status, registerStatusFilter, StringComparison.OrdinalIgnoreCase)) &&
+            (registerStoreFilter <= 0 || l.StoreID == registerStoreFilter) &&
+            (string.IsNullOrWhiteSpace(registerSearch) ||
+             l.LoanNumber.Contains(registerSearch, StringComparison.OrdinalIgnoreCase) ||
+             l.EmployeeName.Contains(registerSearch, StringComparison.OrdinalIgnoreCase) ||
+             l.EmployeeNumber.Contains(registerSearch, StringComparison.OrdinalIgnoreCase))
+        ).ToList();
+
+        builder.OpenElement(0, "div");
+        builder.AddAttribute(1, "class", "space-y-3");
+
+        // Filter Bar
+        builder.OpenElement(2, "div");
+        builder.AddAttribute(3, "class", "flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white p-3 shadow-xs");
+
+        builder.OpenElement(4, "div");
+        builder.AddAttribute(5, "class", "flex-1 min-w-[200px]");
+        builder.OpenElement(6, "input");
+        builder.AddAttribute(7, "type", "text");
+        builder.AddAttribute(8, "class", "w-full rounded-lg border border-slate-300 p-1.5 text-xs");
+        builder.AddAttribute(9, "placeholder", "Search loan #, staff name, employee #...");
+        builder.AddAttribute(10, "value", registerSearch);
+        builder.AddAttribute(11, "oninput", EventCallback.Factory.Create<ChangeEventArgs>(this, e => { registerSearch = e.Value?.ToString() ?? ""; }));
+        builder.CloseElement();
+        builder.CloseElement();
+
+        builder.OpenElement(12, "select");
+        builder.AddAttribute(13, "class", "rounded-lg border border-slate-300 p-1.5 text-xs");
+        builder.AddAttribute(14, "value", registerStatusFilter);
+        builder.AddAttribute(15, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(this, e => { registerStatusFilter = e.Value?.ToString() ?? "ALL"; }));
+        builder.AddContent(16, (MarkupString)"<option value='ALL'>All Statuses</option><option value='ACTIVE'>ACTIVE</option><option value='PENDING_APPROVAL'>PENDING APPROVAL</option><option value='COMPLETED'>COMPLETED</option><option value='REJECTED'>REJECTED</option><option value='CANCELLED'>CANCELLED</option>");
+        builder.CloseElement();
+
+        builder.OpenElement(17, "select");
+        builder.AddAttribute(18, "class", "rounded-lg border border-slate-300 p-1.5 text-xs");
+        builder.AddAttribute(19, "value", registerStoreFilter);
+        builder.AddAttribute(20, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(this, e => { int.TryParse(e.Value?.ToString(), out registerStoreFilter); }));
+        builder.OpenElement(21, "option");
+        builder.AddAttribute(22, "value", "0");
+        builder.AddContent(23, "All Stores");
+        builder.CloseElement();
+        foreach (var s in stores)
+        {
+            builder.OpenElement(24, "option");
+            builder.AddAttribute(25, "value", s.StoreID);
+            builder.AddContent(26, s.StoreName);
+            builder.CloseElement();
+        }
+        builder.CloseElement();
+
+        builder.OpenElement(261, "a");
+        builder.AddAttribute(262, "href", "/admin/my/workspace?tab=goods-loans");
+        builder.AddAttribute(263, "class", "inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 transition sm:ml-auto");
+        builder.AddContent(264, (MarkupString)"<svg class='h-3.5 w-3.5' fill='none' stroke='currentColor' viewBox='0 0 24 24'><path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M12 4v16m8-8H4' /></svg><span>Enter Staff Goods Loan</span>");
+        builder.CloseElement();
+
+        builder.CloseElement(); // filter bar
+
+        // Loans Table
+        builder.OpenElement(27, "div");
+        builder.AddAttribute(28, "class", "overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-xs");
+        builder.OpenElement(29, "table");
+        builder.AddAttribute(30, "class", "w-full text-left text-xs");
+        builder.AddContent(31, (MarkupString)"<thead class='bg-slate-50 text-slate-700 font-semibold border-b border-slate-200'><tr><th class='p-3'>Loan #</th><th class='p-3'>Employee</th><th class='p-3'>Store</th><th class='p-3 text-right'>Principal</th><th class='p-3 text-right'>Repaid</th><th class='p-3 text-right'>Outstanding</th><th class='p-3 text-center'>Months</th><th class='p-3 text-center'>Status</th></tr></thead>");
+
+        builder.OpenElement(32, "tbody");
+        builder.AddAttribute(33, "class", "divide-y divide-slate-100");
+        foreach (var ln in filtered)
+        {
+            builder.OpenElement(34, "tr");
+            builder.AddAttribute(35, "class", "hover:bg-slate-50/50");
+
+            builder.OpenElement(36, "td");
+            builder.AddAttribute(37, "class", "p-3 font-mono font-bold text-blue-700");
+            builder.AddContent(38, ln.LoanNumber);
+            builder.CloseElement();
+
+            builder.OpenElement(39, "td");
+            builder.AddAttribute(40, "class", "p-3 font-medium text-slate-900");
+            builder.OpenElement(41, "a");
+            builder.AddAttribute(42, "href", $"/admin/my/workspace?entityType=Staff&entityId={ln.IndividualID}");
+            builder.AddAttribute(43, "class", "text-blue-600 hover:text-blue-800 hover:underline font-semibold");
+            builder.AddContent(44, ln.EmployeeName);
+            builder.CloseElement();
+            builder.CloseElement();
+
+            builder.OpenElement(42, "td");
+            builder.AddAttribute(43, "class", "p-3");
+            builder.AddContent(44, ln.StoreName);
+            builder.CloseElement();
+
+            builder.OpenElement(45, "td");
+            builder.AddAttribute(46, "class", "p-3 text-right font-semibold text-slate-900");
+            builder.AddContent(47, $"MVR {ln.PrincipalAmount:N2}");
+            builder.CloseElement();
+
+            builder.OpenElement(48, "td");
+            builder.AddAttribute(49, "class", "p-3 text-right text-emerald-700 font-semibold");
+            builder.AddContent(50, $"MVR {ln.PaidAmount:N2}");
+            builder.CloseElement();
+
+            builder.OpenElement(51, "td");
+            builder.AddAttribute(52, "class", "p-3 text-right text-amber-700 font-semibold");
+            builder.AddContent(53, $"MVR {ln.OutstandingAmount:N2}");
+            builder.CloseElement();
+
+            builder.OpenElement(54, "td");
+            builder.AddAttribute(55, "class", "p-3 text-center");
+            builder.AddContent(56, $"{ln.PaidInstallmentsCount}/{ln.RepaymentMonths}");
+            builder.CloseElement();
+
+            builder.OpenElement(57, "td");
+            builder.AddAttribute(58, "class", "p-3 text-center");
+            builder.AddContent(59, RenderStatusBadge(ln.Status));
+            builder.CloseElement();
+
+            builder.CloseElement(); // tr
+        }
+        builder.CloseElement(); // tbody
+        builder.CloseElement(); // table
+        builder.CloseElement(); // div
+
+        builder.CloseElement(); // space-y-3
+    };
+
+    private RenderFragment RenderStoresTab() => builder =>
+    {
+        builder.OpenElement(0, "div");
+        builder.AddAttribute(1, "class", "space-y-3");
+
+        builder.OpenElement(2, "div");
+        builder.AddAttribute(3, "class", "flex items-center justify-between");
+        builder.AddContent(4, (MarkupString)"<h3 class='text-sm font-bold text-slate-900'>Approved Merchant Stores</h3>");
+        builder.OpenElement(5, "button");
+        builder.AddAttribute(6, "type", "button");
+        builder.AddAttribute(7, "class", "inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700");
+        builder.AddAttribute(8, "onclick", EventCallback.Factory.Create(this, OpenAddStoreModal));
+        builder.AddContent(9, "+ Register Store");
+        builder.CloseElement();
+        builder.CloseElement();
+
+        builder.OpenElement(10, "div");
+        builder.AddAttribute(11, "class", "overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-xs");
+        builder.OpenElement(12, "table");
+        builder.AddAttribute(13, "class", "w-full text-left text-xs");
+        builder.AddContent(14, (MarkupString)"<thead class='bg-slate-50 text-slate-700 font-semibold border-b border-slate-200'><tr><th class='p-3'>Store Code</th><th class='p-3'>Store Name</th><th class='p-3'>Registration #</th><th class='p-3'>Contact Person</th><th class='p-3'>Phone</th><th class='p-3 text-center'>Active Agreements</th><th class='p-3 text-center'>Status</th><th class='p-3 text-right'>Actions</th></tr></thead>");
+
+        builder.OpenElement(15, "tbody");
+        builder.AddAttribute(16, "class", "divide-y divide-slate-100");
+        foreach (var s in stores)
+        {
+            builder.OpenElement(17, "tr");
+            builder.AddAttribute(18, "class", "hover:bg-slate-50/50");
+
+            builder.OpenElement(19, "td");
+            builder.AddAttribute(20, "class", "p-3 font-mono font-bold text-slate-900");
+            builder.AddContent(21, s.StoreCode);
+            builder.CloseElement();
+
+            builder.OpenElement(22, "td");
+            builder.AddAttribute(23, "class", "p-3 font-bold text-slate-900");
+            builder.AddContent(24, s.StoreName);
+            builder.CloseElement();
+
+            builder.OpenElement(25, "td");
+            builder.AddAttribute(26, "class", "p-3 text-slate-600");
+            builder.AddContent(27, s.RegistrationNumber);
+            builder.CloseElement();
+
+            builder.OpenElement(28, "td");
+            builder.AddAttribute(29, "class", "p-3");
+            builder.AddContent(30, s.ContactPerson);
+            builder.CloseElement();
+
+            builder.OpenElement(31, "td");
+            builder.AddAttribute(32, "class", "p-3");
+            builder.AddContent(33, s.PhoneNumber);
+            builder.CloseElement();
+
+            builder.OpenElement(34, "td");
+            builder.AddAttribute(35, "class", "p-3 text-center font-bold text-blue-700");
+            builder.AddContent(36, s.ActiveAgreementsCount);
+            builder.CloseElement();
+
+            builder.OpenElement(37, "td");
+            builder.AddAttribute(38, "class", "p-3 text-center");
+            builder.OpenElement(39, "span");
+            builder.AddAttribute(40, "class", $"rounded-full px-2 py-0.5 text-[11px] font-semibold {(s.IsActive ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-500")}");
+            builder.AddContent(41, s.IsActive ? "Active" : "Inactive");
+            builder.CloseElement();
+            builder.CloseElement();
+
+            builder.OpenElement(42, "td");
+            builder.AddAttribute(43, "class", "p-3 text-right flex items-center justify-end gap-1.5");
+
+            builder.OpenElement(44, "button");
+            builder.AddAttribute(45, "type", "button");
+            builder.AddAttribute(46, "class", "rounded-md border border-slate-300 px-2 py-1 text-slate-700 hover:bg-slate-50");
+            builder.AddAttribute(47, "onclick", EventCallback.Factory.Create(this, () => OpenEditStoreModal(s)));
+            builder.AddContent(48, "Edit");
+            builder.CloseElement();
+
+            builder.OpenElement(49, "button");
+            builder.AddAttribute(50, "type", "button");
+            builder.AddAttribute(51, "class", $"rounded-md border px-2 py-1 {(s.IsActive ? "border-amber-300 text-amber-800 hover:bg-amber-50" : "border-emerald-300 text-emerald-800 hover:bg-emerald-50")}");
+            builder.AddAttribute(52, "onclick", EventCallback.Factory.Create(this, () => ToggleStoreActiveAsync(s.StoreID, !s.IsActive)));
+            builder.AddContent(53, s.IsActive ? "Deactivate" : "Activate");
+            builder.CloseElement();
+
+            builder.CloseElement(); // td
+            builder.CloseElement(); // tr
+        }
+        builder.CloseElement(); // tbody
+        builder.CloseElement(); // table
+        builder.CloseElement(); // div
+
+        builder.CloseElement(); // space-y-3
+    };
+
+    private RenderFragment RenderAgreementsTab() => builder =>
+    {
+        builder.OpenElement(0, "div");
+        builder.AddAttribute(1, "class", "space-y-3");
+
+        builder.OpenElement(2, "div");
+        builder.AddAttribute(3, "class", "flex items-center justify-between");
+        builder.AddContent(4, (MarkupString)"<h3 class='text-sm font-bold text-slate-900'>Organisation Store Agreements</h3>");
+        builder.OpenElement(5, "button");
+        builder.AddAttribute(6, "type", "button");
+        builder.AddAttribute(7, "class", "inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700");
+        builder.AddAttribute(8, "onclick", EventCallback.Factory.Create(this, OpenAddAgreementModal));
+        builder.AddContent(9, "+ New Agreement");
+        builder.CloseElement();
+        builder.CloseElement();
+
+        builder.OpenElement(10, "div");
+        builder.AddAttribute(11, "class", "overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-xs");
+        builder.OpenElement(12, "table");
+        builder.AddAttribute(13, "class", "w-full text-left text-xs");
+        builder.AddContent(14, (MarkupString)"<thead class='bg-slate-50 text-slate-700 font-semibold border-b border-slate-200'><tr><th class='p-3'>Agreement #</th><th class='p-3'>Store</th><th class='p-3 text-center'>Duration Range</th><th class='p-3 text-right'>Max Loan Amount</th><th class='p-3 text-center'>Settlement Mode</th><th class='p-3'>Effective Dates</th><th class='p-3 text-center'>Status</th><th class='p-3 text-right'>Actions</th></tr></thead>");
+
+        builder.OpenElement(15, "tbody");
+        builder.AddAttribute(16, "class", "divide-y divide-slate-100");
+        foreach (var a in agreements)
+        {
+            builder.OpenElement(17, "tr");
+            builder.AddAttribute(18, "class", "hover:bg-slate-50/50");
+
+            builder.OpenElement(19, "td");
+            builder.AddAttribute(20, "class", "p-3 font-mono font-bold text-blue-700");
+            builder.AddContent(21, a.AgreementNumber);
+            builder.CloseElement();
+
+            builder.OpenElement(22, "td");
+            builder.AddAttribute(23, "class", "p-3 font-bold text-slate-900");
+            builder.AddContent(24, a.StoreName);
+            builder.CloseElement();
+
+            builder.OpenElement(25, "td");
+            builder.AddAttribute(26, "class", "p-3 text-center font-medium");
+            builder.AddContent(27, $"{a.MinimumMonths} - {a.MaximumMonths} Months");
+            builder.CloseElement();
+
+            builder.OpenElement(28, "td");
+            builder.AddAttribute(29, "class", "p-3 text-right font-bold text-slate-900");
+            builder.AddContent(30, $"MVR {a.MaximumLoanAmount:N2}");
+            builder.CloseElement();
+
+            builder.OpenElement(31, "td");
+            builder.AddAttribute(32, "class", "p-3 text-center");
+            builder.OpenElement(33, "span");
+            builder.AddAttribute(34, "class", $"rounded-full px-2 py-0.5 text-[10px] font-bold {(a.SettlementMode == GoodsLoanSettlementMode.Monthly ? "bg-blue-100 text-blue-800" : "bg-purple-100 text-purple-800")}");
+            builder.AddContent(35, a.SettlementMode);
+            builder.CloseElement();
+            builder.CloseElement();
+
+            builder.OpenElement(36, "td");
+            builder.AddAttribute(37, "class", "p-3 text-slate-500 text-[11px]");
+            builder.AddContent(38, $"{a.EffectiveFrom:dd MMM yyyy} - {(a.EffectiveTo.HasValue ? a.EffectiveTo.Value.ToString("dd MMM yyyy") : "Indefinite")}");
+            builder.CloseElement();
+
+            builder.OpenElement(39, "td");
+            builder.AddAttribute(40, "class", "p-3 text-center");
+            builder.OpenElement(41, "span");
+            builder.AddAttribute(42, "class", $"rounded-full px-2 py-0.5 text-[11px] font-semibold {(a.IsActive ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-500")}");
+            builder.AddContent(43, a.IsActive ? "Active" : "Inactive");
+            builder.CloseElement();
+            builder.CloseElement();
+
+            builder.OpenElement(44, "td");
+            builder.AddAttribute(45, "class", "p-3 text-right");
+            builder.OpenElement(46, "button");
+            builder.AddAttribute(47, "type", "button");
+            builder.AddAttribute(48, "class", $"rounded-md border px-2 py-1 {(a.IsActive ? "border-amber-300 text-amber-800 hover:bg-amber-50" : "border-emerald-300 text-emerald-800 hover:bg-emerald-50")}");
+            builder.AddAttribute(49, "onclick", EventCallback.Factory.Create(this, () => ToggleAgreementActiveAsync(a.AgreementID, !a.IsActive)));
+            builder.AddContent(50, a.IsActive ? "Deactivate" : "Activate");
+            builder.CloseElement();
+            builder.CloseElement();
+
+            builder.CloseElement(); // tr
+        }
+        builder.CloseElement(); // tbody
+        builder.CloseElement(); // table
+        builder.CloseElement(); // div
+
+        builder.CloseElement(); // space-y-3
+    };
+
+    private RenderFragment RenderPolicyTab() => builder =>
+    {
+        builder.OpenElement(0, "div");
+        builder.AddAttribute(1, "class", "max-w-2xl rounded-2xl border border-slate-200 bg-white p-5 shadow-xs space-y-4");
+
+        builder.AddContent(2, (MarkupString)"<div><h3 class='text-sm font-bold text-slate-900'>Organisation Salary Deduction Policy</h3><p class='text-xs text-slate-500'>Controls the maximum percentage of salary staff may commit to goods loans and mandatory take-home protection.</p></div>");
+
+        builder.OpenElement(3, "div");
+        builder.AddAttribute(4, "class", "grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs");
+
+        builder.OpenElement(5, "div");
+        builder.AddAttribute(6, "class", "sm:col-span-2");
+        builder.AddContent(7, (MarkupString)"<label class='block font-semibold text-slate-800 p-1'>Policy Name *</label>");
+        builder.OpenElement(8, "input");
+        builder.AddAttribute(9, "type", "text");
+        builder.AddAttribute(10, "class", "w-full rounded-lg border border-slate-300 p-2 text-xs");
+        builder.AddAttribute(11, "value", currentPolicy.PolicyName);
+        builder.AddAttribute(12, "oninput", EventCallback.Factory.Create<ChangeEventArgs>(this, e => { currentPolicy.PolicyName = e.Value?.ToString() ?? ""; }));
+        builder.CloseElement();
+        builder.CloseElement();
+
+        builder.OpenElement(13, "div");
+        builder.AddContent(14, (MarkupString)"<label class='block font-semibold text-slate-800 p-1'>Salary Calculation Basis *</label>");
+        builder.OpenElement(15, "select");
+        builder.AddAttribute(16, "class", "w-full rounded-lg border border-slate-300 p-2 text-xs");
+        builder.AddAttribute(17, "value", currentPolicy.SalaryBasis);
+        builder.AddAttribute(18, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(this, e => { currentPolicy.SalaryBasis = e.Value?.ToString() ?? SalaryCalculationBasis.BasicSalary; }));
+        builder.AddContent(19, (MarkupString)$"<option value='{SalaryCalculationBasis.BasicSalary}'>Basic Salary Only</option><option value='{SalaryCalculationBasis.GrossSalary}'>Gross Salary (Basic + Allowances)</option><option value='{SalaryCalculationBasis.EligibleSalaryComponents}'>Eligible Salary Components</option>");
+        builder.CloseElement();
+        builder.CloseElement();
+
+        builder.OpenElement(20, "div");
+        builder.AddContent(21, (MarkupString)"<label class='block font-semibold text-slate-800 p-1'>Max Deduction Percentage (%) *</label>");
+        builder.OpenElement(22, "input");
+        builder.AddAttribute(23, "type", "number");
+        builder.AddAttribute(24, "step", "1");
+        builder.AddAttribute(25, "min", "1");
+        builder.AddAttribute(26, "max", "100");
+        builder.AddAttribute(27, "class", "w-full rounded-lg border border-slate-300 p-2 text-xs");
+        builder.AddAttribute(28, "value", currentPolicy.MaximumSalaryPercentage);
+        builder.AddAttribute(29, "oninput", EventCallback.Factory.Create<ChangeEventArgs>(this, e => { if (decimal.TryParse(e.Value?.ToString(), out var p)) currentPolicy.MaximumSalaryPercentage = p; }));
+        builder.CloseElement();
+        builder.CloseElement();
+
+        builder.OpenElement(30, "div");
+        builder.AddContent(31, (MarkupString)"<label class='block font-semibold text-slate-800 p-1'>Minimum Net Salary Guarantee (MVR)</label>");
+        builder.OpenElement(32, "input");
+        builder.AddAttribute(33, "type", "number");
+        builder.AddAttribute(34, "step", "500");
+        builder.AddAttribute(35, "class", "w-full rounded-lg border border-slate-300 p-2 text-xs");
+        builder.AddAttribute(36, "value", currentPolicy.MinimumNetSalary);
+        builder.AddAttribute(37, "oninput", EventCallback.Factory.Create<ChangeEventArgs>(this, e => { if (decimal.TryParse(e.Value?.ToString(), out var m)) currentPolicy.MinimumNetSalary = m; }));
+        builder.CloseElement();
+        builder.CloseElement();
+
+        builder.OpenElement(38, "div");
+        builder.AddContent(39, (MarkupString)"<label class='block font-semibold text-slate-800 p-1'>Max Simultaneous Active Loans</label>");
+        builder.OpenElement(40, "input");
+        builder.AddAttribute(41, "type", "number");
+        builder.AddAttribute(42, "class", "w-full rounded-lg border border-slate-300 p-2 text-xs");
+        builder.AddAttribute(43, "placeholder", "Leave blank for unlimited");
+        builder.AddAttribute(44, "value", currentPolicy.MaximumActiveLoans);
+        builder.AddAttribute(45, "oninput", EventCallback.Factory.Create<ChangeEventArgs>(this, e => { if (int.TryParse(e.Value?.ToString(), out var al)) currentPolicy.MaximumActiveLoans = al; else currentPolicy.MaximumActiveLoans = null; }));
+        builder.CloseElement();
+        builder.CloseElement();
+
+        builder.CloseElement(); // grid
+
+        builder.OpenElement(46, "div");
+        builder.AddAttribute(47, "class", "flex justify-end pt-3 border-t border-slate-100");
+        builder.OpenElement(48, "button");
+        builder.AddAttribute(49, "type", "button");
+        builder.AddAttribute(50, "class", "inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50");
+        builder.AddAttribute(51, "disabled", isActionPending);
+        builder.AddAttribute(52, "onclick", EventCallback.Factory.Create(this, SavePolicyAsync));
+        builder.AddContent(53, "Save Deduction Policy");
+        builder.CloseElement();
+        builder.CloseElement();
+
+        builder.CloseElement(); // container
+    };
+
+    private RenderFragment RenderSettlementsTab() => builder =>
+    {
+        builder.OpenElement(0, "div");
+        builder.AddAttribute(1, "class", "space-y-3");
+
+        builder.OpenElement(2, "div");
+        builder.AddAttribute(3, "class", "flex items-center justify-between");
+        builder.AddContent(4, (MarkupString)"<div><h3 class='text-sm font-bold text-slate-900'>Merchant Store Settlements</h3><p class='text-xs text-slate-500'>Monthly and upfront store payment batches generated from employee payroll deductions.</p></div>");
+        builder.OpenElement(5, "button");
+        builder.AddAttribute(6, "type", "button");
+        builder.AddAttribute(7, "class", "inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700");
+        builder.AddAttribute(8, "onclick", EventCallback.Factory.Create(this, () => showSettlementModal = true));
+        builder.AddContent(9, "+ Generate Settlement Batch");
+        builder.CloseElement();
+        builder.CloseElement();
+
+        builder.OpenElement(10, "div");
+        builder.AddAttribute(11, "class", "overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-xs");
+        builder.OpenElement(12, "table");
+        builder.AddAttribute(13, "class", "w-full text-left text-xs");
+        builder.AddContent(14, (MarkupString)"<thead class='bg-slate-50 text-slate-700 font-semibold border-b border-slate-200'><tr><th class='p-3'>Batch #</th><th class='p-3'>Store</th><th class='p-3'>Payment Date</th><th class='p-3'>Reference</th><th class='p-3 text-right'>Total Amount</th><th class='p-3 text-center'>Loans Settled</th><th class='p-3 text-center'>Status</th><th class='p-3 text-right'>Actions</th></tr></thead>");
+
+        builder.OpenElement(15, "tbody");
+        builder.AddAttribute(16, "class", "divide-y divide-slate-100");
+        if (settlements.Count == 0)
+        {
+            builder.AddContent(17, (MarkupString)"<tr><td colspan='8' class='p-6 text-center text-slate-400'>No settlement batches generated yet. Click '+ Generate Settlement Batch' to process merchant payments.</td></tr>");
+        }
+        else
+        {
+            foreach (var st in settlements)
+            {
+                builder.OpenElement(18, "tr");
+                builder.AddAttribute(19, "class", "hover:bg-slate-50/50");
+
+                builder.OpenElement(20, "td");
+                builder.AddAttribute(21, "class", "p-3 font-mono font-bold text-blue-700");
+                builder.AddContent(22, st.SettlementNumber);
+                builder.CloseElement();
+
+                builder.OpenElement(23, "td");
+                builder.AddAttribute(24, "class", "p-3 font-bold text-slate-900");
+                builder.AddContent(25, st.StoreName);
+                builder.CloseElement();
+
+                builder.OpenElement(26, "td");
+                builder.AddAttribute(27, "class", "p-3 text-slate-600");
+                builder.AddContent(28, st.PaymentDate.ToString("dd MMM yyyy"));
+                builder.CloseElement();
+
+                builder.OpenElement(29, "td");
+                builder.AddAttribute(30, "class", "p-3 text-slate-600 font-mono text-[11px]");
+                builder.AddContent(31, string.IsNullOrWhiteSpace(st.PaymentReference) ? "-" : st.PaymentReference);
+                builder.CloseElement();
+
+                builder.OpenElement(32, "td");
+                builder.AddAttribute(33, "class", "p-3 text-right font-bold text-slate-900");
+                builder.AddContent(34, $"MVR {st.TotalAmount:N2}");
+                builder.CloseElement();
+
+                builder.OpenElement(35, "td");
+                builder.AddAttribute(36, "class", "p-3 text-center font-bold text-blue-700");
+                builder.AddContent(37, st.Allocations.Count);
+                builder.CloseElement();
+
+                builder.OpenElement(38, "td");
+                builder.AddAttribute(39, "class", "p-3 text-center");
+                builder.OpenElement(40, "span");
+                builder.AddAttribute(41, "class", $"rounded-full px-2 py-0.5 text-[11px] font-semibold {(st.Status == GoodsLoanSettlementStatus.Paid ? "bg-emerald-100 text-emerald-800" : st.Status == GoodsLoanSettlementStatus.Approved ? "bg-blue-100 text-blue-800" : "bg-amber-100 text-amber-800")}");
+                builder.AddContent(42, st.Status);
+                builder.CloseElement();
+                builder.CloseElement();
+
+                builder.OpenElement(43, "td");
+                builder.AddAttribute(44, "class", "p-3 text-right flex items-center justify-end gap-1.5");
+                if (st.Status == GoodsLoanSettlementStatus.Draft)
+                {
+                    builder.OpenElement(45, "button");
+                    builder.AddAttribute(46, "type", "button");
+                    builder.AddAttribute(47, "class", "rounded-md bg-blue-600 px-2 py-1 text-white hover:bg-blue-700");
+                    builder.AddAttribute(48, "onclick", EventCallback.Factory.Create(this, () => ApproveSettlementAsync(st.SettlementID)));
+                    builder.AddContent(49, "Approve");
+                    builder.CloseElement();
+                }
+                else if (st.Status == GoodsLoanSettlementStatus.Approved)
+                {
+                    builder.OpenElement(50, "button");
+                    builder.AddAttribute(51, "type", "button");
+                    builder.AddAttribute(52, "class", "rounded-md bg-emerald-600 px-2 py-1 text-white hover:bg-emerald-700");
+                    builder.AddAttribute(53, "onclick", EventCallback.Factory.Create(this, () => ConfirmSettlementPaidAsync(st.SettlementID)));
+                    builder.AddContent(54, "Confirm Paid");
+                    builder.CloseElement();
+                }
+                builder.CloseElement(); // td
+
+                builder.CloseElement(); // tr
+            }
+        }
+        builder.CloseElement(); // tbody
+        builder.CloseElement(); // table
+        builder.CloseElement(); // div
+
+        builder.CloseElement(); // space-y-3
+    };
+
+    private RenderFragment RenderReportsTab() => builder =>
+    {
+        builder.OpenElement(0, "div");
+        builder.AddAttribute(1, "class", "space-y-4");
+
+        builder.AddContent(2, (MarkupString)"<div class='rounded-xl border border-slate-200 bg-white p-4 shadow-xs space-y-2'><h3 class='text-sm font-bold text-slate-900'>Financial Audit & Store Reports</h3><p class='text-xs text-slate-500'>Export store monthly deduction statements for payroll transfer verification and store reconciliations.</p></div>");
+
+        builder.OpenElement(3, "div");
+        builder.AddAttribute(4, "class", "grid grid-cols-1 md:grid-cols-2 gap-4");
+
+        // Card 1: Store Monthly Deductions Report
+        builder.OpenElement(5, "div");
+        builder.AddAttribute(6, "class", "rounded-xl border border-slate-200 bg-white p-4 shadow-xs space-y-3");
+        builder.AddContent(7, (MarkupString)"<h4 class='text-xs font-bold text-slate-800'>Store Monthly Deductions Statement</h4><p class='text-xs text-slate-500'>Detailed schedule of all staff loan deductions applied in a given payroll month grouped by store.</p>");
+        builder.OpenElement(8, "button");
+        builder.AddAttribute(9, "type", "button");
+        builder.AddAttribute(10, "class", "inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100");
+        builder.AddAttribute(11, "onclick", EventCallback.Factory.Create(this, () => Toast.Success("Monthly store report generated for current cycle.")));
+        builder.AddContent(12, "Generate Current Month Report");
+        builder.CloseElement();
+        builder.CloseElement();
+
+        // Card 2: Portfolio Exposure & Outstanding Balance Report
+        builder.OpenElement(13, "div");
+        builder.AddAttribute(14, "class", "rounded-xl border border-slate-200 bg-white p-4 shadow-xs space-y-3");
+        builder.AddContent(15, (MarkupString)"<h4 class='text-xs font-bold text-slate-800'>Total Portfolio Exposure & Outstanding Balance</h4><p class='text-xs text-slate-500'>Complete financial audit of all active loans, store liabilities, and payroll recovery status.</p>");
+        builder.OpenElement(16, "button");
+        builder.AddAttribute(17, "type", "button");
+        builder.AddAttribute(18, "class", "inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100");
+        builder.AddAttribute(19, "onclick", EventCallback.Factory.Create(this, () => Toast.Success("Outstanding loans report generated.")));
+        builder.AddContent(20, "Generate Portfolio Report");
+        builder.CloseElement();
+        builder.CloseElement();
+
+        builder.CloseElement(); // grid
+        builder.CloseElement(); // space-y-4
+    };
+
+    #endregion
+
+    #region Action Handlers
+
+    private void OpenAddStoreModal()
+    {
+        storeEditModel = new SaveGoodsLoanStoreRequest();
+        showStoreModal = true;
+    }
+
+    private void OpenEditStoreModal(GoodsLoanStoreDto store)
+    {
+        storeEditModel = new SaveGoodsLoanStoreRequest
+        {
+            StoreID = store.StoreID,
+            StoreCode = store.StoreCode,
+            StoreName = store.StoreName,
+            RegistrationNumber = store.RegistrationNumber,
+            ContactPerson = store.ContactPerson,
+            PhoneNumber = store.PhoneNumber,
+            Email = store.Email,
+            Address = store.Address
+        };
+        showStoreModal = true;
+    }
+
+    private async Task SaveStoreAsync()
+    {
+        if (string.IsNullOrWhiteSpace(storeEditModel.StoreCode) || string.IsNullOrWhiteSpace(storeEditModel.StoreName))
+        {
+            Toast.Error("Store code and store name are required.");
+            return;
+        }
+
+        isActionPending = true;
+        try
+        {
+            var res = await LoanService.SaveStoreAsync(storeEditModel);
+            if (res.Success)
+            {
+                Toast.Success("Store registered/updated successfully.");
+                showStoreModal = false;
+                await ReloadAllDataAsync();
+            }
+            else
+            {
+                Toast.Error(res.Message);
+            }
+        }
+        catch (Exception ex)
+        {
+            Toast.Error(ex.Message);
+        }
+        finally
+        {
+            isActionPending = false;
+        }
+    }
+
+    private async Task ToggleStoreActiveAsync(int storeId, bool isActive)
+    {
+        var res = await LoanService.ToggleStoreActiveAsync(storeId, isActive);
+        if (res.Success)
+        {
+            Toast.Success($"Store status updated to {(isActive ? "Active" : "Inactive")}.");
+            await ReloadAllDataAsync();
+        }
+        else
+        {
+            Toast.Error(res.Message);
+        }
+    }
+
+    private void OpenAddAgreementModal()
+    {
+        agreementEditModel = new SaveGoodsLoanStoreAgreementRequest
+        {
+            OrganisationBusinessEntityID = activeOrganisationId,
+            MinimumMonths = 1,
+            MaximumMonths = 36,
+            MaximumLoanAmount = 25000m,
+            SettlementMode = GoodsLoanSettlementMode.Monthly,
+            EffectiveFrom = DateTime.Today
+        };
+        showAgreementModal = true;
+    }
+
+    private async Task SaveAgreementAsync()
+    {
+        if (agreementEditModel.StoreID <= 0 || string.IsNullOrWhiteSpace(agreementEditModel.AgreementNumber))
+        {
+            Toast.Error("Store and agreement number are required.");
+            return;
+        }
+
+        isActionPending = true;
+        try
+        {
+            var res = await LoanService.SaveAgreementAsync(agreementEditModel);
+            if (res.Success)
+            {
+                Toast.Success("Agreement saved successfully.");
+                showAgreementModal = false;
+                await ReloadAllDataAsync();
+            }
+            else
+            {
+                Toast.Error(res.Message);
+            }
+        }
+        catch (Exception ex)
+        {
+            Toast.Error(ex.Message);
+        }
+        finally
+        {
+            isActionPending = false;
+        }
+    }
+
+    private async Task ToggleAgreementActiveAsync(int agreementId, bool isActive)
+    {
+        var res = await LoanService.ToggleAgreementActiveAsync(agreementId, isActive);
+        if (res.Success)
+        {
+            Toast.Success($"Agreement status updated to {(isActive ? "Active" : "Inactive")}.");
+            await ReloadAllDataAsync();
+        }
+        else
+        {
+            Toast.Error(res.Message);
+        }
+    }
+
+    private async Task SavePolicyAsync()
+    {
+        isActionPending = true;
+        try
+        {
+            var res = await LoanService.SavePolicyAsync(new SaveGoodsLoanDeductionPolicyRequest
+            {
+                PolicyID = currentPolicy.PolicyID,
+                OrganisationBusinessEntityID = activeOrganisationId,
+                PolicyName = currentPolicy.PolicyName,
+                MaximumSalaryPercentage = currentPolicy.MaximumSalaryPercentage,
+                MinimumNetSalary = currentPolicy.MinimumNetSalary,
+                MaximumActiveLoans = currentPolicy.MaximumActiveLoans,
+                MaximumOutstandingAmount = currentPolicy.MaximumOutstandingAmount,
+                SalaryBasis = currentPolicy.SalaryBasis,
+                EffectiveFrom = currentPolicy.EffectiveFrom,
+                EffectiveTo = currentPolicy.EffectiveTo
+            });
+
+            if (res.Success)
+            {
+                Toast.Success("Deduction policy updated successfully.");
+                await ReloadAllDataAsync();
+            }
+            else
+            {
+                Toast.Error(res.Message);
+            }
+        }
+        catch (Exception ex)
+        {
+            Toast.Error(ex.Message);
+        }
+        finally
+        {
+            isActionPending = false;
+        }
+    }
+
+    private void OpenReviewModal(GoodsLoanDto loan)
+    {
+        loanUnderReview = loan;
+        reviewRemarks = "";
+        showReviewModal = true;
+    }
+
+    private async Task ApproveLoanAsync()
+    {
+        if (loanUnderReview == null) return;
+        isActionPending = true;
+        try
+        {
+            var res = await LoanService.ApproveLoanAsync(loanUnderReview.LoanID, 0, reviewRemarks);
+            if (res.Success)
+            {
+                Toast.Success($"Loan #{loanUnderReview.LoanNumber} approved. Amortisation schedule activated.");
+                showReviewModal = false;
+                await ReloadAllDataAsync();
+            }
+            else
+            {
+                Toast.Error(res.Message, "Approval Failed");
+            }
+        }
+        catch (Exception ex)
+        {
+            Toast.Error(ex.Message);
+        }
+        finally
+        {
+            isActionPending = false;
+        }
+    }
+
+    private async Task RejectLoanAsync()
+    {
+        if (loanUnderReview == null) return;
+        if (string.IsNullOrWhiteSpace(reviewRemarks))
+        {
+            Toast.Error("Please provide a rejection reason.");
+            return;
+        }
+
+        isActionPending = true;
+        try
+        {
+            var res = await LoanService.RejectLoanAsync(loanUnderReview.LoanID, 0, reviewRemarks);
+            if (res.Success)
+            {
+                Toast.Success($"Loan #{loanUnderReview.LoanNumber} rejected.");
+                showReviewModal = false;
+                await ReloadAllDataAsync();
+            }
+            else
+            {
+                Toast.Error(res.Message);
+            }
+        }
+        catch (Exception ex)
+        {
+            Toast.Error(ex.Message);
+        }
+        finally
+        {
+            isActionPending = false;
+        }
+    }
+
+    private async Task GenerateSettlementBatchAsync()
+    {
+        if (newSettlementStoreId <= 0) return;
+        isActionPending = true;
+        try
+        {
+            var res = await LoanService.CreateStoreSettlementBatchAsync(new CreateStoreSettlementBatchRequest
+            {
+                OrganisationBusinessEntityID = activeOrganisationId,
+                StoreID = newSettlementStoreId,
+                SettlementDate = newSettlementDate
+            }, 0);
+
+            if (res.Success)
+            {
+                Toast.Success("Store settlement batch created successfully.");
+                showSettlementModal = false;
+                await ReloadAllDataAsync();
+            }
+            else
+            {
+                Toast.Error(res.Message, "Settlement Batch Failed");
+            }
+        }
+        catch (Exception ex)
+        {
+            Toast.Error(ex.Message);
+        }
+        finally
+        {
+            isActionPending = false;
+        }
+    }
+
+    private async Task ApproveSettlementAsync(int settlementId)
+    {
+        var res = await LoanService.ApproveStoreSettlementAsync(settlementId, 0);
+        if (res.Success)
+        {
+            Toast.Success("Settlement batch approved for payment.");
+            await ReloadAllDataAsync();
+        }
+        else
+        {
+            Toast.Error(res.Message);
+        }
+    }
+
+    private async Task ConfirmSettlementPaidAsync(int settlementId)
+    {
+        var res = await LoanService.ConfirmStoreSettlementPaidAsync(settlementId, 0, "BML-TRF-" + Random.Shared.Next(100000, 999999));
+        if (res.Success)
+        {
+            Toast.Success("Settlement confirmed paid to store.");
+            await ReloadAllDataAsync();
+        }
+        else
+        {
+            Toast.Error(res.Message);
+        }
+    }
+
+    private RenderFragment RenderStatusBadge(string status) => builder =>
+    {
+        var (cls, text) = status switch
+        {
+            GoodsLoanStatus.Active => ("bg-emerald-100 text-emerald-800", "ACTIVE"),
+            GoodsLoanStatus.PendingApproval => ("bg-amber-100 text-amber-800", "PENDING"),
+            GoodsLoanStatus.Completed => ("bg-blue-100 text-blue-800", "COMPLETED"),
+            GoodsLoanStatus.Rejected => ("bg-rose-100 text-rose-800", "REJECTED"),
+            GoodsLoanStatus.Cancelled => ("bg-slate-100 text-slate-700", "CANCELLED"),
+            _ => ("bg-slate-100 text-slate-700", status)
+        };
+        builder.OpenElement(0, "span");
+        builder.AddAttribute(1, "class", $"rounded-full px-2 py-0.5 text-[10px] font-bold {cls}");
+        builder.AddContent(2, text);
+        builder.CloseElement();
+    };
+
+    #endregion
+}

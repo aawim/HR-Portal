@@ -506,6 +506,7 @@ namespace HRM.Components.Shared
             public const int JOB_TERMINATION_DUE_TO_OTHER_REASON = 94;
             public const int EMPLOYMENT_CERTIFICATE_REQUEST = 120;
             public const int DOCUMENT_MANAGEMENT_REQUEST = 121;
+            public const int GOODS_LOAN_REQUEST = 130;
 
 
         }
@@ -648,7 +649,6 @@ namespace HRM.Components.Shared
             public const int Schedule = 86;
             public const int ScheduleElement = 87;
             public const int Element = 88;
-            public const int ShiftScheduleDay = 89;
             public const int SpecialDayType = 90;
             public const int BreakTime = 91;
             public const int ScheduleOwners = 92;

@@ -95,8 +95,10 @@
                 <span class="text-xs font-bold text-slate-800 dark:text-slate-200">Project Members (@Project.Members.Count)</span>
                 @if (Project.CanManageAssignments)
                 {
-                    <div class="flex items-center gap-1">
-                        <button type="button" class="rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-[10px] font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition" @onclick="OpenAddMemberAsync">Add Team Member</button>
+                    <div class="flex items-center gap-1 flex-wrap">
+                        <button type="button" class="app-button app-button-secondary app-button-sm" @onclick="OpenEditProjectAsync">Edit Project</button>
+                        <button type="button" class="rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-[10px] font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition" @onclick="OpenAddMemberAsync">Add Member</button>
+                        <button type="button" class="rounded-lg bg-teal-700 dark:bg-teal-600 hover:bg-teal-800 dark:hover:bg-teal-500 text-white px-2 py-1 text-[10px] font-semibold transition shadow-xs" @onclick="OpenCreateTask">+ Add Task</button>
                         <button type="button" class="rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-[10px] font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition disabled:opacity-50" disabled="@(Project.Members.Count == 0)" @onclick="OpenAssignTask">Assign Task</button>
                     </div>
                 }
@@ -183,13 +185,40 @@
 
         <AssignmentModal Visible="showAssign" Mode="assignMode" ProjectId="ProjectId" StaffOptions="assignStaffOptions"
                          OnSaved="OnAssignedAsync" OnClose="() => showAssign = false" />
+        <EditProjectModal Visible="showEditProject" Project="Project" Teams="editTeams" Departments="editDepartments"
+                          StaffOptions="editStaffOptions" OnSaved="OnProjectSavedAsync" OnClose="() => showEditProject = false" />
+        <CreateTaskModal Visible="showCreateTask" ProjectId="ProjectId" ProjectName="@Project?.Name"
+                         StaffOptions="GetTaskAssigneeOptions()" OnSaved="OnTaskCreatedAsync" OnClose="() => showCreateTask = false" />
         <!-- Tasks Grouped by Category -->
         <div class="space-y-3 pt-2 border-t border-slate-100 dark:border-slate-800">
             <div class="flex items-center justify-between">
                 <h4 class="text-xs font-bold text-slate-900 dark:text-slate-100">
-                    Project Tasks (@Project.TotalTaskCount)
+                    Project Tasks (@(Project?.TotalTaskCount ?? 0))
                 </h4>
+                @if (Project?.CanManageAssignments == true)
+                {
+                    <button type="button"
+                            class="inline-flex items-center gap-1 rounded-lg bg-teal-700 hover:bg-teal-800 dark:bg-teal-600 dark:hover:bg-teal-500 text-white px-2.5 py-1 text-[11px] font-semibold transition shadow-xs"
+                            @onclick="OpenCreateTask">
+                        <span>+ Add Task</span>
+                    </button>
+                }
             </div>
+
+            @if (Project?.TotalTaskCount == 0)
+            {
+                <div class="rounded-xl border border-dashed border-slate-200 dark:border-slate-800 p-4 text-center">
+                    <p class="text-xs text-slate-500 dark:text-slate-400">No tasks created for this project yet.</p>
+                    @if (Project?.CanManageAssignments == true)
+                    {
+                        <button type="button"
+                                class="mt-2 inline-flex items-center gap-1 rounded-lg bg-teal-700 hover:bg-teal-800 dark:bg-teal-600 text-white px-3 py-1.5 text-xs font-semibold transition"
+                                @onclick="OpenCreateTask">
+                            + Add First Task
+                        </button>
+                    }
+                </div>
+            }
 
             <!-- 1. Ongoing Tasks -->
             <div class="space-y-1.5">
@@ -199,7 +228,7 @@
                         Ongoing Tasks
                     </span>
                     <span class="rounded-full bg-blue-100 dark:bg-blue-950/60 px-2 py-0.2 text-[10px]">
-                        @Project.OngoingTaskCount
+                        @Project!.OngoingTaskCount
                     </span>
                 </div>
                 @if (Project.Tasks.Count(t => t.Status is "Ongoing" or "In Progress" or "Active") == 0)
@@ -349,13 +378,42 @@
     private static readonly string[] Roles = ["Member", "Lead", "Coordinator", "Contributor", "Reviewer"];
     private TeamProjectDto? Project;
     private bool loading = true;
-    private bool showAssign, busy, showHistory;
+    private bool showAssign, busy, showHistory, showCreateTask, showEditProject;
     private AssignmentModal.AssignmentMode assignMode;
     private List<TeamStaffDto> assignStaffOptions = new();
+    private List<TeamDto> editTeams = new();
+    private List<OrganisationStructureDropdownDto> editDepartments = new();
+    private List<CreateProjectModal.StaffOptionDto> editStaffOptions = new();
     private List<AssignmentHistoryDto> history = new();
     private int? editingId, removeConfirmId;
     private string editRole = "Member", editRemarks = "";
     private DateTime? editEnd;
+
+    private void OpenCreateTask()
+    {
+        showCreateTask = true;
+    }
+
+    private async Task OnTaskCreatedAsync(int newTaskId)
+    {
+        showCreateTask = false;
+        await LoadProjectAsync();
+        if (showHistory) history = await TeamService.GetAssignmentHistoryAsync(ProjectId, null);
+        await OnAssignmentsChanged.InvokeAsync();
+    }
+
+    private List<CreateProjectModal.StaffOptionDto> GetTaskAssigneeOptions()
+    {
+        var list = new List<CreateProjectModal.StaffOptionDto>();
+        if (Project?.Members != null)
+        {
+            foreach (var m in Project.Members)
+            {
+                list.Add(new CreateProjectModal.StaffOptionDto { StaffId = m.StaffId, FullName = m.StaffName });
+            }
+        }
+        return list;
+    }
 
     private async Task OpenAddMemberAsync()
     {
@@ -372,6 +430,42 @@
         }
         catch (Exception ex) { Logger.LogWarning(ex, "Failed to load team members for project {ProjectId}", ProjectId); }
         showAssign = true;
+    }
+
+    private async Task OpenEditProjectAsync()
+    {
+        if (Project == null) return;
+        try
+        {
+            editTeams = await TeamService.GetMyTeamsAsync() ?? new();
+            editDepartments = await TeamService.GetOrganisationStructuresAsync() ?? new();
+            if (Project.TeamId is int teamId)
+            {
+                var team = await TeamService.GetTeamByIdAsync(teamId);
+                editStaffOptions = team?.Staffs.Select(s => new CreateProjectModal.StaffOptionDto
+                {
+                    StaffId = s.StaffId,
+                    FullName = s.FullName
+                }).ToList() ?? new();
+            }
+            else
+            {
+                editStaffOptions = new();
+            }
+            showEditProject = true;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to open project editor for {ProjectId}", ProjectId);
+            ToastService.Error("Unable to load project editing options.");
+        }
+    }
+
+    private async Task OnProjectSavedAsync()
+    {
+        showEditProject = false;
+        await LoadProjectAsync();
+        await OnAssignmentsChanged.InvokeAsync();
     }
 
     private void OpenAssignTask()

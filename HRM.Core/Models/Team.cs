@@ -18,6 +18,12 @@ public class Team
 
     // Foreign Key to the Organisation
     public int OrganisationId { get; set; }
+    public int? ParentTeamId { get; set; }
+    public int? OrganisationStructureId { get; set; }
+    public int? OrganisationStructureTypeId { get; set; }
+    public bool OvertimeEnabled { get; set; }
+    public decimal? MaximumDailyOvertimeHours { get; set; }
+    public decimal? MaximumWeeklyOvertimeHours { get; set; }
     
     public DateTime? StartDate { get; set; }
 
@@ -35,9 +41,12 @@ public class Team
 
     // Navigation Properties
     public virtual Organisation Organisation { get; set; } = null!;
+    public virtual OrganisationStructureType? OrganisationStructureType { get; set; }
     public virtual OperationLog OperationLog { get; set; } = null!;
  
     public virtual ICollection<TeamStaff> TeamStaffs { get; set; } = new List<TeamStaff>();
+    public virtual Team? ParentTeam { get; set; }
+    public virtual ICollection<Team> SubTeams { get; set; } = new List<Team>();
     public virtual ICollection<RequestTeam> RequestTeams { get; set; } = new List<RequestTeam>();
 
 

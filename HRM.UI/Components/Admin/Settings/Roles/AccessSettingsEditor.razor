@@ -15,7 +15,7 @@
                     <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
                         <div class="flex items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
                             <div class="flex items-center gap-3">
-                                <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-blue-600"><span class="material-symbols-rounded" aria-hidden="true">@(Editing ? "edit_note" : "add_circle")</span></div>
+                                <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-blue-600"><AppIcon Name="@(Editing ? "edit_note" : "add_circle")" /></div>
                                 <div><h2 class="text-sm font-semibold text-slate-900">@(Editing ? "Edit" : "Create") @Singular</h2>
                                     <p class="mt-0.5 text-xs text-slate-500">@(GroupsMode ? "Roles are user groups that bundle permissions." : "Permissions are individual actions, grouped by application area.")</p></div>
                             </div>
@@ -31,9 +31,11 @@
                                 <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
                                     <PermissionAssignmentColumn @key="(role.Id, true)" Assigned="true"
                                         Permissions="data.Permissions.Where(x => role.PermissionIds.Contains(x.Id)).ToList()"
+                                        Modules="data.Modules"
                                         OnMove="id => TogglePermission(id, false)" OnMoveGroup="ids => MovePermissions(ids, false)" />
                                     <PermissionAssignmentColumn @key="(role.Id, false)" Assigned="false"
                                         Permissions="data.Permissions.Where(x => !role.PermissionIds.Contains(x.Id)).ToList()"
+                                        Modules="data.Modules"
                                         OnMove="id => TogglePermission(id, true)" OnMoveGroup="ids => MovePermissions(ids, true)" />
                                 </div>
                                 @if (role.Id > 0)
@@ -85,7 +87,7 @@
                     <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
                         <div class="border-b border-slate-200 px-5 py-4">
                             <div class="flex items-center justify-between gap-3"><div><h2 class="text-sm font-semibold text-slate-900">@(GroupsMode ? "Roles" : "Permissions")</h2><p class="mt-0.5 text-xs text-slate-500">@(GroupsMode ? data.Roles.Count : data.Permissions.Count) configured</p></div>
-                                <button type="button" class="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-600 text-white hover:bg-blue-700" aria-label="Add @Singular" title="Add @Singular" @onclick="NewItem"><span class="material-symbols-rounded" aria-hidden="true">add</span></button></div>
+                                <button type="button" class="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-600 text-white hover:bg-blue-700" aria-label="Add @Singular" title="Add @Singular" @onclick="NewItem"><AppIcon Name="add" /></button></div>
                             <input type="search" class="mt-4 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-100" placeholder="Search…" aria-label="Search @(GroupsMode ? "roles" : "permissions")" @bind="search" @bind:event="oninput" />
                         </div>
                         <div class="overflow-y-auto" style="max-height: 680px; scrollbar-gutter: stable;" tabindex="0" aria-label="@(GroupsMode ? "Role list" : "Grouped permission list")">

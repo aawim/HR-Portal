@@ -295,6 +295,22 @@ namespace HRM.Services
                     x.BusinessEntityId == user.BusinessEntityID);
 
 
+            var idCard = individual != null
+                ? await db.Idcards.AsNoTracking()
+                    .Where(c => c.BusinessEntityId == individual.BusinessEntityId)
+                    .OrderByDescending(c => c.IdcardId)
+                    .Select(c => new { c.IdcardNumber, c.ExpiryDate })
+                    .FirstOrDefaultAsync()
+                : null;
+
+            var passport = individual != null
+                ? await db.Passports.AsNoTracking()
+                    .Where(p => p.BusinessEntityId == individual.BusinessEntityId)
+                    .OrderByDescending(p => p.PassportId)
+                    .Select(p => new { p.PassportNumber, p.ExpiryDate })
+                    .FirstOrDefaultAsync()
+                : null;
+
             return new UserContextDto
             {
                 UserId = user.UserId,
@@ -310,7 +326,14 @@ namespace HRM.Services
                     ? user.Username
                     : $"{individual.FirstNameEnglish} {individual.MiddleNameEnglish} {individual.LastNameEnglish}"
                         .Replace("  ", " ")
-                        .Trim()
+                        .Trim(),
+
+                ImageUrl = individual != null ? IndividualImage.DataUrl(individual.ImageData, individual.ImageContentType) : null,
+
+                IdentityCardNumber = idCard?.IdcardNumber,
+                IdentityCardExpiryDate = idCard?.ExpiryDate,
+                PassportNumber = passport?.PassportNumber,
+                PassportExpiryDate = passport?.ExpiryDate
             };
         }
 

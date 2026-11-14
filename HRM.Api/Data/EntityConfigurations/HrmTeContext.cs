@@ -5,10 +5,25 @@ using HRM.Models.LeaveTypes;
 using HRM.Models.Workflow;
 using HRM.Models.WorkPlanning;
 using Microsoft.EntityFrameworkCore;
+using HRM.Models.Budget;
 namespace HRM.Models;
 
 public partial class HrmTeContext : DbContext
 {
+    public DbSet<StaffAccessPolicy> StaffAccessPolicies => Set<StaffAccessPolicy>();
+    public DbSet<StaffAccessScope> StaffAccessScopes => Set<StaffAccessScope>();
+    public DbSet<StaffAccessGrant> StaffAccessGrants => Set<StaffAccessGrant>();
+    public virtual DbSet<FiscalYear> FiscalYears { get; set; }
+    public virtual DbSet<BudgetCategory> BudgetCategories { get; set; }
+    public virtual DbSet<BudgetItem> BudgetItems { get; set; }
+    public virtual DbSet<BudgetTransactionType> BudgetTransactionTypes { get; set; }
+    public virtual DbSet<BudgetAllocation> BudgetAllocations { get; set; }
+    public virtual DbSet<BudgetVirement> BudgetVirements { get; set; }
+    public virtual DbSet<BudgetCommitment> BudgetCommitments { get; set; }
+    public virtual DbSet<BudgetTransaction> BudgetTransactions { get; set; }
+    public virtual DbSet<PayrollBudgetMapping> PayrollBudgetMappings { get; set; }
+    public virtual DbSet<BudgetAuditEvent> BudgetAuditEvents { get; set; }
+
     public DbSet<RequestNotification> RequestNotifications => Set<RequestNotification>();
     public DbSet<JobTypeLeaveAccrualRule> JobTypeLeaveAccrualRules => Set<JobTypeLeaveAccrualRule>();
     public DbSet<LeaveAccrualPosting> LeaveAccrualPostings => Set<LeaveAccrualPosting>();
@@ -383,10 +398,6 @@ public partial class HrmTeContext : DbContext
     public virtual DbSet<SequenceNumberType> SequenceNumberTypes { get; set; }
 
     public virtual DbSet<Service> Services { get; set; }
-
-    public virtual DbSet<ShiftSchedule> ShiftSchedules { get; set; }
-
-    public virtual DbSet<ShiftScheduleDay> ShiftScheduleDays { get; set; }
 
     public virtual DbSet<SickLeaveForm> SickLeaveForms { get; set; }
 
@@ -3605,50 +3616,6 @@ public partial class HrmTeContext : DbContext
 
         });
 
-        modelBuilder.Entity<ShiftSchedule>(entity =>
-        {
-            entity.HasKey(e => e.ScheduleId);
-
-            entity.Property(e => e.ScheduleId)
-                .ValueGeneratedNever()
-                .HasColumnName("ScheduleID");
-
-            entity.HasOne(d => d.Schedule).WithOne(p => p.ShiftSchedule)
-                .HasForeignKey<ShiftSchedule>(d => d.ScheduleId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_ShiftSchedules_Schedules");
-        });
-
-        modelBuilder.Entity<ShiftScheduleDay>(entity =>
-        {
-            entity.Property(e => e.ShiftScheduleDayId).HasColumnName("ShiftScheduleDayID");
-            entity.Property(e => e.Date).HasColumnType("datetime");
-            entity.Property(e => e.IsValid).HasDefaultValue(true);
-            entity.Property(e => e.OperationLogId).HasColumnName("OperationLogID");
-            entity.Property(e => e.ScheduleId).HasColumnName("ScheduleID");
-            entity.Property(e => e.SpecialDayTypeId).HasColumnName("SpecialDayTypeID");
-            entity.Property(e => e.WorkShiftId).HasColumnName("WorkShiftID");
-
-            entity.HasOne(d => d.OperationLog).WithMany(p => p.ShiftScheduleDays)
-                .HasForeignKey(d => d.OperationLogId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_ShiftScheduleDays_OperationLogs");
-
-            entity.HasOne(d => d.Schedule).WithMany(p => p.ShiftScheduleDays)
-                .HasForeignKey(d => d.ScheduleId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_ShiftScheduleDays_ShiftSchedules");
-
-            entity.HasOne(d => d.SpecialDayType).WithMany(p => p.ShiftScheduleDays)
-                .HasForeignKey(d => d.SpecialDayTypeId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_ShiftScheduleDays_SpecialDayTypes");
-
-            entity.HasOne(d => d.WorkShift).WithMany(p => p.ShiftScheduleDays)
-                .HasForeignKey(d => d.WorkShiftId)
-                .HasConstraintName("FK_ShiftScheduleDays_WorkShifts");
-        });
-
         modelBuilder.Entity<SickLeaveForm>(entity =>
         {
             entity.HasKey(e => e.LeaveId).HasName("PK_SickLeaveForms_1");
@@ -3876,6 +3843,10 @@ public partial class HrmTeContext : DbContext
         modelBuilder.Entity<Team>(entity =>
         {
             entity.Property(e => e.TeamId).HasColumnName("TeamID");
+            entity.Property(e => e.ParentTeamId).HasColumnName("ParentTeamID");
+            entity.Property(e => e.OrganisationStructureId).HasColumnName("OrganisationStructureID");
+            entity.Property(e => e.MaximumDailyOvertimeHours).HasColumnType("decimal(5,2)");
+            entity.Property(e => e.MaximumWeeklyOvertimeHours).HasColumnType("decimal(5,2)");
             entity.Property(e => e.EndDate).HasColumnType("datetime");
             entity.Property(e => e.Name).HasMaxLength(250);
             entity.Property(e => e.NameDhivehi).HasMaxLength(250);
@@ -3892,6 +3863,14 @@ public partial class HrmTeContext : DbContext
                 .HasForeignKey(d => d.OrganisationId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_Teams_Organisations");
+
+            entity.HasOne(d => d.ParentTeam).WithMany(p => p.SubTeams)
+                .HasForeignKey(d => d.ParentTeamId).OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("FK_Teams_ParentTeam");
+
+            entity.HasOne<OrganisationStructure>().WithMany()
+                .HasForeignKey(d => d.OrganisationStructureId).OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("FK_Teams_OrganisationStructures");
         });
 
         modelBuilder.Entity<TeamStaff>(entity =>
@@ -3906,6 +3885,7 @@ public partial class HrmTeContext : DbContext
             entity.Property(e => e.TeamId).HasColumnName("TeamID");
             entity.Property(e => e.IsSuperVisor).HasColumnName("IsSuperVisor");
             entity.Property(e => e.IsValid).HasColumnName("IsValid");
+            entity.Property(e => e.MemberRole).HasMaxLength(20).HasDefaultValue("Member");
 
             entity.HasOne(d => d.Staff).WithMany(p => p.TeamStaffs)
                 .HasForeignKey(d => d.StaffId)

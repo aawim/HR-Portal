@@ -1,5 +1,6 @@
 using HRM.DTOs;
 using HRM.Enum;
+using HRM.Helpers;
 using Microsoft.EntityFrameworkCore;
 
 namespace HRM.Services;
@@ -50,9 +51,11 @@ public partial class OrganisationWorkspaceService
                         db.Jobs.Any(j => j.IndividualID == m.StaffId && j.OrganisationID == organisationId && j.JobStateId == HRM.Components.Shared.SharedConfig.JobStates.APPROVED && j.TerminatedDate == null && j.JoinedDate <= today))
                         .Select(m => new { m.StaffId, m.IsSuperVisor, Name = (m.Staff.Individual.FirstNameEnglish + " " + (m.Staff.Individual.MiddleNameEnglish ?? "") + " " + (m.Staff.Individual.LastNameEnglish ?? "")).Trim() }).ToList()
                 }).ToListAsync();
+            var memberIds = teams.SelectMany(x => x.Members).Select(x => x.StaffId).Distinct().ToList();
+            var viewableMemberIds = await StaffAttributeAccess.FilterViewableAsync(db, access, organisationId, memberIds);
             return teams.Select(x => new OrganisationWorkspaceResource { Id = x.TeamId, Name = x.Name,
-                Summary = $"{x.Members.Select(m => m.StaffId).Distinct().Count()} active members",
-                Details = x.Members.GroupBy(m => m.StaffId).Select(g => g.OrderByDescending(m => m.IsSuperVisor).First())
+                Summary = $"{x.Members.Where(m => viewableMemberIds.Contains(m.StaffId)).Select(m => m.StaffId).Distinct().Count()} active members",
+                Details = x.Members.Where(m => viewableMemberIds.Contains(m.StaffId)).GroupBy(m => m.StaffId).Select(g => g.OrderByDescending(m => m.IsSuperVisor).First())
                     .OrderByDescending(m => m.IsSuperVisor).ThenBy(m => m.Name).Select(m => m.Name + (m.IsSuperVisor ? " · Supervisor" : " · Team member")).ToList() }).ToList();
         }
         if (tab == WorkspaceTab.LeaveType)

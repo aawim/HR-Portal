@@ -2,6 +2,7 @@ using System.Data;
 using System.Text.Json;
 using HRM.DTOs;
 using HRM.Enum;
+using HRM.Helpers;
 using HRM.Models;
 using HRM.Models.Archives;
 using HRM.Services.Interfaces;
@@ -19,10 +20,11 @@ public sealed class WorkspaceRecentSearchService(IDbContextFactory<HrmTeContext>
         var actor = await access.RequireContextAsync(); var org = await access.GetCurrentOrganisationIdAsync();
         if (org <= 0 || !await access.HasOrganisationAccessAsync(org) || id <= 0) return null;
         await using var db = await factory.CreateDbContextAsync();
-        return await ResolveAsync(db, actor, org, type, id);
+        return await ResolveAsync(db, access, actor, org, type, id);
     }
 
-    private static async Task<WorkspaceSearchResult?> ResolveAsync(HrmTeContext db, HRM.DTOs.UserContext.UserContextDto actor, int org, WorkspaceEntityType type, int id)
+    private static async Task<WorkspaceSearchResult?> ResolveAsync(HrmTeContext db, IUserAccessService access,
+        HRM.DTOs.UserContext.UserContextDto actor, int org, WorkspaceEntityType type, int id)
     {
         if (id <= 0) return null;
         if (type == WorkspaceEntityType.Organisation)
@@ -34,6 +36,7 @@ public sealed class WorkspaceRecentSearchService(IDbContextFactory<HrmTeContext>
         var job = await FormerStaffPolicy.CurrentJobs(db).Where(x => x.IndividualID == id && (actor.IsSuperAdministrator || x.OrganisationID == org))
             .OrderByDescending(x => x.JobStateId == 4 && x.TerminatedDate == null).ThenByDescending(x => x.JoinedDate).Select(x => (int?)x.JobId).FirstOrDefaultAsync();
         if (!job.HasValue && (!actor.IsSuperAdministrator || await db.Jobs.AnyAsync(x => x.IndividualID == id))) return null;
+        if (job.HasValue && !await StaffAttributeAccess.CanViewAsync(db, access, id, org)) return null;
         return new WorkspaceSearchResult { Id = id, IndividualId = id, JobId = job, EntityType = job.HasValue ? WorkspaceEntityType.Staff : WorkspaceEntityType.Individual,
             Name = string.Join(" ", new[] { person.FirstNameEnglish, person.MiddleNameEnglish, person.LastNameEnglish }.Where(x => !string.IsNullOrWhiteSpace(x))) };
     }
@@ -49,7 +52,7 @@ public sealed class WorkspaceRecentSearchService(IDbContextFactory<HrmTeContext>
         var json = await db.UserPreferences.Where(x => x.UserPreferenceId == preferenceId).Select(x => x.RecentWorkspaceSearchesJson).SingleOrDefaultAsync();
         var result = new List<WorkspaceSearchResult>();
         foreach (var entry in Read(json).Where(x => x.OrganisationId == org).OrderByDescending(x => x.AtUtc).Take(6))
-        { var item = await ResolveAsync(db, actor, org, entry.Type, entry.Id); if(item != null && !result.Any(x => x.Id == item.Id && x.EntityType == item.EntityType)) result.Add(item); }
+        { var item = await ResolveAsync(db, access, actor, org, entry.Type, entry.Id); if(item != null && !result.Any(x => x.Id == item.Id && x.EntityType == item.EntityType)) result.Add(item); }
         return result;
     }
 
@@ -58,7 +61,7 @@ public sealed class WorkspaceRecentSearchService(IDbContextFactory<HrmTeContext>
         var actor = await access.RequireContextAsync(); var org = await access.GetCurrentOrganisationIdAsync();
         if (org <= 0 || !await access.HasOrganisationAccessAsync(org)) return null;
         await using var db = await factory.CreateDbContextAsync();
-        var item = await ResolveAsync(db, actor, org, selected.EntityType, selected.Id); if(item == null) return null;
+        var item = await ResolveAsync(db, access, actor, org, selected.EntityType, selected.Id); if(item == null) return null;
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
         var user = await db.Users.SingleAsync(x => x.UserId == actor.UserId && x.BusinessEntityID == actor.IndividualId && x.IsActive && x.LocalUserStateId == 1);
         var preference = await db.UserPreferences.SingleOrDefaultAsync(x => x.UserPreferenceId == user.UserPreferenceId);

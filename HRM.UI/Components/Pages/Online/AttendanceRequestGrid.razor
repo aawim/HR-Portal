@@ -51,9 +51,7 @@
                 @if (activeTab is not ("late-check-in" or "early-check-out" or "weekly-hours-exception"))
                 {
                     <button type="button" @onclick="OpenAddPanel" class="portal-action-btn portal-action-btn--primary">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
-                        </svg>
+                        <AppIcon Name="add" Class="w-4 h-4 text-base" />
                         <span>Add Request</span>
                     </button>
                 }
@@ -347,12 +345,12 @@
                                         <button type="button" @onclick="ExecuteSearch" disabled="@isLoading" class="portal-action-btn portal-action-btn--primary">
                                             @if (isLoading)
                                             {
-                                                <svg class="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                                                <AppIcon Name="progress_activity" Class="animate-spin h-4 w-4 text-white text-base" />
                                                 <span>Searching...</span>
                                             }
                                             else
                                             {
-                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                                                <AppIcon Name="search" Class="w-4 h-4 text-base" />
                                                 <span>Search</span>
                                             }
                                         </button>
@@ -453,7 +451,7 @@
     <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/50">
         <h3 class="text-lg font-bold text-slate-800">@(isLeaveChange ? "New Leave Change Request" : isCorrection ? "New Uneven Log Correction Request" : "New Attendance Request")</h3>
         <button @onclick="CloseAddPanel" class="text-slate-400 hover:text-slate-600 transition-colors bg-white hover:bg-slate-100 rounded-full p-1">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            <AppIcon Name="close" Class="w-5 h-5 text-xl" />
         </button>
     </div>
 
@@ -523,8 +521,8 @@
         @if (isCorrection)
         {
             <div>
-                <label class="block text-xs font-bold text-slate-700 uppercase mb-2">Uneven clock event</label>
-                <select @bind="newRequest.OriginalLogId" @bind:after="OriginalLogChanged" disabled="@isSubmitting" class="w-full border rounded-md p-2">
+                <label for="correction-clock-event" class="block text-xs font-bold text-slate-700 uppercase mb-2">Uneven clock event</label>
+                <select id="correction-clock-event" @bind="newRequest.OriginalLogId" @bind:after="OriginalLogChanged" disabled="@isSubmitting" class="w-full border rounded-md p-2">
                     <option value="">Select a clock event</option>
                     @foreach (var log in unevenLogs.Where(x => CanRequestCorrection(x.AttendanceLogID)))
                     {

@@ -41,6 +41,9 @@ using HRM.Models.Archives;
 using HRM.Services.Attendance.Evaluation;
 using HRM.Services.Attendance;
 using HRM.Services.Interfaces.AppovalWF;
+using HRM.ErrorLogs.Extensions;
+using HRM.ErrorLogs.Services;
+using HRM.Services.Diagnostics;
 
 
 
@@ -55,6 +58,14 @@ var configuredAuditConnection = builder.Configuration.GetConnectionString("Audit
 if (string.IsNullOrWhiteSpace(configuredAuditConnection)) configuredAuditConnection = builder.Configuration["AuditConnectionStrings:DefaultConnection"];
 var auditConnection = HRM.Helpers.DatabaseConnectionPolicy.Validate(
     configuredAuditConnection, builder.Environment.IsDevelopment(), "ConnectionStrings:AuditConnection");
+var configuredErrorLogsConnection = builder.Configuration.GetConnectionString("ErrorLogsConnection");
+if (string.IsNullOrWhiteSpace(configuredErrorLogsConnection))
+{
+    var csb = new Microsoft.Data.SqlClient.SqlConnectionStringBuilder(mainConnection) { InitialCatalog = "HrmErrorLogs" };
+    configuredErrorLogsConnection = csb.ConnectionString;
+}
+var errorLogsConnection = HRM.Helpers.DatabaseConnectionPolicy.Validate(
+    configuredErrorLogsConnection, builder.Environment.IsDevelopment(), "ConnectionStrings:ErrorLogsConnection");
 builder.Services.AddDbContextFactory<HrmTeContext>(options => options.UseSqlServer(mainConnection));
 
 builder.Services.AddDbContextFactory<AuditDbContext>(options =>
@@ -63,6 +74,8 @@ builder.Services.AddDbContextFactory<AuditDbContext>(options =>
 
 builder.Logging.AddDebug();
 builder.Logging.AddConsole();
+builder.Services.AddSingleton<IErrorLogStore>(sp => new SqlErrorLogStore(builder.Configuration, sp.GetService<ILogger<SqlErrorLogStore>>(), errorLogsConnection));
+builder.Services.AddHrmErrorLogging("HRM.Api");
 builder.Services.AddHrmBackendServices();
 builder.Services.AddResponseCompression(options =>
 {
@@ -83,6 +96,7 @@ app.UseResponseCompression();
 if (builder.Environment.IsDevelopment() && CredentialExposure.IsExposed(builder.Configuration["Authentication:OpenIdConnect:ClientSecret"]))
     app.Logger.LogWarning("The development eFaas client secret matches a credential exposed in Git history. Rotate it at the provider and update the development secret store.");
 app.UseTrustedProxyHeaders();
+app.UseHrmErrorLogging("HRM.Api");
 
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())

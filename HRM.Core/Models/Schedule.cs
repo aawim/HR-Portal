@@ -42,5 +42,4 @@ public partial class Schedule
 
     public virtual ScheduleType ScheduleType { get; set; } = null!;
 
-    public virtual ShiftSchedule? ShiftSchedule { get; set; }
 }

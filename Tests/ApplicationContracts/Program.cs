@@ -24,9 +24,9 @@ void CheckPayload(Type type, string path)
 }
 Check(ApplicationContractCatalog.All.Distinct().Count() == ApplicationContractCatalog.All.Count, "Duplicate contract registration.");
 foreach (var contract in assembly.GetTypes().Where(t => t.IsInterface && (t.DeclaringType?.Name.EndsWith("Contracts") == true || t.Namespace == "HRM.Application.Contracts.Pages")))
-    Check(ApplicationContractCatalog.All.Contains(contract), "New remote contract missing from the reviewed catalog: " + contract.FullName);
+    Check(ApplicationContractCatalog.Reviewed.Contains(contract), "New remote contract missing from the reviewed catalog: " + contract.FullName);
 var operations = 0;
-foreach (var contract in ApplicationContractCatalog.All)
+foreach (var contract in ApplicationContractCatalog.Reviewed)
 {
     _ = new ApiOperationDescriptor(contract);
     foreach (var method in contract.GetMethods())
@@ -36,7 +36,7 @@ foreach (var contract in ApplicationContractCatalog.All)
         foreach (var parameter in method.GetParameters()) CheckPayload(parameter.ParameterType, contract.Name + "." + method.Name + "(" + parameter.Name + ")");
     }
 }
-Console.WriteLine($"PASS {ApplicationContractCatalog.All.Count} remote contracts / {operations} operations: async, DTO-only, bounded payloads and no host/EF references");
+Console.WriteLine($"PASS {ApplicationContractCatalog.Reviewed.Count} remote contracts / {operations} operations: async, DTO-only, bounded payloads and no host/EF references");
 
 T RoundTrip<T>(T value) => JsonSerializer.Deserialize<T>(JsonSerializer.Serialize(value, ApiOperationKeys.Json), ApiOperationKeys.Json)!;
 var balance = RoundTrip(new HRM.DTOs.Leave.JobLeaveTypeDto { JobLeaveTypeId = 8, JobId = 12, LeaveTypeId = 4, LeaveTypeName = "Annual Leave", RemainingDays = 17.5m, EffectiveToDate = new DateTime(2027, 1, 1) });

@@ -217,8 +217,9 @@ static class AttendanceRequestTests
         renderer.CheckErrors();
         var model = (AttendanceRequestApplicationDto)typeof(RequestPage).GetField("newRequest", flags)!.GetValue(page)!;
         Check(model.OriginalLogId == 14, "First correction button did not belong to an eligible event");
-        Check(!renderer.RootValues().Contains("10") && renderer.RootValues().Contains("14") && renderer.RootValues().Contains("1"),
-            "Correction dropdown still offers blocked leave dates, or omits eligible check-in dates");
+        var renderedValues = renderer.RootOptionValues("correction-clock-event");
+        Check(!renderedValues.Contains("10") && renderedValues.Contains("14") && renderedValues.Contains("1"),
+            $"Correction dropdown still offers blocked leave dates, or omits eligible check-in dates: {string.Join(", ", renderedValues)}");
     }
 
     private static async Task TestPanel(AttendanceRequestService service, DateTime today)

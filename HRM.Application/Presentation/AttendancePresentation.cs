@@ -9,7 +9,9 @@ public static class AttendancePresentation
         : complete ? "Perfectly attended" : "Attended";
 
     public static string Status(YearlyAttendanceDayDto day) => day.IsOnLeave ? $"Leave · {day.LeaveTypeName ?? "Leave"}" :
+        day.IsHoliday ? "Holiday" :
+        day.IsMissingClock ? "Missing clock event" :
         day.IsPresent ? Attended(day.IsLate, day.LateMinutes, day.IsPerfectlyAttended) :
-        day.IsRestDay ? "Rest day" : day.IsHoliday ? "Holiday" : day.IsUnresolved ? "Unresolved" :
+        day.IsRestDay ? "Rest day" : day.IsUnresolved ? "Unresolved" :
         day.IsLate ? $"Check in overdue by {day.LateMinutes} minutes" : day.IsAbsent ? "Absent" : day.EligibilityMessage ?? "—";
 }

@@ -1,0 +1,1232 @@
+@namespace HRM.Components.Shared.GoodsLoans
+@using System.Globalization
+@using HRM.Application.Contracts.Pages
+@using HRM.Application.Features.GoodsLoans
+@using HRM.DTOs
+@using HRM.DTOs.GoodsLoans
+@using HRM.Models.GoodsLoans
+@using HRM.Services
+@using HRM.Services.Interfaces
+@inject IGoodsLoanService LoanService
+@inject IGoodsLoanScheduleCalculator ScheduleCalculator
+@inject IUserAccessService AccessService
+@inject ToastService Toast
+@inject IJSRuntime JS
+
+<section class="goods-loans-panel w-full min-w-0 p-2 space-y-4">
+    <!-- Header -->
+    <header class="sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur-xs px-3 py-3 shadow-xs rounded-xl flex items-center justify-between flex-wrap gap-2">
+        <div>
+            <div class="flex items-center gap-2">
+                <h2 class="text-lg font-bold text-slate-900">Staff Goods Loans</h2>
+                <span class="rounded-full px-2.5 py-0.5 text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+                    Store Purchase Agreements
+                </span>
+            </div>
+            <p class="text-xs text-slate-500 mt-0.5">
+                @if (EffectiveCanEnterLoan)
+                {
+                    <span>Record store purchase agreements and track active repayment schedules & deductions for this employee.</span>
+                }
+                else
+                {
+                    <span>Track your active store purchase agreement statuses, repayment schedules & deductions. Store purchase agreements are registered and managed by HR & Finance Administration.</span>
+                }
+            </p>
+        </div>
+        <div class="flex items-center gap-2">
+            @if (!IsEmbedded)
+            {
+                <button type="button"
+                        class="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition"
+                        @onclick="ToggleFullWidth">
+                    @if (isFullWidth)
+                    {
+                        <AppIcon Name="fullscreen" Class="h-3.5 w-3.5 text-slate-500 text-sm" />
+                        <span>Shrink View</span>
+                    }
+                    else
+                    {
+                        <AppIcon Name="fullscreen" Class="h-3.5 w-3.5 text-slate-500 text-sm" />
+                        <span>Full Width</span>
+                    }
+                </button>
+            }
+
+            <button type="button"
+                    class="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition"
+                    @onclick="ReloadDataAsync"
+                    disabled="@isLoading">
+                <AppIcon Name="refresh" Class="h-3.5 w-3.5 text-slate-500 text-sm " />
+                <span>Refresh</span>
+            </button>
+
+            @if (EffectiveCanEnterLoan)
+            {
+                @if (!isApplying)
+                {
+                    <button type="button"
+                            class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 transition"
+                            @onclick="StartNewApplication">
+                        <AppIcon Name="add" Class="h-3.5 w-3.5 text-sm" />
+                        <span>+ Enter Goods Loan</span>
+                    </button>
+                }
+                else
+                {
+                    <button type="button"
+                            class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition"
+                            @onclick="CancelApplication">
+                        <span>Back to Details</span>
+                    </button>
+                }
+            }
+        </div>
+    </header>
+
+    <!-- Metrics Cards Overview -->
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div class="rounded-xl border border-slate-200 bg-white p-3 shadow-xs">
+            <div class="text-[11px] font-medium text-slate-500">Active Loans</div>
+            <div class="text-lg font-bold text-slate-900 mt-1">@summary.ActiveLoansCount</div>
+            <div class="text-[10px] text-slate-400 mt-0.5">Separate agreements</div>
+        </div>
+        <div class="rounded-xl border border-slate-200 bg-white p-3 shadow-xs">
+            <div class="text-[11px] font-medium text-slate-500">Total Borrowed</div>
+            <div class="text-lg font-bold text-blue-600 mt-1">MVR @summary.AllLoans.Sum(l => l.PrincipalAmount).ToString("N2")</div>
+            <div class="text-[10px] text-slate-400 mt-0.5">Approved purchases</div>
+        </div>
+        <div class="rounded-xl border border-slate-200 bg-white p-3 shadow-xs">
+            <div class="text-[11px] font-medium text-slate-500">Total Repaid</div>
+            <div class="text-lg font-bold text-emerald-600 mt-1">MVR @summary.AllLoans.Sum(l => l.TotalPaidAmount).ToString("N2")</div>
+            <div class="text-[10px] text-slate-400 mt-0.5">Payroll deductions</div>
+        </div>
+        <div class="rounded-xl border border-slate-200 bg-white p-3 shadow-xs">
+            <div class="text-[11px] font-medium text-slate-500">Outstanding Balance</div>
+            <div class="text-lg font-bold text-amber-600 mt-1">MVR @summary.TotalOutstandingBalance.ToString("N2")</div>
+            <div class="text-[10px] text-slate-400 mt-0.5">Remaining obligations</div>
+        </div>
+        <div class="rounded-xl border border-slate-200 bg-white p-3 shadow-xs">
+            <div class="text-[11px] font-medium text-slate-500">Monthly Deduction</div>
+            <div class="text-lg font-bold text-slate-900 mt-1">MVR @summary.CurrentMonthlyDeduction.ToString("N2")</div>
+            <div class="text-[10px] text-slate-400 mt-0.5">Active commitment</div>
+        </div>
+        <div class="rounded-xl border border-emerald-200 bg-emerald-50/50 p-3 shadow-xs">
+            <div class="text-[11px] font-medium text-emerald-700">Available Capacity</div>
+            <div class="text-lg font-bold text-emerald-700 mt-1">MVR @summary.AvailableMonthlyCapacity.ToString("N2")</div>
+            <div class="text-[10px] text-emerald-600 mt-0.5">Monthly loan limit</div>
+        </div>
+    </div>
+
+    <!-- 2-Panel Grid System -->
+    <div class="page-panels @(isFullWidth ? "page-panels-full" : "page-panels-standard")">
+        
+        <!-- LEFT PANEL: Application Form OR Selected Loan Details -->
+        <div class="page-panel-left min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-xs flex flex-col gap-4">
+            @if (isApplying)
+            {
+                <!-- APPLICATION FORM -->
+                <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                    <div>
+                        <h3 class="text-sm font-bold text-slate-900">New Goods Loan Application</h3>
+                        <p class="text-xs text-slate-500">Select store agreement and specify goods to be purchased.</p>
+                    </div>
+                    <span class="rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-semibold text-blue-700 border border-blue-200">
+                        Step-by-Step Request
+                    </span>
+                </div>
+
+                <div class="space-y-4">
+                    <!-- Store and Agreement Selection -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-800 p-1">Store / Merchant *</label>
+                            <select class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                    value="@newApp.StoreID"
+                                    @onchange="OnStoreChanged">
+                                <option value="0">-- Select Merchant Store --</option>
+                                @foreach (var store in availableStores)
+                                {
+                                    <option value="@store.StoreID">@store.StoreName (@store.StoreCode)</option>
+                                }
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-800 p-1">Store Agreement *</label>
+                            <select class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                    value="@newApp.AgreementID"
+                                    @onchange="OnAgreementChanged"
+                                    disabled="@(selectedStoreAgreements.Count == 0)">
+                                <option value="0">-- Select Agreement --</option>
+                                @foreach (var agr in selectedStoreAgreements)
+                                {
+                                    <option value="@agr.AgreementID">
+                                        @agr.AgreementNumber (@agr.MinimumMonths - @agr.MaximumMonths mos, Max: MVR @agr.MaximumLoanAmount.ToString("N0"))
+                                    </option>
+                                }
+                            </select>
+                        </div>
+                    </div>
+
+                    @if (selectedAgreement != null)
+                    {
+                        <div class="rounded-xl border border-blue-200 bg-blue-50/40 p-3 flex items-center justify-between text-xs text-blue-900">
+                            <div>
+                                <span class="font-semibold">Agreement Terms:</span>
+                                Repayment: @selectedAgreement.MinimumMonths to @selectedAgreement.MaximumMonths months | 
+                                Max Limit: MVR @selectedAgreement.MaximumLoanAmount.ToString("N2") | 
+                                Settlement: @selectedAgreement.SettlementMode
+                            </div>
+                            <span class="rounded-full bg-emerald-100 text-emerald-800 px-2 py-0.5 font-bold text-[11px]">
+                                0.00% Interest
+                            </span>
+                        </div>
+                    }
+
+                    <!-- Purchase Invoice & Date -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-800 p-1">Quotation / Invoice # *</label>
+                            <input type="text"
+                                   class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                   placeholder="e.g. INV-2026-0891"
+                                   @bind="newApp.InvoiceNumber" />
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-800 p-1">Purchase / Quotation Date *</label>
+                            <input type="date"
+                                   class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                   @bind="newApp.PurchaseDate" />
+                        </div>
+                    </div>
+
+                    <!-- Items Purchased Table -->
+                    <div class="space-y-2">
+                        <div class="flex items-center justify-between">
+                            <label class="block text-xs font-bold text-slate-800 p-1">Goods / Items Included *</label>
+                            <button type="button"
+                                    class="inline-flex items-center gap-1 rounded-lg border border-blue-300 bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-100 transition"
+                                    @onclick="AddGoodsItem">
+                                + Add Item
+                            </button>
+                        </div>
+
+                        <div class="overflow-x-auto rounded-xl border border-slate-200">
+                            <table class="w-full text-left text-xs">
+                                <thead class="bg-slate-50 text-slate-700 font-semibold border-b border-slate-200">
+                                    <tr>
+                                        <th class="p-2.5">#</th>
+                                        <th class="p-2.5">Item Description</th>
+                                        <th class="p-2.5 w-20 text-center">Qty</th>
+                                        <th class="p-2.5 w-32 text-right">Unit Price (MVR)</th>
+                                        <th class="p-2.5 w-32 text-right">Total (MVR)</th>
+                                        <th class="p-2.5 w-12 text-center"></th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-100">
+                                    @if (newApp.Items.Count == 0)
+                                    {
+                                        <tr>
+                                            <td colspan="6" class="p-4 text-center text-slate-400">
+                                                No items added yet. Click "+ Add Item" to specify goods from the store quotation.
+                                            </td>
+                                        </tr>
+                                    }
+                                    else
+                                    {
+                                        @for (int i = 0; i < newApp.Items.Count; i++)
+                                        {
+                                            var idx = i;
+                                            var item = newApp.Items[idx];
+                                            <tr class="hover:bg-slate-50/50">
+                                                <td class="p-2.5 text-slate-400">@(idx + 1)</td>
+                                                <td class="p-2.5">
+                                                    <input type="text"
+                                                           class="w-full rounded-md border border-slate-300 p-1.5 text-xs text-slate-900"
+                                                           placeholder="e.g. Samsung 55' UHD Smart TV"
+                                                           @bind="item.ItemDescription" />
+                                                </td>
+                                                <td class="p-2.5">
+                                                    <input type="number" min="1"
+                                                           class="w-full rounded-md border border-slate-300 p-1.5 text-xs text-slate-900 text-center"
+                                                           value="@item.Quantity"
+                                                           @oninput="(e) => OnItemQtyChanged(idx, e.Value)" />
+                                                </td>
+                                                <td class="p-2.5">
+                                                    <input type="number" step="0.01" min="0"
+                                                           class="w-full rounded-md border border-slate-300 p-1.5 text-xs text-slate-900 text-right"
+                                                           value="@item.UnitPrice"
+                                                           @oninput="(e) => OnItemPriceChanged(idx, e.Value)" />
+                                                </td>
+                                                <td class="p-2.5 text-right font-semibold text-slate-900">
+                                                    @item.TotalAmount.ToString("N2")
+                                                </td>
+                                                <td class="p-2.5 text-center">
+                                                    <button type="button"
+                                                            class="text-rose-500 hover:text-rose-700 text-xs font-bold"
+                                                            @onclick="() => RemoveGoodsItem(idx)">
+                                                        ✕
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        }
+                                    }
+                                </tbody>
+                                @if (newApp.Items.Count > 0)
+                                {
+                                    <tfoot class="bg-slate-50 font-bold border-t border-slate-200">
+                                        <tr>
+                                            <td colspan="4" class="p-2.5 text-right text-slate-700">Total Principal Amount:</td>
+                                            <td class="p-2.5 text-right text-blue-700 text-sm">MVR @CalculatedPrincipal.ToString("N2")</td>
+                                            <td></td>
+                                        </tr>
+                                    </tfoot>
+                                }
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Repayment Configuration -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-800 p-1">Repayment Duration (Months) *</label>
+                            <input type="number"
+                                   min="@(selectedAgreement?.MinimumMonths ?? 1)"
+                                   max="@(selectedAgreement?.MaximumMonths ?? 36)"
+                                   class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                   value="@newApp.RepaymentMonths"
+                                   @oninput="OnRepaymentMonthsChanged" />
+                            <span class="text-[11px] text-slate-400 mt-0.5 block">
+                                Allowed by agreement: @(selectedAgreement?.MinimumMonths ?? 1) - @(selectedAgreement?.MaximumMonths ?? 36) months
+                            </span>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-800 p-1">First Deduction Month *</label>
+                            <input type="date"
+                                   class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                   value="@firstMonthDateStr"
+                                   @onchange="OnFirstMonthChanged" />
+                            <span class="text-[11px] text-slate-400 mt-0.5 block">
+                                Repayment deducted via monthly payroll
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- Live Salary Eligibility Banner -->
+                    @if (isCheckingEligibility)
+                    {
+                        <div class="rounded-xl border border-slate-200 bg-slate-50 p-3 text-center text-xs text-slate-500">
+                            Evaluating salary eligibility against organization policy...
+                        </div>
+                    }
+                    else if (eligibilityResult != null)
+                    {
+                        @if (eligibilityResult.IsEligible)
+                        {
+                            <div class="rounded-xl border border-emerald-200 bg-emerald-50/70 p-3.5 space-y-2">
+                                <div class="flex items-center gap-2 text-emerald-800 font-bold text-xs">
+                                    <AppIcon Name="check_circle" Class="h-4 w-4 text-emerald-600 text-base" />
+                                    <span>ELIGIBILITY VERIFIED: You meet all salary and policy criteria</span>
+                                </div>
+                                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] text-emerald-950 pt-1">
+                                    <div>
+                                        <span class="text-emerald-700 block">Eligible Salary:</span>
+                                        <span class="font-bold">MVR @eligibilityResult.EmployeeSalary.ToString("N2")</span>
+                                    </div>
+                                    <div>
+                                        <span class="text-emerald-700 block">Required Monthly:</span>
+                                        <span class="font-bold">MVR @eligibilityResult.ProposedNewMonthlyDeduction.ToString("N2")</span>
+                                    </div>
+                                    <div>
+                                        <span class="text-emerald-700 block">Available Monthly:</span>
+                                        <span class="font-bold">MVR @eligibilityResult.AvailableMonthlyCapacity.ToString("N2")</span>
+                                    </div>
+                                    <div>
+                                        <span class="text-emerald-700 block">Commitment %:</span>
+                                        <span class="font-bold">@(eligibilityResult.EmployeeSalary > 0 ? (eligibilityResult.ProposedNewMonthlyDeduction / eligibilityResult.EmployeeSalary * 100m).ToString("F1") : "0.0")% (Limit @eligibilityResult.MaximumAllowedPercentage%)</span>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="rounded-xl border border-rose-200 bg-rose-50/80 p-3.5 space-y-2">
+                                <div class="flex items-center gap-2 text-rose-800 font-bold text-xs">
+                                    <AppIcon Name="close" Class="h-4 w-4 text-rose-600 text-base" />
+                                    <span>ELIGIBILITY DEFICIT: Cannot proceed with current configuration</span>
+                                </div>
+                                <ul class="list-disc list-inside text-[11px] text-rose-700 space-y-0.5">
+                                    @foreach (var err in eligibilityResult.ValidationErrors)
+                                    {
+                                        <li>@err</li>
+                                    }
+                                </ul>
+                            </div>
+                        }
+                    }
+
+                    <!-- Live Schedule Preview -->
+                    @if (previewSchedule.Count > 0)
+                    {
+                        <div class="space-y-2 pt-2">
+                            <div class="flex items-center justify-between">
+                                <label class="block text-xs font-bold text-slate-800 p-1">Amortisation Schedule Preview (@previewSchedule.Count Months)</label>
+                                <span class="text-[11px] text-slate-500">
+                                    Regular: MVR @(previewSchedule.FirstOrDefault()?.ScheduledAmount.ToString("N2")) | 
+                                    Final: MVR @(previewSchedule.LastOrDefault()?.ScheduledAmount.ToString("N2"))
+                                </span>
+                            </div>
+
+                            <div class="max-h-48 overflow-y-auto rounded-xl border border-slate-200">
+                                <table class="w-full text-left text-xs">
+                                    <thead class="bg-slate-50 text-slate-700 font-semibold border-b border-slate-200 sticky top-0">
+                                        <tr>
+                                            <th class="p-2">#</th>
+                                            <th class="p-2">Due Month</th>
+                                            <th class="p-2 text-right">Deduction (MVR)</th>
+                                            <th class="p-2 text-right">Principal Balance (MVR)</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-slate-100">
+                                        @foreach (var p in previewSchedule)
+                                        {
+                                            <tr class="hover:bg-slate-50/50">
+                                                <td class="p-2 text-slate-400">@p.InstallmentNumber</td>
+                                                <td class="p-2 font-medium text-slate-800">@p.DueMonth.ToString("MMM yyyy")</td>
+                                                <td class="p-2 text-right font-semibold text-slate-900">@p.ScheduledAmount.ToString("N2")</td>
+                                                <td class="p-2 text-right text-slate-600">@p.RemainingPrincipalAfter.ToString("N2")</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    }
+
+                    <!-- Remarks / Notes -->
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-800 p-1">Applicant Remarks</label>
+                        <textarea class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                  rows="2"
+                                  placeholder="Provide any additional details or justification..."
+                                  @bind="newApp.Remarks"></textarea>
+                    </div>
+
+                    <!-- Submit Actions -->
+                    <div class="flex items-center justify-end gap-2 border-t border-slate-100 pt-3">
+                        <button type="button"
+                                class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition"
+                                @onclick="CancelApplication">
+                            Cancel
+                        </button>
+                        <button type="button"
+                                class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 disabled:opacity-50 transition"
+                                disabled="@(isSubmitting || eligibilityResult == null || !eligibilityResult.IsEligible || newApp.Items.Count == 0)"
+                                @onclick="SubmitApplicationAsync">
+                            @if (isSubmitting)
+                            {
+                                <span>Submitting...</span>
+                            }
+                            else
+                            {
+                                <span>Submit Goods Loan Application</span>
+                            }
+                        </button>
+                    </div>
+                </div>
+            }
+            else if (selectedLoan != null)
+            {
+                <!-- SELECTED LOAN DETAIL VIEW -->
+                <div class="flex items-center justify-between border-b border-slate-100 pb-3 flex-wrap gap-2">
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <span class="font-mono text-xs font-bold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md">
+                                @selectedLoan.LoanNumber
+                            </span>
+                            @GetStatusBadge(selectedLoan.Status)
+                        </div>
+                        <h3 class="text-sm font-bold text-slate-900 mt-1">@selectedLoan.StoreName</h3>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        @if (selectedLoan.Status == GoodsLoanStatus.Active && selectedLoan.OutstandingAmount > 0)
+                        {
+                            <button type="button"
+                                    class="inline-flex items-center gap-1 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-800 hover:bg-emerald-100 transition"
+                                    @onclick="() => showEarlySettlementModal = true">
+                                Early Settlement
+                            </button>
+                        }
+                        @if (selectedLoan.Status == GoodsLoanStatus.PendingApproval || selectedLoan.Status == GoodsLoanStatus.Draft)
+                        {
+                            <button type="button"
+                                    class="inline-flex items-center gap-1 rounded-lg border border-rose-300 bg-white px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-50 transition"
+                                    @onclick="CancelSelectedLoanAsync">
+                                Cancel Application
+                            </button>
+                        }
+                    </div>
+                </div>
+
+                <!-- Loan Key Information Cards -->
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
+                    <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-2.5">
+                        <span class="text-slate-400 block text-[11px]">Principal Amount</span>
+                        <span class="font-bold text-slate-900 mt-0.5 block">MVR @selectedLoan.PrincipalAmount.ToString("N2")</span>
+                    </div>
+                    <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-2.5">
+                        <span class="text-slate-400 block text-[11px]">Monthly Deduction</span>
+                        <span class="font-bold text-blue-700 mt-0.5 block">MVR @selectedLoan.MonthlyInstalmentAmount.ToString("N2")</span>
+                    </div>
+                    <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-2.5">
+                        <span class="text-slate-400 block text-[11px]">Repaid Amount</span>
+                        <span class="font-bold text-emerald-600 mt-0.5 block">MVR @selectedLoan.TotalPaidAmount.ToString("N2")</span>
+                    </div>
+                    <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-2.5">
+                        <span class="text-slate-400 block text-[11px]">Outstanding Balance</span>
+                        <span class="font-bold text-amber-600 mt-0.5 block">MVR @selectedLoan.OutstandingBalance.ToString("N2")</span>
+                    </div>
+                </div>
+
+                <!-- Repayment Progress Bar -->
+                <div class="space-y-1">
+                    <div class="flex justify-between text-xs font-semibold text-slate-700">
+                        <span>Repayment Progress</span>
+                        <span>@SelectedLoanProgressPct.ToString("F1")% Repaid (@SelectedLoanPaidCount of @selectedLoan.RepaymentMonths months)</span>
+                    </div>
+                    <div class="h-2 w-full rounded-full bg-slate-100 overflow-hidden">
+                        <div class="h-full bg-emerald-500 rounded-full transition-all" style="width: @(SelectedLoanProgressPct)%"></div>
+                    </div>
+                </div>
+
+                <!-- Goods Included in this Loan -->
+                @if (selectedLoan.Items.Count > 0)
+                {
+                    <div class="space-y-2">
+                        <h4 class="text-xs font-bold text-slate-800">Purchased Goods (@selectedLoan.Items.Count items)</h4>
+                        <div class="rounded-xl border border-slate-200 overflow-hidden">
+                            <table class="w-full text-left text-xs">
+                                <thead class="bg-slate-50 text-slate-600 font-semibold border-b border-slate-200">
+                                    <tr>
+                                        <th class="p-2">Item</th>
+                                        <th class="p-2 text-center">Qty</th>
+                                        <th class="p-2 text-right">Unit Price</th>
+                                        <th class="p-2 text-right">Total</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-100">
+                                    @foreach (var itm in selectedLoan.Items)
+                                    {
+                                        <tr>
+                                            <td class="p-2 font-medium text-slate-900">@itm.ItemDescription</td>
+                                            <td class="p-2 text-center text-slate-600">@itm.Quantity</td>
+                                            <td class="p-2 text-right text-slate-600">MVR @itm.UnitPrice.ToString("N2")</td>
+                                            <td class="p-2 text-right font-semibold text-slate-900">MVR @itm.TotalAmount.ToString("N2")</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                }
+
+                <!-- Complete 24-Month Instalment Schedule -->
+                <div class="space-y-2">
+                    <div class="flex items-center justify-between">
+                        <h4 class="text-xs font-bold text-slate-800">
+                            Repayment Schedule (@selectedLoan.Installments.Count Installments)
+                        </h4>
+                        <span class="text-[11px] text-slate-500">
+                            Automatic payroll deduction schedule
+                        </span>
+                    </div>
+
+                    <div class="max-h-64 overflow-y-auto rounded-xl border border-slate-200">
+                        <table class="w-full text-left text-xs">
+                            <thead class="bg-slate-50 text-slate-700 font-semibold border-b border-slate-200 sticky top-0">
+                                <tr>
+                                    <th class="p-2">#</th>
+                                    <th class="p-2">Due Month</th>
+                                    <th class="p-2 text-right">Scheduled</th>
+                                    <th class="p-2 text-right">Paid</th>
+                                    <th class="p-2 text-center">Status</th>
+                                    <th class="p-2">Payment Date</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100">
+                                @foreach (var inst in selectedLoan.Installments.OrderBy(i => i.InstallmentNumber))
+                                {
+                                    <tr class="hover:bg-slate-50/50">
+                                        <td class="p-2 text-slate-400">@inst.InstallmentNumber</td>
+                                        <td class="p-2 font-medium text-slate-800">@inst.DueMonth.ToString("MMM yyyy")</td>
+                                        <td class="p-2 text-right font-semibold text-slate-900">MVR @inst.ScheduledAmount.ToString("N2")</td>
+                                        <td class="p-2 text-right text-emerald-700">MVR @inst.PaidAmount.ToString("N2")</td>
+                                        <td class="p-2 text-center">@GetInstallmentStatusBadge(inst.Status)</td>
+                                        <td class="p-2 text-slate-500 text-[11px]">
+                                            @(inst.LastPaymentDate.HasValue ? inst.LastPaymentDate.Value.ToString("dd MMM yyyy") : "-")
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <!-- EMPTY STATE / WELCOME -->
+                <div class="rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center text-xs text-slate-500 space-y-3">
+                    <svg class="h-10 w-10 text-slate-300 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <div>
+                        <div class="font-bold text-slate-800 text-sm">No Goods Loan Selected</div>
+                        <p class="text-xs text-slate-500 mt-1">
+                            @if (EffectiveCanEnterLoan)
+                            {
+                                <span>Select an existing loan from the list on the right to view details and amortisation schedule, or click "+ Enter Goods Loan" to record an agreement for this staff member.</span>
+                            }
+                            else
+                            {
+                                <span>Select a store purchase agreement from the list on the right to view repayment progress, purchased items, and monthly deduction schedules.</span>
+                            }
+                        </p>
+                    </div>
+                    @if (EffectiveCanEnterLoan)
+                    {
+                        <button type="button"
+                                class="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 transition"
+                                @onclick="StartNewApplication">
+                            + Enter Goods Loan
+                        </button>
+                    }
+                </div>
+            }
+        </div>
+
+        <!-- RIGHT PANEL: Employee Goods Loans List -->
+        <aside class="page-panel-right min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-xs flex flex-col gap-3">
+            <div class="flex items-center justify-between">
+                <h3 class="text-sm font-bold text-slate-900">Your Goods Loans</h3>
+                <span class="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-700">
+                    @loans.Count Total
+                </span>
+            </div>
+
+            <!-- Status Filter Tabs -->
+            <div class="flex rounded-lg border border-slate-300 p-0.5 bg-slate-50 text-[11px] font-semibold">
+                <button type="button"
+                        class="flex-1 py-1 rounded-md text-center transition @(filterStatus == "ALL" ? "bg-white text-blue-700 shadow-xs" : "text-slate-600 hover:text-slate-900")"
+                        @onclick='() => SetFilterStatus("ALL")'>
+                    All
+                </button>
+                <button type="button"
+                        class="flex-1 py-1 rounded-md text-center transition @(filterStatus == GoodsLoanStatus.Active ? "bg-white text-blue-700 shadow-xs" : "text-slate-600 hover:text-slate-900")"
+                        @onclick='() => SetFilterStatus(GoodsLoanStatus.Active)'>
+                    Active
+                </button>
+                <button type="button"
+                        class="flex-1 py-1 rounded-md text-center transition @(filterStatus == GoodsLoanStatus.PendingApproval ? "bg-white text-blue-700 shadow-xs" : "text-slate-600 hover:text-slate-900")"
+                        @onclick='() => SetFilterStatus(GoodsLoanStatus.PendingApproval)'>
+                    Pending
+                </button>
+                <button type="button"
+                        class="flex-1 py-1 rounded-md text-center transition @(filterStatus == GoodsLoanStatus.Completed ? "bg-white text-blue-700 shadow-xs" : "text-slate-600 hover:text-slate-900")"
+                        @onclick='() => SetFilterStatus(GoodsLoanStatus.Completed)'>
+                    Completed
+                </button>
+            </div>
+
+            <!-- Loans Card List -->
+            <div class="space-y-2 overflow-y-auto max-h-[600px] pr-1">
+                @if (filteredLoans.Count == 0)
+                {
+                    <div class="rounded-xl border border-dashed border-slate-200 p-6 text-center text-xs text-slate-400">
+                        No goods loans found for this filter.
+                    </div>
+                }
+                else
+                {
+                    @foreach (var ln in filteredLoans)
+                    {
+                        var isSelected = selectedLoan?.LoanID == ln.LoanID && !isApplying;
+                        <div class="rounded-xl border p-3 text-xs transition cursor-pointer hover:shadow-xs flex flex-col gap-2 @(isSelected ? "border-blue-500 bg-blue-50/70 shadow-xs ring-1 ring-blue-500" : "border-slate-200 bg-white hover:border-slate-300")"
+                             @onclick="() => SelectLoan(ln)">
+                            <div class="flex items-center justify-between">
+                                <span class="font-mono text-[11px] font-bold text-blue-700">@ln.LoanNumber</span>
+                                @GetStatusBadge(ln.Status)
+                            </div>
+                            <div>
+                                <div class="font-bold text-slate-900 text-xs">@ln.StoreName</div>
+                                <div class="text-[11px] text-slate-500 mt-0.5">Purchased on @ln.PurchaseDate.ToString("dd MMM yyyy")</div>
+                            </div>
+                            <div class="grid grid-cols-2 gap-2 border-t border-slate-100 pt-1.5 text-[11px]">
+                                <div>
+                                    <span class="text-slate-400 block">Monthly Deduction:</span>
+                                    <span class="font-bold text-slate-800">MVR @ln.MonthlyInstalmentAmount.ToString("N2")</span>
+                                </div>
+                                <div class="text-right">
+                                    <span class="text-slate-400 block">Outstanding:</span>
+                                    <span class="font-bold text-amber-600">MVR @ln.OutstandingBalance.ToString("N2")</span>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                }
+            </div>
+        </aside>
+    </div>
+</section>
+
+<!-- Early Settlement Modal -->
+@if (showEarlySettlementModal && selectedLoan != null)
+{
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4">
+        <div class="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-xl space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <h3 class="text-sm font-bold text-slate-900">Early Loan Settlement</h3>
+                <button type="button" class="text-slate-400 hover:text-slate-600 font-bold" @onclick="() => showEarlySettlementModal = false">✕</button>
+            </div>
+            <div class="space-y-3 text-xs">
+                <p class="text-slate-600">
+                    Settle the outstanding balance for loan <strong class="font-mono text-blue-700">@selectedLoan.LoanNumber</strong> with store <strong class="text-slate-900">@selectedLoan.StoreName</strong>.
+                </p>
+                <div class="rounded-xl border border-amber-200 bg-amber-50/60 p-3">
+                    <span class="text-amber-800 block font-medium">Outstanding Balance to Clear:</span>
+                    <span class="text-lg font-bold text-amber-900 mt-0.5 block">MVR @selectedLoan.OutstandingBalance.ToString("N2")</span>
+                </div>
+                <div>
+                    <label class="block font-semibold text-slate-800 p-1">Settlement Payment Reference *</label>
+                    <input type="text"
+                           class="w-full rounded-lg border border-slate-300 p-2 text-xs"
+                           placeholder="e.g. BML Transfer Ref #789012"
+                           @bind="settlementReference" />
+                </div>
+                <div>
+                    <label class="block font-semibold text-slate-800 p-1">Remarks</label>
+                    <textarea class="w-full rounded-lg border border-slate-300 p-2 text-xs"
+                              rows="2"
+                              placeholder="Reason for early settlement..."
+                              @bind="settlementRemarks"></textarea>
+                </div>
+            </div>
+            <div class="flex items-center justify-end gap-2 border-t border-slate-100 pt-3">
+                <button type="button"
+                        class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                        @onclick="() => showEarlySettlementModal = false">
+                    Cancel
+                </button>
+                <button type="button"
+                        class="rounded-lg bg-emerald-600 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+                        disabled="@(string.IsNullOrWhiteSpace(settlementReference) || isSubmitting)"
+                        @onclick="SubmitEarlySettlementAsync">
+                    Confirm Full Settlement
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+.page-panels {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+    gap: 1rem;
+    width: 100%;
+    min-width: 0;
+    margin-inline: auto;
+    transition: max-width .3s ease;
+}
+.page-panels-standard {
+    max-width: 80rem;
+}
+.page-panels-full {
+    max-width: none;
+}
+@@media (min-width: 1024px) {
+    .page-panels {
+        grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+    }
+}
+</style>
+
+@code {
+    [Parameter] public int? IndividualId { get; set; }
+    [Parameter] public int? OrganisationId { get; set; }
+    [Parameter] public bool IsEmbedded { get; set; }
+    [Parameter] public bool? CanEnterLoan { get; set; }
+
+    private bool hasAdminAccess;
+    private bool EffectiveCanEnterLoan => (CanEnterLoan ?? IsEmbedded) && hasAdminAccess;
+
+    private bool isFullWidth = false;
+    private bool isLoading = true;
+    private bool isApplying = false;
+    private bool isCheckingEligibility = false;
+    private bool isSubmitting = false;
+    private bool showEarlySettlementModal = false;
+
+    private int activeIndividualId;
+    private int activeOrganisationId;
+    private string filterStatus = "ALL";
+
+    private GoodsLoanStaffWorkspaceSummary summary = new();
+    private List<GoodsLoanDto> loans = new();
+    private List<GoodsLoanDto> filteredLoans => filterStatus == "ALL"
+        ? loans
+        : loans.Where(l => string.Equals(l.Status, filterStatus, StringComparison.OrdinalIgnoreCase)).ToList();
+
+    private GoodsLoanDto? selectedLoan;
+    private List<GoodsLoanStoreDto> availableStores = new();
+    private List<GoodsLoanStoreAgreementDto> allAgreements = new();
+    private List<GoodsLoanStoreAgreementDto> selectedStoreAgreements = new();
+    private GoodsLoanStoreAgreementDto? selectedAgreement;
+
+    private CreateGoodsLoanApplicationRequest newApp = new();
+    private GoodsLoanEligibilityResult? eligibilityResult;
+    private List<RepaymentScheduleInstalmentPlan> previewSchedule = new();
+
+    private string firstMonthDateStr = DateTime.Today.AddMonths(1).ToString("yyyy-MM-01");
+    private string settlementReference = string.Empty;
+    private string settlementRemarks = string.Empty;
+
+    private decimal CalculatedPrincipal => newApp.Items.Sum(i => i.TotalAmount);
+    private decimal SelectedLoanProgressPct => selectedLoan != null && selectedLoan.TotalRepayableAmount > 0
+        ? Math.Clamp((selectedLoan.TotalPaidAmount / selectedLoan.TotalRepayableAmount) * 100m, 0m, 100m)
+        : 0m;
+    private int SelectedLoanPaidCount => selectedLoan?.Installments.Count(i => i.Status == GoodsLoanInstallmentStatus.Paid) ?? 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await ResolveContextAsync();
+        await ReloadDataAsync();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (IndividualId.HasValue && IndividualId.Value != activeIndividualId)
+        {
+            await ResolveContextAsync();
+            await ReloadDataAsync();
+        }
+    }
+
+    private async Task ResolveContextAsync()
+    {
+        var ctx = await AccessService.RequireContextAsync();
+        hasAdminAccess = ctx.IsSuperAdministrator || ctx.IsOrganisationAdmin || ctx.IsHRHead || ctx.IsHRManager || ctx.IsHRStaff
+            || await AccessService.HasPermissionAsync("Admin")
+            || await AccessService.HasPermissionAsync("GoodsLoan.Manage")
+            || await AccessService.HasPermissionAsync("GoodsLoan.Create");
+
+        if (IndividualId.HasValue && IndividualId.Value > 0)
+        {
+            activeIndividualId = IndividualId.Value;
+        }
+        else
+        {
+            activeIndividualId = ctx.IndividualId > 0 ? ctx.IndividualId : ctx.UserId;
+        }
+
+        if (OrganisationId.HasValue && OrganisationId.Value > 0)
+        {
+            activeOrganisationId = OrganisationId.Value;
+        }
+        else
+        {
+            activeOrganisationId = await AccessService.GetCurrentOrganisationIdAsync();
+        }
+    }
+
+    private async Task ReloadDataAsync()
+    {
+        isLoading = true;
+        try
+        {
+            summary = await LoanService.GetStaffWorkspaceSummaryAsync(activeIndividualId, activeOrganisationId);
+            loans = await LoanService.GetLoansAsync(new GoodsLoanFilterRequest
+            {
+                IndividualID = activeIndividualId,
+                OrganisationBusinessEntityID = activeOrganisationId
+            });
+
+            availableStores = await LoanService.GetStoresAsync(activeOrganisationId);
+            allAgreements = await LoanService.GetAgreementsAsync(activeOrganisationId);
+
+            if (selectedLoan != null)
+            {
+                selectedLoan = loans.FirstOrDefault(l => l.LoanID == selectedLoan.LoanID) ?? loans.FirstOrDefault();
+            }
+            else
+            {
+                selectedLoan = loans.FirstOrDefault(l => l.Status == GoodsLoanStatus.Active) ?? loans.FirstOrDefault();
+            }
+        }
+        catch (Exception ex)
+        {
+            Toast.Error(ex.Message, "Error Loading Loans");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void SetFilterStatus(string status)
+    {
+        filterStatus = status;
+    }
+
+    private void SelectLoan(GoodsLoanDto loan)
+    {
+        selectedLoan = loan;
+        isApplying = false;
+    }
+
+    private void StartNewApplication()
+    {
+        if (!EffectiveCanEnterLoan) return;
+        isApplying = true;
+        selectedLoan = null;
+        selectedAgreement = null;
+        selectedStoreAgreements.Clear();
+        eligibilityResult = null;
+        previewSchedule.Clear();
+
+        newApp = new CreateGoodsLoanApplicationRequest
+        {
+            IndividualID = activeIndividualId,
+            OrganisationBusinessEntityID = activeOrganisationId,
+            PurchaseDate = DateTime.Today,
+            FirstDeductionMonth = DateTime.Today.AddMonths(1),
+            RepaymentMonths = 24,
+            Items = new List<GoodsLoanItemDto>()
+        };
+
+        firstMonthDateStr = DateTime.Today.AddMonths(1).ToString("yyyy-MM-01");
+        AddGoodsItem();
+    }
+
+    private void CancelApplication()
+    {
+        isApplying = false;
+        selectedLoan = loans.FirstOrDefault();
+    }
+
+    private void OnStoreChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var storeId) && storeId > 0)
+        {
+            newApp.StoreID = storeId;
+            selectedStoreAgreements = allAgreements.Where(a => a.StoreID == storeId && a.IsActive).ToList();
+            if (selectedStoreAgreements.Count > 0)
+            {
+                newApp.AgreementID = selectedStoreAgreements.First().AgreementID;
+                selectedAgreement = selectedStoreAgreements.First();
+                newApp.RepaymentMonths = Math.Clamp(newApp.RepaymentMonths, selectedAgreement.MinimumMonths, selectedAgreement.MaximumMonths);
+            }
+            else
+            {
+                newApp.AgreementID = 0;
+                selectedAgreement = null;
+            }
+        }
+        else
+        {
+            newApp.StoreID = 0;
+            newApp.AgreementID = 0;
+            selectedStoreAgreements.Clear();
+            selectedAgreement = null;
+        }
+
+        ReevaluateLoanParameters();
+    }
+
+    private void OnAgreementChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var agrId) && agrId > 0)
+        {
+            newApp.AgreementID = agrId;
+            selectedAgreement = selectedStoreAgreements.FirstOrDefault(a => a.AgreementID == agrId);
+            if (selectedAgreement != null)
+            {
+                newApp.RepaymentMonths = Math.Clamp(newApp.RepaymentMonths, selectedAgreement.MinimumMonths, selectedAgreement.MaximumMonths);
+            }
+        }
+        else
+        {
+            newApp.AgreementID = 0;
+            selectedAgreement = null;
+        }
+
+        ReevaluateLoanParameters();
+    }
+
+    private void AddGoodsItem()
+    {
+        newApp.Items.Add(new GoodsLoanItemDto
+        {
+            ItemDescription = "",
+            Quantity = 1,
+            UnitPrice = 0m,
+            TotalAmount = 0m
+        });
+    }
+
+    private void RemoveGoodsItem(int index)
+    {
+        if (index >= 0 && index < newApp.Items.Count)
+        {
+            newApp.Items.RemoveAt(index);
+            ReevaluateLoanParameters();
+        }
+    }
+
+    private void OnItemQtyChanged(int index, object? value)
+    {
+        if (index >= 0 && index < newApp.Items.Count && int.TryParse(value?.ToString(), out var qty))
+        {
+            var item = newApp.Items[index];
+            item.Quantity = Math.Max(1, qty);
+            item.TotalAmount = item.Quantity * item.UnitPrice;
+            ReevaluateLoanParameters();
+        }
+    }
+
+    private void OnItemPriceChanged(int index, object? value)
+    {
+        if (index >= 0 && index < newApp.Items.Count && decimal.TryParse(value?.ToString(), out var price))
+        {
+            var item = newApp.Items[index];
+            item.UnitPrice = Math.Max(0m, price);
+            item.TotalAmount = item.Quantity * item.UnitPrice;
+            ReevaluateLoanParameters();
+        }
+    }
+
+    private void OnRepaymentMonthsChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var months))
+        {
+            newApp.RepaymentMonths = Math.Max(1, months);
+            ReevaluateLoanParameters();
+        }
+    }
+
+    private void OnFirstMonthChanged(ChangeEventArgs e)
+    {
+        if (DateTime.TryParse(e.Value?.ToString(), out var dt))
+        {
+            newApp.FirstDeductionMonth = new DateTime(dt.Year, dt.Month, 1);
+            firstMonthDateStr = newApp.FirstDeductionMonth.ToString("yyyy-MM-01");
+            ReevaluateLoanParameters();
+        }
+    }
+
+    private async void ReevaluateLoanParameters()
+    {
+        newApp.PrincipalAmount = CalculatedPrincipal;
+        newApp.TotalRepayableAmount = CalculatedPrincipal; // 0% interest
+
+        if (newApp.PrincipalAmount > 0 && newApp.RepaymentMonths > 0)
+        {
+            try
+            {
+                previewSchedule = ScheduleCalculator.CalculateSchedule(
+                    newApp.TotalRepayableAmount,
+                    newApp.RepaymentMonths,
+                    newApp.FirstDeductionMonth
+                );
+            }
+            catch
+            {
+                previewSchedule.Clear();
+            }
+
+            if (newApp.AgreementID > 0)
+            {
+                isCheckingEligibility = true;
+                StateHasChanged();
+
+                try
+                {
+                    eligibilityResult = await LoanService.CheckEligibilityAsync(new GoodsLoanEligibilityCheckRequest
+                    {
+                        IndividualID = activeIndividualId,
+                        JobID = 0,
+                        OrganisationBusinessEntityID = activeOrganisationId,
+                        AgreementID = newApp.AgreementID,
+                        PrincipalAmount = newApp.PrincipalAmount,
+                        RepaymentMonths = newApp.RepaymentMonths,
+                        FirstDeductionMonth = newApp.FirstDeductionMonth
+                    });
+                }
+                catch (Exception ex)
+                {
+                    eligibilityResult = new GoodsLoanEligibilityResult
+                    {
+                        IsEligible = false,
+                        ValidationErrors = new() { ex.Message }
+                    };
+                }
+                finally
+                {
+                    isCheckingEligibility = false;
+                }
+            }
+        }
+        else
+        {
+            previewSchedule.Clear();
+            eligibilityResult = null;
+        }
+
+        StateHasChanged();
+    }
+
+    private async Task SubmitApplicationAsync()
+    {
+        if (!EffectiveCanEnterLoan)
+        {
+            Toast.Error("Goods loans can only be entered by HR or administrative staff through the Admin Portal.");
+            return;
+        }
+
+        if (newApp.StoreID <= 0 || newApp.AgreementID <= 0)
+        {
+            Toast.Error("Please select a store and active store agreement.");
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(newApp.InvoiceNumber))
+        {
+            Toast.Error("Please provide the store invoice or quotation number.");
+            return;
+        }
+
+        if (newApp.Items.Count == 0 || CalculatedPrincipal <= 0)
+        {
+            Toast.Error("Please add at least one item with valid price.");
+            return;
+        }
+
+        isSubmitting = true;
+        try
+        {
+            var res = await LoanService.ApplyForLoanAsync(newApp);
+            if (res.Success)
+            {
+                Toast.Success("Goods loan application submitted successfully.");
+                isApplying = false;
+                await ReloadDataAsync();
+            }
+            else
+            {
+                Toast.Error(res.Message, "Application Failed");
+            }
+        }
+        catch (Exception ex)
+        {
+            Toast.Error(ex.Message, "Submission Error");
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+
+    private async Task CancelSelectedLoanAsync()
+    {
+        if (selectedLoan == null) return;
+        var res = await LoanService.CancelLoanAsync(selectedLoan.LoanID, 0, "Cancelled by employee");
+        if (res.Success)
+        {
+            Toast.Success("Loan application cancelled.");
+            await ReloadDataAsync();
+        }
+        else
+        {
+            Toast.Error(res.Message);
+        }
+    }
+
+    private async Task SubmitEarlySettlementAsync()
+    {
+        if (selectedLoan == null) return;
+        isSubmitting = true;
+        try
+        {
+            var res = await LoanService.ProcessEarlySettlementAsync(new EarlyLoanSettlementRequest
+            {
+                LoanID = selectedLoan.LoanID,
+                SettlementAmount = selectedLoan.OutstandingAmount,
+                PaymentDate = DateTime.UtcNow,
+                PaymentReference = settlementReference,
+                Remarks = settlementRemarks
+            }, 0);
+
+            if (res.Success)
+            {
+                Toast.Success("Early settlement processed successfully.");
+                showEarlySettlementModal = false;
+                settlementReference = string.Empty;
+                settlementRemarks = string.Empty;
+                await ReloadDataAsync();
+            }
+            else
+            {
+                Toast.Error(res.Message);
+            }
+        }
+        catch (Exception ex)
+        {
+            Toast.Error(ex.Message);
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+
+    private void ToggleFullWidth()
+    {
+        isFullWidth = !isFullWidth;
+    }
+
+    private RenderFragment GetStatusBadge(string status) => builder =>
+    {
+        var (cls, text) = status switch
+        {
+            GoodsLoanStatus.Active => ("bg-emerald-100 text-emerald-800", "ACTIVE"),
+            GoodsLoanStatus.PendingApproval => ("bg-amber-100 text-amber-800", "PENDING APPROVAL"),
+            GoodsLoanStatus.Completed => ("bg-blue-100 text-blue-800", "COMPLETED"),
+            GoodsLoanStatus.Rejected => ("bg-rose-100 text-rose-800", "REJECTED"),
+            GoodsLoanStatus.Cancelled => ("bg-slate-100 text-slate-700", "CANCELLED"),
+            GoodsLoanStatus.Defaulted => ("bg-red-200 text-red-900 font-bold", "DEFAULTED"),
+            _ => ("bg-slate-100 text-slate-700", status)
+        };
+        builder.OpenElement(0, "span");
+        builder.AddAttribute(1, "class", $"rounded-full px-2.5 py-0.5 text-[11px] font-semibold {cls}");
+        builder.AddContent(2, text);
+        builder.CloseElement();
+    };
+
+    private RenderFragment GetInstallmentStatusBadge(string status) => builder =>
+    {
+        var (cls, text) = status switch
+        {
+            GoodsLoanInstallmentStatus.Paid => ("bg-emerald-100 text-emerald-800", "PAID"),
+            GoodsLoanInstallmentStatus.PartiallyPaid => ("bg-amber-100 text-amber-800", "PARTIAL"),
+            GoodsLoanInstallmentStatus.Pending => ("bg-slate-100 text-slate-600", "PENDING"),
+            GoodsLoanInstallmentStatus.Cancelled => ("bg-rose-100 text-rose-800", "CANCELLED"),
+            _ => ("bg-slate-100 text-slate-700", status)
+        };
+        builder.OpenElement(0, "span");
+        builder.AddAttribute(1, "class", $"rounded-full px-2 py-0.5 text-[10px] font-bold {cls}");
+        builder.AddContent(2, text);
+        builder.CloseElement();
+    };
+}

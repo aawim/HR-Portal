@@ -3,6 +3,7 @@ using HRM.DTOs.Profile.ProfileAccess;
 using HRM.DTOs.Leave;
 using HRM.DTOs.UserContext;
 using HRM.Enum;
+using HRM.DTOs.Staff;
 
 namespace HRM.DTOs.Profile
 {
@@ -23,6 +24,20 @@ namespace HRM.DTOs.Profile
             string.Empty;
 
         public string? IdentityCardNumber { get; set; }
+
+        public DateTime? IdentityCardExpiryDate { get; set; }
+
+        public string? PassportNumber { get; set; }
+
+        public DateTime? PassportExpiryDate { get; set; }
+
+        public DateTime? PassportIssuedDate { get; set; }
+
+        public string? PassportCountryName { get; set; }
+
+        public List<StaffBankAccountDto> BankAccounts { get; set; } = [];
+
+        public List<StaffEmergencyContactDto> EmergencyContacts { get; set; } = [];
 
         public ProfileType ProfileType { get; set; }
 
@@ -53,10 +68,6 @@ namespace HRM.DTOs.Profile
 
         public List<ProfileSupervisingGroupDto> SupervisingTeams { get; set; } = [];
 
-        
-
-
-
         public bool HasActiveJob =>
             ActiveJob?.IsActive == true;
 
@@ -64,13 +75,9 @@ namespace HRM.DTOs.Profile
             JobHistory.Count > 0 || PositionHistory.Count > 0 ||
             HasActiveJob;
 
-
         public DateTime DateOfBirth { get; set; }
 
         public int GenderId { get; set; }
-
-        //public string GenderName { get; set; } =
-        //    string.Empty;
 
         public int? NationalityId { get; set; }
 

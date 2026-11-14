@@ -35,7 +35,7 @@ public sealed class StaffTerminationRenderingTests
         var service=DispatchProxy.Create<Contract.IOperations,Proxy>();((Proxy)(object)service).Ended=ended;
         using var provider=new ServiceCollection().AddLogging().AddSingleton(service).AddSingleton<ToastService>().BuildServiceProvider();await using var renderer=new HtmlRenderer(provider,provider.GetRequiredService<ILoggerFactory>());
         var html=await renderer.Dispatcher.InvokeAsync(async()=> (await renderer.RenderComponentAsync<StaffPositions>(ParameterView.FromDictionary(new Dictionary<string,object?>{{"StaffId",50}}))).ToHtmlString());
-        Assert.Equal(ended,html.Contains(">Assign position</button>",StringComparison.Ordinal));
+        Assert.Equal(ended,html.Contains("Assign Position",StringComparison.Ordinal));
     }
     [Theory][InlineData(false)][InlineData(true)]
     public async Task Assign_and_change_position_filter_slots_by_framework_and_matrix_and_disable_full_matrices(bool assign)

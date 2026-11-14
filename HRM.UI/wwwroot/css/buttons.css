@@ -22,16 +22,49 @@
     display: inline-flex; align-items: center; justify-content: center; gap: .5rem;
     padding: .5rem .75rem; border: 1px solid; border-radius: .5rem;
     font-weight: 600; line-height: 1.25; text-align: center; text-decoration: none;
+    transition: background-color .15s, border-color .15s, color .15s, box-shadow .15s;
 }
-:root .app-button.app-button-secondary {
+.app-button-sm { padding: .375rem .625rem; font-size: .75rem; }
+.app-button-icon { width: 2.5rem; height: 2.5rem; padding: 0; }
+.app-button-primary {
+    background-color: var(--action-primary); color: #fff; border-color: var(--action-primary);
+}
+.app-button-primary:hover:not(:disabled):not([aria-disabled="true"]) {
+    background-color: var(--action-primary-hover); border-color: var(--action-primary-hover);
+}
+.app-button-success {
+    background-color: var(--action-success); color: #fff; border-color: var(--action-success);
+}
+.app-button-success:hover:not(:disabled):not([aria-disabled="true"]) {
+    background-color: var(--action-success-hover); border-color: var(--action-success-hover);
+}
+.app-button-danger {
+    background-color: var(--action-danger); color: #fff; border-color: var(--action-danger);
+}
+.app-button-danger:hover:not(:disabled):not([aria-disabled="true"]) {
+    background-color: var(--action-danger-hover); border-color: var(--action-danger-hover);
+}
+.app-button-neutral {
+    background-color: var(--action-neutral); color: var(--action-neutral-text); border-color: var(--action-border);
+}
+.app-button-neutral:hover:not(:disabled):not([aria-disabled="true"]) {
+    background-color: var(--action-neutral-hover);
+}
+.app-button-secondary {
     background-color: var(--action-secondary) !important;
     color: var(--action-secondary-text) !important;
     border-color: var(--action-border) !important;
     text-decoration: none !important;
 }
-:root .app-button.app-button-secondary:hover:not(:disabled):not([aria-disabled="true"]) {
+.app-button-secondary:hover:not(:disabled):not([aria-disabled="true"]) {
     background-color: var(--action-secondary-hover) !important;
     color: var(--action-secondary-text) !important;
+}
+.app-button-ghost {
+    background: transparent; color: var(--action-neutral-text); border-color: transparent;
+}
+.app-button-ghost:hover:not(:disabled):not([aria-disabled="true"]) {
+    background: var(--action-neutral);
 }
 
 :is(button, .btn, input[type="submit"], input[type="button"]) {
@@ -42,46 +75,6 @@
 }
 :is(button, .btn, input[type="submit"], input[type="button"]):disabled {
     cursor: not-allowed; opacity: .5;
-}
-/* Respect existing segmented button groups; wrap action rows on small screens. */
-:where(.flex, .inline-flex, .d-flex, .d-inline-flex, .grid):has(> :is(button, .app-button) ~ :is(button, .app-button)):not([class*="gap-"]):not(.btn-group):not(.btn-group-vertical) {
-    column-gap: .5rem; row-gap: .5rem;
-}
-:where(.flex, .inline-flex, .d-flex, .d-inline-flex):has(> button ~ button):not(.btn-group):not(.btn-group-vertical):not(.flex-col) { flex-wrap: wrap; }
-:where(div, section, footer, form, td):not(.flex):not(.inline-flex):not(.grid):not(.d-flex):not(.d-inline-flex):not(.btn-group):not(.btn-group-vertical) > :is(button, .btn) + :is(button, .btn) { margin-inline-start: .5rem; }
-
-@media screen {
-    :root :is(button, a, input):is(.bg-blue-500, .bg-blue-600, .bg-blue-700, .bg-indigo-600, .btn-primary) {
-        background-color: var(--action-primary) !important; color: #fff !important; border-color: var(--action-primary) !important;
-    }
-    :root :is(button, a, input):is(.bg-blue-500, .bg-blue-600, .bg-blue-700, .bg-indigo-600, .btn-primary):hover:not(:disabled):not([aria-disabled="true"]) {
-        background-color: var(--action-primary-hover) !important; border-color: var(--action-primary-hover) !important;
-    }
-    :root :is(button, a, input):is(.bg-green-600, .bg-green-700, .bg-emerald-500, .bg-emerald-600, .bg-emerald-700, .btn-success) {
-        background-color: var(--action-success) !important; color: #fff !important; border-color: var(--action-success) !important;
-    }
-    :root :is(button, a, input):is(.bg-green-600, .bg-green-700, .bg-emerald-500, .bg-emerald-600, .bg-emerald-700, .btn-success):hover:not(:disabled):not([aria-disabled="true"]) {
-        background-color: var(--action-success-hover) !important; border-color: var(--action-success-hover) !important;
-    }
-    :root :is(button, a, input):is(.bg-red-500, .bg-red-600, .bg-red-700, .bg-rose-500, .bg-rose-600, .bg-rose-700, .btn-danger) {
-        background-color: var(--action-danger) !important; color: #fff !important; border-color: var(--action-danger) !important;
-    }
-    :root :is(button, a, input):is(.bg-red-500, .bg-red-600, .bg-red-700, .bg-rose-500, .bg-rose-600, .bg-rose-700, .btn-danger):hover:not(:disabled):not([aria-disabled="true"]) {
-        background-color: var(--action-danger-hover) !important; border-color: var(--action-danger-hover) !important;
-    }
-    :root :is(button:not(.text-left):not(.border-b-2), .btn):is(.bg-white, .bg-gray-100, .bg-slate-100, .bg-gray-200, .bg-slate-200, .btn-light, .btn-secondary, .btn-outline-secondary) {
-        background-color: var(--action-neutral) !important; color: var(--action-neutral-text) !important; border-color: var(--action-border) !important;
-    }
-    :root :is(button:not(.text-left):not(.border-b-2), .btn):is(.bg-white, .bg-gray-100, .bg-slate-100, .bg-gray-200, .bg-slate-200, .btn-light, .btn-secondary, .btn-outline-secondary):hover:not(:disabled):not([aria-disabled="true"]) {
-        background-color: var(--action-neutral-hover) !important;
-    }
-    [data-theme="dark"] :is(.btn-outline-primary, .btn-link) { color: #93c5fd; }
-    [data-theme="dark"] .btn-outline-primary:hover { background-color: var(--action-primary); color: white; }
-    [data-theme="dark"] .btn-outline-danger { color: #fda4af; }
-    [data-theme="dark"] .btn-outline-danger:hover { background-color: var(--action-danger); color: white; }
-    /* Legacy light action fills also need a matching foreground in dark mode. */
-    [data-theme="dark"] :is(button, a):is(.bg-green-200, .bg-green-300, .bg-emerald-200, .bg-emerald-300) { background-color: #153e34 !important; color: #a7f3d0 !important; }
-    [data-theme="dark"] :is(button, a):is(.bg-blue-200, .bg-blue-300, .bg-sky-200, .bg-indigo-200) { background-color: #193657 !important; color: #bfdbfe !important; }
 }
 @media (prefers-reduced-motion: reduce) {
     :is(button, .btn, input[type="submit"], input[type="button"]) { transition: none; }

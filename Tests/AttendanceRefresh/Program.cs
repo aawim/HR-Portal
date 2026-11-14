@@ -109,6 +109,8 @@ catch (Exception ex) { failures++; Console.Error.WriteLine($"FAIL Working hours:
 if (args.Contains("--working-hours-only")) return failures == 0 ? 0 : 1;
 try { await SecurityHardeningTests.RunAsync(); Console.WriteLine("PASS Security hardening: retired endpoints, CSRF, configured database providers, clock ownership, developer-only diagnostics, leave-type privileges and tenant isolation"); }
 catch (Exception ex) { failures++; Console.Error.WriteLine($"FAIL Security hardening: {ex}"); }
+try { await StaffAttributeAccessTests.RunAsync(); Console.WriteLine("PASS Staff ABAC: Political classification default-deny, explicit grants, deny precedence, explicit-only scopes and self access"); }
+catch (Exception ex) { failures++; Console.Error.WriteLine($"FAIL Staff ABAC: {ex}"); }
 if (args.Contains("--security-only")) return failures == 0 ? 0 : 1;
 try { await CrudConsolidationTests.RunAsync(); Console.WriteLine("PASS CRUD consolidation: shared address creation, owner isolation, current-address handling, canonical account writes and legacy adapters"); }
 catch(Exception ex) { failures++; Console.Error.WriteLine($"FAIL CRUD consolidation: {ex}"); }
@@ -685,6 +687,28 @@ sealed class TestRenderer : Renderer
         var frames = GetCurrentRenderTreeFrames(root);
         return frames.Array.Take(frames.Count).Where(x => x.FrameType == RenderTreeFrameType.Attribute && x.AttributeName == "value")
             .Select(x => x.AttributeValue?.ToString() ?? "").ToList();
+    }
+    public List<string> RootOptionValues(string selectId)
+    {
+        var frames = GetCurrentRenderTreeFrames(root);
+        var values = new List<string>();
+        for (var i = 0; i < frames.Count; i++)
+        {
+            var select = frames.Array[i];
+            if (select.FrameType != RenderTreeFrameType.Element || select.ElementName != "select") continue;
+            var selectAttributes = frames.Array.Skip(i + 1).TakeWhile(x => x.FrameType == RenderTreeFrameType.Attribute);
+            if (!selectAttributes.Any(x => x.AttributeName == "id" && x.AttributeValue?.ToString() == selectId)) continue;
+            var end = i + select.ElementSubtreeLength;
+            for (var optionIndex = i + 1; optionIndex < end; optionIndex++)
+            {
+                if (frames.Array[optionIndex].FrameType != RenderTreeFrameType.Element || frames.Array[optionIndex].ElementName != "option") continue;
+                var value = frames.Array.Skip(optionIndex + 1).TakeWhile(x => x.FrameType == RenderTreeFrameType.Attribute)
+                    .FirstOrDefault(x => x.AttributeName == "value");
+                values.Add(value.AttributeValue?.ToString() ?? "");
+            }
+            break;
+        }
+        return values;
     }
     public int RootDateInputCount()
     {

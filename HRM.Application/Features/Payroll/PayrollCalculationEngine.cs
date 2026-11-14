@@ -44,34 +44,33 @@ public sealed class PayrollCalculationEngine : IPayrollCalculationEngine
         var warnings = new List<string>();
         var errors = new List<string>();
 
+        if (periodEnd < periodStart)
+        {
+            errors.Add("Payroll period end date cannot be earlier than its start date.");
+            return new(0, 0, 0, 0, 0, lines, warnings, errors);
+        }
+        if (periodStart.Year != periodEnd.Year || periodStart.Month != periodEnd.Month)
+        {
+            errors.Add("A regular monthly payroll period must start and end in the same calendar month.");
+            return new(0, 0, 0, 0, 0, lines, warnings, errors);
+        }
+
         int daysInMonth = DateTime.DaysInMonth(periodStart.Year, periodStart.Month);
-        int workedDays = daysInMonth;
-
-        // Proration check for mid-month join or termination
-        if (input.JoinedDate > periodStart)
+        var employmentStart = input.JoinedDate > periodStart ? input.JoinedDate : periodStart;
+        var employmentEnd = input.TerminatedDate.HasValue && input.TerminatedDate.Value < periodEnd
+            ? input.TerminatedDate.Value
+            : periodEnd;
+        if (employmentStart > periodEnd)
         {
-            if (input.JoinedDate > periodEnd)
-            {
-                errors.Add($"Employee joined after payroll period ({input.JoinedDate:yyyy-MM-dd} > {periodEnd:yyyy-MM-dd}).");
-                return new(0, 0, 0, 0, 0, lines, warnings, errors);
-            }
-            workedDays = (periodEnd.Day - input.JoinedDate.Day) + 1;
+            errors.Add($"Employee joined after payroll period ({input.JoinedDate:yyyy-MM-dd} > {periodEnd:yyyy-MM-dd}).");
+            return new(0, 0, 0, 0, 0, lines, warnings, errors);
         }
-
-        if (input.TerminatedDate.HasValue && input.TerminatedDate.Value < periodEnd)
+        if (employmentEnd < periodStart || employmentEnd < employmentStart)
         {
-            if (input.TerminatedDate.Value < periodStart)
-            {
-                errors.Add($"Employee was terminated before payroll period ({input.TerminatedDate.Value:yyyy-MM-dd} < {periodStart:yyyy-MM-dd}).");
-                return new(0, 0, 0, 0, 0, lines, warnings, errors);
-            }
-            int terminateDay = input.TerminatedDate.Value.Day;
-            int startDay = input.JoinedDate > periodStart ? input.JoinedDate.Day : 1;
-            workedDays = (terminateDay - startDay) + 1;
+            errors.Add($"Employee was not active during payroll period ({periodStart:yyyy-MM-dd} to {periodEnd:yyyy-MM-dd}).");
+            return new(0, 0, 0, 0, 0, lines, warnings, errors);
         }
-
-        if (workedDays < 0) workedDays = 0;
-        if (workedDays > daysInMonth) workedDays = daysInMonth;
+        int workedDays = employmentEnd.DayNumber - employmentStart.DayNumber + 1;
 
         // 1. Basic Salary
         decimal basicSalary = input.BasicSalary;
@@ -103,9 +102,14 @@ public sealed class PayrollCalculationEngine : IPayrollCalculationEngine
         foreach (var allowance in input.Allowances)
         {
             decimal allowanceAmount = allowance.Amount;
-            if (allowance.IsProratable && workedDays < daysInMonth && daysInMonth > 0)
+            if (allowance.IsProratable && daysInMonth > 0)
             {
-                allowanceAmount = decimal.Round((allowance.Amount / daysInMonth) * workedDays, 2, MidpointRounding.AwayFromZero);
+                var allowanceStart = allowance.FromDate > employmentStart ? allowance.FromDate : employmentStart;
+                var allowanceEnd = allowance.ToDate.HasValue && allowance.ToDate.Value < employmentEnd
+                    ? allowance.ToDate.Value
+                    : employmentEnd;
+                var allowanceDays = allowanceEnd < allowanceStart ? 0 : allowanceEnd.DayNumber - allowanceStart.DayNumber + 1;
+                allowanceAmount = decimal.Round((allowance.Amount / daysInMonth) * allowanceDays, 2, MidpointRounding.AwayFromZero);
             }
 
             if (allowanceAmount > 0)
@@ -307,11 +311,15 @@ public sealed class PayrollCalculationEngine : IPayrollCalculationEngine
         decimal totalAgreementDeductions = 0m;
         foreach (var ded in input.Deductions)
         {
+            var isGoodsLoan = string.Equals(ded.Category, "GoodsLoan", StringComparison.OrdinalIgnoreCase);
+            var compCode = isGoodsLoan ? "GL_DED" : "AGREEMENT_DED";
+            var compName = isGoodsLoan ? $"Goods Loan ({ded.Reference})" : $"{ded.Category} ({ded.Reference})";
+
             lines.Add(new PayrollLineDto(
                 0,
                 0,
-                "AGREEMENT_DED",
-                $"{ded.Category} ({ded.Reference})",
+                compCode,
+                compName,
                 SalaryComponentType.LoanDeduction,
                 ded.DueAmount,
                 1.0m,

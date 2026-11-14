@@ -1,38 +1,36 @@
 @using HRM.DTOs.StaffSchedule
-<section class="min-w-0 rounded-xl border bg-white p-5 shadow-sm">
-    <div class="flex flex-wrap items-center justify-between gap-3">
-        <h3 class="font-semibold">@(SchedulePurpose == "Official" ? "Default official working hours" : $"Duty schedules ({DisplayAssignments.Count})")</h3>
-        <button type="button" class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@(IsDisabled || SchedulePurpose == "Duty" && !HasDefaultOfficialSchedule)" @onclick="() => OnAssignRequested.InvokeAsync()">
-            @(SchedulePurpose == "Duty" ? "Add duty" : CurrentAssignment == null ? "Set default working hours" : "Change")
+<section class="min-w-0 rounded-2xl border border-slate-200 bg-white p-2 shadow-xs dark:border-slate-800 dark:bg-slate-900">
+    <div class="flex flex-wrap items-start justify-between gap-2 border-b border-slate-100 p-2 dark:border-slate-800">
+        <div class="min-w-0">
+            <div class="flex items-center gap-2"><span class="rounded-full px-2 py-0.5 text-[11px] font-semibold @(SchedulePurpose == "Official" ? "bg-blue-50 text-blue-700" : "bg-amber-50 text-amber-800")">@(SchedulePurpose == "Official" ? "Required" : "Optional")</span><h3 class="text-sm font-bold text-slate-900 dark:text-slate-100">@(SchedulePurpose == "Official" ? "Default working hours" : $"Duty schedules ({DisplayAssignments.Count})")</h3></div>
+            <p class="mt-1 text-[11px] text-slate-500">@(SchedulePurpose == "Official" ? "Baseline attendance hours. Keep one active while the job is active." : "Extra or temporary duty periods. Duty end dates are managed from Schedule Manager.")</p>
+        </div>
+        <button type="button" class="app-button app-button-@(SchedulePurpose == "Official" ? "primary" : "secondary") app-button-sm" disabled="@(IsDisabled || SchedulePurpose == "Duty" && !HasDefaultOfficialSchedule)" @onclick="() => OnAssignRequested.InvokeAsync()">
+            <AppIcon Name="@(SchedulePurpose == "Duty" ? "add" : "pencil")" Class="text-sm" /> @(SchedulePurpose == "Duty" ? "Add duty" : CurrentAssignment == null ? "Set hours" : "Change hours")
         </button>
     </div>
-    @if (SchedulePurpose == "Duty" && !HasDefaultOfficialSchedule) { <p class="mt-3 text-sm">Set default official working hours before adding duty schedules.</p> }
+    @if (SchedulePurpose == "Duty" && !HasDefaultOfficialSchedule) { <p class="m-2 rounded-xl border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">Set default working hours before adding a duty schedule.</p> }
     @if (DisplayAssignments.Count > 0)
     {
         @foreach (var current in DisplayAssignments)
         {
-        @if (current.ScheduleMode == "Rotation")
-        {
-            <p class="mt-4 font-semibold">Rotating shifts · @HRM.Helpers.SchedulePattern.Parse(current.RotationTemplateIds).Count-day cycle</p>
-            <p class="mt-1 text-sm">Cycle day 1: @current.RotationAnchorDate?.ToString("dd MMM yyyy"). View or change the cycle using Change.</p>
-        }
-        else
-        {
-        <p class="mt-4 text-xl font-semibold tabular-nums">@current.DefaultStartTime?.ToString("HH:mm")–@current.DefaultEndTime?.ToString("HH:mm") @if (current.EndsNextDay) { <span class="text-xs font-normal">next day</span> }</p>
-        @if (SchedulePurpose == "Official" || current.ScheduleMode == "Weekly") { <p class="text-xs text-slate-500">Working days: @string.Join(", ", Enumerable.Range(0, 7).Where(n => (current.WorkingDaysMask & (1 << n)) != 0).Select(n => ((DayOfWeek)n).ToString()))</p> }
-        else { <p class="text-xs text-slate-500">Every day within the assigned dates</p> }
-        }
-        <p class="mt-1 break-words text-sm">@current.TemplateName</p>
-        @if(current.IsInherited){<p class="mt-1 text-xs text-slate-500">Inherited from @current.InheritedFrom</p><a class="text-xs underline" href="/admin/hr/work-planning/duty-roster?tab=schedule">Manage shared schedule assignments</a>}
-        <p class="mt-2 text-xs text-slate-500">@current.EffectiveFrom.ToString("dd MMM yyyy") @(current.EffectiveTo.HasValue ? $"through {current.EffectiveTo:dd MMM yyyy}" : "onwards")</p>
-        <div class="mt-3 space-y-1 text-sm">
+        <article class="m-2 flex flex-col gap-2 rounded-xl border border-slate-200 bg-slate-50/70 p-2 text-xs dark:border-slate-800 dark:bg-slate-800/40">
+            <div class="flex flex-wrap items-start justify-between gap-2"><div><p class="font-semibold text-slate-900 dark:text-slate-100">@current.TemplateName</p><p class="mt-0.5 text-[11px] text-slate-500">@current.EffectiveFrom.ToString("dd MMM yyyy") @(current.EffectiveTo.HasValue ? $"– {current.EffectiveTo:dd MMM yyyy}" : "onwards")</p></div><span class="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-800">Active</span></div>
+        @if (current.ScheduleMode == "Rotation") { <p class="font-semibold text-slate-800 dark:text-slate-200">Rotating shifts · @HRM.Helpers.SchedulePattern.Parse(current.RotationTemplateIds).Count-day cycle</p><p class="text-[11px] text-slate-500">Cycle starts @current.RotationAnchorDate?.ToString("dd MMM yyyy")</p> }
+        else { <p class="text-lg font-bold tabular-nums text-slate-900 dark:text-slate-100">@current.DefaultStartTime?.ToString("HH:mm")–@current.DefaultEndTime?.ToString("HH:mm") @if (current.EndsNextDay) { <span class="text-[11px] font-medium text-slate-500">next day</span> }</p><p class="text-[11px] text-slate-500">@(SchedulePurpose == "Official" || current.ScheduleMode == "Weekly" ? $"Working days: {string.Join(", ", Enumerable.Range(0, 7).Where(n => (current.WorkingDaysMask & (1 << n)) != 0).Select(n => ((DayOfWeek)n).ToString()))}" : "Every day within the assigned dates")</p> }
+        @if(current.IsInherited){<p class="text-[11px] text-slate-500">Inherited from @current.InheritedFrom · <a class="font-medium text-blue-700 hover:underline" href="/admin/hr/work-planning/duty-roster?tab=schedule">Manage shared assignment</a></p>}
+        <div class="flex flex-wrap gap-2 border-t border-slate-200 pt-2 dark:border-slate-700">
+            @if (SchedulePurpose == "Duty") { <button type="button" class="app-button app-button-secondary app-button-sm" disabled="@(IsDisabled || current.IsInherited)" @onclick="() => OnAssignRequested.InvokeAsync()"><AppIcon Name="arrow-left-right" Class="text-sm" /> Swap / change</button><span class="self-center text-[11px] text-slate-500">End duty in Schedule Manager.</span> }
+            else { <span class="text-[11px] text-slate-500">Default hours are required until this job is terminated.</span> }
+        </div>
+        <div class="space-y-1 text-[11px] text-slate-600 dark:text-slate-300">
             @if (current.DefaultStartTime.HasValue && current.ScheduleMode != "Rotation")
             {
                 @foreach (var offset in current.MandatoryCheckInOffsets) { <p>Check in at <strong>@current.DefaultStartTime.Value.AddMinutes(offset).ToString("HH:mm")</strong> · required</p> }
                 @foreach (var offset in current.MandatoryCheckOutOffsets) { <p>Check out at <strong>@current.DefaultStartTime.Value.AddMinutes(offset).ToString("HH:mm")</strong> · required</p> }
             }
         </div>
-        <div class="mt-4 flex flex-wrap gap-2"><button type="button" class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@(IsDisabled || current.IsInherited)" @onclick="() => OnRemoveRequested.InvokeAsync(current)">End schedule</button></div>
+        </article>
         }
     }
     else
@@ -65,5 +63,4 @@
     [Parameter] public bool IsDisabled { get; set; }
     [Parameter] public EventCallback OnChanged { get; set; }
     [Parameter] public EventCallback OnAssignRequested { get; set; }
-    [Parameter] public EventCallback<CurrentWorkTemplateAssignmentDto> OnRemoveRequested { get; set; }
 }

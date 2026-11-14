@@ -35,8 +35,8 @@ namespace HRM.Services
             int? organisationId,
             string organisationName,
             bool canAccessAdminPortal,
-            bool canAccessDeveloperPortal,
-            bool canAccessAuditPortal)
+            bool canAccessDeveloperPortal = false,
+            bool canAccessAuditPortal = false)
         {
             CurrentOrganisationId = organisationId;
             OrganisationName = organisationName;
