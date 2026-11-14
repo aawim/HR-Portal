@@ -70,18 +70,30 @@
                     <span class="@(loading ? "animate-spin" : "")">↻</span>
                     <span>Refresh</span>
                 </button>
-
+                <button type="button"
+                        class="inline-flex items-center gap-1.5 rounded-lg border border-teal-300 dark:border-teal-700 bg-teal-50 dark:bg-teal-950/40 px-3 py-1.5 text-xs font-semibold text-teal-800 dark:text-teal-200 shadow-xs hover:bg-teal-100 dark:hover:bg-teal-900/60 transition"
+                        aria-expanded="@showWorkspaceControls"
+                        aria-controls="workspace-controls"
+                        @onclick="ToggleWorkspaceControls">
+                    <span aria-hidden="true">@(showWorkspaceControls ? "▴" : "☰")</span>
+                    <span>@(showWorkspaceControls ? "Hide workspace tools" : "Workspace tools")</span>
+                </button>
             </div>
         </div>
 
-        <!-- Workspace Directory Search (Using Standard Workspace Directory Search Component) -->
-        <div class="relative w-full max-w-xl">
-            <WorkspaceSearch OnSelected="SelectSearchResult" />
-        </div>
+        @if (showWorkspaceControls)
+        {
+            <!-- Workspace Directory Search (on demand) -->
+            <div id="workspace-controls" class="relative w-full max-w-xl">
+                <WorkspaceSearch OnSelected="SelectSearchResult" />
+            </div>
+        }
     </div>
 
-    <!-- Solid Folder Navigation Tabs -->
-    <div class="my-workspace-tabs staff-overview-no-print w-full border-b-2 border-teal-700 dark:border-teal-600 overflow-x-auto">
+    @if (showWorkspaceControls)
+    {
+    <!-- Solid Folder Navigation Tabs (on demand) -->
+    <div id="workspace-navigation" class="my-workspace-tabs staff-overview-no-print w-full border-b-2 border-teal-700 dark:border-teal-600 overflow-x-auto">
         <nav class="flex items-end gap-1 min-w-max pb-0" aria-label="Workspace Tabs">
             <button type="button"
                     class="rounded-t-xl px-4 py-2 font-bold text-xs md:text-sm transition-all border-t border-l border-r @(activeWorkspaceTab == "Home" ? "bg-teal-700 dark:bg-teal-600 text-white border-teal-700 dark:border-teal-600 shadow-sm" : "bg-[#86b0be]/30 text-slate-700 hover:text-slate-900 hover:bg-[#86b0be]/50 dark:bg-slate-800/90 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-700 border-slate-300 dark:border-slate-700")"
@@ -169,6 +181,7 @@
             }
         </nav>
     </div>
+    }
 
     <!-- ======================================================== -->
     <!-- TAB: STAFF WORKSPACE (Full Width Dedicated Employee Workspace) -->
@@ -3274,6 +3287,7 @@
 
     // Tab state: "Home", "MyTeam", "Calendar", "Request", "Onboarding", "LeaveLog", "Attendance", "TimeChange", "OrgDaily"
     private string activeWorkspaceTab = "Home";
+    private bool showWorkspaceControls = true;
     private string activeReqSubTab = "leave";
     private string teamCenterSubTab = "members";
 
@@ -3755,6 +3769,7 @@
             inspectedStaffId = null;
             inspectedOrgId = null;
             selectedEntityItem = null;
+            showWorkspaceControls = true;
             return;
         }
         var entity = EntityRoute ?? EntityTypeQuery;
@@ -3788,6 +3803,7 @@
                     _ => WorkspaceTab.Overview
                 };
                 activeWorkspaceTab = "Staff";
+                showWorkspaceControls = false;
                 return;
             }
             else if (string.Equals(entity, "organisation", StringComparison.OrdinalIgnoreCase) ||
@@ -4361,6 +4377,7 @@
             : allTeamStaff.FirstOrDefault(s => s.StaffId == staffId)?.FullName ?? $"Staff #{staffId}";
         inspectedStaffTab = tab;
         activeWorkspaceTab = "Staff";
+        showWorkspaceControls = false;
         UpdateUrl();
         _ = EnsureInspectedStaffProfileLoadedAsync();
     }
@@ -4395,6 +4412,11 @@
 
     private string? previousTabBeforeStaff;
 
+    private void ToggleWorkspaceControls()
+    {
+        showWorkspaceControls = !showWorkspaceControls;
+    }
+
     private void SetActiveTab(string tab)
     {
         if (activeWorkspaceTab != "Staff" && activeWorkspaceTab != "Organisation")
@@ -4422,6 +4444,7 @@
         inspectedStaffName = staffName ?? allTeamStaff.FirstOrDefault(s => s.StaffId == staffId)?.FullName ?? $"Staff #{staffId}";
         inspectedStaffTab = WorkspaceTab.Overview;
         activeWorkspaceTab = "Staff";
+        showWorkspaceControls = false;
         UpdateUrl();
         _ = EnsureInspectedStaffProfileLoadedAsync();
     }
@@ -4432,6 +4455,7 @@
         inspectedStaffProfile = null;
         loadedProfileStaffId = null;
         activeWorkspaceTab = previousTabBeforeStaff ?? "MyTeam";
+        showWorkspaceControls = true;
         UpdateUrl();
     }
 
