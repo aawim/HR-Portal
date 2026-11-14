@@ -1,0 +1,7 @@
+using HRM.Models;
+using HRM.Models.WorkPlanning;
+using HRM.WorkPlanning.Abstractions;
+using Microsoft.EntityFrameworkCore;
+namespace HRM.WorkPlanning.Services;
+public sealed class WorkTimeLedgerService(IDbContextFactory<HrmTeContext> factory):IWorkTimeLedgerService
+{public async Task<long> RecordAsync(RecordWorkTimeLedgerEntry e,CancellationToken ct=default){if(e.EndAt<=e.StartAt||e.ActualMinutes<0||e.CreditedMinutes<0||string.IsNullOrWhiteSpace(e.TimeCategory)||string.IsNullOrWhiteSpace(e.SourceReference))throw new InvalidOperationException("Provide a valid work-time ledger entry.");await using var db=await factory.CreateDbContextAsync(ct);if(await db.WorkTimeLedgerEntries.AnyAsync(x=>x.SourceReference==e.SourceReference&&x.TimeCategory==e.TimeCategory&&x.Status=="Calculated",ct))throw new InvalidOperationException("This recognised work time was already recorded.");var row=new WorkTimeLedgerEntry{OrganisationId=e.OrganisationId,IndividualId=e.IndividualId,JobId=e.JobId,StartAt=e.StartAt,EndAt=e.EndAt,TimeCategory=e.TimeCategory.Trim(),ActualMinutes=e.ActualMinutes,CreditedMinutes=e.CreditedMinutes,SourceReference=e.SourceReference.Trim(),OperationLogId=e.OperationLogId,WorkPlanSegmentId=e.WorkPlanSegmentId,DutyAssignmentId=e.DutyAssignmentId,WorkforcePolicyId=e.WorkforcePolicyId,WorkforcePolicyVersion=e.WorkforcePolicyVersion,CreatedAtUtc=DateTime.UtcNow};db.WorkTimeLedgerEntries.Add(row);await db.SaveChangesAsync(ct);return row.Id;}}

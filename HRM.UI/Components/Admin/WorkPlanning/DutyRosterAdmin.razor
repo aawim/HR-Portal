@@ -4,21 +4,43 @@
 @using HRM.Components.Pages.Online
 @inject NavigationManager Navigation
 
-<PageTitle>Duty roster</PageTitle>
+<PageTitle>Schedule Manager</PageTitle>
 
-<section class="space-y-4 p-4">
+<section class="w-full min-w-0 space-y-4 p-2">
+    <header class="sticky top-0 z-30 m-0 flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-white/95 px-3 py-3 shadow-xs backdrop-blur-xs">
+        <div>
+            <h1 class="text-lg font-bold text-slate-900">Schedule Manager</h1>
+            <p class="mt-0.5 text-xs text-slate-500">Manage rosters, schedule assignments and manual duty planning in one place.</p>
+        </div>
+        <span class="rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-semibold text-blue-700">Workforce scheduling</span>
+    </header>
     <div class="flex flex-wrap gap-2" role="tablist" aria-label="Duty roster sections">
         <button type="button" role="tab" aria-selected="@(tab == "roster")" class="@(tab == "roster" ? "inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" : "inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors")" @onclick='() => SelectTab("roster")'>Roster</button>
+        <button type="button" role="tab" aria-selected="@(tab == "draft")" class="@(tab == "draft" ? "inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" : "inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors")" @onclick='() => SelectTab("draft")'>Draft planner</button>
         <button type="button" role="tab" aria-selected="@(tab == "schedule")" class="@(tab == "schedule" ? "inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" : "inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors")" @onclick='() => SelectTab("schedule")'>Schedule assignment</button>
         <button type="button" role="tab" aria-selected="@(tab == "manual")" class="@(tab == "manual" ? "inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" : "inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors")" @onclick='() => SelectTab("manual")'>Manual assignment</button>
+        <button type="button" role="tab" aria-selected="@(tab == "policies")" class="@(tab == "policies" ? "inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" : "inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors")" @onclick='() => SelectTab("policies")'>Policies</button>
+        <button type="button" role="tab" aria-selected="@(tab == "review")" class="@(tab == "review" ? "inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" : "inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors")" @onclick='() => SelectTab("review")'>Session & ledger review</button>
     </div>
     @if (tab == "schedule")
     {
         <ScopeScheduleSettings />
     }
+    else if (tab == "draft")
+    {
+        <ScheduleManagerDraft />
+    }
     else if (tab == "manual")
     {
         <ManualAssignment />
+    }
+    else if (tab == "policies")
+    {
+        <ScheduleManagerPolicies />
+    }
+    else if (tab == "review")
+    {
+        <ScheduleManagerReviews />
     }
     else
     {
@@ -28,7 +50,7 @@
 
 @code {
     [SupplyParameterFromQuery(Name = "tab")] public string? RequestedTab { get; set; }
-    private static readonly string[] Tabs = ["roster", "schedule", "manual"];
+    private static readonly string[] Tabs = ["roster", "draft", "schedule", "manual", "policies", "review"];
     private string tab = "roster";
     protected override void OnParametersSet() => tab = RequestedTab is { } requested && Tabs.Contains(requested) ? requested : "roster";
     private void SelectTab(string value)

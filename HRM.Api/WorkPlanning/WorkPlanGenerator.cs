@@ -73,7 +73,7 @@ namespace HRM.WorkPlanning
                 throw new UnauthorizedAccessException("The existing work plan belongs to another staff member or organisation.");
             if (plan?.IsFinalized == true) return await HRM.Helpers.OfficialScheduleAmendments.ApplyAsync(db, MapToDto(plan), cancellationToken);
 
-            var selections = new List<(WorkTemplate Template, TimeOnly? Start, int Priority, string Purpose)>();
+            var selections = new List<(WorkTemplate Template, TimeOnly? Start, int Priority, string Purpose, long? RosterAssignmentId)>();
             var job = await db.Jobs.AsNoTracking().SingleAsync(j=>j.JobId==jobId && j.OrganisationID==organisationBusinessEntityId, cancellationToken);
             var candidates = await HRM.Helpers.EffectiveStaffSchedules.LoadAsync(db,job,date,date,cancellationToken);
             var attached = HRM.Helpers.EffectiveStaffSchedules.On(candidates,date).Select(c=>c.Assignment).ToList();
@@ -86,7 +86,21 @@ namespace HRM.WorkPlanning
                     .SingleOrDefaultAsync(t=>t.WorkTemplateId==templateId && t.IsActive && (t.IsGlobal || t.OrganisationBusinessEntityId==organisationBusinessEntityId) &&
                         (!t.EffectiveFrom.HasValue || t.EffectiveFrom<=date) && (!t.EffectiveTo.HasValue || t.EffectiveTo>=date),cancellationToken);
                 if(template==null) throw new InvalidOperationException("A schedule template is unavailable. Please contact HR.");
-                selections.Add((template,item.ScheduleMode=="Rotation"?null:item.ScheduledStartTime,0,item.SchedulePurpose));
+                selections.Add((template,item.ScheduleMode=="Rotation"?null:item.ScheduledStartTime,0,item.SchedulePurpose,null));
+            }
+            var rosterDuties = await db.DutyAssignments.AsNoTracking()
+                .Where(x => x.JobId == jobId && x.IndividualId == individualId && x.Status == "Assigned" &&
+                    x.DutyOccurrence.Status == "Planned" && x.DutyOccurrence.WorkforceRosterVersion.Status == "Published" &&
+                    x.DutyOccurrence.WorkforceRosterVersion.WorkforceRoster.Status == "Published" &&
+                    x.DutyOccurrence.StartAt < date.AddDays(1) && x.DutyOccurrence.EndAt > date &&
+                    x.DutyOccurrence.DutyType.WorkTemplateId.HasValue)
+                .Select(x => new { x.Id, x.DutyOccurrence.DutyType.WorkTemplateId, x.DutyOccurrence.StartAt })
+                .ToListAsync(cancellationToken);
+            foreach (var duty in rosterDuties)
+            {
+                var template = await db.WorkTemplates.AsNoTracking().Include(x => x.WorkTemplateSegments)
+                    .SingleOrDefaultAsync(x => x.WorkTemplateId == duty.WorkTemplateId && x.IsActive, cancellationToken);
+                if (template != null) selections.Add((template, TimeOnly.FromDateTime(duty.StartAt), 100, "Duty", duty.Id));
             }
             var hasRecordedAttendance = plan != null && (plan.WorkPlanSegments.Any(s=>s.IsCompleted || s.AttendanceId.HasValue) ||
                 await db.AttendanceLogResolutions.AnyAsync(r=>r.WorkPlanId==plan.WorkPlanId,cancellationToken) ||
@@ -127,8 +141,10 @@ namespace HRM.WorkPlanning
                 if(selection.Purpose=="Official" && (hasRecordedAttendance || plan.IsManual) && plan.WorkAssignments.Any(a=>a.IsValid && a.SchedulePurpose=="Official")) continue;
                 if (selection.Purpose == "Duty" && plan.WorkAssignments.Any(x => x.WorkTemplateId == selection.Template.WorkTemplateId &&
                     x.SchedulePurpose == "Duty" && x.CancellationReason != null && x.CancellationReason.StartsWith(HRM.WorkPlanning.Services.DutyRosterService.MovementMarker))) continue;
-                if (plan.WorkAssignments.Any(x => x.IsValid && x.WorkTemplateId == selection.Template.WorkTemplateId && x.SchedulePurpose == selection.Purpose)) continue;
-                AddTemplate(plan, selection.Template, selection.Start, selection.Priority, state, now, workDate, selection.Purpose);
+                if (plan.WorkAssignments.Any(x => x.IsValid && x.WorkTemplateId == selection.Template.WorkTemplateId && x.SchedulePurpose == selection.Purpose &&
+                    (selection.RosterAssignmentId.HasValue ? x.SourceReferenceId == selection.RosterAssignmentId : !x.SourceReferenceId.HasValue))) continue;
+                var assignment = AddTemplate(plan, selection.Template, selection.Start, selection.Priority, state, now, workDate, selection.Purpose);
+                if (selection.RosterAssignmentId.HasValue) { assignment.AssignmentSource = WorkAssignmentSource.Roster; assignment.SourceReferenceId = selection.RosterAssignmentId; }
             }
             var ids = plan.WorkAssignments.Where(x => x.IsValid).Select(x => x.WorkTemplateId).Distinct().ToList();
             plan.WorkTemplateId = ids.Count == 1 ? ids[0] : null;
@@ -137,7 +153,7 @@ namespace HRM.WorkPlanning
             return await HRM.Helpers.OfficialScheduleAmendments.ApplyAsync(db, MapToDto(plan), cancellationToken);
         }
 
-        private static void AddTemplate(WorkPlan plan, WorkTemplate template, TimeOnly? assignedStart, int priority, int state, DateTime now, DateOnly date, string purpose)
+        private static WorkAssignment AddTemplate(WorkPlan plan, WorkTemplate template, TimeOnly? assignedStart, int priority, int state, DateTime now, DateOnly date, string purpose)
         {
             var start = assignedStart ?? template.DefaultStartTime ?? throw new InvalidOperationException($"Template '{template.Name}' has no start time.");
             var sources = template.WorkTemplateSegments.Where(x => x.IsActive).OrderBy(x => x.SequenceNumber).ToList();
@@ -175,6 +191,7 @@ namespace HRM.WorkPlanning
                 OwnershipType = WorkOwnershipType.Original, AssignedDate = now, EffectiveFrom = assignment.StartDateTime,
                 IsCurrentOwner = true, IsValid = true });
             plan.WorkAssignments.Add(assignment);
+            return assignment;
         }
 
         private static AttendanceWorkPlanDto MapToDto(WorkPlan plan)
@@ -221,6 +238,8 @@ namespace HRM.WorkPlanning
                         Priority = x.Priority,
 
                         AssignmentSource = x.AssignmentSource,
+                        SourceReferenceId = x.SourceReferenceId,
+                        SourceReferenceType = x.SourceReferenceType,
 
                         OwnershipType = x.WorkAssignmentOwners
                             .Where(o =>

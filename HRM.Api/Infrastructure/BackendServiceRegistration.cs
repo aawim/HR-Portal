@@ -161,6 +161,17 @@ public static class BackendServiceRegistration
         services.AddScoped<IWorkPlanBuilder,WorkPlanBuilder>();
 
         services.AddScoped<IPlanningProviderResolver, PlanningProviderResolver>();
+        services.AddScoped<IWorkforcePolicyResolver, WorkforcePolicyResolver>();
+        services.AddScoped<IWorkforcePolicyManagementService, WorkforcePolicyManagementService>();
+        services.AddScoped<IWorkforceConstraintService, WorkforceConstraintService>();
+        services.AddScoped<IWorkforceRosterService, WorkforceRosterService>();
+        services.AddScoped<IWorkforcePayrollExportService, WorkforcePayrollExportService>();
+        services.AddScoped<IDutyOperationService, DutyOperationService>();
+        services.AddHostedService<DutyOperationApprovalCompletionService>();
+        services.AddScoped<IWorkTimeLedgerService, WorkTimeLedgerService>();
+        services.AddScoped<IDutyAvailabilityService, DutyAvailabilityService>();
+        services.AddScoped<IWorkforceAttendanceSessionService, WorkforceAttendanceSessionService>();
+        services.AddScoped<IWorkforceScheduleReviewService, WorkforceScheduleReviewService>();
 
         services.AddScoped<IWorkPlanValidator, WorkPlanValidator>();
 

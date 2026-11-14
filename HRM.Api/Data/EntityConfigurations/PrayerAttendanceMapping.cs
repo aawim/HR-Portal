@@ -58,7 +58,7 @@ public sealed class PrayerAttendanceMapping :
         b.ToTable("PRY_AttendanceEventMatches"); b.HasKey(x => x.AttendanceEventMatchId); b.Property(x => x.AttendanceEventMatchId).HasColumnName("AttendanceEventMatchID"); b.Property(x => x.AttendanceSessionResultId).HasColumnName("AttendanceSessionResultID"); b.Property(x => x.AttendanceLogId).HasColumnName("AttendanceLogID"); Text(b.Property(x => x.MatchRole), 30); Text(b.Property(x => x.MatchMethod), 50); Text(b.Property(x => x.ConfidenceState), 30); Text(b.Property(x => x.EvidenceSnapshot), 2000, false); Utc(b.Property(x => x.MatchedAtUtc)); b.HasOne<AttendanceSessionResult>().WithMany().HasForeignKey(x => x.AttendanceSessionResultId).OnDelete(DeleteBehavior.Restrict); b.HasOne<AttendanceLog>().WithMany().HasForeignKey(x => x.AttendanceLogId).OnDelete(DeleteBehavior.Restrict); b.HasIndex(x => new { x.AttendanceSessionResultId, x.AttendanceLogId, x.MatchRole }).IsUnique(); b.HasIndex(x => x.AttendanceLogId);
     }
 
-    private static void Text(PropertyBuilder<string> property, int length, bool required = true) { property.HasMaxLength(length); if (required) property.IsRequired(); }
+    private static void Text(PropertyBuilder<string?> property, int length, bool required = true) { property.HasMaxLength(length); if (required) property.IsRequired(); }
     private static void Date(PropertyBuilder<DateOnly> property) => property.HasColumnType("date");
     private static void NullableDate(PropertyBuilder<DateOnly?> property) => property.HasColumnType("date");
     private static void Utc(PropertyBuilder<DateTime> property) => property.HasColumnType("datetime2(0)");

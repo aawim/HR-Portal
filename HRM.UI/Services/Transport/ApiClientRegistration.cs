@@ -33,6 +33,12 @@ public static class ApiClientRegistration
         services.AddScoped<IUserService, UserProfileClient>();
         services.AddScoped<IGeographyService, GeographyClient>();
         services.AddScoped<HRM.Services.ToastService>();
+        services.AddScoped<HRM.UI.Services.WorkPlanning.IWorkforceScheduleApiClient>(provider =>
+        {
+            var origins = provider.GetRequiredService<BackendOrigins>();
+            var handler = new CircuitBackendHandler(provider.GetRequiredService<Microsoft.AspNetCore.Components.Authorization.AuthenticationStateProvider>(), provider.GetRequiredService<BackendSessionStore>(), provider.GetRequiredService<IHttpClientFactory>(), origins, provider.GetRequiredService<Microsoft.AspNetCore.DataProtection.IDataProtectionProvider>(), provider.GetRequiredService<ILogger<BackendSession>>());
+            return new HRM.UI.Services.WorkPlanning.WorkforceScheduleApiClient(new HttpClient(handler) { BaseAddress = origins.Api });
+        });
         services.AddScoped<HRM.Services.State.LeaveApplicationState>();
         services.AddScoped<HRM.Services.Stores.LeaveStore>();
         services.AddScoped<HRM.Helpers.NavigationTrail>(p => new(p.GetRequiredService<Microsoft.AspNetCore.Components.NavigationManager>().Uri));

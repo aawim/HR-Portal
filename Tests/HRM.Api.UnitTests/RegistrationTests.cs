@@ -60,7 +60,9 @@ public sealed class RegistrationTests
         {
             typeof(HRM.Api.Controllers.V1.AttendanceDeductionController),
             typeof(HRM.Api.Controllers.V1.ErrorLogsController),
-            typeof(HRM.Api.Controllers.V1.SessionTokensController)
+            typeof(HRM.Api.Controllers.V1.SessionTokensController),
+            typeof(HRM.Api.Controllers.V1.TeamController),
+            typeof(HRM.Api.Controllers.V1.WorkforceScheduleController)
         };
         Assert.All(routes.Where(route => !catalogRoutes.Contains((route.Path, route.Verb))),
             route => Assert.Contains(route.Action.ControllerTypeInfo.AsType(), approvedHandWrittenControllers));

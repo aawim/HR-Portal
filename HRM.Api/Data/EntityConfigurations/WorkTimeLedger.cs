@@ -1,0 +1,8 @@
+using HRM.Models.WorkPlanning;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
+namespace HRM.Models;
+public sealed class WorkTimeLedgerEntryMapping : IEntityTypeConfiguration<WorkTimeLedgerEntry>
+{
+ public void Configure(EntityTypeBuilder<WorkTimeLedgerEntry> b){b.ToTable("WS_WorkTimeLedgerEntries");b.HasKey(x=>x.Id);b.Property(x=>x.TimeCategory).HasMaxLength(40);b.Property(x=>x.SourceReference).HasMaxLength(200);b.Property(x=>x.Status).HasMaxLength(30);b.Property(x=>x.PayrollExportReference).HasMaxLength(100);b.HasIndex(x=>new{x.OrganisationId,x.IndividualId,x.StartAt,x.EndAt});b.HasIndex(x=>new{x.DutyAssignmentId,x.TimeCategory});b.HasIndex(x=>x.CorrectsLedgerEntryId);b.HasOne<Organisation>().WithMany().HasForeignKey(x=>x.OrganisationId).OnDelete(DeleteBehavior.Restrict);b.HasOne<Job>().WithMany().HasForeignKey(x=>x.JobId).OnDelete(DeleteBehavior.Restrict);b.HasOne<Individual>().WithMany().HasForeignKey(x=>x.IndividualId).OnDelete(DeleteBehavior.Restrict);b.HasOne<WorkPlanSegment>().WithMany().HasForeignKey(x=>x.WorkPlanSegmentId).OnDelete(DeleteBehavior.Restrict);b.HasOne<DutyAssignment>().WithMany().HasForeignKey(x=>x.DutyAssignmentId).OnDelete(DeleteBehavior.Restrict);b.HasOne<WorkforcePolicy>().WithMany().HasForeignKey(x=>x.WorkforcePolicyId).OnDelete(DeleteBehavior.Restrict);b.HasOne<WorkTimeLedgerEntry>().WithMany().HasForeignKey(x=>x.CorrectsLedgerEntryId).OnDelete(DeleteBehavior.Restrict);b.HasOne<OperationLog>().WithMany().HasForeignKey(x=>x.OperationLogId).OnDelete(DeleteBehavior.Restrict);}}
+public partial class HrmTeContext{public DbSet<WorkTimeLedgerEntry> WorkTimeLedgerEntries=>Set<WorkTimeLedgerEntry>();}
