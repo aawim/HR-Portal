@@ -4,6 +4,7 @@
 @page "/admin/developer/{ActiveTab}"
 @using HRM.Components.Admin.Settings
 @using HRM.Components.Admin.Settings.JobTypes
+@using HRM.DTOs
 @using HRM.Services.Interfaces
 @using HRM.Services
 @using HRM.Enum
@@ -20,6 +21,7 @@
 @inject IJSRuntime JS
 @inject DeveloperTestClockService TestClockPreference
 @inject HRM.Services.Contracts.RequestTransitionSettingsServiceContracts.IOperations TransitionService
+@inject HRM.Services.Contracts.RequestNotificationServiceContracts.IOperations NotificationService
 
 <PageTitle>Developer Workspace - HR Portal</PageTitle>
 
@@ -111,6 +113,15 @@
                                 class="rounded-t-xl px-4 py-2 font-bold text-xs md:text-sm transition-all border-t border-l border-r @(activeTab == "transitions" ? "bg-amber-600 dark:bg-amber-600 text-white border-amber-600 dark:border-amber-500 shadow-sm" : "bg-[#fef3c7]/60 text-slate-700 hover:text-slate-900 hover:bg-[#fde68a]/60 dark:bg-slate-800/90 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-700 border-slate-300 dark:border-slate-700")"
                                 @onclick="@(e => SetTab("transitions"))">
                             Transition States
+                        </button>
+                        <button type="button"
+                                class="rounded-t-xl px-4 py-2 font-bold text-xs md:text-sm transition-all border-t border-l border-r @(activeTab == "notification-resolution" ? "bg-amber-600 dark:bg-amber-600 text-white border-amber-600 dark:border-amber-500 shadow-sm" : "bg-[#fef3c7]/60 text-slate-700 hover:text-slate-900 hover:bg-[#fde68a]/60 dark:bg-slate-800/90 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-700 border-slate-300 dark:border-slate-700")"
+                                @onclick="@(e => SetTab("notification-resolution"))">
+                            Notification Resolution
+                            @if (configurationAlerts.Count > 0)
+                            {
+                                <span class="ml-1 rounded-full bg-rose-500 px-1.5 py-0.5 text-[10px] text-white">@configurationAlerts.Count</span>
+                            }
                         </button>
                         <button type="button"
                                 class="rounded-t-xl px-4 py-2 font-bold text-xs md:text-sm transition-all border-t border-l border-r @(activeTab == "workflows" ? "bg-amber-600 dark:bg-amber-600 text-white border-amber-600 dark:border-amber-500 shadow-sm" : "bg-[#fef3c7]/60 text-slate-700 hover:text-slate-900 hover:bg-[#fde68a]/60 dark:bg-slate-800/90 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-700 border-slate-300 dark:border-slate-700")"
@@ -328,6 +339,55 @@
                             <RequestStateTransitionSettings />
                         </div>
                     }
+                    else if (activeTab == "notification-resolution")
+                    {
+                        <section class="flex flex-col gap-2">
+                            <header class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-white/95 p-2 shadow-xs backdrop-blur-xs dark:border-slate-800 dark:bg-slate-900/95">
+                                <div><h2 class="text-lg font-bold text-slate-900 dark:text-slate-100">Notification Resolution</h2><p class="text-xs text-slate-500">Resolve workflow configuration without leaving the Developer Portal.</p></div>
+                                <button type="button" class="app-button app-button-secondary app-button-sm" @onclick="LoadConfigurationAlertsAsync" disabled="@loading"><AppIcon Name="arrow-clockwise" />Refresh notifications</button>
+                            </header>
+                            <div class="grid min-w-0 grid-cols-1 items-start gap-2 lg:grid-cols-12">
+                                <div class="min-w-0 rounded-2xl border border-slate-200 bg-white p-2 shadow-xs dark:border-slate-800 dark:bg-slate-900 lg:col-span-7">
+                                    <div class="border-b border-slate-200 p-2 dark:border-slate-800"><h3 class="font-bold text-slate-900 dark:text-slate-100">Transition configuration</h3><p class="text-xs text-slate-500">Enter Request Type, From State and To State in the order shown in the notification.</p></div>
+                                    <RequestStateTransitionSettings Embedded="true"
+                                                                    InitialRequestTypeId="@ResolutionRequestTypeId"
+                                                                    InitialFromStateId="@ResolutionFromStateId"
+                                                                    InitialToStateId="@ResolutionToStateId"
+                                                                    InitialRequestTypeName="@ResolutionRequestTypeName"
+                                                                    InitialFromStateName="@ResolutionFromStateName"
+                                                                    InitialToStateName="@ResolutionToStateName"
+                                                                    OnConfigurationChanged="LoadConfigurationAlertsAsync" />
+                                </div>
+                                <aside class="flex min-w-0 max-h-[75vh] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white p-2 shadow-xs dark:border-slate-800 dark:bg-slate-900 lg:col-span-5" aria-label="Configuration notification details">
+                                    <div class="border-b border-slate-200 p-2 dark:border-slate-800"><div class="flex items-center justify-between gap-2"><h3 class="font-bold text-slate-900 dark:text-slate-100">Notification details</h3><span class="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">@configurationAlerts.Count recent</span></div><p class="text-xs text-slate-500">Newest notification appears first.</p></div>
+                                    <div class="mt-2 flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto overscroll-contain pr-1">
+                                    @if (configurationAlerts.Count == 0)
+                                    {
+                                        <div class="rounded-xl border border-dashed border-slate-300 p-6 text-center text-xs text-slate-500">No recent configuration-resolution notifications.</div>
+                                    }
+                                    else
+                                    {
+                                        @foreach (var alert in configurationAlerts)
+                                        {
+                                            <article class="flex flex-col gap-2 rounded-xl border border-amber-200 bg-amber-50/50 p-3 text-xs dark:border-amber-900 dark:bg-amber-950/20">
+                                                <div class="flex flex-wrap items-center justify-between gap-2"><div class="flex items-center gap-2"><strong class="text-amber-900 dark:text-amber-200">@alert.Item.Reference</strong>@if (alert.Resolved){<span class="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800">Resolved</span>}</div><time class="text-[11px] text-slate-500">@alert.Item.CreatedAtUtc.ToLocalTime().ToString("dd MMM yyyy HH:mm")</time></div>
+                                                <p class="whitespace-pre-wrap text-slate-700 dark:text-slate-300">@alert.Item.Message</p>
+                                                @if (alert.Resolved)
+                                                {
+                                                    <button type="button" class="app-button app-button-secondary app-button-sm self-start" disabled><AppIcon Name="check-circle" />Configuration already exists</button>
+                                                }
+                                                else
+                                                {
+                                                    <a class="app-button app-button-primary app-button-sm self-start" href="@alert.Url"><AppIcon Name="arrow-left-right" />Populate configuration form</a>
+                                                }
+                                            </article>
+                                        }
+                                    }
+                                    </div>
+                                </aside>
+                            </div>
+                        </section>
+                    }
                     else if (activeTab == "workflows")
                     {
                         <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
@@ -446,6 +506,13 @@
 @code {
     [Parameter] public string? ActiveTab { get; set; }
     [SupplyParameterFromQuery(Name = "tab")] public string? TabQuery { get; set; }
+    [SupplyParameterFromQuery(Name = "jobTypeId")] public int? ResolutionJobTypeId { get; set; }
+    [SupplyParameterFromQuery(Name = "requestTypeId")] public int? ResolutionRequestTypeId { get; set; }
+    [SupplyParameterFromQuery(Name = "fromStateId")] public int? ResolutionFromStateId { get; set; }
+    [SupplyParameterFromQuery(Name = "toStateId")] public int? ResolutionToStateId { get; set; }
+    [SupplyParameterFromQuery(Name = "requestTypeName")] public string? ResolutionRequestTypeName { get; set; }
+    [SupplyParameterFromQuery(Name = "fromStateName")] public string? ResolutionFromStateName { get; set; }
+    [SupplyParameterFromQuery(Name = "toStateName")] public string? ResolutionToStateName { get; set; }
 
     private bool checking = true;
     private bool isDeveloper;
@@ -455,6 +522,48 @@
     private string activeTab = "overview";
     private int requestTypesCount;
     private int statesCount;
+    private sealed record ResolutionTarget(int RequestTypeId, int FromStateId, int ToStateId);
+    private sealed record ConfigurationAlertView(RequestNotificationItem Item, string Url, bool Resolved);
+    private List<ConfigurationAlertView> configurationAlerts = [];
+    private static string DeveloperResolutionUrl(RequestNotificationItem alert)
+    {
+        if (alert.Url.StartsWith("/developer/", StringComparison.OrdinalIgnoreCase) &&
+            alert.Url.Contains("requestTypeId=", StringComparison.OrdinalIgnoreCase)) return alert.Url;
+        var text = alert.Message ?? string.Empty;
+        var ids = System.Text.RegularExpressions.Regex.Match(text,
+            @"Request Type\s*=.*?\(ID\s+(\d+)\).*?From State\s*=.*?\(ID\s+(\d+)\).*?To State\s*=.*?\(ID\s+(\d+)\)",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        if (ids.Success)
+            return $"/developer/notification-resolution?requestTypeId={ids.Groups[1].Value}&fromStateId={ids.Groups[2].Value}&toStateId={ids.Groups[3].Value}";
+        var request = System.Text.RegularExpressions.Regex.Match(text,
+            @"Request Type:\s*(.*?)\.\s*(?:Transition not allowed|Missing transition)",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        var states = System.Text.RegularExpressions.Regex.Match(text,
+            @"Transition not allowed for .*?:\s*(.*?)\s*→\s*(.*?)\.\s*Configure",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        if (request.Success && states.Success)
+            return "/developer/notification-resolution?requestTypeName=" + Uri.EscapeDataString(request.Groups[1].Value.Trim()) +
+                "&fromStateName=" + Uri.EscapeDataString(states.Groups[1].Value.Trim()) +
+                "&toStateName=" + Uri.EscapeDataString(states.Groups[2].Value.Trim());
+        return "/developer/notification-resolution";
+    }
+
+    private static ResolutionTarget? ResolutionTargetFor(RequestNotificationItem alert, RequestTransitionSettingsDto settings)
+    {
+        var text = alert.Message ?? string.Empty;
+        var ids = System.Text.RegularExpressions.Regex.Match(text,
+            @"Request Type\s*=.*?\(ID\s+(\d+)\).*?From State\s*=.*?\(ID\s+(\d+)\).*?To State\s*=.*?\(ID\s+(\d+)\)",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        if (ids.Success && int.TryParse(ids.Groups[1].Value, out var requestId) && int.TryParse(ids.Groups[2].Value, out var fromId) && int.TryParse(ids.Groups[3].Value, out var toId))
+            return new(requestId, fromId, toId);
+        var request = System.Text.RegularExpressions.Regex.Match(text, @"Request Type:\s*(.*?)\.\s*(?:Transition not allowed|Missing transition)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        var states = System.Text.RegularExpressions.Regex.Match(text, @"Transition not allowed for .*?:\s*(.*?)\s*→\s*(.*?)\.\s*Configure", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        if (!request.Success || !states.Success) return null;
+        var requestOption = settings.RequestTypes.FirstOrDefault(x => x.Name.Trim().Equals(request.Groups[1].Value.Trim(), StringComparison.OrdinalIgnoreCase));
+        var fromOption = settings.States.FirstOrDefault(x => x.Name.Trim().Equals(states.Groups[1].Value.Trim(), StringComparison.OrdinalIgnoreCase));
+        var toOption = settings.States.FirstOrDefault(x => x.Name.Trim().Equals(states.Groups[2].Value.Trim(), StringComparison.OrdinalIgnoreCase));
+        return requestOption is null || fromOption is null || toOption is null ? null : new(requestOption.Id, fromOption.Id, toOption.Id);
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -473,6 +582,7 @@
             if (isDeveloper)
             {
                 await LoadOverviewStatsAsync();
+                await LoadConfigurationAlertsAsync();
             }
         }
         catch
@@ -491,7 +601,7 @@
         if (!string.IsNullOrWhiteSpace(selected))
         {
             var normalized = selected.ToLowerInvariant();
-            if (normalized is "overview" or "error-logs" or "errors" or "request-types" or "transitions" or "workflows" or "health" or "edge-agents" or "diagnostics")
+            if (normalized is "overview" or "error-logs" or "errors" or "request-types" or "transitions" or "notification-resolution" or "workflows" or "health" or "edge-agents" or "diagnostics")
             {
                 activeTab = normalized == "errors" ? "error-logs" : normalized;
             }
@@ -525,6 +635,40 @@
         catch
         {
             // Non-critical stat loading
+        }
+    }
+
+    private async Task LoadConfigurationAlertsAsync()
+    {
+        try
+        {
+            var inbox = await NotificationService.GetInboxAsync();
+            var settings = await TransitionService.LoadAsync();
+            var items = inbox.Items
+                .Where(x => x.Id < 0 && x.Reference.Contains("needs attention", StringComparison.OrdinalIgnoreCase))
+                .OrderByDescending(x => x.CreatedAtUtc)
+                .ToList();
+            var transitionCache = new Dictionary<int, List<AllowedRequestTransitionDto>>();
+            configurationAlerts = [];
+            foreach (var item in items)
+            {
+                var target = ResolutionTargetFor(item, settings);
+                var resolved = false;
+                if (target is not null)
+                {
+                    if (!transitionCache.TryGetValue(target.RequestTypeId, out var transitions))
+                    {
+                        transitions = await TransitionService.GetAsync(target.RequestTypeId);
+                        transitionCache[target.RequestTypeId] = transitions;
+                    }
+                    resolved = transitions.Any(x => x.FromStateId == target.FromStateId && x.ToStateId == target.ToStateId);
+                }
+                configurationAlerts.Add(new(item, DeveloperResolutionUrl(item), resolved));
+            }
+        }
+        catch
+        {
+            configurationAlerts = [];
         }
     }
 
@@ -595,6 +739,7 @@
         try
         {
             await LoadOverviewStatsAsync();
+            await LoadConfigurationAlertsAsync();
             StateHasChanged();
         }
         finally

@@ -492,11 +492,9 @@ public sealed class ItemStaffRequestLineTests
         Assert.Equal("Requisition", req.Kind);
 
         // Verification of Notifications:
-        // 1. Approver (UserId = 1) MUST receive StaffNotification & RequestNotification
+        // 1. Approver (UserId = 1) receives one actionable request notification.
         var approverStaffNotif = await db.StaffNotifications.FirstOrDefaultAsync(n => n.UserId == 1);
-        Assert.NotNull(approverStaffNotif);
-        Assert.Equal("ItemRequest", approverStaffNotif.Kind);
-        Assert.Contains("Requisition request", approverStaffNotif.Message);
+        Assert.Null(approverStaffNotif);
 
         var approverReqNotif = await db.RequestNotifications.FirstOrDefaultAsync(n => n.UserId == 1);
         Assert.NotNull(approverReqNotif);
@@ -596,10 +594,12 @@ public sealed class ItemStaffRequestLineTests
             var janeNotif = await db.StaffNotifications.FirstOrDefaultAsync(n => n.UserId == 2);
             Assert.Null(janeNotif);
 
-            // APPROVER NOTIFICATION CHECK: Admin (user 1) MUST receive a notification
+            // APPROVER NOTIFICATION CHECK: Admin receives one actionable request notification.
             var adminNotif = await db.StaffNotifications.FirstOrDefaultAsync(n => n.UserId == 1);
-            Assert.NotNull(adminNotif);
-            Assert.Contains("upgrade request", adminNotif.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.Null(adminNotif);
+            var adminRequestNotif = await db.RequestNotifications.SingleOrDefaultAsync(n => n.UserId == 1);
+            Assert.NotNull(adminRequestNotif);
+            Assert.Equal("ActionRequired", adminRequestNotif.NotificationKind);
         }
     }
 
@@ -693,6 +693,7 @@ public sealed class ItemStaffRequestLineTests
             var staffNotif = await db.StaffNotifications.FirstOrDefaultAsync(n => n.UserId == 2);
             Assert.NotNull(staffNotif);
             Assert.Contains("approved", staffNotif.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.Empty(await db.RequestNotifications.Where(n => n.UserId == 2).ToListAsync());
 
             // HR Admin (user 1, who approved) must NOT be notified of their own action
             var adminNotif = await db.StaffNotifications.FirstOrDefaultAsync(n => n.UserId == 1);
@@ -742,6 +743,7 @@ public sealed class ItemStaffRequestLineTests
             Assert.NotNull(staffNotif);
             Assert.Contains("rejected", staffNotif.Message, StringComparison.OrdinalIgnoreCase);
             Assert.Contains("out of stock", staffNotif.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.Empty(await db.RequestNotifications.Where(n => n.UserId == 2).ToListAsync());
 
             // HR Admin (user 1) must NOT be notified
             var adminNotif = await db.StaffNotifications.FirstOrDefaultAsync(n => n.UserId == 1);
