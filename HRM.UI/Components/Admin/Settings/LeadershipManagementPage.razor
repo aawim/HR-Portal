@@ -1,0 +1,18 @@
+@page "/admin/settings/leadership/management"
+@attribute [Authorize]
+@using HRM.DTOs.Leadership
+@inject HRM.Services.Contracts.LeadershipAdministrationServiceContracts.IOperations Administration
+@rendermode InteractiveServer
+<PageTitle>Leadership records and audit</PageTitle>
+<section class="w-full min-w-0 p-2 space-y-4">
+ <header class="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur-xs px-3 py-3 shadow-xs"><div class="flex flex-wrap items-center justify-between gap-2"><h1 class="text-lg font-bold text-slate-900">Leadership records and audit</h1><div class="flex gap-2"><a class="app-button app-button-secondary app-button-sm" href="/admin/settings/leadership">Appointment administration</a><button class="app-button app-button-secondary app-button-sm" @onclick="LoadAsync">Refresh</button></div></div></header>
+ @if(error is not null){<div role="alert" class="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">@error</div>}
+ <div class="app-surface rounded-2xl border border-slate-200 p-4"><h2 class="p-1 font-bold">Appointments and authority</h2><div class="overflow-x-auto rounded-xl border border-slate-200"><table class="w-full text-left text-xs"><thead class="border-b border-slate-200 bg-slate-50 text-slate-700"><tr><th class="p-2.5">Record</th><th class="p-2.5">Appointment / organisation</th><th class="p-2.5">Details</th><th class="p-2.5">Status</th><th class="p-2.5">Action</th></tr></thead><tbody class="divide-y divide-slate-100">@foreach(var row in records){<tr class="hover:bg-slate-50/50"><td class="p-2.5">@row.Kind #@row.Id</td><td class="p-2.5">#@row.AppointmentId / #@row.OrganisationId</td><td class="p-2.5">@row.Description</td><td class="p-2.5">@row.Status</td><td class="p-2.5"><button disabled="@(busy || row.Status is "Revoked" or "Expired")" class="app-button app-button-danger app-button-sm" @onclick="()=>RevokeAsync(row)">Revoke</button></td></tr>}</tbody></table></div></div>
+ <div class="app-surface rounded-2xl border border-slate-200 p-4"><h2 class="p-1 font-bold">Recent audit history</h2><div class="overflow-x-auto rounded-xl border border-slate-200"><table class="w-full text-left text-xs"><thead class="border-b border-slate-200 bg-slate-50 text-slate-700"><tr><th class="p-2.5">UTC time</th><th class="p-2.5">Appointment</th><th class="p-2.5">Administrator</th><th class="p-2.5">Action</th><th class="p-2.5">Details</th></tr></thead><tbody class="divide-y divide-slate-100">@foreach(var row in audit){<tr><td class="p-2.5">@row.TimestampUtc.ToString("u")</td><td class="p-2.5">#@row.AppointmentId</td><td class="p-2.5">#@row.UserId</td><td class="p-2.5">@row.Action</td><td class="p-2.5">@row.Detail</td></tr>}</tbody></table></div></div>
+</section>
+@code{
+ private IReadOnlyList<LeadershipManagementRecord> records=[];private IReadOnlyList<LeadershipAuditDto> audit=[];private string? error;private bool busy;
+ protected override Task OnInitializedAsync()=>LoadAsync();
+ private async Task LoadAsync(){try{error=null;records=await Administration.ListRecordsAsync();audit=await Administration.ListAuditAsync();}catch{error="Leadership records could not be loaded. Check your administration access.";}}
+ private async Task RevokeAsync(LeadershipManagementRecord row){if(busy)return;busy=true;try{var result=await Administration.RevokeRecordAsync(row.Kind,row.Id);if(result.Success)await LoadAsync();else error=result.Message;}catch{error="The record could not be revoked.";}finally{busy=false;}}
+}

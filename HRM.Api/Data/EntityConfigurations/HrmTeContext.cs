@@ -751,6 +751,7 @@ public partial class HrmTeContext : DbContext
 
         modelBuilder.Entity<AttendanceDevice>(entity =>
         {
+            entity.ToTable("EA_AttendanceDevices");
             entity.Property(e => e.AttendanceDeviceId).HasColumnName("AttendanceDeviceID");
             entity.Property(e => e.AttendanceClientId).HasColumnName("AttendanceClientID");
             entity.Property(e => e.AttendanceDeviceInOutTypeId)
@@ -762,10 +763,22 @@ public partial class HrmTeContext : DbContext
                 .HasColumnName("IPAddress");
             entity.Property(e => e.Location).HasMaxLength(250);
             entity.Property(e => e.OperationLogId).HasColumnName("OperationLogID");
+            entity.Property(e => e.OrganisationId).HasColumnName("OrganisationID");
+            entity.Property(e => e.AdapterType).HasMaxLength(80);
+            entity.Property(e => e.EdgeAttendanceAgentId).HasColumnName("EdgeAttendanceAgentID");
+            entity.Property(e => e.IsEdgeEnabled).HasDefaultValue(true);
+            entity.HasIndex(e => e.OrganisationId).HasDatabaseName("IX_EA_AttendanceDevices_OrganisationID");
+            entity.HasIndex(e => e.EdgeAttendanceAgentId).HasDatabaseName("IX_EA_AttendanceDevices_EdgeAttendanceAgentID");
 
             entity.HasOne(d => d.OperationLog).WithMany(p => p.AttendanceDevices)
                 .HasForeignKey(d => d.OperationLogId)
                 .HasConstraintName("FK_AttendanceDevices_OperationLogs");
+            entity.HasOne<Organisation>().WithMany().HasForeignKey(d => d.OrganisationId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("FK_EA_AttendanceDevices_Organisations");
+            entity.HasOne<HRM.Models.EdgeAttendance.EdgeAttendanceAgent>().WithMany().HasForeignKey(d => d.EdgeAttendanceAgentId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("FK_EA_AttendanceDevices_Agents");
         });
 
         modelBuilder.Entity<AttendanceLog>(entity =>

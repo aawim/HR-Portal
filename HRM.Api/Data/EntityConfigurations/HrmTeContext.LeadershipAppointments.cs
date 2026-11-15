@@ -1,0 +1,4 @@
+using HRM.Models.Leadership;
+using Microsoft.EntityFrameworkCore;
+namespace HRM.Models;
+public partial class HrmTeContext { public DbSet<LeadershipAppointmentType> LeadershipAppointmentTypes=>Set<LeadershipAppointmentType>(); public DbSet<LeadershipAppointment> LeadershipAppointments=>Set<LeadershipAppointment>(); public DbSet<LeadershipAppointmentOrganisation> LeadershipAppointmentOrganisations=>Set<LeadershipAppointmentOrganisation>(); public DbSet<LeadershipAuthorityGrant> LeadershipAuthorityGrants=>Set<LeadershipAuthorityGrant>(); public DbSet<LeadershipAttendancePolicy> LeadershipAttendancePolicies=>Set<LeadershipAttendancePolicy>(); public DbSet<LeadershipDeviceAccess> LeadershipDeviceAccesses=>Set<LeadershipDeviceAccess>(); public DbSet<LeadershipDelegation> LeadershipDelegations=>Set<LeadershipDelegation>(); public DbSet<LeadershipAuditLog> LeadershipAuditLogs=>Set<LeadershipAuditLog>(); }

@@ -1,46 +1,12 @@
 using HRM.Api.Authentication;
 using HRM.Hosting;
 using HRM.Api.Infrastructure;
-
+using Microsoft.AspNetCore.Server.Kestrel.Https;
 using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.EntityFrameworkCore;
 using HRM.Models;
-using HRM.Services;
-using HRM.Services.Interfaces;
 using HRM;
-
-
-using HRM.Services.Repositories;
-using HRM.Caching;
-using HRM.WorkPlanning.Abstractions;
-using HRM.WorkPlanning.Builders;
-using HRM.WorkPlanning.Services;
-
-using HRM.Services.WorkPlanning;
-using HRM.Services.Attendance.Repositories;
-using HRM.Services.Attendance.Abstraction;
-using HRM.Services.Attendance.Abstraction.Services;
-using HRM.WorkPlanning.Services.Schedules;
-using HRM.WorkPlanning.Abstractions.Schedules;
-using HRM.WorkPlanning.Abstractions.JobWorkTemplateAssignment;
-using HRM.WorkPlanning.Services.JobWorkTemplateAssignmentService;
-using HRM.Services.Interfaces.Profile;
-using HRM.Services.Interfaces.Leave;
-using HRM.Services.Leave;
-using HRM.Services.JobLeaveTypes;
-using HRM.Services.Interfaces.JobLeaveTypes;
-using HRM.Services.JobPosition;
-using HRM.Services.Interfaces.JobPosition;
-using HRM.Services.Interfaces.LeaveType;
-
-using HRM.Services.Attendance.AttendancePlan;
-using HRM.WorkPlanning;
-using HRM.Models.Archives;
-using HRM.Services.Attendance.Evaluation;
-using HRM.Services.Attendance;
-using HRM.Services.Interfaces.AppovalWF;
 using HRM.ErrorLogs.Extensions;
 using HRM.ErrorLogs.Services;
 using HRM.Services.Diagnostics;
@@ -48,6 +14,8 @@ using HRM.Services.Diagnostics;
 
 
 var builder = WebApplication.CreateBuilder(args);
+// Edge ingestion independently validates an enrolled client certificate.  Other HTTPS endpoints remain usable without one.
+builder.WebHost.ConfigureKestrel(options => options.ConfigureHttpsDefaults(https => https.ClientCertificateMode = ClientCertificateMode.AllowCertificate));
 RuntimeRequirements.RequireCurrent(builder.Environment);
 var publicOrigin = HRM.Application.Transport.DeploymentOrigin.Require(builder.Configuration["Application:PublicOrigin"], "Application:PublicOrigin", !builder.Environment.IsDevelopment());
 builder.Services.AddProtectedHostKeys(builder.Configuration, builder.Environment, "HRM.Api");

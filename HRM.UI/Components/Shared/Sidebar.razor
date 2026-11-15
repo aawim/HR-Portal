@@ -61,6 +61,11 @@
                             <NavItem Compact="collapsed" Href="/admin" Icon="home" Text="Dashboard" />
                             <NavItem Compact="collapsed" Href="admin/hr" Icon="users" Text="HR" />
                             <NavItem Compact="collapsed" Href="admin/settings" Icon="cog" Text="Settings" />
+                            @if (canManageLeadership)
+                            {
+                                <NavItem Compact="collapsed" Href="/admin/settings/leadership" Icon="briefcase" Text="Leadership administration" />
+                                <NavItem Compact="collapsed" Href="/admin/settings/leadership/management" Icon="document" Text="Leadership records & audit" />
+                            }
                             <NavItem Compact="collapsed" Href="/admin/goods-loans" Icon="currency-dollar" Text="Goods Loans" />
                             <NavItem Compact="collapsed" Href="/admin/intranet" Icon="document" Text="Intranet" />
                             <hr class="my-2 border-white/15" />
@@ -147,16 +152,24 @@
     [Parameter] public EventCallback OnMobileClose { get; set; }
     private bool collapsed;
     private bool isDeveloper;
+    private bool canManageLeadership;
 
     protected override async Task OnParametersSetAsync()
     {
         if (MobileOpen) collapsed = false;
         try
         {
+            canManageLeadership = false;
+            if (HasSystemAccess)
+            {
+                var actor = await UserAccess.RequireContextAsync();
+                canManageLeadership = actor.IsSuperAdministrator || await UserAccess.HasPermissionAsync("Leadership.Appointment.Manage");
+            }
             isDeveloper = CanAccessDeveloperPortal || (HasSystemAccess && (await UserAccess.HasUserGroupAsync("Developer") || await UserAccess.HasPermissionAsync("Developer")));
         }
         catch
         {
+            canManageLeadership = false;
             isDeveloper = CanAccessDeveloperPortal;
         }
     }

@@ -119,6 +119,38 @@ namespace HRM.Services.Interfaces.AppovalWF
                             .ToListAsync(cancellationToken);
                         break;
 
+                    case "LEADERSHIPPERMISSION":
+                        var permissionCode = await db.Roles.AsNoTracking()
+                            .Where(r => r.RoleID == referenceId)
+                            .Select(r => r.RoleKey)
+                            .SingleOrDefaultAsync(cancellationToken);
+                        if (string.IsNullOrWhiteSpace(permissionCode))
+                            throw new InvalidOperationException($"Leadership approver rule {rule.StageApproverId} references an unknown permission role.");
+
+                        var today = context.EffectiveDate == default ? DateOnly.FromDateTime(DateTime.UtcNow) : context.EffectiveDate;
+                        var appointmentUserIds = await (from appointment in db.LeadershipAppointments
+                                                        join responsibility in db.LeadershipAppointmentOrganisations on appointment.LeadershipAppointmentId equals responsibility.LeadershipAppointmentId
+                                                        join grant in db.LeadershipAuthorityGrants on responsibility.LeadershipAppointmentOrganisationId equals grant.LeadershipAppointmentOrganisationId
+                                                        join user in db.Users on appointment.IndividualId equals user.BusinessEntityID
+                                                        where user.IsActive && appointment.Status == "Active" &&
+                                                              appointment.EffectiveFrom <= today && (appointment.EffectiveTo == null || appointment.EffectiveTo >= today) &&
+                                                              responsibility.OrganisationId == context.OrganisationBusinessEntityId &&
+                                                              responsibility.EffectiveFrom <= today && (responsibility.EffectiveTo == null || responsibility.EffectiveTo >= today) &&
+                                                              grant.IsActive && grant.PermissionCode == permissionCode &&
+                                                              grant.ValidFrom <= today && (grant.ValidTo == null || grant.ValidTo >= today)
+                                                        select user.UserId).Distinct().ToListAsync(cancellationToken);
+
+                        var delegateUserIds = await (from delegation in db.LeadershipDelegations
+                                                     join appointment in db.LeadershipAppointments on delegation.FromLeadershipAppointmentId equals appointment.LeadershipAppointmentId
+                                                     where delegation.IsActive && delegation.OrganisationId == context.OrganisationBusinessEntityId &&
+                                                             delegation.PermissionScope == permissionCode && delegation.ValidFrom <= today &&
+                                                             db.LeadershipAppointmentOrganisations.Any(o => o.LeadershipAppointmentId == appointment.LeadershipAppointmentId && o.OrganisationId == delegation.OrganisationId && o.EffectiveFrom <= today && (o.EffectiveTo == null || o.EffectiveTo >= today) && db.LeadershipAuthorityGrants.Any(g => g.LeadershipAppointmentOrganisationId == o.LeadershipAppointmentOrganisationId && g.IsActive && g.PermissionCode == permissionCode && g.ValidFrom <= today && (g.ValidTo == null || g.ValidTo >= today))) &&
+                                                           (delegation.ValidTo == null || delegation.ValidTo >= today) && appointment.Status == "Active" &&
+                                                           appointment.EffectiveFrom <= today && (appointment.EffectiveTo == null || appointment.EffectiveTo >= today)
+                                                     select delegation.ToUserId).Distinct().ToListAsync(cancellationToken);
+                        userIds = appointmentUserIds.Concat(delegateUserIds).Distinct().ToList();
+                        break;
+
                     default:
                         throw new NotSupportedException(
                             $"Approver type '{rule.ApproverType}' " +

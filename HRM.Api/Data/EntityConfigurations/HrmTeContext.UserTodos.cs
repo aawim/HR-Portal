@@ -7,6 +7,19 @@ public partial class HrmTeContext
 
     partial void OnModelCreatingPartial(ModelBuilder modelBuilder)
     {
+        modelBuilder.ApplyConfiguration<HRM.Models.Leadership.LeadershipAppointmentType>(new HRM.Api.Data.EntityConfigurations.LeadershipAppointmentsMapping());
+        modelBuilder.ApplyConfiguration<HRM.Models.Leadership.LeadershipAppointment>(new HRM.Api.Data.EntityConfigurations.LeadershipAppointmentsMapping());
+        modelBuilder.ApplyConfiguration<HRM.Models.Leadership.LeadershipAppointmentOrganisation>(new HRM.Api.Data.EntityConfigurations.LeadershipAppointmentsMapping());
+        modelBuilder.ApplyConfiguration<HRM.Models.Leadership.LeadershipAuthorityGrant>(new HRM.Api.Data.EntityConfigurations.LeadershipAppointmentsMapping());
+        modelBuilder.ApplyConfiguration<HRM.Models.Leadership.LeadershipAttendancePolicy>(new HRM.Api.Data.EntityConfigurations.LeadershipAppointmentsMapping());
+        modelBuilder.ApplyConfiguration<HRM.Models.Leadership.LeadershipDeviceAccess>(new HRM.Api.Data.EntityConfigurations.LeadershipAppointmentsMapping());
+        modelBuilder.ApplyConfiguration<HRM.Models.Leadership.LeadershipDelegation>(new HRM.Api.Data.EntityConfigurations.LeadershipAppointmentsMapping());
+        modelBuilder.ApplyConfiguration<HRM.Models.Leadership.LeadershipAuditLog>(new HRM.Api.Data.EntityConfigurations.LeadershipAppointmentsMapping());
+        modelBuilder.ApplyConfiguration<HRM.Models.EdgeAttendance.EdgeAttendanceAgent>(new HRM.Api.Data.EntityConfigurations.EdgeAttendanceMapping());
+        modelBuilder.ApplyConfiguration<HRM.Models.EdgeAttendance.EdgeAttendanceTrustedIssuer>(new HRM.Api.Data.EntityConfigurations.EdgeAttendanceMapping());
+        modelBuilder.ApplyConfiguration<HRM.Models.EdgeAttendance.EdgeAttendanceAgentDevice>(new HRM.Api.Data.EntityConfigurations.EdgeAttendanceMapping());
+        modelBuilder.ApplyConfiguration<HRM.Models.EdgeAttendance.EdgeAttendanceEventReceipt>(new HRM.Api.Data.EntityConfigurations.EdgeAttendanceMapping());
+        modelBuilder.ApplyConfiguration<HRM.Models.EdgeAttendance.EdgeAttendanceIngestionFailure>(new HRM.Api.Data.EntityConfigurations.EdgeAttendanceMapping());
         modelBuilder.Entity<UserTodo>(entity =>
         {
             entity.ToTable("UT_UserTodos", "dbo", table => table.HasCheckConstraint("CK_UserTodos_Priority", "[Priority] IN ('Normal','Medium','High')"));

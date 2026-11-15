@@ -18,12 +18,15 @@ public sealed class LeaveFlowSettingsData
     public List<LeaveFlowOption> JobTypes { get; set; } = [];
     public List<LeaveFlowOption> RequestTypes { get; set; } = [];
     public List<LeaveFlowOption> UserGroups { get; set; } = [];
+    public List<LeaveFlowOption> PermissionRoles { get; set; } = [];
     public List<LeaveFlowOption> States { get; set; } = [];
 }
 public sealed class LeaveFlowStageDto
 {
     public string Name { get; set; } = "";
     public int UserGroupId { get; set; }
+    public string ApproverType { get; set; } = "UserGroup";
+    public int PermissionRoleId { get; set; }
     public bool ApplicantSupervisorOnly { get; set; }
     public int StateId { get; set; }
 }
