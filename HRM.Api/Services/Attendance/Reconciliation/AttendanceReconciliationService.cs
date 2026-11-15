@@ -396,6 +396,9 @@ public sealed class AttendanceReconciliationService : IAttendanceReconciliationS
 
         // 2. Build Planned Obligations (Official, Official Break/Lunch, and Duties)
         var obligations = BuildObligations(workPlan, workDateTime);
+        var leadershipPolicy = await HRM.Services.LeadershipAttendancePolicyResolver.ResolveAsync(db, individualId, organisationId, workDate, cancellationToken);
+        if (leadershipPolicy is { AttendanceRequired: false })
+            foreach (var obligation in obligations) { obligation.RequiresAttendance = false; obligation.RequiresCheckOut = false; }
         var officialObligations = obligations.Where(o => o.ObligationType == "Official").OrderBy(o => o.ScheduledStart).ToList();
         var breakObligations = obligations.Where(o => o.ObligationType == "OfficialBreak").OrderBy(o => o.ScheduledStart).ToList();
         var dutyObligations = obligations.Where(o => o.ObligationType == "Duty").OrderBy(o => o.ScheduledStart).ThenBy(o => o.Priority).ThenBy(o => o.WorkAssignmentId).ToList();
@@ -492,6 +495,12 @@ public sealed class AttendanceReconciliationService : IAttendanceReconciliationS
             result);
 
         // 6. Persist Reconciled State if requested
+        if (leadershipPolicy is { AttendanceRequired: false })
+        {
+            result.DailyStatus = AttendanceDailyStatus.Exempt;
+            result.IsComplete = true;
+            result.SummaryMessage = "Attendance exemption under the active leadership policy. Recorded presence is evidence only; exemption does not create worked time.";
+        }
         if (persistChanges && (workPlan is not null || rawLogs.Count > 0))
         {
             if (workPlan is not { IsFinalized: true } || allowFinalizedOverride)
@@ -552,8 +561,8 @@ public sealed class AttendanceReconciliationService : IAttendanceReconciliationS
         public int CheckInGraceAfterMinutes { get; init; } = 60;
         public int CheckOutGraceBeforeMinutes { get; init; } = 30;
         public int CheckOutGraceAfterMinutes { get; init; } = 90;
-        public bool RequiresAttendance { get; init; } = true;
-        public bool RequiresCheckOut { get; init; } = true;
+        public bool RequiresAttendance { get; set; } = true;
+        public bool RequiresCheckOut { get; set; } = true;
         public bool IsFlexibleBreak { get; init; }
 
         public AttendanceObligationState State { get; set; } = AttendanceObligationState.NotStarted;

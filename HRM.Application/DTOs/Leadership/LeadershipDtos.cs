@@ -1,6 +1,8 @@
 namespace HRM.DTOs.Leadership;
+public sealed class LeadershipRecordEditInput { public string Kind {get;set;}="";public int Id{get;set;}public string Description{get;set;}="";public string PermissionCode{get;set;}="";public int? DelegateUserId{get;set;}public DateOnly From{get;set;}public DateOnly? To{get;set;}public bool AttendanceRequired{get;set;}=true; }
+public sealed record LeadershipPermissionOption(string Code,string Name);
 public sealed record LeadershipLookupOption(int Id,string Name);
-public sealed record LeadershipConfigurationDto(IReadOnlyList<LeadershipLookupOption> AppointmentTypes,IReadOnlyList<LeadershipLookupOption> Organisations,IReadOnlyList<LeadershipLookupOption> Appointments,IReadOnlyList<LeadershipLookupOption> Responsibilities);
+public sealed record LeadershipConfigurationDto(IReadOnlyList<LeadershipLookupOption> AppointmentTypes,IReadOnlyList<LeadershipLookupOption> Organisations,IReadOnlyList<LeadershipLookupOption> Appointments,IReadOnlyList<LeadershipLookupOption> Responsibilities,IReadOnlyList<LeadershipLookupOption> People,IReadOnlyList<LeadershipLookupOption> Users,IReadOnlyList<LeadershipPermissionOption> Permissions);
 public sealed record LeadershipManagementRecord(string Kind,int Id,int AppointmentId,int? OrganisationId,string Description,string Status);
 public sealed record LeadershipAuditDto(long Id,int AppointmentId,string Action,int? OrganisationId,int UserId,DateTime TimestampUtc,string? Detail);
 public sealed record LeadershipOrganisationAccessDto(int OrganisationId, string OrganisationName, int AppointmentId, IReadOnlyList<string> Permissions);

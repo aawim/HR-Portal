@@ -78,6 +78,8 @@ public sealed class AttendanceDeductionService : IAttendanceDeductionService
         await using var db = await _factory.CreateDbContextAsync(ct);
 
         var policy = await GetEffectivePolicyAsync(organisationId, workDate);
+        var leadershipPolicy = await HRM.Services.LeadershipAttendancePolicyResolver.ResolveAsync(db, individualId, organisationId, workDate, ct);
+        if (leadershipPolicy is { AttendanceRequired: false }) return null;
         var workDateDt = workDate.ToDateTime(TimeOnly.MinValue);
 
         // 1. Resolve employee job and compensation

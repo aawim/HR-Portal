@@ -4,6 +4,8 @@ using Microsoft.AspNetCore.Mvc;
 namespace HRM.Api.Controllers.V1;
 public sealed partial class LeadershipAuthorityController
 {
+ [HttpGet("management/record")] public async Task<ActionResult<LeadershipRecordEditInput>> Record(string kind,int id,CancellationToken ct)=>Ok(await administration.GetRecordAsync(kind,id,ct));
+ [HttpPost("management/update")] public async Task<ActionResult<ServiceResult>> Update(LeadershipRequest<LeadershipRecordEditInput> request,CancellationToken ct)=>Ok(await administration.UpdateRecordAsync(request.Input,ct));
  [HttpGet("configuration")] public async Task<ActionResult<LeadershipConfigurationDto>> Configuration(CancellationToken ct)=>Ok(await administration.GetConfigurationAsync(ct));
  [HttpGet("has-authority")] public async Task<ActionResult<bool>> HasAuthority(int organisationId,string permissionCode,DateOnly? onDate,CancellationToken ct)=>Ok(await service.HasAuthorityAsync(organisationId,permissionCode,onDate,ct));
  [HttpGet("require-authority")] public async Task<IActionResult> RequireAuthority(int organisationId,string permissionCode,DateOnly? onDate,CancellationToken ct){await service.RequireAuthorityAsync(organisationId,permissionCode,onDate,ct);return NoContent();}
