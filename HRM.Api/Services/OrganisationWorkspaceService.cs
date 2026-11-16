@@ -29,7 +29,8 @@ public partial class OrganisationWorkspaceService(IDbContextFactory<HrmTeContext
         var jobs = db.Jobs.AsNoTracking().Where(x => x.OrganisationID == organisationId && x.JobStateId == SharedConfig.JobStates.APPROVED && x.TerminatedDate == null && x.JoinedDate <= today);
         var staffIds = await jobs.Select(x => x.IndividualID).Distinct().ToListAsync();
         var viewableStaffIds = await StaffAttributeAccess.FilterViewableAsync(db, access, organisationId, staffIds);
-        jobs = jobs.Where(x => viewableStaffIds.Contains(x.IndividualID));
+        if (viewableStaffIds.Count < staffIds.Count)
+            jobs = jobs.Where(x => viewableStaffIds.Contains(x.IndividualID));
         data.StaffCount = await jobs.Select(x => x.IndividualID).Distinct().CountAsync();
         data.Workforce = await jobs.Select(x => new OrganisationOverviewStaff(x.IndividualID, x.OrganisationStructureId,
             x.JobTypeId, x.JobType.TypeName, x.Individual.GenderTypeId)).Distinct().ToListAsync();
@@ -74,7 +75,8 @@ public partial class OrganisationWorkspaceService(IDbContextFactory<HrmTeContext
         var query = db.Jobs.AsNoTracking().Where(x => x.OrganisationID == organisationId && x.JobStateId == SharedConfig.JobStates.APPROVED && x.TerminatedDate == null && x.JoinedDate <= today);
         var staffIds = await query.Select(x => x.IndividualID).Distinct().ToListAsync();
         var viewableStaffIds = await StaffAttributeAccess.FilterViewableAsync(db, access, organisationId, staffIds);
-        query = query.Where(x => viewableStaffIds.Contains(x.IndividualID));
+        if (viewableStaffIds.Count < staffIds.Count)
+            query = query.Where(x => viewableStaffIds.Contains(x.IndividualID));
         if (departmentId > 0) query = query.Where(x => x.OrganisationStructureId == departmentId);
         search = search.Trim();
         if (search.Length > 0) query = query.Where(x => (x.Individual.FirstNameEnglish + " " + (x.Individual.MiddleNameEnglish ?? "") + " " + (x.Individual.LastNameEnglish ?? "")).Contains(search) ||

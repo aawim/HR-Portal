@@ -57,7 +57,47 @@ public sealed class ResolvedOrganisationalAccess
 /// </summary>
 public static class OrganisationalAccessScopeResolver
 {
+    private static int _schemaInitialized;
     public static DateTime TodayMaldives => DateTime.UtcNow.AddHours(5).Date;
+
+    public static async Task EnsureSchemaAsync(IServiceProvider services)
+    {
+        try
+        {
+            var factory = services.GetService<IDbContextFactory<HrmTeContext>>();
+            if (factory is null) return;
+            await using var db = await factory.CreateDbContextAsync();
+            await EnsureSchemaAsync(db);
+        }
+        catch
+        {
+            // Ignored on startup if database is not reachable yet
+        }
+    }
+
+    public static async Task EnsureSchemaAsync(HrmTeContext db, CancellationToken ct = default)
+    {
+        if (!db.Database.IsSqlServer()) return;
+        if (Interlocked.Exchange(ref _schemaInitialized, 1) == 1) return;
+
+        try
+        {
+            using var stream = typeof(OrganisationalAccessScopeResolver).Assembly
+                .GetManifestResourceStream("HRM.Database.Scripts.20261115_OrganisationalAccessScopeFramework.sql");
+            if (stream is null) return;
+
+            using var reader = new StreamReader(stream);
+            var sql = await reader.ReadToEndAsync(ct);
+            if (!string.IsNullOrWhiteSpace(sql))
+            {
+                await db.Database.ExecuteSqlRawAsync(sql, ct);
+            }
+        }
+        catch
+        {
+            Interlocked.Exchange(ref _schemaInitialized, 0);
+        }
+    }
 
     public static async Task<ResolvedOrganisationalAccess> ResolveCurrentUserAsync(
         HrmTeContext db,
@@ -237,6 +277,7 @@ public static class OrganisationalAccessScopeResolver
         string? permissionFilter,
         CancellationToken ct)
     {
+        await EnsureSchemaAsync(db, ct);
         var now = DateTime.UtcNow;
         var today = TodayMaldives;
 
@@ -248,15 +289,24 @@ public static class OrganisationalAccessScopeResolver
                 .ToArrayAsync(ct)
             : [];
 
-        var activeGrants = userId > 0 && organisationId > 0
-            ? await db.UserAccessScopes.AsNoTracking()
-                .Where(s => s.OrganisationId == organisationId &&
-                            s.IsActive &&
-                            s.ValidFrom <= now &&
-                            (!s.ValidTo.HasValue || s.ValidTo.Value > now) &&
-                            (s.UserId == userId || (s.UserGroupId.HasValue && groupIds.Contains(s.UserGroupId.Value))))
-                .ToListAsync(ct)
-            : [];
+        List<UserAccessScope> activeGrants = [];
+        if (userId > 0 && organisationId > 0)
+        {
+            try
+            {
+                activeGrants = await db.UserAccessScopes.AsNoTracking()
+                    .Where(s => s.OrganisationId == organisationId &&
+                                s.IsActive &&
+                                s.ValidFrom <= now &&
+                                (!s.ValidTo.HasValue || s.ValidTo.Value > now) &&
+                                (s.UserId == userId || (s.UserGroupId.HasValue && groupIds.Contains(s.UserGroupId.Value))))
+                    .ToListAsync(ct);
+            }
+            catch
+            {
+                activeGrants = [];
+            }
+        }
 
         if (!string.IsNullOrWhiteSpace(permissionFilter))
         {

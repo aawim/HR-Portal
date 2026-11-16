@@ -45,7 +45,7 @@ public sealed class OrganisationalAccessScopeFramework : Migration
                 table.ForeignKey("FK_AC_UserAccessScopes_Organisations", x => x.OrganisationId, "Organisations", "BusinessEntityID", onDelete: ReferentialAction.Restrict);
                 table.ForeignKey("FK_AC_UserAccessScopes_Users", x => x.UserId, "Users", "UserID", onDelete: ReferentialAction.Restrict);
                 table.ForeignKey("FK_AC_UserAccessScopes_UserGroups", x => x.UserGroupId, "UserGroups", "UserGroupID", onDelete: ReferentialAction.Restrict);
-                table.ForeignKey("FK_AC_UserAccessScopes_Units", x => x.UnitId, "OrganisationStructures", "OrganisationStructureID", onDelete: ReferentialAction.Restrict);
+                table.ForeignKey("FK_AC_UserAccessScopes_Units", x => x.UnitId, "OrganisationStructure", "OrganisationStructureID", onDelete: ReferentialAction.Restrict);
                 table.ForeignKey("FK_AC_UserAccessScopes_Teams", x => x.TeamId, "Teams", "TeamID", onDelete: ReferentialAction.Restrict);
                 table.ForeignKey("FK_AC_UserAccessScopes_GrantedByUsers", x => x.GrantedByUserId, "Users", "UserID", onDelete: ReferentialAction.Restrict);
                 table.ForeignKey("FK_AC_UserAccessScopes_RevokedByUsers", x => x.RevokedByUserId, "Users", "UserID", onDelete: ReferentialAction.Restrict);
@@ -80,7 +80,7 @@ public sealed class OrganisationalAccessScopeFramework : Migration
                 table.ForeignKey("FK_AC_UserAccessScopeAudits_Organisations", x => x.OrganisationId, "Organisations", "BusinessEntityID", onDelete: ReferentialAction.Restrict);
                 table.ForeignKey("FK_AC_UserAccessScopeAudits_TargetUsers", x => x.TargetUserId, "Users", "UserID", onDelete: ReferentialAction.Restrict);
                 table.ForeignKey("FK_AC_UserAccessScopeAudits_TargetUserGroups", x => x.TargetUserGroupId, "UserGroups", "UserGroupID", onDelete: ReferentialAction.Restrict);
-                table.ForeignKey("FK_AC_UserAccessScopeAudits_Units", x => x.UnitId, "OrganisationStructures", "OrganisationStructureID", onDelete: ReferentialAction.Restrict);
+                table.ForeignKey("FK_AC_UserAccessScopeAudits_Units", x => x.UnitId, "OrganisationStructure", "OrganisationStructureID", onDelete: ReferentialAction.Restrict);
                 table.ForeignKey("FK_AC_UserAccessScopeAudits_Teams", x => x.TeamId, "Teams", "TeamID", onDelete: ReferentialAction.Restrict);
                 table.ForeignKey("FK_AC_UserAccessScopeAudits_PerformedByUsers", x => x.PerformedByUserId, "Users", "UserID", onDelete: ReferentialAction.Restrict);
                 table.ForeignKey("FK_AC_UserAccessScopeAudits_OperationLogs", x => x.OperationLogId, "OperationLogs", "OperationLogID", onDelete: ReferentialAction.Restrict);

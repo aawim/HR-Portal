@@ -23,6 +23,7 @@ public partial class PermissionSettingsService
 
         var org = await OrganisationAsync(user);
         await using var db = await factory.CreateDbContextAsync();
+        await HRM.Helpers.OrganisationalAccessScopeResolver.EnsureSchemaAsync(db);
         var userOrg = await db.UserOrganisations.Where(x => x.BusinessEntityID == org).Select(x => x.UserOrganisationID).SingleAsync();
         return (user, org, userOrg);
     }

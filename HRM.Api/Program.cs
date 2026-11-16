@@ -60,6 +60,7 @@ builder.Services.AddEfaasAuthentication(builder.Configuration, builder.Environme
 
 var app = builder.Build();
 await HRM.Services.Attendance.Reconciliation.AttendanceReconciliationSchemaBootstrapper.EnsureSchemaAsync(app.Services);
+await HRM.Helpers.OrganisationalAccessScopeResolver.EnsureSchemaAsync(app.Services);
 app.UseResponseCompression();
 if (builder.Environment.IsDevelopment() && CredentialExposure.IsExposed(builder.Configuration["Authentication:OpenIdConnect:ClientSecret"]))
     app.Logger.LogWarning("The development eFaas client secret matches a credential exposed in Git history. Rotate it at the provider and update the development secret store.");

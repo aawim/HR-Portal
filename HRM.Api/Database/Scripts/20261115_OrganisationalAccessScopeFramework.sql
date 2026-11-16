@@ -29,7 +29,7 @@ BEGIN
         CONSTRAINT FK_AC_UserAccessScopes_Organisations FOREIGN KEY (OrganisationId) REFERENCES dbo.Organisations (BusinessEntityID),
         CONSTRAINT FK_AC_UserAccessScopes_Users FOREIGN KEY (UserId) REFERENCES dbo.Users (UserID),
         CONSTRAINT FK_AC_UserAccessScopes_UserGroups FOREIGN KEY (UserGroupId) REFERENCES dbo.UserGroups (UserGroupID),
-        CONSTRAINT FK_AC_UserAccessScopes_Units FOREIGN KEY (UnitId) REFERENCES dbo.OrganisationStructures (OrganisationStructureID),
+        CONSTRAINT FK_AC_UserAccessScopes_Units FOREIGN KEY (UnitId) REFERENCES dbo.OrganisationStructure (OrganisationStructureID),
         CONSTRAINT FK_AC_UserAccessScopes_Teams FOREIGN KEY (TeamId) REFERENCES dbo.Teams (TeamID),
         CONSTRAINT FK_AC_UserAccessScopes_GrantedByUsers FOREIGN KEY (GrantedByUserId) REFERENCES dbo.Users (UserID),
         CONSTRAINT FK_AC_UserAccessScopes_RevokedByUsers FOREIGN KEY (RevokedByUserId) REFERENCES dbo.Users (UserID),
@@ -65,7 +65,7 @@ BEGIN
         CONSTRAINT FK_AC_UserAccessScopeAudits_Organisations FOREIGN KEY (OrganisationId) REFERENCES dbo.Organisations (BusinessEntityID),
         CONSTRAINT FK_AC_UserAccessScopeAudits_TargetUsers FOREIGN KEY (TargetUserId) REFERENCES dbo.Users (UserID),
         CONSTRAINT FK_AC_UserAccessScopeAudits_TargetUserGroups FOREIGN KEY (TargetUserGroupId) REFERENCES dbo.UserGroups (UserGroupID),
-        CONSTRAINT FK_AC_UserAccessScopeAudits_Units FOREIGN KEY (UnitId) REFERENCES dbo.OrganisationStructures (OrganisationStructureID),
+        CONSTRAINT FK_AC_UserAccessScopeAudits_Units FOREIGN KEY (UnitId) REFERENCES dbo.OrganisationStructure (OrganisationStructureID),
         CONSTRAINT FK_AC_UserAccessScopeAudits_Teams FOREIGN KEY (TeamId) REFERENCES dbo.Teams (TeamID),
         CONSTRAINT FK_AC_UserAccessScopeAudits_PerformedByUsers FOREIGN KEY (PerformedByUserId) REFERENCES dbo.Users (UserID),
         CONSTRAINT FK_AC_UserAccessScopeAudits_OperationLogs FOREIGN KEY (OperationLogId) REFERENCES dbo.OperationLogs (OperationLogID)
