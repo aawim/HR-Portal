@@ -20,6 +20,10 @@ public partial class HrmTeContext
         modelBuilder.ApplyConfiguration<HRM.Models.EdgeAttendance.EdgeAttendanceAgentDevice>(new HRM.Api.Data.EntityConfigurations.EdgeAttendanceMapping());
         modelBuilder.ApplyConfiguration<HRM.Models.EdgeAttendance.EdgeAttendanceEventReceipt>(new HRM.Api.Data.EntityConfigurations.EdgeAttendanceMapping());
         modelBuilder.ApplyConfiguration<HRM.Models.EdgeAttendance.EdgeAttendanceIngestionFailure>(new HRM.Api.Data.EntityConfigurations.EdgeAttendanceMapping());
+        modelBuilder.ApplyConfiguration<HRM.Models.Recruitment.RecruitmentPolicyProfile>(new HRM.Api.Data.EntityConfigurations.RecruitmentComplianceMapping());
+        modelBuilder.ApplyConfiguration<HRM.Models.Recruitment.RecruitmentPolicyVersion>(new HRM.Api.Data.EntityConfigurations.RecruitmentComplianceMapping());
+        modelBuilder.ApplyConfiguration<HRM.Models.Recruitment.RecruitmentComplianceRule>(new HRM.Api.Data.EntityConfigurations.RecruitmentComplianceMapping());
+        modelBuilder.ApplyConfiguration<HRM.Models.Recruitment.RecruitmentPolicyAssignment>(new HRM.Api.Data.EntityConfigurations.RecruitmentComplianceMapping());
         modelBuilder.Entity<UserTodo>(entity =>
         {
             entity.ToTable("UT_UserTodos", "dbo", table => table.HasCheckConstraint("CK_UserTodos_Priority", "[Priority] IN ('Normal','Medium','High')"));

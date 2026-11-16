@@ -103,5 +103,7 @@ PF_ProfessionRequirementTemplates stores profession/rank-specific source-linked 
 
 `TM_` is the team hierarchy operational prefix. `TM_TeamScheduleAdjustments` stores audited, dated check-in/check-out overlays for sub-team members without rewriting schedule templates or attendance punches.
 
+`RM_` is the recruitment-management prefix. `RM_RecruitmentPolicyProfiles`, `RM_RecruitmentPolicyVersions`, `RM_RecruitmentComplianceRules`, and `RM_RecruitmentPolicyAssignments` form the source-traceable, effective-dated policy foundation for CSC and other authorised recruitment frameworks. The registry stores verification status and approved-use state so unverified legal assumptions cannot be activated as mandatory recruitment checks.
+
 
 OC_ is the organisation calendar feature prefix. OC_OrganisationEvents (with OC_OrganisationEventAudiences, OC_OrganisationEventRecurrences, OC_OrganisationEventOccurrenceExceptions) stores events; OC_CalendarExceptions and OC_CalendarExceptionSegments store approved working-day overrides; OC_CalendarImpactAssessments stores leave/plan/schedule impact reviews; OC_EventNotifications deduplicates notifications delivered through SN_StaffNotifications; OC_SupervisorTasks and OC_SupervisorTaskAssignees store supervisor calendar tasks. Script: 20261111_OrganisationCalendar.sql.
