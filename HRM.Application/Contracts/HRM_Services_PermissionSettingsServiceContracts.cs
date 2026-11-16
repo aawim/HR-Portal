@@ -24,5 +24,11 @@ Task<ServiceResult> SaveStaffAccessScopeAsync(StaffAccessScopeDto model)
 ;
 Task<ServiceResult> SaveStaffAccessGrantAsync(StaffAccessGrantDto model)
 ;
+Task<ServiceResult> SaveOrganisationalAccessScopeAsync(OrganisationalAccessScopeDto model)
+;
+Task<ServiceResult> RevokeOrganisationalAccessScopeAsync(int scopeId, string reason)
+;
+Task<EffectiveAccessSimulationDto> SimulateEffectiveAccessAsync(int userId)
+;
 }
 }

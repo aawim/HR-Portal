@@ -18,9 +18,13 @@ public sealed class OrganisationDirectoryQueries(IDbContextFactory<HrmTeContext>
         var org = await scope.OrganisationAsync(organisationId);
         await scope.RequireStaffReadAsync("Employee.View");
         await using var db = await factory.CreateDbContextAsync(ct);
-        return await db.Teams.AsNoTracking().Where(t => t.OrganisationId == org).OrderBy(t => t.Name)
+        var orgScope = await HRM.Helpers.OrganisationalAccessScopeResolver.ResolveCurrentUserAsync(db, access, org, ct: ct);
+        var teams = await db.Teams.AsNoTracking().Where(t => t.OrganisationId == org).OrderBy(t => t.Name)
             .Select(t => new OrganisationUnitSummary(t.TeamId, OrganisationUnitKind.Team, org, t.Name, t.NameDhivehi, null,
                 t.StartDate, t.EndDate, t.IsValid == true, t.OperationLogId ?? 0, t.ParentTeamId, t.OrganisationStructureId)).ToListAsync(ct);
+        if (!orgScope.HasFullOrganisationScope)
+            teams = teams.Where(t => orgScope.CanAccessTeam(t.Id, t.OrganisationStructureId)).ToList();
+        return teams;
     }
     public async Task<OrganisationUnitDetails?> GetDetailsAsync(OrganisationUnitKey unit, CancellationToken ct = default)
     {
@@ -32,12 +36,24 @@ public sealed class OrganisationDirectoryQueries(IDbContextFactory<HrmTeContext>
             OrganisationUnitKind.Team => await db.Teams.AsNoTracking().Where(t => t.TeamId == unit.Id)
                 .Select(t => new OrganisationUnitSummary(t.TeamId, unit.Kind, t.OrganisationId, t.Name, t.NameDhivehi, null, t.StartDate, t.EndDate, t.IsValid == true, t.OperationLogId ?? 0, t.ParentTeamId, t.OrganisationStructureId)).SingleOrDefaultAsync(ct),
             OrganisationUnitKind.Group => await db.Groups.AsNoTracking().Where(g => g.GroupId == unit.Id)
-                .Select(g => new OrganisationUnitSummary(g.GroupId, unit.Kind, g.BusinessEntityOrganisationId, g.Name, null, g.GroupTypeId, null, null, true, g.OperationLogId, null, null)).SingleOrDefaultAsync(ct),
+                .Select(g => new OrganisationUnitSummary(g.GroupId, unit.Kind, g.BusinessEntityOrganisationId, g.Name, null, g.GroupTypeId, null, null, true, g.OperationLogId, null, g.OrganisationStructureId)).SingleOrDefaultAsync(ct),
             _ => await db.OrganisationStructures.AsNoTracking().Where(s => s.OrganisationStructureId == unit.Id && s.OrganisationStructureStateId == 3)
-                .Select(s => new OrganisationUnitSummary(s.OrganisationStructureId, unit.Kind, s.OrganisationBusinessEntityID, s.Name, null, s.OrganisationStructureTypeId, null, null, true, s.OperationLogId, null, null)).SingleOrDefaultAsync(ct)
+                .Select(s => new OrganisationUnitSummary(s.OrganisationStructureId, unit.Kind, s.OrganisationBusinessEntityID, s.Name, null, s.OrganisationStructureTypeId, null, null, true, s.OperationLogId, null, s.OrganisationStructureId)).SingleOrDefaultAsync(ct)
         };
         if (summary is null) return null;
         var org = await scope.OrganisationAsync(summary.OrganisationId);
+        var orgScope = await HRM.Helpers.OrganisationalAccessScopeResolver.ResolveCurrentUserAsync(db, access, org, ct: ct);
+        if (!orgScope.HasFullOrganisationScope)
+        {
+            var canAccessUnit = unit.Kind switch
+            {
+                OrganisationUnitKind.Team => orgScope.CanAccessTeam(unit.Id, summary.OrganisationStructureId),
+                OrganisationUnitKind.Group => !summary.OrganisationStructureId.HasValue || orgScope.CanAccessUnit(summary.OrganisationStructureId),
+                _ => orgScope.CanAccessUnit(unit.Id)
+            };
+            if (!canAccessUnit)
+                throw new UnauthorizedAccessException("This organisational unit is outside your authorised access scope.");
+        }
         var today = DateTime.UtcNow.AddHours(5).Date;
         List<OrganisationMember> members;
         if (unit.Kind == OrganisationUnitKind.Team)

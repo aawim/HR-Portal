@@ -85,11 +85,89 @@ public sealed class StaffAccessGrantDto
 public sealed class StaffAccessSettingsData
 {
     public int OrganisationId { get; set; }
+    public string OrganisationName { get; set; } = "";
     public List<StaffAccessOption> Users { get; set; } = new();
     public List<StaffAccessOption> Groups { get; set; } = new();
     public List<StaffAccessOption> Staff { get; set; } = new();
     public List<StaffAccessOption> Classifications { get; set; } = new();
+    public List<StaffAccessOption> Units { get; set; } = new();
+    public List<StaffAccessOption> Teams { get; set; } = new();
     public List<StaffAccessPolicyDto> Policies { get; set; } = new();
     public List<StaffAccessScopeDto> Scopes { get; set; } = new();
     public List<StaffAccessGrantDto> Grants { get; set; } = new();
+    public List<OrganisationalAccessScopeDto> OrganisationalScopes { get; set; } = new();
+    public List<UserAccessScopeAuditDto> ScopeAudits { get; set; } = new();
+}
+
+public sealed class OrganisationalAccessScopeDto
+{
+    public int Id { get; set; }
+    public string SubjectType { get; set; } = "User";
+    public int SubjectId { get; set; }
+    public string SubjectName { get; set; } = "";
+    public string ScopeType { get; set; } = "DivisionAndDescendants";
+    public int? UnitId { get; set; }
+    public string UnitName { get; set; } = "";
+    public int? TeamId { get; set; }
+    public string TeamName { get; set; } = "";
+    public bool IncludeDescendants { get; set; } = true;
+    public string PermissionFilter { get; set; } = "";
+    public DateTime ValidFrom { get; set; } = DateTime.UtcNow.Date;
+    public DateTime? ValidTo { get; set; }
+    public bool IsActive { get; set; } = true;
+    public string Reason { get; set; } = "";
+    public string GrantedByName { get; set; } = "";
+    public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
+}
+
+public sealed class UserAccessScopeAuditDto
+{
+    public long Id { get; set; }
+    public int? ScopeId { get; set; }
+    public string SubjectName { get; set; } = "";
+    public string Action { get; set; } = "";
+    public string ScopeType { get; set; } = "";
+    public string TargetUnitOrTeam { get; set; } = "";
+    public bool IncludeDescendants { get; set; }
+    public string PerformedByName { get; set; } = "";
+    public DateTime TimestampUtc { get; set; }
+    public string Detail { get; set; } = "";
+}
+
+public sealed class EffectiveUnitAccessPreviewDto
+{
+    public int UnitId { get; set; }
+    public string UnitName { get; set; } = "";
+    public string UnitType { get; set; } = "";
+    public int? ParentUnitId { get; set; }
+    public bool IsAllowed { get; set; }
+    public string AccessLevel { get; set; } = "Restricted";
+    public string AccessSummary { get; set; } = "";
+    public int TotalStaffCount { get; set; }
+    public int VisibleStaffCount { get; set; }
+}
+
+public sealed class EffectiveFieldAccessPreviewDto
+{
+    public string FieldCategory { get; set; } = "";
+    public string PermissionCode { get; set; } = "";
+    public bool IsAllowed { get; set; }
+    public string StatusLabel { get; set; } = "Restricted";
+}
+
+public sealed class EffectiveAccessSimulationDto
+{
+    public int UserId { get; set; }
+    public string UserName { get; set; } = "";
+    public string JobTitle { get; set; } = "";
+    public string HomeUnitName { get; set; } = "";
+    public string OrganisationName { get; set; } = "";
+    public string EffectiveScopeSummary { get; set; } = "";
+    public bool HasFullOrganisationScope { get; set; }
+    public int TotalOrganisationStaff { get; set; }
+    public int TotalVisibleStaff { get; set; }
+    public List<OrganisationalAccessScopeDto> ActiveScopes { get; set; } = new();
+    public List<EffectiveUnitAccessPreviewDto> UnitAccessMatrix { get; set; } = new();
+    public List<EffectiveFieldAccessPreviewDto> FieldAccessMatrix { get; set; } = new();
+    public List<string> EffectivePermissions { get; set; } = new();
 }

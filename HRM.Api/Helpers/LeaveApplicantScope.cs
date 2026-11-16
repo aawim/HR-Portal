@@ -31,6 +31,7 @@ public static class LeaveApplicantScope
             if (job.OrganisationID != org || job.JobStateId != 4 || job.JoinedDate.Date > today ||
                 job.TerminatedDate.HasValue && job.TerminatedDate.Value.Date <= today)
                 throw new UnauthorizedAccessException("Select an active staff employment record in the current organisation.");
+            await StaffAttributeAccess.RequireViewAsync(db, access, job.IndividualID, org);
         }
         else if (job.IndividualID != actor.IndividualId)
             throw new UnauthorizedAccessException("The employee session does not match this employment record.");

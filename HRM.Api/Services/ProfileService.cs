@@ -222,12 +222,59 @@ namespace HRM.Services
                         individualId,
                         cancellationToken);
 
+                var isSelfOrSuper = individualId == actor.IndividualId || actor.IsSuperAdministrator;
+                var fieldScopeOrgId = activeJob?.OrganisationId ?? await _userAccessService.GetCurrentOrganisationIdAsync();
+                var fieldAccess = isSelfOrSuper
+                    ? new HRM.Helpers.DataClassificationAccess
+                    {
+                        CanViewPublicProfile = true,
+                        CanViewBasicEmployment = true,
+                        CanViewPrivateRecord = true,
+                        CanViewSalaryAndBank = true,
+                        CanViewIdentification = true,
+                        CanViewDisciplinary = true,
+                        CanViewMedical = true,
+                        CanViewIntranetAnnouncements = true
+                    }
+                    : (await HRM.Helpers.OrganisationalAccessScopeResolver.ResolveCurrentUserAsync(
+                        db, _userAccessService, fieldScopeOrgId, ct: cancellationToken)).FieldPermissions;
+
+                if (!fieldAccess.CanViewSalaryAndBank && activeJob is not null)
+                {
+                    activeJob.BasicSalary = 0m;
+                    bankAccounts = [];
+                }
+
+                if (!fieldAccess.CanViewIdentification)
+                {
+                    identityCardNumber = null;
+                    idCardExpiry = null;
+                    passportNumber = null;
+                    passportExpiry = null;
+                    passportIssued = null;
+                    passportCountry = null;
+                    emergencyContacts = [];
+                }
+
+                var jobHistory = fieldAccess.CanViewPrivateRecord || fieldAccess.CanViewBasicEmployment
+                    ? await JobHistoryQuery.LoadAsync(db, individualId, cancellationToken, fieldScopeOrgId > 0 ? fieldScopeOrgId : null)
+                    : [];
+                if (!fieldAccess.CanViewSalaryAndBank)
+                {
+                    foreach (var jh in jobHistory)
+                        jh.BasicSalary = 0m;
+                }
+
+                var profileDocuments = fieldAccess.CanViewPrivateRecord
+                    ? await LoadProfileDocumentsAsync(db, individualId, cancellationToken)
+                    : [];
+
                 return new ProfileOverviewDto
                 {
                     //DateOfBirth = individual.DateOfBirth.Value.ToString("dd MMM yyyy") ?? "Not Available",
 
                     ImageUrl = IndividualImage.DataUrl(individual.ImageData,individual.ImageContentType),
-                    DateOfBirth = individual.DateOfBirth ?? DateTime.MinValue,
+                    DateOfBirth = fieldAccess.CanViewIdentification ? (individual.DateOfBirth ?? DateTime.MinValue) : DateTime.MinValue,
 
                     GenderId = individual.GenderId,
 
@@ -290,7 +337,7 @@ namespace HRM.Services
                     StaffNo = StaffNo?.StaffNo ?? "N/A",
 
 
-                    JobHistory = await JobHistoryQuery.LoadAsync(db, individualId, cancellationToken),
+                    JobHistory = jobHistory,
                     /*
                      * Populate these as their loaders are implemented.
                      */
@@ -301,7 +348,7 @@ namespace HRM.Services
 
                     Education = [],
 
-                    Documents = await LoadProfileDocumentsAsync(db, individualId, cancellationToken),
+                    Documents = profileDocuments,
 
                     SupervisingTeams = supervisingTeams,
 

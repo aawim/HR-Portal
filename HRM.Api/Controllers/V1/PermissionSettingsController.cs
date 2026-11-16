@@ -73,4 +73,38 @@ public sealed class PermissionSettingsController(global::HRM.Services.Contracts.
         public global::HRM.DTOs.Roles.StaffAccessGrantDto model { get; set; } = default!;
     }
 
+    [HttpPost("save-organisational-access-scope")]
+    public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> SaveOrganisationalAccessScope([FromBody] PermissionSettingsSaveOrganisationalAccessScopeRequest request)
+    {
+        return Ok(await service.SaveOrganisationalAccessScopeAsync(request.model));
+    }
+
+    public sealed class PermissionSettingsSaveOrganisationalAccessScopeRequest
+    {
+        public global::HRM.DTOs.Roles.OrganisationalAccessScopeDto model { get; set; } = default!;
+    }
+
+    [HttpPost("revoke-organisational-access-scope")]
+    public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> RevokeOrganisationalAccessScope([FromBody] PermissionSettingsRevokeOrganisationalAccessScopeRequest request)
+    {
+        return Ok(await service.RevokeOrganisationalAccessScopeAsync(request.scopeId, request.reason));
+    }
+
+    public sealed class PermissionSettingsRevokeOrganisationalAccessScopeRequest
+    {
+        public global::System.Int32 scopeId { get; set; }
+        public global::System.String reason { get; set; } = default!;
+    }
+
+    [HttpPost("simulate-effective-access")]
+    public async Task<ActionResult<global::HRM.DTOs.Roles.EffectiveAccessSimulationDto>> SimulateEffectiveAccess([FromBody] PermissionSettingsSimulateEffectiveAccessRequest request)
+    {
+        return Ok(await service.SimulateEffectiveAccessAsync(request.userId));
+    }
+
+    public sealed class PermissionSettingsSimulateEffectiveAccessRequest
+    {
+        public global::System.Int32 userId { get; set; }
+    }
+
 }

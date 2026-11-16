@@ -16,14 +16,16 @@ public static class StaffDataAccess
             throw new UnauthorizedAccessException("Employment record is outside the current organisation.");
     }
 
-    // Own history is visible across employments; staff administration stays in the selected tenant.
+    // Own history is visible across employments; staff administration stays in the selected tenant and authorised organisational scope.
     public static async Task<int?> RequireIndividualAsync(HrmTeContext db, IUserAccessService access, int individualId)
     {
         var actor = await access.RequireContextAsync();
         if (individualId > 0 && actor.IndividualId == individualId) return null;
         var org = await access.GetCurrentOrganisationIdAsync();
-        if (org <= 0 || !await access.HasOrganisationAccessAsync(org) ||
+        var orgScope = org > 0 ? await OrganisationalAccessScopeResolver.ResolveCurrentUserAsync(db, access, org) : null;
+        if (org <= 0 || orgScope is null || !orgScope.HasOrganisationTenantAccess ||
             !(actor.IsSuperAdministrator || actor.IsHRStaff || actor.IsHRHead || actor.IsHRManager || actor.IsOrganisationAdmin ||
+              actor.IsSupervisor || orgScope.HasExplicitScopeGrants ||
               await access.HasPermissionAsync("Admin") || await access.HasPermissionAsync("Employee.View")) ||
             !await db.Jobs.AnyAsync(j => j.IndividualID == individualId && j.OrganisationID == org))
             throw new UnauthorizedAccessException("Staff information is unavailable in the current organisation.");

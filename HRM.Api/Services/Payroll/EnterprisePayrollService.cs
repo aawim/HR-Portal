@@ -601,10 +601,29 @@ public sealed class EnterprisePayrollService : IEnterprisePayroll
         var (orgId, _, _, _) = await RequireOrgScopeAsync();
         await using var db = await _factory.CreateDbContextAsync();
 
+        var orgScope = await HRM.Helpers.OrganisationalAccessScopeResolver.ResolveCurrentUserAsync(
+            db, _access, orgId, "Payroll.View");
+
         var query = db.PayrollEmployees
             .AsNoTracking()
             .Include(e => e.Lines)
             .Where(e => e.PayrollRunId == runId && e.PayrollRun!.OrganisationId == orgId);
+
+        if (!orgScope.HasFullOrganisationScope)
+        {
+            var periodDates = await db.PayrollRuns.AsNoTracking()
+                .Where(r => r.PayrollRunId == runId && r.OrganisationId == orgId)
+                .Select(r => new { r.PayrollPeriod!.PeriodStartDate, r.PayrollPeriod.PeriodEndDate })
+                .FirstOrDefaultAsync();
+            var candidateIds = await query.Select(e => e.IndividualId).Distinct().ToListAsync();
+            var allowedIds = await HRM.Helpers.OrganisationalAccessScopeResolver.FilterAuthorisedEmployeesAsync(
+                db,
+                orgScope,
+                candidateIds,
+                periodDates?.PeriodStartDate.ToDateTime(TimeOnly.MinValue),
+                periodDates?.PeriodEndDate.ToDateTime(TimeOnly.MinValue));
+            query = query.Where(e => allowedIds.Contains(e.IndividualId));
+        }
 
         if (!string.IsNullOrWhiteSpace(search))
         {

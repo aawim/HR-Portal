@@ -46,6 +46,13 @@ public static class StaffAttributeAccess
         // An explicit deny always wins, including for ordinary classifications.
         if (await matching.AnyAsync(x => !x.IsAllowed, cancellationToken)) return false;
         var explicitlyAllowed = await matching.AnyAsync(x => x.IsAllowed, cancellationToken);
+
+        // Enforce hierarchical Organisational Access Scopes (Division / Department / Team / Custom / Self isolation).
+        var inOrgScope = await OrganisationalAccessScopeResolver.CanViewEmployeeAsync(
+            db, access, individualId, organisationId, ct: cancellationToken);
+        if (!inOrgScope && !explicitlyAllowed)
+            return false;
+
         var restricted = classifications.Length > 0 && await db.StaffAccessPolicies.AsNoTracking().AnyAsync(x =>
             x.OrganisationId == organisationId && x.IsActive && x.IsRestricted && classifications.Contains(x.PositionClassificationId), cancellationToken);
         var explicitOnly = await db.StaffAccessScopes.AsNoTracking().AnyAsync(x => x.OrganisationId == organisationId && x.IsActive &&
@@ -56,9 +63,25 @@ public static class StaffAttributeAccess
     public static async Task<HashSet<int>> FilterViewableAsync(HrmTeContext db, IUserAccessService access, int organisationId,
         IEnumerable<int> individualIds, CancellationToken cancellationToken = default)
     {
+        var distinctIds = individualIds.Distinct().ToArray();
+        if (distinctIds.Length == 0) return [];
+
+        var orgScope = await OrganisationalAccessScopeResolver.ResolveCurrentUserAsync(
+            db, access, organisationId, ct: cancellationToken);
+        var scopedIds = await OrganisationalAccessScopeResolver.FilterAuthorisedEmployeesAsync(
+            db, orgScope, distinctIds, ct: cancellationToken);
+
         var result = new HashSet<int>();
-        foreach (var id in individualIds.Distinct())
-            if (await CanViewAsync(db, access, id, organisationId, cancellationToken)) result.Add(id);
+        foreach (var id in distinctIds)
+        {
+            if (!scopedIds.Contains(id))
+            {
+                // Only check ABAC if not in organisational scope in case of an explicit individual grant
+                if (!orgScope.HasOrganisationTenantAccess) continue;
+            }
+            if (await CanViewAsync(db, access, id, organisationId, cancellationToken))
+                result.Add(id);
+        }
         return result;
     }
 }

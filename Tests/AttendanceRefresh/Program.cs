@@ -27,12 +27,15 @@ using MyAttendance = HRM.Components.Pages.Online.MyAttendanceGrid;
 // Only unrelated dashboard widgets are replaced. Clock buttons use the real
 // AttendanceLogService against an isolated in-memory database. Production
 // connections and employee attendance records are never used.
-if(args.Contains("--application-contracts-only")){await ContractProjectionTests.RunAsync();await UserAppDataRegistrationTests.RunAsync();await ApiOperationContractTests.RunAsync();await OvertimePolicyTests.RunAsync();return 0;}
+if(args.Contains("--application-contracts-only")){await ContractProjectionTests.RunAsync();await UserAppDataRegistrationTests.RunAsync();await ApiOperationContractTests.RunAsync();
+if(args.Contains("--access-scope-only")){await StaffAttributeAccessTests.RunAsync();Console.WriteLine("PASS Organisational access scopes, multi-division grants, field-level classification redaction, simulation and audit");return 0;}await OvertimePolicyTests.RunAsync();return 0;}
 await ContractProjectionTests.RunAsync();
 if(args.Contains("--user-app-data-only")){await UserAppDataRegistrationTests.RunAsync();return 0;}
 await UserAppDataRegistrationTests.RunAsync();
-if(args.Contains("--architecture-only")){await ApiOperationContractTests.RunAsync();await UnattachedIndividualSearchTests.RunAsync();await SearchReliabilityTests.RunAsync();return 0;}
+if(args.Contains("--architecture-only")){await ApiOperationContractTests.RunAsync();
+if(args.Contains("--access-scope-only")){await StaffAttributeAccessTests.RunAsync();Console.WriteLine("PASS Organisational access scopes, multi-division grants, field-level classification redaction, simulation and audit");return 0;}await UnattachedIndividualSearchTests.RunAsync();await SearchReliabilityTests.RunAsync();return 0;}
 await ApiOperationContractTests.RunAsync();
+if(args.Contains("--access-scope-only")){await StaffAttributeAccessTests.RunAsync();Console.WriteLine("PASS Organisational access scopes, multi-division grants, field-level classification redaction, simulation and audit");return 0;}
 if(args.Contains("--group-chat-only")){await StaffGroupChatTests.RunAsync();Console.WriteLine("PASS Staff group chat");return 0;}
 if(args.Contains("--chat-only")){await StaffChatTests.RunAsync();Console.WriteLine("PASS Staff chat");return 0;}
 if(args.Contains("--font-size-only")){await UserFontSizeTests.RunAsync();Console.WriteLine("PASS User font size preferences");return 0;}
