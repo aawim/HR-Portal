@@ -8,9 +8,11 @@ using HRM.AttendanceEdgeAgent.Storage;
 using HRM.Models;
 using HRM.Models.Archives;
 using HRM.Models.EdgeAttendance;
+using HRM.DTOs.EdgeAttendance;
 using HRM.Services.Attendance.Abstraction;
 using HRM.Services.Attendance.Processing;
 using HRM.Services.EdgeAttendance;
+using HRM.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -320,6 +322,120 @@ public static class EdgeAgentTests
                     throw new Exception("Unmatched event did not record PendingStaffMapping status");
             }
 
+            // 5. Test Re-evaluate Pending Receipts (Option 1)
+            // Seed staff #888 with an active job
+            await using (var db = dbFactory.CreateDbContext())
+            {
+                db.Jobs.Add(new Job
+                {
+                    JobId = 501,
+                    IndividualID = 888,
+                    OrganisationID = 10,
+                    JobStateId = 4,
+                    JoinedDate = DateTime.UtcNow.AddYears(-1).Date,
+                    OrganisationStructureId = 12
+                });
+                // Assign enrollment number USR-UNKNOWN-99 to staff #888
+                db.StaffEnrollmentNumbers.Add(new StaffEnrollmentNumber
+                {
+                    StaffEnrollmentNumberId = 2,
+                    OrganisationId = 10,
+                    IndividualId = 888,
+                    EnrollmentNumber = "USR-UNKNOWN-99"
+                });
+                await db.SaveChangesAsync();
+            }
+
+            // Run re-evaluation
+            var reevalResult = await ingestionService.ReevaluatePendingReceiptsAsync(organisationId: 10);
+            if (reevalResult.Evaluated < 1 || reevalResult.Resolved != 1 || reevalResult.RemainingPending != 0)
+                throw new Exception($"Expected 1 resolved receipt from re-evaluation, got {reevalResult.Resolved} resolved, {reevalResult.RemainingPending} remaining");
+
+            await using (var db = dbFactory.CreateDbContext())
+            {
+                var receipt = await db.EdgeAttendanceEventReceipts.SingleAsync(x => x.DeviceEventId == "EVT-UNMATCHED-001");
+                if (receipt.ProcessingStatus != "Recorded" || !receipt.AttendanceLogId.HasValue)
+                    throw new Exception("Re-evaluated receipt status was not updated to Recorded");
+
+                var log = await db.AttendanceLogs.SingleAsync(x => x.AttendanceLogId == receipt.AttendanceLogId.Value);
+                if (log.IndividualId != 888 || log.AttendanceDeviceId != 101)
+                    throw new Exception("Re-evaluated attendance log not mapped to expected employee");
+
+                if (!testLogProcessor.ProcessedIds.Contains(log.AttendanceLogId))
+                    throw new Exception("AttendanceLogProcessor was not triggered for re-evaluated log");
+            }
+
+            // 6. Test EdgeAgentManagementService: ListPendingReceiptsAsync, SearchStaffAsync, ResolvePendingReceiptAsync
+            var adminAccess = Proxy.For<IUserAccessService>((m, a) => m switch
+            {
+                "RequireContextAsync" => Task.FromResult(new HRM.DTOs.UserContext.UserContextDto { UserId = 1, IndividualId = 100, IsSuperAdministrator = true }),
+                _ => throw new Exception(m)
+            });
+
+            var edgeMgmtService = new EdgeAgentManagementService(dbFactory, adminAccess, ingestionService);
+
+            // Ingest a new pending event for manual resolution
+            var manualBatch = new EdgeAttendanceBatchInput(
+                AgentId: "test-agent-01",
+                Events: new[]
+                {
+                    new EdgeAttendanceEventInput(
+                        DeviceId: 101,
+                        LocalUserId: "USR-NEW-BADGE-77",
+                        DeviceTimestamp: eventTimestamp,
+                        DeviceEventId: "EVT-MANUAL-001",
+                        RawMetadata: null)
+                });
+
+            var manualIngestResult = await ingestionService.AcceptAsync(clientCert, manualBatch);
+            if (manualIngestResult.Accepted != 1)
+                throw new Exception("Expected manual batch event to be accepted");
+
+            // Verify ListPendingReceiptsAsync returns the pending receipt
+            var pendingList = await edgeMgmtService.ListPendingReceiptsAsync(new EdgeReconciliationFilterInput { OrganisationId = 10 });
+            var pendingItem = pendingList.FirstOrDefault(p => p.DeviceEventId == "EVT-MANUAL-001");
+            if (pendingItem is null || pendingItem.ProcessingStatus != "PendingStaffMapping")
+                throw new Exception("ListPendingReceiptsAsync did not return the pending manual receipt");
+
+            // Test SearchStaffAsync
+            // Seed Staff record for Individual #888
+            await using (var db = dbFactory.CreateDbContext())
+            {
+                db.Staffs.Add(new Staff
+                {
+                    IndividualId = 888,
+                    Individual = new Individual { BusinessEntityId = 888, FirstNameEnglish = "Ahmed", LastNameEnglish = "Ali" }
+                });
+                await db.SaveChangesAsync();
+            }
+
+            var staffResults = await edgeMgmtService.SearchStaffAsync(new EdgeStaffSearchInput { OrganisationId = 10, Query = "Ahmed" });
+            if (staffResults.Count == 0 || staffResults[0].IndividualId != 888)
+                throw new Exception("SearchStaffAsync failed to find matching staff member");
+
+            // Test ResolvePendingReceiptAsync with permanent badge assignment
+            var resolveResult = await edgeMgmtService.ResolvePendingReceiptAsync(new ResolvePendingReceiptInput
+            {
+                ReceiptId = pendingItem.ReceiptId,
+                IndividualId = 888,
+                AssignEnrollmentNumberToStaff = true
+            });
+
+            if (!resolveResult.Success)
+                throw new Exception($"ResolvePendingReceiptAsync failed: {resolveResult.Message}");
+
+            // Verify receipt and enrollment number
+            await using (var db = dbFactory.CreateDbContext())
+            {
+                var resolvedReceipt = await db.EdgeAttendanceEventReceipts.SingleAsync(x => x.EdgeAttendanceEventReceiptId == pendingItem.ReceiptId);
+                if (resolvedReceipt.ProcessingStatus != "Recorded" || !resolvedReceipt.AttendanceLogId.HasValue)
+                    throw new Exception("Manually resolved receipt was not marked Recorded with AttendanceLogId");
+
+                var newEnrollment = await db.StaffEnrollmentNumbers.FirstOrDefaultAsync(x => x.OrganisationId == 10 && x.EnrollmentNumber == "USR-NEW-BADGE-77");
+                if (newEnrollment is null || newEnrollment.IndividualId != 888)
+                    throw new Exception("ResolvePendingReceiptAsync did not persist permanent StaffEnrollmentNumber");
+            }
+
             // Test Agent Heartbeat
             await ingestionService.HeartbeatAsync(clientCert, new EdgeAttendanceHeartbeatInput("test-agent-01", "Online"));
             await using (var db = dbFactory.CreateDbContext())
@@ -329,7 +445,7 @@ public static class EdgeAgentTests
                     throw new Exception("Heartbeat failed to update agent health status and last seen timestamp");
             }
 
-            Console.WriteLine("PASS Edge agent storage, offline store-and-forward outbox buffer, cursor tracking, file-drop adapter, and end-to-end mTLS ingestion pipeline");
+            Console.WriteLine("PASS Edge agent storage, offline store-and-forward outbox buffer, cursor tracking, file-drop adapter, end-to-end mTLS ingestion pipeline, and staff reconciliation");
         }
         finally
         {

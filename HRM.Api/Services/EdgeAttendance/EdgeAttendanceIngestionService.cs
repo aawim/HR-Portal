@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
+using HRM.DTOs.EdgeAttendance;
 using HRM.Models;
 using HRM.Models.EdgeAttendance;
 using HRM.Services.Attendance.Abstraction;
@@ -102,6 +103,121 @@ public sealed class EdgeAttendanceIngestionService(IDbContextFactory<HrmTeContex
         agent.LastSeenAtUtc = DateTime.UtcNow;
         agent.LastHealthStatus = heartbeat.HealthStatus;
         await db.SaveChangesAsync(ct);
+    }
+
+    public async Task<EdgeReconciliationResultDto> ReevaluatePendingReceiptsAsync(int? organisationId = null, int maxCount = 500, CancellationToken ct = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        var query = db.EdgeAttendanceEventReceipts
+            .Where(x => (x.ProcessingStatus == "PendingStaffMapping" || x.ProcessingStatus == "PendingActiveJob") && x.AttendanceLogId == null);
+
+        if (organisationId.HasValue)
+        {
+            var agentIds = await db.EdgeAttendanceAgents
+                .Where(a => a.OrganisationId == organisationId.Value)
+                .Select(a => a.EdgeAttendanceAgentId)
+                .ToListAsync(ct);
+            query = query.Where(x => agentIds.Contains(x.EdgeAttendanceAgentId));
+        }
+
+        var pending = await query.OrderBy(x => x.ReceivedAtUtc).Take(maxCount).ToListAsync(ct);
+        var evaluated = pending.Count;
+        var resolved = 0;
+        var logsToProcess = new List<(EdgeAttendanceEventReceipt Receipt, AttendanceLog Log)>();
+
+        foreach (var receipt in pending)
+        {
+            var agent = await db.EdgeAttendanceAgents.AsNoTracking().SingleOrDefaultAsync(a => a.EdgeAttendanceAgentId == receipt.EdgeAttendanceAgentId, ct);
+            if (agent is null) continue;
+
+            var enrollments = await db.StaffEnrollmentNumbers.AsNoTracking()
+                .Where(x => x.OrganisationId == agent.OrganisationId && x.EnrollmentNumber == receipt.LocalUserId.Trim())
+                .Select(x => x.IndividualId)
+                .Take(2)
+                .ToListAsync(ct);
+
+            if (enrollments.Count != 1)
+            {
+                receipt.ProcessingStatus = "PendingStaffMapping";
+                continue;
+            }
+
+            var timestamp = receipt.DeviceTimestampUtc;
+            var job = await db.Jobs.AsNoTracking()
+                .Where(x => x.IndividualID == enrollments[0] && x.OrganisationID == agent.OrganisationId && x.JobStateId == 4 && x.JoinedDate <= timestamp.Date && (!x.TerminatedDate.HasValue || x.TerminatedDate.Value > timestamp.Date))
+                .OrderByDescending(x => x.JobId)
+                .FirstOrDefaultAsync(ct);
+
+            if (job is null)
+            {
+                receipt.ProcessingStatus = "PendingActiveJob";
+                continue;
+            }
+
+            var log = new AttendanceLog
+            {
+                AttendanceDeviceId = receipt.AttendanceDeviceId,
+                IndividualId = enrollments[0],
+                OrganisationId = agent.OrganisationId,
+                OrganisationStructureId = job.OrganisationStructureId,
+                InOutModeId = 3,
+                ActualInOutMode = 3,
+                Date = timestamp,
+                Year = timestamp.Year,
+                Month = timestamp.Month,
+                Day = timestamp.Day,
+                Hour = timestamp.Hour,
+                Minute = timestamp.Minute,
+                Second = timestamp.Second,
+                Uidstamp = receipt.EventHash,
+                AttendanceLogStateId = 1,
+                AttendanceLogModeId = 2
+            };
+
+            db.AttendanceLogs.Add(log);
+            receipt.ProcessingStatus = "Recorded";
+            logsToProcess.Add((receipt, log));
+            resolved++;
+        }
+
+        if (logsToProcess.Count > 0)
+        {
+            await db.SaveChangesAsync(ct);
+            foreach (var (receipt, log) in logsToProcess) receipt.AttendanceLogId = log.AttendanceLogId;
+            await db.SaveChangesAsync(ct);
+
+            foreach (var (receipt, log) in logsToProcess)
+            {
+                try { await attendanceLogProcessor.ProcessAsync(log.AttendanceLogId, ct); }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+                catch
+                {
+                    await using var failureDb = await factory.CreateDbContextAsync(ct);
+                    var r = await failureDb.EdgeAttendanceEventReceipts.SingleAsync(x => x.EdgeAttendanceEventReceiptId == receipt.EdgeAttendanceEventReceiptId, ct);
+                    r.ProcessingStatus = "RecordedPendingProcessing";
+                    AddFailure(failureDb, r.EdgeAttendanceAgentId, r.AttendanceDeviceId, "ProcessingFailed", "The attendance record was saved but downstream processing must be retried.");
+                    await failureDb.SaveChangesAsync(ct);
+                }
+            }
+        }
+        else
+        {
+            await db.SaveChangesAsync(ct);
+        }
+
+        var remainingQuery = db.EdgeAttendanceEventReceipts
+            .Where(x => (x.ProcessingStatus == "PendingStaffMapping" || x.ProcessingStatus == "PendingActiveJob") && x.AttendanceLogId == null);
+        if (organisationId.HasValue)
+        {
+            var agentIds = await db.EdgeAttendanceAgents
+                .Where(a => a.OrganisationId == organisationId.Value)
+                .Select(a => a.EdgeAttendanceAgentId)
+                .ToListAsync(ct);
+            remainingQuery = remainingQuery.Where(x => agentIds.Contains(x.EdgeAttendanceAgentId));
+        }
+        var remaining = await remainingQuery.CountAsync(ct);
+
+        return new EdgeReconciliationResultDto(evaluated, resolved, remaining);
     }
 
     private async Task<EdgeAttendanceAgent> AuthenticateAgentAsync(HrmTeContext db, X509Certificate2 certificate, string agentId, CancellationToken ct)
