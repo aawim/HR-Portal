@@ -27,6 +27,11 @@ using MyAttendance = HRM.Components.Pages.Online.MyAttendanceGrid;
 // Only unrelated dashboard widgets are replaced. Clock buttons use the real
 // AttendanceLogService against an isolated in-memory database. Production
 // connections and employee attendance records are never used.
+if (args.Contains("--edge-agent-only"))
+{
+    await EdgeAgentTests.RunAsync();
+    return 0;
+}
 if(args.Contains("--application-contracts-only")){await ContractProjectionTests.RunAsync();await UserAppDataRegistrationTests.RunAsync();await ApiOperationContractTests.RunAsync();
 if(args.Contains("--access-scope-only")){await StaffAttributeAccessTests.RunAsync();Console.WriteLine("PASS Organisational access scopes, multi-division grants, field-level classification redaction, simulation and audit");return 0;}await OvertimePolicyTests.RunAsync();return 0;}
 await ContractProjectionTests.RunAsync();
