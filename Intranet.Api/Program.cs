@@ -12,6 +12,8 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         o.TokenValidationParameters.ValidateIssuer = true;
         o.TokenValidationParameters.ValidateAudience = true;
         o.TokenValidationParameters.ValidateLifetime = true;
+        o.TokenValidationParameters.ValidateIssuerSigningKey = true;
+        o.TokenValidationParameters.RequireSignedTokens = true;
     });
 builder.Services.AddAuthorization();
 builder.Services.AddHttpContextAccessor();
@@ -21,6 +23,16 @@ builder.Services.AddScoped<Intranet.Application.Services.INewJoinerService, Intr
 var cs = builder.Configuration.GetConnectionString("IntranetDb");
 builder.Services.AddDbContext<IntranetDbContext>(o => o.UseSqlServer(cs));
 var app = builder.Build();
+
+app.Use(async (context, next) =>
+{
+    context.Response.Headers["X-Content-Type-Options"] = "nosniff";
+    context.Response.Headers["X-Frame-Options"] = "SAMEORIGIN";
+    context.Response.Headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
+    context.Response.Headers["Permissions-Policy"] = "geolocation=(), camera=(), microphone=()";
+    await next();
+});
+
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();

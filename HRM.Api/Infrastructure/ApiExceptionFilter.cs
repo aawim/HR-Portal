@@ -26,7 +26,7 @@ public sealed class ApiExceptionFilter(ILogger<ApiExceptionFilter> logger) : IEx
             409 => context.Exception switch
             {
                 InvalidOperationException inv => inv.Message,
-                DbUpdateException dbEx => dbEx.InnerException?.Message ?? dbEx.Message,
+                DbUpdateException => "This action could not be completed due to a database conflict. Please review your input and try again.",
                 _ => "This action could not be completed. Refresh and try again, or contact your organisation's HR team."
             },
             _ => "This action could not be completed right now. Please try again."

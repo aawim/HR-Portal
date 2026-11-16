@@ -289,18 +289,21 @@ public static class OrganisationalAccessScopeResolver
                 .ToArrayAsync(ct)
             : [];
 
+        var anyOrgGrantsExist = false;
         List<UserAccessScope> activeGrants = [];
         if (userId > 0 && organisationId > 0)
         {
             try
             {
-                activeGrants = await db.UserAccessScopes.AsNoTracking()
-                    .Where(s => s.OrganisationId == organisationId &&
-                                s.IsActive &&
-                                s.ValidFrom <= now &&
+                var orgGrants = await db.UserAccessScopes.AsNoTracking()
+                    .Where(s => s.OrganisationId == organisationId && s.IsActive)
+                    .ToListAsync(ct);
+                anyOrgGrantsExist = orgGrants.Count > 0;
+                activeGrants = orgGrants
+                    .Where(s => s.ValidFrom <= now &&
                                 (!s.ValidTo.HasValue || s.ValidTo.Value > now) &&
                                 (s.UserId == userId || (s.UserGroupId.HasValue && groupIds.Contains(s.UserGroupId.Value))))
-                    .ToListAsync(ct);
+                    .ToList();
             }
             catch
             {
@@ -497,6 +500,7 @@ public static class OrganisationalAccessScopeResolver
 
         var hasFullOrganisationScope = isSuperAdmin ||
                                        hasExplicitOrgGrant ||
+                                       (!anyOrgGrantsExist) ||
                                        (!hasExplicitGrants && hasBroadHrOrModuleRole);
 
         if (hasFullOrganisationScope)

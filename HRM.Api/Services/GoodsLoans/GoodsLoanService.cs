@@ -721,7 +721,27 @@ public sealed class GoodsLoanService : IGoodsLoanService
     public async Task<List<GoodsLoanDto>> GetLoansAsync(GoodsLoanFilterRequest filter, CancellationToken ct = default)
     {
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
-        var org = filter.OrganisationBusinessEntityID ?? await _access.GetCurrentOrganisationIdAsync();
+        var actor = await _access.RequireContextAsync();
+        var currentOrg = await _access.GetCurrentOrganisationIdAsync();
+
+        var isPrivileged = actor.IsSuperAdministrator ||
+            actor.IsHRStaff ||
+            actor.IsHRManager ||
+            actor.IsHeadOfOrganisation ||
+            await _access.HasPermissionAsync("Admin") ||
+            await _access.HasPermissionAsync("GoodsLoan.View") ||
+            await _access.HasPermissionAsync("GoodsLoan.Manage") ||
+            await _access.HasPermissionAsync("Payroll.Manage") ||
+            await _access.HasPermissionAsync("Employee.View");
+
+        var org = (!actor.IsSuperAdministrator && currentOrg > 0)
+            ? currentOrg
+            : (filter.OrganisationBusinessEntityID ?? currentOrg);
+
+        if (!isPrivileged)
+        {
+            filter.IndividualID = actor.IndividualId;
+        }
 
         var query = db.GoodsLoans
             .AsNoTracking()
@@ -792,6 +812,29 @@ public sealed class GoodsLoanService : IGoodsLoanService
             .FirstOrDefaultAsync(l => l.LoanID == loanId, ct);
 
         if (loan == null) return null;
+
+        var actor = await _access.RequireContextAsync();
+        var currentOrg = await _access.GetCurrentOrganisationIdAsync();
+
+        if (!actor.IsSuperAdministrator && currentOrg > 0 && loan.OrganisationBusinessEntityID != currentOrg)
+        {
+            return null;
+        }
+
+        var isPrivileged = actor.IsSuperAdministrator ||
+            actor.IsHRStaff ||
+            actor.IsHRManager ||
+            actor.IsHeadOfOrganisation ||
+            await _access.HasPermissionAsync("Admin") ||
+            await _access.HasPermissionAsync("GoodsLoan.View") ||
+            await _access.HasPermissionAsync("GoodsLoan.Manage") ||
+            await _access.HasPermissionAsync("Payroll.Manage") ||
+            await _access.HasPermissionAsync("Employee.View");
+
+        if (!isPrivileged && loan.IndividualID != actor.IndividualId)
+        {
+            return null;
+        }
 
         var dto = MapToDto(loan);
 

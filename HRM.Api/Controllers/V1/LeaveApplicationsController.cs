@@ -84,10 +84,15 @@ public sealed class LeaveApplicationsController(global::HRM.Application.Contract
         public global::System.Int32? applicantJobId { get; set; } = null;
     }
 
-    [HttpGet("cancel-leave")]
-    public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> CancelLeave([FromQuery] global::System.Int32 leaveId)
+    [HttpPost("cancel-leave")]
+    public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> CancelLeave([FromBody] LeaveApplicationsCancelLeaveRequest request)
     {
-        return Ok(await service.CancelLeaveAsync(leaveId));
+        return Ok(await service.CancelLeaveAsync(request.leaveId));
+    }
+
+    public sealed class LeaveApplicationsCancelLeaveRequest
+    {
+        public global::System.Int32 leaveId { get; set; }
     }
 
     [HttpGet("get-my-processing-leaves")]

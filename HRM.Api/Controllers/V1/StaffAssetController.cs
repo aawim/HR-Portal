@@ -73,10 +73,16 @@ public sealed class StaffAssetController(global::HRM.Services.Contracts.StaffAss
         public global::HRM.DTOs.Assets.AssetHandoverInput input { get; set; } = default!;
     }
 
-    [HttpGet("cancel-issuance")]
-    public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> CancelIssuance([FromQuery] global::System.Int32 assetIssuanceId, [FromQuery] global::System.String reason)
+    [HttpPost("cancel-issuance")]
+    public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> CancelIssuance([FromBody] StaffAssetCancelIssuanceRequest request)
     {
-        return Ok(await service.CancelIssuanceAsync(assetIssuanceId, reason));
+        return Ok(await service.CancelIssuanceAsync(request.assetIssuanceId, request.reason));
+    }
+
+    public sealed class StaffAssetCancelIssuanceRequest
+    {
+        public global::System.Int32 assetIssuanceId { get; set; }
+        public global::System.String reason { get; set; } = default!;
     }
 
     [HttpGet("load-my-assets-portal")]

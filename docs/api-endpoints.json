@@ -457,7 +457,7 @@
   },
   {
     "Contract": "HRM.Services.Contracts.AttendanceLogServiceContracts\u002BIOperations",
-    "Operation": "GetMyTeamAttendanceTodayAsync()",
+    "Operation": "GetMyTeamAttendanceTodayAsync(System.Boolean)",
     "Verb": "GET",
     "Path": "/api/v1/attendance-log/get-my-team-attendance-today",
     "Controller": "AttendanceLogController",
@@ -1986,7 +1986,7 @@
   {
     "Contract": "HRM.Services.Contracts.StaffAssetServiceContracts\u002BIOperations",
     "Operation": "CancelIssuanceAsync(System.Int32,System.String)",
-    "Verb": "GET",
+    "Verb": "POST",
     "Path": "/api/v1/staff-asset/cancel-issuance",
     "Controller": "StaffAssetController",
     "Action": "CancelIssuance"
@@ -2825,6 +2825,14 @@
   },
   {
     "Contract": "HRM.Services.Interfaces.ITeam",
+    "Operation": "DeleteSubTeamAsync(System.Int32)",
+    "Verb": "POST",
+    "Path": "/api/v1/team/delete-sub-team",
+    "Controller": "TeamController",
+    "Action": "DeleteSubTeam"
+  },
+  {
+    "Contract": "HRM.Services.Interfaces.ITeam",
     "Operation": "SaveSubTeamMemberAsync(HRM.DTOs.SaveSubTeamMemberDto)",
     "Verb": "POST",
     "Path": "/api/v1/team/save-sub-team-member",
@@ -3474,7 +3482,7 @@
   {
     "Contract": "HRM.WorkPlanning.Abstractions.IManualWorkAssignmentService",
     "Operation": "CancelAsync(System.Int64,System.String)",
-    "Verb": "GET",
+    "Verb": "POST",
     "Path": "/api/v1/manual-work-assignment/cancel",
     "Controller": "ManualWorkAssignmentController",
     "Action": "Cancel"
@@ -3914,7 +3922,7 @@
   {
     "Contract": "HRM.Application.Contracts.Pages.ILeaveApplications",
     "Operation": "CancelLeaveAsync(System.Int32)",
-    "Verb": "GET",
+    "Verb": "POST",
     "Path": "/api/v1/leave-applications/cancel-leave",
     "Controller": "LeaveApplicationsController",
     "Action": "CancelLeave"
@@ -3986,7 +3994,7 @@
   {
     "Contract": "HRM.Services.Contracts.CertificateServiceContracts\u002BIOperations",
     "Operation": "CancelCertificateRequestAsync(System.Int32)",
-    "Verb": "GET",
+    "Verb": "POST",
     "Path": "/api/v1/certificate/cancel-certificate-request",
     "Controller": "CertificateController",
     "Action": "CancelCertificateRequest"
@@ -4559,84 +4567,189 @@
     "Controller": "StaffIdentityDocumentController",
     "Action": "UpdateIdentityDocuments"
   },
-  {
-    "Contract": "HRM.Services.Interfaces.IAttendanceDeductionService",
-    "Operation": "GetEffectivePolicyAsync(System.Int32,System.DateOnly)",
-    "Verb": "GET",
-    "Path": "/api/v1/attendance-deduction/get-effective-policy",
-    "Controller": "AttendanceDeductionController",
-    "Action": "GetEffectivePolicy"
-  },
-  {
-    "Contract": "HRM.Services.Interfaces.IAttendanceDeductionService",
-    "Operation": "EvaluateDailyDeductionAsync(System.Int32,System.Int32,System.Int32,System.DateOnly)",
-    "Verb": "POST",
-    "Path": "/api/v1/attendance-deduction/evaluate-daily-deduction",
-    "Controller": "AttendanceDeductionController",
-    "Action": "EvaluateDailyDeduction"
-  },
-  {
-    "Contract": "HRM.Services.Interfaces.IAttendanceDeductionService",
-    "Operation": "EvaluateRangeAsync(System.Int32,System.Nullable\u00601[[System.Int32, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]],System.Nullable\u00601[[System.Int32, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]],System.DateOnly,System.DateOnly)",
-    "Verb": "POST",
-    "Path": "/api/v1/attendance-deduction/evaluate-range",
-    "Controller": "AttendanceDeductionController",
-    "Action": "EvaluateRange"
-  },
-  {
-    "Contract": "HRM.Services.Interfaces.IAttendanceDeductionService",
-    "Operation": "GetAdjustmentsAsync(System.Int32,System.Nullable\u00601[[System.DateOnly, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]],System.Nullable\u00601[[System.DateOnly, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]],System.String,System.String)",
-    "Verb": "GET",
-    "Path": "/api/v1/attendance-deduction/get-adjustments",
-    "Controller": "AttendanceDeductionController",
-    "Action": "GetAdjustments"
-  },
-  {
-    "Contract": "HRM.Services.Interfaces.IAttendanceDeductionService",
-    "Operation": "VerifyAdjustmentAsync(System.Int64,System.Int32,System.String)",
-    "Verb": "POST",
-    "Path": "/api/v1/attendance-deduction/verify-adjustment",
-    "Controller": "AttendanceDeductionController",
-    "Action": "VerifyAdjustment"
-  },
-  {
-    "Contract": "HRM.Services.Interfaces.IAttendanceDeductionService",
-    "Operation": "ExcuseAdjustmentAsync(System.Int64,System.Int32,System.String)",
-    "Verb": "POST",
-    "Path": "/api/v1/attendance-deduction/excuse-adjustment",
-    "Controller": "AttendanceDeductionController",
-    "Action": "ExcuseAdjustment"
-  },
-  {
-    "Contract": "HRM.Services.Interfaces.IAttendanceDeductionService",
-    "Operation": "RejectAdjustmentAsync(System.Int64,System.Int32,System.String)",
-    "Verb": "POST",
-    "Path": "/api/v1/attendance-deduction/reject-adjustment",
-    "Controller": "AttendanceDeductionController",
-    "Action": "RejectAdjustment"
-  },
-  {
-    "Contract": "HRM.Services.Interfaces.IAttendanceDeductionService",
-    "Operation": "GetPoliciesAsync(System.Int32)",
-    "Verb": "GET",
-    "Path": "/api/v1/attendance-deduction/get-policies",
-    "Controller": "AttendanceDeductionController",
-    "Action": "GetPolicies"
-  },
-  {
-    "Contract": "HRM.Services.Interfaces.IAttendanceDeductionService",
-    "Operation": "SavePolicyAsync(HRM.Models.AttendanceDeductions.AttendanceDeductionPolicy,System.Int32)",
-    "Verb": "POST",
-    "Path": "/api/v1/attendance-deduction/save-policy",
-    "Controller": "AttendanceDeductionController",
-    "Action": "SavePolicy"
-  },
-  {
-    "Contract": "HRM.Services.Interfaces.IAttendanceDeductionService",
-    "Operation": "PreviewCalculationAsync(System.Int32,System.Int32,System.DateOnly,System.Int32,System.String)",
-    "Verb": "GET",
-    "Path": "/api/v1/attendance-deduction/preview-calculation",
-    "Controller": "AttendanceDeductionController",
-    "Action": "PreviewCalculation"
-  }
+{
+        "Contract":  "HRM.Services.Calendar.Contracts.OrganisationEventServiceContracts+IOperations",
+        "Operation":  "ListAsync(System.Nullable`1[[System.DateTime, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]],System.Nullable`1[[System.DateTime, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]],System.String,System.String,System.String,System.Nullable`1[[System.Int32, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]],System.Nullable`1[[System.Boolean, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]])",
+        "Verb":  "GET",
+        "Path":  "/api/v1/organisation-events/list",
+        "Controller":  "OrganisationEventsController",
+        "Action":  "List"
+    },
+    {
+        "Contract":  "HRM.Services.Calendar.Contracts.OrganisationEventServiceContracts+IOperations",
+        "Operation":  "GetAsync(System.Int32)",
+        "Verb":  "GET",
+        "Path":  "/api/v1/organisation-events/get",
+        "Controller":  "OrganisationEventsController",
+        "Action":  "Get"
+    },
+    {
+        "Contract":  "HRM.Services.Calendar.Contracts.OrganisationEventServiceContracts+IOperations",
+        "Operation":  "SaveAsync(HRM.DTOs.Calendar.OrganisationEventDto)",
+        "Verb":  "POST",
+        "Path":  "/api/v1/organisation-events/save",
+        "Controller":  "OrganisationEventsController",
+        "Action":  "Save"
+    },
+    {
+        "Contract":  "HRM.Services.Calendar.Contracts.OrganisationEventServiceContracts+IOperations",
+        "Operation":  "PreviewImpactAsync(System.Int32)",
+        "Verb":  "GET",
+        "Path":  "/api/v1/organisation-events/preview-impact",
+        "Controller":  "OrganisationEventsController",
+        "Action":  "PreviewImpact"
+    },
+    {
+        "Contract":  "HRM.Services.Calendar.Contracts.OrganisationEventServiceContracts+IOperations",
+        "Operation":  "PublishAsync(System.Int32)",
+        "Verb":  "POST",
+        "Path":  "/api/v1/organisation-events/publish",
+        "Controller":  "OrganisationEventsController",
+        "Action":  "Publish"
+    },
+    {
+        "Contract":  "HRM.Services.Calendar.Contracts.OrganisationEventServiceContracts+IOperations",
+        "Operation":  "CancelAsync(System.Int32,System.String)",
+        "Verb":  "POST",
+        "Path":  "/api/v1/organisation-events/cancel",
+        "Controller":  "OrganisationEventsController",
+        "Action":  "Cancel"
+    },
+    {
+        "Contract":  "HRM.Services.Calendar.Contracts.OrganisationEventServiceContracts+IOperations",
+        "Operation":  "DuplicateAsync(System.Int32)",
+        "Verb":  "POST",
+        "Path":  "/api/v1/organisation-events/duplicate",
+        "Controller":  "OrganisationEventsController",
+        "Action":  "Duplicate"
+    },
+    {
+        "Contract":  "HRM.Services.Calendar.Contracts.OrganisationEventServiceContracts+IOperations",
+        "Operation":  "AuditAsync(System.Int32)",
+        "Verb":  "GET",
+        "Path":  "/api/v1/organisation-events/audit",
+        "Controller":  "OrganisationEventsController",
+        "Action":  "Audit"
+    },
+{
+        "Contract":  "HRM.Services.Calendar.Contracts.OrganisationCalendarServiceContracts+IOperations",
+        "Operation":  "ResolveEffectiveWorkdayAsync(System.DateTime,System.Nullable`1[[System.Int32, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]])",
+        "Verb":  "GET",
+        "Path":  "/api/v1/organisation-calendar/resolve-effective-workday",
+        "Controller":  "OrganisationCalendarController",
+        "Action":  "ResolveEffectiveWorkday"
+    },
+    {
+        "Contract":  "HRM.Services.Calendar.Contracts.OrganisationCalendarServiceContracts+IOperations",
+        "Operation":  "GetOrganisationCalendarMonthAsync(System.DateTime)",
+        "Verb":  "GET",
+        "Path":  "/api/v1/organisation-calendar/month-summary",
+        "Controller":  "OrganisationCalendarController",
+        "Action":  "GetOrganisationCalendarMonth"
+    },
+    {
+        "Contract":  "HRM.Services.Calendar.Contracts.OrganisationCalendarServiceContracts+IOperations",
+        "Operation":  "GetCalendarDayDetailAsync(System.DateTime)",
+        "Verb":  "GET",
+        "Path":  "/api/v1/organisation-calendar/day-detail",
+        "Controller":  "OrganisationCalendarController",
+        "Action":  "GetCalendarDayDetail"
+    },
+    {
+        "Contract":  "HRM.Services.Calendar.Contracts.SupervisorCalendarServiceContracts+IOperations",
+        "Operation":  "GetSupervisedTeamsAsync()",
+        "Verb":  "GET",
+        "Path":  "/api/v1/supervisor-calendar/teams",
+        "Controller":  "SupervisorCalendarController",
+        "Action":  "GetSupervisedTeams"
+    },
+    {
+        "Contract":  "HRM.Services.Calendar.Contracts.SupervisorCalendarServiceContracts+IOperations",
+        "Operation":  "GetTeamSchedulesAsync(System.DateTime,System.DateTime,System.Nullable`1[[System.Int32, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]],System.Nullable`1[[System.Int32, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]])",
+        "Verb":  "GET",
+        "Path":  "/api/v1/supervisor-calendar/schedules",
+        "Controller":  "SupervisorCalendarController",
+        "Action":  "GetTeamSchedules"
+    },
+    {
+        "Contract":  "HRM.Services.Calendar.Contracts.SupervisorCalendarServiceContracts+IOperations",
+        "Operation":  "GetTasksAsync(System.DateTime,System.DateTime,System.Nullable`1[[System.Int32, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]])",
+        "Verb":  "GET",
+        "Path":  "/api/v1/supervisor-calendar/tasks",
+        "Controller":  "SupervisorCalendarController",
+        "Action":  "GetTasks"
+    },
+    {
+        "Contract":  "HRM.Services.Calendar.Contracts.SupervisorCalendarServiceContracts+IOperations",
+        "Operation":  "SaveTaskAsync(HRM.DTOs.Calendar.SupervisorCalendarTaskDto)",
+        "Verb":  "POST",
+        "Path":  "/api/v1/supervisor-calendar/save-task",
+        "Controller":  "SupervisorCalendarController",
+        "Action":  "SaveTask"
+    },
+    {
+        "Contract":  "HRM.Services.Calendar.Contracts.SupervisorCalendarServiceContracts+IOperations",
+        "Operation":  "UpdateTaskStatusAsync(System.Int32,System.String)",
+        "Verb":  "POST",
+        "Path":  "/api/v1/supervisor-calendar/update-task-status",
+        "Controller":  "SupervisorCalendarController",
+        "Action":  "UpdateTaskStatus"
+    },
+    {
+        "Contract":  "HRM.Services.Calendar.Contracts.SupervisorCalendarServiceContracts+IOperations",
+        "Operation":  "DeleteTaskAsync(System.Int32)",
+        "Verb":  "POST",
+        "Path":  "/api/v1/supervisor-calendar/delete-task",
+        "Controller":  "SupervisorCalendarController",
+        "Action":  "DeleteTask"
+    },
+    {
+        "Contract":  "HRM.Services.Calendar.Contracts.CalendarImpactServiceContracts+IOperations",
+        "Operation":  "GetAssessmentsForExceptionAsync(System.Int32)",
+        "Verb":  "GET",
+        "Path":  "/api/v1/calendar-impact/assessments",
+        "Controller":  "CalendarImpactController",
+        "Action":  "GetAssessmentsForException"
+    },
+    {
+        "Contract":  "HRM.Services.Calendar.Contracts.CalendarImpactServiceContracts+IOperations",
+        "Operation":  "AssessImpactForExceptionAsync(System.Int32)",
+        "Verb":  "POST",
+        "Path":  "/api/v1/calendar-impact/assess",
+        "Controller":  "CalendarImpactController",
+        "Action":  "AssessImpactForException"
+    },
+    {
+        "Contract":  "HRM.Services.Calendar.Contracts.CalendarImpactServiceContracts+IOperations",
+        "Operation":  "ActOnAssessmentAsync(System.Int32,System.String)",
+        "Verb":  "POST",
+        "Path":  "/api/v1/calendar-impact/act",
+        "Controller":  "CalendarImpactController",
+        "Action":  "ActOnAssessment"
+    }
+  ,{"Contract":"HRM.Services.Contracts.LeadershipAuthorityServiceContracts+IOperations","Operation":"GetCurrentOrganisationAccessAsync()","Verb":"GET","Path":"/api/v1/leadership-authority/organisations"}
+  ,{"Contract":"HRM.Services.Contracts.LeadershipAuthorityServiceContracts+IOperations","Operation":"GetMyAppointmentsAsync()","Verb":"GET","Path":"/api/v1/leadership-authority/appointments"}
+  ,{"Contract":"HRM.Services.Contracts.LeadershipAdministrationServiceContracts+IOperations","Operation":"SaveAppointmentTypeAsync(HRM.DTOs.Leadership.LeadershipAppointmentTypeInput)","Verb":"POST","Path":"/api/v1/leadership-authority/appointment-types"}
+  ,{"Contract":"HRM.Services.Contracts.LeadershipAdministrationServiceContracts+IOperations","Operation":"SaveAppointmentAsync(HRM.DTOs.Leadership.LeadershipAppointmentInput)","Verb":"POST","Path":"/api/v1/leadership-authority/appointments"}
+  ,{"Contract":"HRM.Services.Contracts.LeadershipAdministrationServiceContracts+IOperations","Operation":"AddResponsibilityAsync(HRM.DTOs.Leadership.LeadershipResponsibilityInput)","Verb":"POST","Path":"/api/v1/leadership-authority/responsibilities"}
+  ,{"Contract":"HRM.Services.Contracts.LeadershipAdministrationServiceContracts+IOperations","Operation":"AddAuthorityGrantAsync(HRM.DTOs.Leadership.LeadershipAuthorityGrantInput)","Verb":"POST","Path":"/api/v1/leadership-authority/authority-grants"}
+  ,{"Contract":"HRM.Services.Contracts.LeadershipAdministrationServiceContracts+IOperations","Operation":"AddDelegationAsync(HRM.DTOs.Leadership.LeadershipDelegationInput)","Verb":"POST","Path":"/api/v1/leadership-authority/delegations"}
+  ,{"Contract":"HRM.Services.Contracts.LeadershipAdministrationServiceContracts+IOperations","Operation":"SaveAttendancePolicyAsync(HRM.DTOs.Leadership.LeadershipAttendancePolicyInput)","Verb":"POST","Path":"/api/v1/leadership-authority/attendance-policies"}
+  ,{"Contract":"HRM.Services.Contracts.EdgeAgentManagementContracts+IOperations","Operation":"ListAsync()","Verb":"GET","Path":"/api/v1/edge-agents"}
+  ,{"Contract":"HRM.Services.Contracts.EdgeAgentManagementContracts+IOperations","Operation":"ListDevicesAsync()","Verb":"GET","Path":"/api/v1/edge-agents/devices"}
+  ,{"Contract":"HRM.Services.Contracts.EdgeAgentManagementContracts+IOperations","Operation":"ListFailuresAsync()","Verb":"GET","Path":"/api/v1/edge-agents/failures"}
+  ,{"Contract":"HRM.Services.Contracts.EdgeAgentManagementContracts+IOperations","Operation":"ListTrustedIssuersAsync()","Verb":"GET","Path":"/api/v1/edge-agents/trusted-issuers"}
+  ,{"Contract":"HRM.Services.Contracts.EdgeAgentManagementContracts+IOperations","Operation":"AddTrustedIssuerAsync(HRM.DTOs.EdgeAttendance.EdgeTrustedIssuerInput)","Verb":"POST","Path":"/api/v1/edge-agents/trusted-issuers"}
+  ,{"Contract":"HRM.Services.Contracts.EdgeAgentManagementContracts+IOperations","Operation":"RevokeTrustedIssuerAsync(System.Int32)","Verb":"POST","Path":"/api/v1/edge-agents/trusted-issuers/revoke"}
+  ,{"Contract":"HRM.Services.Contracts.EdgeAgentManagementContracts+IOperations","Operation":"SaveDeviceConfigurationAsync(HRM.DTOs.EdgeAttendance.EdgeAttendanceDeviceConfigurationInput)","Verb":"POST","Path":"/api/v1/edge-agents/devices/save"}
+  ,{"Contract":"HRM.Services.Contracts.EdgeAgentManagementContracts+IOperations","Operation":"RegisterAsync(HRM.DTOs.EdgeAttendance.EdgeAgentRegistrationInput)","Verb":"POST","Path":"/api/v1/edge-agents"}
+  ,{"Contract":"HRM.Services.Contracts.EdgeAgentManagementContracts+IOperations","Operation":"RevokeAsync(System.Int32)","Verb":"POST","Path":"/api/v1/edge-agents/revoke"}
+  ,{"Contract":"HRM.Services.Contracts.LeadershipAdministrationServiceContracts+IOperations","Operation":"ListRecordsAsync()","Verb":"GET","Path":"/api/v1/leadership-authority/management/records"}
+  ,{"Contract":"HRM.Services.Contracts.LeadershipAdministrationServiceContracts+IOperations","Operation":"ListAuditAsync()","Verb":"GET","Path":"/api/v1/leadership-authority/management/audit"}
+  ,{"Contract":"HRM.Services.Contracts.LeadershipAdministrationServiceContracts+IOperations","Operation":"RevokeRecordAsync(System.String,System.Int32)","Verb":"POST","Path":"/api/v1/leadership-authority/management/revoke"}
+  ,{"Contract":"HRM.Services.Contracts.LeadershipAuthorityServiceContracts+IOperations","Operation":"HasAuthorityAsync(System.Int32,System.String,System.Nullable`1[[System.DateOnly, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]])","Verb":"GET","Path":"/api/v1/leadership-authority/has-authority"}
+  ,{"Contract":"HRM.Services.Contracts.LeadershipAuthorityServiceContracts+IOperations","Operation":"RequireAuthorityAsync(System.Int32,System.String,System.Nullable`1[[System.DateOnly, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]])","Verb":"GET","Path":"/api/v1/leadership-authority/require-authority"}
+  ,{"Contract":"HRM.Services.Contracts.LeadershipAdministrationServiceContracts+IOperations","Operation":"GetConfigurationAsync()","Verb":"GET","Path":"/api/v1/leadership-authority/configuration"}
+  ,{"Contract":"HRM.Services.Contracts.LeadershipAdministrationServiceContracts+IOperations","Operation":"GetRecordAsync(System.String,System.Int32)","Verb":"GET","Path":"/api/v1/leadership-authority/management/record"}
+  ,{"Contract":"HRM.Services.Contracts.LeadershipAdministrationServiceContracts+IOperations","Operation":"UpdateRecordAsync(HRM.DTOs.Leadership.LeadershipRecordEditInput)","Verb":"POST","Path":"/api/v1/leadership-authority/management/update"}
 ]

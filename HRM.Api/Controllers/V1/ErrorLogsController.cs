@@ -7,6 +7,7 @@ namespace HRM.Api.Controllers.V1;
 
 [Route("api/v1/error-logs")]
 [AllowMissingEmployee]
+[ApiPermission("Admin", "Developer")]
 public sealed class ErrorLogsController(IErrorLogService errorLogService) : HrmApiController
 {
     [HttpGet]

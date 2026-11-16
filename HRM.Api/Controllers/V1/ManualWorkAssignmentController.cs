@@ -18,10 +18,16 @@ public sealed class ManualWorkAssignmentController(global::HRM.WorkPlanning.Abst
         public global::HRM.DTOs.WorkPlanning.ManualWorkAssignmentRequest request { get; set; } = default!;
     }
 
-    [HttpGet("cancel")]
-    public async Task<ActionResult<global::HRM.DTOs.WorkPlanning.GeneratedWorkPlanResult>> Cancel([FromQuery] global::System.Int64 assignmentId, [FromQuery] global::System.String reason)
+    [HttpPost("cancel")]
+    public async Task<ActionResult<global::HRM.DTOs.WorkPlanning.GeneratedWorkPlanResult>> Cancel([FromBody] ManualWorkAssignmentCancelRequest request)
     {
-        return Ok(await service.CancelAsync(assignmentId, reason, HttpContext.RequestAborted));
+        return Ok(await service.CancelAsync(request.assignmentId, request.reason, HttpContext.RequestAborted));
+    }
+
+    public sealed class ManualWorkAssignmentCancelRequest
+    {
+        public global::System.Int64 assignmentId { get; set; }
+        public global::System.String reason { get; set; } = default!;
     }
 
     [HttpPost("generate")]
