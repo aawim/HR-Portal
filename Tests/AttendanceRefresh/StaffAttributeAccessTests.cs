@@ -66,6 +66,7 @@ static class StaffAttributeAccessTests
         var grantedPermissions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
             "Employee.View",
+            "UserOrganisation.Groups.View",
             "Staff.AccessPolicy.Manage",
             "Staff.AccessScope.Manage",
             "Staff.AccessScope.Simulate"
@@ -198,6 +199,17 @@ static class StaffAttributeAccessTests
         await permissionSettingsService.RevokeOrganisationalAccessScopeAsync(2, "End of temporary coverage");
         Check(!await StaffAttributeAccess.CanViewAsync(db, access, 1004, 10), "Revoked Southern Division scope still allowed access");
         Check(await db.UserAccessScopeAudits.AnyAsync(a => a.UserAccessScopeId == 2 && a.Action == AccessScopeAuditActions.Revoked), "Scope revocation audit was not recorded");
+
+        // 6. Verify Site Map Area Map hierarchy in PermissionSettingsService.LoadAsync
+        var settingsData = await permissionSettingsService.LoadAsync(true);
+        Check(settingsData.AreaMap.Select(c => c.ContextKey).SequenceEqual(["Online", "Admin", "Developer"]),
+            "AreaMap did not return Online, Admin, and Developer contexts");
+        var onlineAttendance = settingsData.AreaMap.Single(c => c.ContextKey == "Online")
+            .Areas.SingleOrDefault(a => a.AreaKey == "online-attendance");
+        Check(onlineAttendance != null, "Online -> Attendance area missing from AreaMap");
+        var myAttendanceSf = onlineAttendance!.SubFunctions.SingleOrDefault(sf => sf.SubFunctionKey == "online-my-attendance");
+        Check(myAttendanceSf != null && myAttendanceSf.Permissions.Any(p => p.Key == "Attendance.View"),
+            "Online -> Attendance -> My Attendance sub-function or Attendance.View permission missing from AreaMap");
     }
 
     private static Individual Person(int id, string name) => new() { BusinessEntityId = id, FirstNameEnglish = name };

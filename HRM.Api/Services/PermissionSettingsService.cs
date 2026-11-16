@@ -39,14 +39,35 @@ public partial class PermissionSettingsService(IDbContextFactory<HrmTeContext> f
     {
         var user = await RequireAsync(groups ? "UserOrganisation.Groups.View" : "Roles.View", groups);
         await using var db = await factory.CreateDbContextAsync();
+        await EnsureCanonicalSiteMapCatalogAsync(db);
+        var contextsList = await db.Contexts.AsNoTracking().OrderBy(x => x.Name).Select(x => new PermissionSettingOption(x.ContextId, x.Name)).ToListAsync();
+        var modulesList = await db.Modules.AsNoTracking().OrderBy(x => x.Name).Select(x => new PermissionSettingOption(x.ModuleId, x.Name)).ToListAsync();
+        var contextMap = contextsList.ToDictionary(c => c.Id, c => c.Name);
+        var moduleMap = modulesList.ToDictionary(m => m.Id, m => m.Name);
+
+        var rawPermissions = await db.Roles.AsNoTracking().OrderBy(x => x.RoleKey).Select(x => new PermissionDefinitionDto
+        {
+            Id = x.RoleID,
+            Key = x.RoleKey,
+            Name = x.Name,
+            Description = x.Description ?? "",
+            ContextId = x.ContextId,
+            ModuleId = x.ModuleId,
+            IsSystem = x.IsSystemRole == true
+        }).ToListAsync();
+
+        foreach (var p in rawPermissions)
+        {
+            p.ContextName = contextMap.TryGetValue(p.ContextId, out var cName) ? cName : "";
+            p.ModuleName = p.ModuleId.HasValue && moduleMap.TryGetValue(p.ModuleId.Value, out var mName) ? mName : "Unassigned";
+        }
+
         var result = new PermissionSettingsData
         {
-            Permissions = await db.Roles.AsNoTracking().OrderBy(x => x.RoleKey).Select(x => new PermissionDefinitionDto
-            { Id = x.RoleID, Key = x.RoleKey, Name = x.Name, Description = x.Description ?? "",
-                ContextId = x.ContextId, ModuleId = x.ModuleId, ModuleName = x.Module == null ? "Unassigned" : x.Module.Name,
-                IsSystem = x.IsSystemRole == true }).ToListAsync(),
-            Contexts = await db.Contexts.AsNoTracking().OrderBy(x => x.Name).Select(x => new PermissionSettingOption(x.ContextId, x.Name)).ToListAsync(),
-            Modules = await db.Modules.AsNoTracking().OrderBy(x => x.Name).Select(x => new PermissionSettingOption(x.ModuleId, x.Name)).ToListAsync()
+            Permissions = rawPermissions,
+            Contexts = contextsList,
+            Modules = modulesList,
+            AreaMap = BuildSiteMapAreaCatalog(rawPermissions, contextsList)
         };
         if (groups)
         {

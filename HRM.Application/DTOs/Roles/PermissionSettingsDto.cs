@@ -7,6 +7,7 @@ public class PermissionDefinitionDto
     public string Name { get; set; } = "";
     public string Description { get; set; } = "";
     public int ContextId { get; set; } = 1;
+    public string ContextName { get; set; } = "";
     public int? ModuleId { get; set; }
     public string ModuleName { get; set; } = "";
     public bool IsSystem { get; set; }
@@ -47,6 +48,47 @@ public class PermissionSettingsData
     public List<AccessRoleDto> Roles { get; set; } = new();
     public List<PermissionSettingOption> Contexts { get; set; } = new();
     public List<PermissionSettingOption> Modules { get; set; } = new();
+    public List<SiteMapContextDto> AreaMap { get; set; } = new();
+}
+
+public sealed class SiteMapContextDto
+{
+    public string ContextKey { get; set; } = "";
+    public string Title { get; set; } = "";
+    public string Subtitle { get; set; } = "";
+    public string BaseRoute { get; set; } = "";
+    public string Icon { get; set; } = "";
+    public List<SiteMapMenuAreaDto> Areas { get; set; } = new();
+}
+
+public sealed class SiteMapMenuAreaDto
+{
+    public string AreaKey { get; set; } = "";
+    public string Title { get; set; } = "";
+    public string Route { get; set; } = "";
+    public string Icon { get; set; } = "";
+    public string Description { get; set; } = "";
+    public List<SiteMapSubFunctionDto> SubFunctions { get; set; } = new();
+}
+
+public sealed class SiteMapSubFunctionDto
+{
+    public string SubFunctionKey { get; set; } = "";
+    public string Title { get; set; } = "";
+    public string Route { get; set; } = "";
+    public string Description { get; set; } = "";
+    public List<SiteMapPermissionItemDto> Permissions { get; set; } = new();
+}
+
+public sealed class SiteMapPermissionItemDto
+{
+    public int Id { get; set; }
+    public string Key { get; set; } = "";
+    public string Name { get; set; } = "";
+    public string Description { get; set; } = "";
+    public string ContextName { get; set; } = "";
+    public string ModuleName { get; set; } = "";
+    public bool IsSystem { get; set; }
 }
 
 public sealed record StaffAccessOption(int Id, string Name);

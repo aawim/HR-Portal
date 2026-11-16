@@ -1,0 +1,455 @@
+@using HRM.DTOs.Roles
+
+<div class="space-y-4">
+    <!-- Top Filter & Context Bar -->
+    <div class="rounded-2xl border border-slate-200 bg-slate-50/70 p-3.5 space-y-3">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+            <div>
+                <div class="flex items-center gap-2 flex-wrap">
+                    <h3 class="text-sm font-bold text-slate-900">Application Site Map &amp; Permission Area Map</h3>
+                    @if (!string.IsNullOrWhiteSpace(SelectedRoleName))
+                    {
+                        <span class="rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-semibold text-blue-800">
+                            Editing Role: @SelectedRoleName (@AssignedPermissionIds.Count permissions assigned)
+                        </span>
+                    }
+                    else if (InteractiveAssignment)
+                    {
+                        <span class="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-800">
+                            Select or enter a Role name above to assign permissions from the Area Map
+                        </span>
+                    }
+                </div>
+                <p class="text-xs text-slate-500 mt-0.5">
+                    Browse all portals (<strong>Online</strong>, <strong>Admin</strong>, <strong>Developer</strong>), menus, sub-functions, and their governing permissions.
+                </p>
+            </div>
+
+            <div class="flex items-center gap-1.5">
+                <button type="button"
+                        class="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition"
+                        @onclick="ExpandAll">
+                    Expand All
+                </button>
+                <button type="button"
+                        class="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition"
+                        @onclick="CollapseAll">
+                    Collapse All
+                </button>
+            </div>
+        </div>
+
+        <!-- Context Tabs (Online, Admin, Developer) -->
+        <div class="flex flex-wrap items-center gap-1.5 border-b border-slate-200 pb-2.5">
+            <button type="button"
+                    class="rounded-xl px-3 py-1.5 text-xs font-bold transition flex items-center gap-1.5 @(selectedContext == "All" ? "bg-blue-600 text-white shadow-xs" : "bg-white text-slate-700 border border-slate-200 hover:bg-slate-100")"
+                    @onclick='() => selectedContext = "All"'>
+                <i class="bi bi-diagram-3" aria-hidden="true"></i>
+                <span>All Contexts</span>
+                <span class="rounded-full px-1.5 py-0.2 text-[10px] @(selectedContext == "All" ? "bg-white/20 text-white" : "bg-slate-100 text-slate-700")">
+                    @AreaMap.Sum(c => c.Areas.Count) areas
+                </span>
+            </button>
+
+            @foreach (var ctx in AreaMap)
+            {
+                var ctxPermIds = GetContextPermissionIds(ctx);
+                var assignedInCtx = ctxPermIds.Count(id => AssignedPermissionIds.Contains(id));
+                var isSelected = selectedContext.Equals(ctx.ContextKey, StringComparison.OrdinalIgnoreCase);
+
+                <button type="button"
+                        class="rounded-xl px-3 py-1.5 text-xs font-bold transition flex items-center gap-1.5 @(isSelected ? "bg-blue-600 text-white shadow-xs" : "bg-white text-slate-700 border border-slate-200 hover:bg-slate-100")"
+                        @onclick="() => selectedContext = ctx.ContextKey">
+                    <i class="bi @ctx.Icon" aria-hidden="true"></i>
+                    <span>@ctx.ContextKey</span>
+                    <span class="rounded-full px-1.5 py-0.2 text-[10px] @(isSelected ? "bg-white/20 text-white" : "bg-blue-50 text-blue-700")">
+                        @if (InteractiveAssignment && ctxPermIds.Count > 0)
+                        {
+                            @($"{assignedInCtx}/{ctxPermIds.Count}")
+                        }
+                        else
+                        {
+                            @($"{ctx.Areas.Count} menus")
+                        }
+                    </span>
+                </button>
+            }
+        </div>
+
+        <!-- Search & Assignment Filter Row -->
+        <div class="grid grid-cols-1 md:grid-cols-12 gap-2.5 items-center">
+            <div class="md:col-span-8">
+                <input type="search"
+                       @bind="searchQuery"
+                       @bind:event="oninput"
+                       aria-label="Search site map areas, sub-functions, routes, or permissions"
+                       placeholder="Search menu, sub-function (e.g. My Attendance), route (/online/attendance), or permission key (Attendance.View)…"
+                       class="w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+            </div>
+            <div class="md:col-span-4 flex items-center gap-1.5 justify-end">
+                <button type="button"
+                        class="px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition @(assignmentFilter == "all" ? "bg-slate-800 text-white border-slate-800" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50")"
+                        @onclick='() => assignmentFilter = "all"'>
+                    All
+                </button>
+                <button type="button"
+                        class="px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition @(assignmentFilter == "assigned" ? "bg-emerald-600 text-white border-emerald-600" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50")"
+                        @onclick='() => assignmentFilter = "assigned"'>
+                    Assigned Only
+                </button>
+                <button type="button"
+                        class="px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition @(assignmentFilter == "unassigned" ? "bg-amber-600 text-white border-amber-600" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50")"
+                        @onclick='() => assignmentFilter = "unassigned"'>
+                    Unassigned Only
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Context Sections -->
+    @foreach (var ctx in FilteredContexts)
+    {
+        var filteredAreas = GetFilteredAreas(ctx).ToList();
+        if (filteredAreas.Count == 0)
+        {
+            continue;
+        }
+
+        var ctxAssignableIds = GetContextPermissionIds(ctx);
+        var ctxAssignedCount = ctxAssignableIds.Count(id => AssignedPermissionIds.Contains(id));
+
+        <section class="rounded-2xl border border-slate-200 bg-white shadow-xs overflow-hidden" aria-label="@ctx.Title">
+            <!-- Context Header Banner -->
+            <div class="border-b border-slate-200 bg-slate-50 px-4 py-3 flex flex-wrap items-center justify-between gap-2">
+                <div class="flex items-center gap-2.5">
+                    <div class="flex h-9 w-9 items-center justify-center rounded-xl @GetContextBadgeStyle(ctx.ContextKey) text-base font-bold shrink-0">
+                        <i class="bi @ctx.Icon" aria-hidden="true"></i>
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <h4 class="text-sm font-bold text-slate-900">@ctx.Title</h4>
+                            <span class="rounded bg-slate-200/80 px-2 py-0.5 font-mono text-[11px] font-semibold text-slate-700">@ctx.BaseRoute</span>
+                            <span class="rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-blue-700">
+                                @filteredAreas.Count @(filteredAreas.Count == 1 ? "Menu Area" : "Menu Areas")
+                            </span>
+                            @if (InteractiveAssignment && ctxAssignableIds.Count > 0)
+                            {
+                                <span class="rounded-full bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+                                    @ctxAssignedCount / @ctxAssignableIds.Count Permissions Assigned
+                                </span>
+                            }
+                        </div>
+                        <p class="text-xs text-slate-500 mt-0.5">@ctx.Subtitle</p>
+                    </div>
+                </div>
+
+                @if (InteractiveAssignment && ctxAssignableIds.Count > 0)
+                {
+                    <div class="flex items-center gap-1.5">
+                        <button type="button"
+                                class="rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-100 transition"
+                                @onclick="() => OnMoveGroup.InvokeAsync((ctxAssignableIds, true))">
+                            + Add all in @ctx.ContextKey
+                        </button>
+                        <button type="button"
+                                class="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-100 transition"
+                                @onclick="() => OnMoveGroup.InvokeAsync((ctxAssignableIds, false))">
+                            Remove all
+                        </button>
+                    </div>
+                }
+            </div>
+
+            <!-- Menu Areas List inside Context -->
+            <div class="divide-y divide-slate-200">
+                @foreach (var area in filteredAreas)
+                {
+                    var areaKey = $"{ctx.ContextKey}:{area.AreaKey}";
+                    var isOpen = IsAreaOpen(areaKey);
+                    var areaAssignableIds = GetAreaPermissionIds(area);
+                    var areaAssignedCount = areaAssignableIds.Count(id => AssignedPermissionIds.Contains(id));
+                    var visibleSubFunctions = GetFilteredSubFunctions(area).ToList();
+
+                    <div class="bg-white">
+                        <!-- Menu Area Accordion Header -->
+                        <div class="px-4 py-3 bg-slate-50/40 hover:bg-slate-50 transition flex flex-wrap items-center justify-between gap-2">
+                            <button type="button"
+                                    class="flex items-center gap-2.5 text-left flex-1 min-w-0"
+                                    @onclick="() => ToggleArea(areaKey)">
+                                <i class="bi @(isOpen ? "bi-chevron-down" : "bi-chevron-right") text-xs text-slate-500" aria-hidden="true"></i>
+                                <i class="bi @area.Icon text-blue-600 text-sm" aria-hidden="true"></i>
+                                <div class="min-w-0">
+                                    <div class="flex items-center gap-2 flex-wrap">
+                                        <span class="text-xs md:text-sm font-bold text-slate-800">@ctx.ContextKey &rarr; @area.Title</span>
+                                        <span class="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate-600">@area.Route</span>
+                                        <span class="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
+                                            @visibleSubFunctions.Count @(visibleSubFunctions.Count == 1 ? "sub-function" : "sub-functions")
+                                        </span>
+                                        @if (InteractiveAssignment && areaAssignableIds.Count > 0)
+                                        {
+                                            <span class="rounded-full px-2 py-0.5 text-[10px] font-bold @(areaAssignedCount > 0 ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-500")">
+                                                @areaAssignedCount / @areaAssignableIds.Count assigned
+                                            </span>
+                                        }
+                                    </div>
+                                    <p class="text-[11px] text-slate-500 truncate mt-0.5">@area.Description</p>
+                                </div>
+                            </button>
+
+                            @if (InteractiveAssignment && areaAssignableIds.Count > 0)
+                            {
+                                <div class="flex items-center gap-1.5 shrink-0">
+                                    <button type="button"
+                                            class="rounded-md border border-blue-200 bg-white px-2 py-1 text-[11px] font-semibold text-blue-700 hover:bg-blue-50 transition"
+                                            @onclick="() => OnMoveGroup.InvokeAsync((areaAssignableIds, true))">
+                                        + Add Area
+                                    </button>
+                                    <button type="button"
+                                            class="rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-600 hover:bg-slate-50 transition"
+                                            @onclick="() => OnMoveGroup.InvokeAsync((areaAssignableIds, false))">
+                                        Clear Area
+                                    </button>
+                                </div>
+                            }
+                        </div>
+
+                        @if (isOpen)
+                        {
+                            <!-- Sub-Functions Grid inside Menu Area -->
+                            <div class="p-3.5 grid grid-cols-1 lg:grid-cols-2 gap-3 bg-white">
+                                @foreach (var sf in visibleSubFunctions)
+                                {
+                                    var sfAssignableIds = sf.Permissions.Where(p => p.Id > 0).Select(p => p.Id).Distinct().ToList();
+                                    var sfAssignedCount = sfAssignableIds.Count(id => AssignedPermissionIds.Contains(id));
+                                    var visiblePermissions = GetFilteredPermissions(sf).ToList();
+
+                                    <div @key="sf.SubFunctionKey" class="rounded-xl border border-slate-200 bg-slate-50/40 p-3 flex flex-col justify-between gap-2.5">
+                                        <div>
+                                            <!-- Sub-Function Header -->
+                                            <div class="flex items-start justify-between gap-2 border-b border-slate-200/80 pb-2">
+                                                <div class="min-w-0">
+                                                    <div class="flex items-center gap-1.5 flex-wrap">
+                                                        <h5 class="text-xs font-bold text-slate-900">@sf.Title</h5>
+                                                        <span class="rounded bg-white border border-slate-200 px-1.5 py-0.2 font-mono text-[10px] text-slate-600">
+                                                            @sf.Route
+                                                        </span>
+                                                    </div>
+                                                    @if (!string.IsNullOrWhiteSpace(sf.Description))
+                                                    {
+                                                        <p class="text-[11px] text-slate-500 mt-0.5 leading-snug">@sf.Description</p>
+                                                    }
+                                                </div>
+
+                                                @if (InteractiveAssignment && sfAssignableIds.Count > 0)
+                                                {
+                                                    <div class="flex items-center gap-1 shrink-0">
+                                                        @if (sfAssignedCount < sfAssignableIds.Count)
+                                                        {
+                                                            <button type="button"
+                                                                    class="rounded border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700 hover:bg-blue-100 transition"
+                                                                    title="Assign all permissions for @sf.Title"
+                                                                    @onclick="() => OnMoveGroup.InvokeAsync((sfAssignableIds, true))">
+                                                                + All (@sfAssignableIds.Count)
+                                                            </button>
+                                                        }
+                                                        @if (sfAssignedCount > 0)
+                                                        {
+                                                            <button type="button"
+                                                                    class="rounded border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-600 hover:bg-slate-100 transition"
+                                                                    title="Remove all permissions for @sf.Title"
+                                                                    @onclick="() => OnMoveGroup.InvokeAsync((sfAssignableIds, false))">
+                                                                Remove (@sfAssignedCount)
+                                                            </button>
+                                                        }
+                                                    </div>
+                                                }
+                                            </div>
+
+                                            <!-- Related Permissions List -->
+                                            <div class="mt-2 space-y-1.5">
+                                                @foreach (var perm in visiblePermissions)
+                                                {
+                                                    var isAssigned = perm.Id > 0 && AssignedPermissionIds.Contains(perm.Id);
+                                                    <div @key="perm.Key"
+                                                         class="rounded-lg border px-2.5 py-1.5 flex items-center justify-between gap-2 transition @(isAssigned ? "border-emerald-300 bg-emerald-50/60" : "border-slate-200 bg-white hover:border-blue-200")">
+                                                        <div class="min-w-0">
+                                                            <div class="flex items-center gap-1.5 flex-wrap">
+                                                                <span class="font-mono text-xs font-bold @(isAssigned ? "text-emerald-900" : "text-slate-800")">
+                                                                    @perm.Key
+                                                                </span>
+                                                                <span class="text-[11px] font-medium text-slate-600">
+                                                                    — @perm.Name
+                                                                </span>
+                                                                @if (isAssigned)
+                                                                {
+                                                                    <span class="rounded-full bg-emerald-600 px-1.5 py-0.2 text-[9px] font-bold text-white">
+                                                                        Assigned
+                                                                    </span>
+                                                                }
+                                                            </div>
+                                                            @if (!string.IsNullOrWhiteSpace(perm.Description))
+                                                            {
+                                                                <p class="text-[10px] text-slate-500 truncate mt-0.5" title="@perm.Description">
+                                                                    @perm.Description
+                                                                </p>
+                                                            }
+                                                        </div>
+
+                                                        <div class="flex items-center gap-1 shrink-0">
+                                                            @if (InteractiveAssignment)
+                                                            {
+                                                                @if (perm.Id > 0)
+                                                                {
+                                                                    <button type="button"
+                                                                            class="rounded-md px-2 py-1 text-[11px] font-semibold transition @(isAssigned ? "border border-rose-200 bg-white text-rose-700 hover:bg-rose-50" : "border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100")"
+                                                                            @onclick="() => OnTogglePermission.InvokeAsync((perm.Id, !isAssigned))">
+                                                                        @(isAssigned ? "Remove" : "+ Assign")
+                                                                    </button>
+                                                                }
+                                                                else
+                                                                {
+                                                                    <span class="rounded bg-slate-100 px-2 py-0.5 text-[10px] text-slate-500">System</span>
+                                                                }
+                                                            }
+                                                            else if (OnSelectPermission.HasDelegate && perm.Id > 0)
+                                                            {
+                                                                <button type="button"
+                                                                        class="rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-blue-700 hover:bg-blue-50 transition"
+                                                                        @onclick="() => OnSelectPermission.InvokeAsync(perm.Id)">
+                                                                    Inspect
+                                                                </button>
+                                                            }
+                                                        </div>
+                                                    </div>
+                                                }
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        </section>
+    }
+</div>
+
+@code {
+    [Parameter] public List<SiteMapContextDto> AreaMap { get; set; } = new();
+    [Parameter] public IReadOnlyCollection<int> AssignedPermissionIds { get; set; } = Array.Empty<int>();
+    [Parameter] public string? SelectedRoleName { get; set; }
+    [Parameter] public bool InteractiveAssignment { get; set; } = true;
+    [Parameter] public EventCallback<(int PermissionId, bool Assign)> OnTogglePermission { get; set; }
+    [Parameter] public EventCallback<(List<int> PermissionIds, bool Assign)> OnMoveGroup { get; set; }
+    [Parameter] public EventCallback<int> OnSelectPermission { get; set; }
+
+    private string selectedContext = "All";
+    private string searchQuery = "";
+    private string assignmentFilter = "all";
+    private readonly HashSet<string> openAreas = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Online:online-attendance",
+        "Online:online-home",
+        "Admin:admin-workspace",
+        "Admin:admin-hr-attendance",
+        "Admin:admin-settings-roles-positions-workplan",
+        "Developer:dev-workspace"
+    };
+
+    private IEnumerable<SiteMapContextDto> FilteredContexts =>
+        selectedContext == "All"
+            ? AreaMap
+            : AreaMap.Where(c => c.ContextKey.Equals(selectedContext, StringComparison.OrdinalIgnoreCase));
+
+    private bool IsAreaOpen(string areaKey) =>
+        !string.IsNullOrWhiteSpace(searchQuery) || assignmentFilter != "all" || openAreas.Contains(areaKey);
+
+    private void ToggleArea(string areaKey)
+    {
+        if (!openAreas.Remove(areaKey))
+            openAreas.Add(areaKey);
+    }
+
+    private void ExpandAll()
+    {
+        foreach (var ctx in AreaMap)
+            foreach (var area in ctx.Areas)
+                openAreas.Add($"{ctx.ContextKey}:{area.AreaKey}");
+    }
+
+    private void CollapseAll() => openAreas.Clear();
+
+    private IEnumerable<SiteMapMenuAreaDto> GetFilteredAreas(SiteMapContextDto ctx) =>
+        ctx.Areas.Where(a => GetFilteredSubFunctions(a).Any());
+
+    private IEnumerable<SiteMapSubFunctionDto> GetFilteredSubFunctions(SiteMapMenuAreaDto area) =>
+        area.SubFunctions.Where(sf =>
+            MatchesSearch(area, sf) && GetFilteredPermissions(sf).Any());
+
+    private IEnumerable<SiteMapPermissionItemDto> GetFilteredPermissions(SiteMapSubFunctionDto sf)
+    {
+        var query = searchQuery.Trim();
+        var areaOrSfMatches = string.IsNullOrWhiteSpace(query) ||
+                              sf.Title.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                              sf.Route.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                              sf.Description.Contains(query, StringComparison.OrdinalIgnoreCase);
+
+        return sf.Permissions.Where(p =>
+        {
+            if (assignmentFilter == "assigned" && (p.Id <= 0 || !AssignedPermissionIds.Contains(p.Id)))
+                return false;
+            if (assignmentFilter == "unassigned" && (p.Id > 0 && AssignedPermissionIds.Contains(p.Id)))
+                return false;
+
+            if (areaOrSfMatches)
+                return true;
+
+            return p.Key.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                   p.Name.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                   p.Description.Contains(query, StringComparison.OrdinalIgnoreCase);
+        });
+    }
+
+    private bool MatchesSearch(SiteMapMenuAreaDto area, SiteMapSubFunctionDto sf)
+    {
+        if (string.IsNullOrWhiteSpace(searchQuery))
+            return true;
+
+        var q = searchQuery.Trim();
+        return area.Title.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+               area.Route.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+               area.Description.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+               sf.Title.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+               sf.Route.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+               sf.Description.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+               sf.Permissions.Any(p =>
+                   p.Key.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                   p.Name.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                   p.Description.Contains(q, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static List<int> GetContextPermissionIds(SiteMapContextDto ctx) =>
+        ctx.Areas
+            .SelectMany(a => a.SubFunctions)
+            .SelectMany(sf => sf.Permissions)
+            .Where(p => p.Id > 0)
+            .Select(p => p.Id)
+            .Distinct()
+            .ToList();
+
+    private static List<int> GetAreaPermissionIds(SiteMapMenuAreaDto area) =>
+        area.SubFunctions
+            .SelectMany(sf => sf.Permissions)
+            .Where(p => p.Id > 0)
+            .Select(p => p.Id)
+            .Distinct()
+            .ToList();
+
+    private static string GetContextBadgeStyle(string contextKey) => contextKey switch
+    {
+        "Online" => "bg-emerald-100 text-emerald-800 border border-emerald-200",
+        "Developer" => "bg-amber-100 text-amber-800 border border-amber-200",
+        _ => "bg-blue-100 text-blue-800 border border-blue-200"
+    };
+}
