@@ -40,10 +40,20 @@ public partial class PermissionSettingsService
             .OrderBy(x => x.FullName).Select(x => new StaffAccessOption(x.UserId, x.FullName ?? x.Username)).ToListAsync();
         data.Groups = await db.UserGroups.AsNoTracking().Where(x => x.UserOrganisationId == userOrg)
             .OrderBy(x => x.GroupName).Select(x => new StaffAccessOption(x.UserGroupId, x.GroupName)).ToListAsync();
-        data.Staff = await db.Jobs.AsNoTracking().Where(x => x.OrganisationID == org && x.JobStateId == 4)
-            .Select(x => new StaffAccessOption(x.IndividualID,
-                x.Individual.FirstNameEnglish + " " + (x.Individual.LastNameEnglish ?? "")))
-            .Distinct().OrderBy(x => x.Name).ToListAsync();
+        var staff = await db.Individuals.AsNoTracking()
+            .Where(individual => db.Jobs.Any(job => job.IndividualID == individual.BusinessEntityId &&
+                job.OrganisationID == org && job.JobStateId == 4))
+            .OrderBy(individual => individual.FirstNameEnglish)
+            .ThenBy(individual => individual.LastNameEnglish)
+            .Select(individual => new
+            {
+                Id = individual.BusinessEntityId,
+                individual.FirstNameEnglish,
+                individual.LastNameEnglish
+            })
+            .ToListAsync();
+        data.Staff = staff.Select(individual => new StaffAccessOption(individual.Id,
+            $"{individual.FirstNameEnglish} {individual.LastNameEnglish}".Trim())).ToList();
         data.Classifications = await db.PositionClassifications.AsNoTracking()
             .Where(x => x.IsActive != false && (x.OrganisationBusinessEntityID == null || x.OrganisationBusinessEntityID == org))
             .OrderBy(x => x.Name).Select(x => new StaffAccessOption(x.PositionClassificationId, x.Name)).ToListAsync();
