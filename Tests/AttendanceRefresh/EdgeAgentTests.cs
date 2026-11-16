@@ -1,7 +1,17 @@
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
+using X509CertificateRequest = System.Security.Cryptography.X509Certificates.CertificateRequest;
 using HRM.AttendanceEdgeAgent.Adapters;
 using HRM.AttendanceEdgeAgent.Configuration;
 using HRM.AttendanceEdgeAgent.Ingestion;
 using HRM.AttendanceEdgeAgent.Storage;
+using HRM.Models;
+using HRM.Models.Archives;
+using HRM.Models.EdgeAttendance;
+using HRM.Services.Attendance.Abstraction;
+using HRM.Services.Attendance.Processing;
+using HRM.Services.EdgeAttendance;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
@@ -107,11 +117,245 @@ public static class EdgeAgentTests
             if (processedFiles.Length != 1)
                 throw new Exception("Processed file not found in .processed folder");
 
-            Console.WriteLine("PASS Edge agent storage, offline store-and-forward outbox buffer, cursor tracking, and file-drop adapter");
+            // 4. Test Server-side mTLS Ingestion & Trust Pipeline (End-to-End)
+            var dbOptions = new DbContextOptionsBuilder<HrmTeContext>()
+                .UseInMemoryDatabase("HRM_EdgeIngestion_Test_" + Guid.NewGuid().ToString("N"), x => x.EnableNullChecks(false))
+                .Options;
+            var dbFactory = new EdgeAgentTestDbContextFactory(dbOptions);
+
+            // Generate Root CA
+            using var caRsa = RSA.Create(2048);
+            var caReq = new X509CertificateRequest(
+                "CN=DHR Edge Authority Root CA, O=HRM Attendance Edge",
+                caRsa,
+                HashAlgorithmName.SHA256,
+                RSASignaturePadding.Pkcs1);
+            caReq.CertificateExtensions.Add(
+                new X509BasicConstraintsExtension(certificateAuthority: true, hasPathLengthConstraint: false, pathLengthConstraint: 0, critical: true));
+            caReq.CertificateExtensions.Add(
+                new X509KeyUsageExtension(X509KeyUsageFlags.KeyCertSign | X509KeyUsageFlags.CrlSign, critical: true));
+            using var caCert = caReq.CreateSelfSigned(DateTimeOffset.UtcNow.AddMinutes(-10), DateTimeOffset.UtcNow.AddYears(10));
+
+            // Generate Agent Client Certificate signed by Root CA
+            using var clientRsa = RSA.Create(2048);
+            var clientReq = new X509CertificateRequest(
+                "CN=test-agent-01, O=HRM Attendance Edge",
+                clientRsa,
+                HashAlgorithmName.SHA256,
+                RSASignaturePadding.Pkcs1);
+            clientReq.CertificateExtensions.Add(
+                new X509BasicConstraintsExtension(certificateAuthority: false, hasPathLengthConstraint: false, pathLengthConstraint: 0, critical: false));
+            clientReq.CertificateExtensions.Add(
+                new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.KeyEncipherment, critical: true));
+            clientReq.CertificateExtensions.Add(
+                new X509EnhancedKeyUsageExtension(new OidCollection { new("1.3.6.1.5.5.7.3.2") }, critical: false));
+
+            var serial = new byte[8];
+            RandomNumberGenerator.Fill(serial);
+            using var clientCert = clientReq.Create(caCert, DateTimeOffset.UtcNow.AddMinutes(-5), DateTimeOffset.UtcNow.AddYears(2), serial);
+
+            // Seed DB with Trusted CA, Agent, Device, Staff Enrollment, and Active Job
+            await using (var db = dbFactory.CreateDbContext())
+            {
+                db.EdgeAttendanceTrustedIssuers.Add(new EdgeAttendanceTrustedIssuer
+                {
+                    EdgeAttendanceTrustedIssuerId = 1,
+                    Subject = caCert.Subject,
+                    Thumbprint = caCert.Thumbprint,
+                    CertificateRawData = caCert.RawData,
+                    IsActive = true,
+                    CreatedAtUtc = DateTime.UtcNow
+                });
+
+                db.EdgeAttendanceAgents.Add(new EdgeAttendanceAgent
+                {
+                    EdgeAttendanceAgentId = 1,
+                    AgentIdentifier = "test-agent-01",
+                    CertificateThumbprint = clientCert.Thumbprint,
+                    CertificateIssuer = caCert.Subject,
+                    CertificateNotAfterUtc = clientCert.NotAfter.ToUniversalTime(),
+                    IsActive = true,
+                    OrganisationId = 10,
+                    CreatedAtUtc = DateTime.UtcNow
+                });
+
+                db.AttendanceDevices.Add(new AttendanceDevice
+                {
+                    AttendanceDeviceId = 101,
+                    OrganisationId = 10,
+                    EdgeAttendanceAgentId = 1,
+                    IsEdgeEnabled = true,
+                    Ipaddress = "192.168.1.50",
+                    Port = 4370
+                });
+
+                db.EdgeAttendanceAgentDevices.Add(new EdgeAttendanceAgentDevice
+                {
+                    EdgeAttendanceAgentDeviceId = 1,
+                    EdgeAttendanceAgentId = 1,
+                    AttendanceDeviceId = 101,
+                    IsActive = true,
+                    CreatedAtUtc = DateTime.UtcNow
+                });
+
+                db.StaffEnrollmentNumbers.Add(new StaffEnrollmentNumber
+                {
+                    StaffEnrollmentNumberId = 1,
+                    OrganisationId = 10,
+                    IndividualId = 999,
+                    EnrollmentNumber = "USR-0042"
+                });
+
+                db.Jobs.Add(new Job
+                {
+                    JobId = 500,
+                    IndividualID = 999,
+                    OrganisationID = 10,
+                    JobStateId = 4,
+                    JoinedDate = DateTime.UtcNow.AddYears(-1).Date,
+                    OrganisationStructureId = 12
+                });
+
+                await db.SaveChangesAsync();
+            }
+
+            // Test Certificate Trust Validator
+            var trustValidator = new DatabaseCertificateTrustValidator(dbFactory);
+            await trustValidator.ValidateAsync(clientCert);
+
+            // Test Untrusted Certificate Rejection
+            using var rogueRsa = RSA.Create(2048);
+            var rogueReq = new X509CertificateRequest("CN=rogue-agent", rogueRsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+            using var rogueCert = rogueReq.CreateSelfSigned(DateTimeOffset.UtcNow.AddMinutes(-5), DateTimeOffset.UtcNow.AddYears(1));
+            bool rogueRejected = false;
+            try
+            {
+                await trustValidator.ValidateAsync(rogueCert);
+            }
+            catch (UnauthorizedAccessException)
+            {
+                rogueRejected = true;
+            }
+            if (!rogueRejected) throw new Exception("Expected rogue certificate to be rejected by trust validator");
+
+            // Test Ingestion Service with valid batch
+            var testLogProcessor = new TestAttendanceLogProcessor();
+            var ingestionService = new EdgeAttendanceIngestionService(dbFactory, trustValidator, testLogProcessor);
+
+            var eventTimestamp = DateTime.UtcNow.AddMinutes(-5);
+            var batchInput = new EdgeAttendanceBatchInput(
+                AgentId: "test-agent-01",
+                Events: new[]
+                {
+                    new EdgeAttendanceEventInput(
+                        DeviceId: 101,
+                        LocalUserId: "USR-0042",
+                        DeviceTimestamp: eventTimestamp,
+                        DeviceEventId: "EVT-INGEST-001",
+                        RawMetadata: null)
+                });
+
+            var result = await ingestionService.AcceptAsync(clientCert, batchInput);
+            if (result.Accepted != 1 || result.Duplicate != 0 || result.Rejected != 0)
+                throw new Exception($"Expected 1 accepted event, got {result.Accepted} accepted, {result.Duplicate} dup, {result.Rejected} rej");
+
+            // Verify Database Receipt and AttendanceLog
+            await using (var db = dbFactory.CreateDbContext())
+            {
+                var receipt = await db.EdgeAttendanceEventReceipts.SingleOrDefaultAsync(x => x.DeviceEventId == "EVT-INGEST-001");
+                if (receipt == null || receipt.ProcessingStatus != "Recorded" || !receipt.AttendanceLogId.HasValue)
+                    throw new Exception("EdgeAttendanceEventReceipt was not properly recorded");
+
+                var log = await db.AttendanceLogs.SingleOrDefaultAsync(x => x.AttendanceLogId == receipt.AttendanceLogId.Value);
+                if (log == null || log.IndividualId != 999 || log.AttendanceDeviceId != 101 || log.OrganisationId != 10 || log.OrganisationStructureId != 12)
+                    throw new Exception("AttendanceLog was not correctly mapped and created");
+
+                if (!testLogProcessor.ProcessedIds.Contains(log.AttendanceLogId))
+                    throw new Exception("IAttendanceLogProcessor was not invoked for the ingested log");
+            }
+
+            // Test Deduplication (same event sent again)
+            var duplicateResult = await ingestionService.AcceptAsync(clientCert, batchInput);
+            if (duplicateResult.Accepted != 0 || duplicateResult.Duplicate != 1 || duplicateResult.Rejected != 0)
+                throw new Exception($"Expected duplicate event detection, got {duplicateResult.Accepted} accepted, {duplicateResult.Duplicate} dup, {duplicateResult.Rejected} rej");
+
+            // Test Unbound Device Rejection
+            var unboundBatch = new EdgeAttendanceBatchInput(
+                AgentId: "test-agent-01",
+                Events: new[]
+                {
+                    new EdgeAttendanceEventInput(
+                        DeviceId: 999,
+                        LocalUserId: "USR-0042",
+                        DeviceTimestamp: eventTimestamp,
+                        DeviceEventId: "EVT-UNBOUND-001",
+                        RawMetadata: null)
+                });
+
+            var unboundResult = await ingestionService.AcceptAsync(clientCert, unboundBatch);
+            if (unboundResult.Rejected != 1)
+                throw new Exception($"Expected unbound device rejection, got {unboundResult.Rejected} rejected");
+
+            // Test Unmatched Enrollment (local user with no staff record)
+            var unmatchedBatch = new EdgeAttendanceBatchInput(
+                AgentId: "test-agent-01",
+                Events: new[]
+                {
+                    new EdgeAttendanceEventInput(
+                        DeviceId: 101,
+                        LocalUserId: "USR-UNKNOWN-99",
+                        DeviceTimestamp: eventTimestamp,
+                        DeviceEventId: "EVT-UNMATCHED-001",
+                        RawMetadata: null)
+                });
+
+            var unmatchedResult = await ingestionService.AcceptAsync(clientCert, unmatchedBatch);
+            if (unmatchedResult.Accepted != 1)
+                throw new Exception("Expected unmatched event to be accepted with PendingStaffMapping status");
+
+            await using (var db = dbFactory.CreateDbContext())
+            {
+                var unmatchedReceipt = await db.EdgeAttendanceEventReceipts.SingleOrDefaultAsync(x => x.DeviceEventId == "EVT-UNMATCHED-001");
+                if (unmatchedReceipt == null || unmatchedReceipt.ProcessingStatus != "PendingStaffMapping" || unmatchedReceipt.AttendanceLogId.HasValue)
+                    throw new Exception("Unmatched event did not record PendingStaffMapping status");
+            }
+
+            // Test Agent Heartbeat
+            await ingestionService.HeartbeatAsync(clientCert, new EdgeAttendanceHeartbeatInput("test-agent-01", "Online"));
+            await using (var db = dbFactory.CreateDbContext())
+            {
+                var agent = await db.EdgeAttendanceAgents.SingleAsync(x => x.AgentIdentifier == "test-agent-01");
+                if (agent.LastHealthStatus != "Online" || !agent.LastSeenAtUtc.HasValue)
+                    throw new Exception("Heartbeat failed to update agent health status and last seen timestamp");
+            }
+
+            Console.WriteLine("PASS Edge agent storage, offline store-and-forward outbox buffer, cursor tracking, file-drop adapter, and end-to-end mTLS ingestion pipeline");
         }
         finally
         {
             try { Directory.Delete(testDir, recursive: true); } catch { /* ignore temp cleanup */ }
         }
+    }
+}
+
+sealed class EdgeAgentTestDbContext(DbContextOptions<HrmTeContext> options) : HrmTeContext(options)
+{
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder) { }
+}
+
+sealed class EdgeAgentTestDbContextFactory(DbContextOptions<HrmTeContext> options) : IDbContextFactory<HrmTeContext>
+{
+    public HrmTeContext CreateDbContext() => new EdgeAgentTestDbContext(options);
+    public Task<HrmTeContext> CreateDbContextAsync(CancellationToken cancellationToken = default) => Task.FromResult<HrmTeContext>(new EdgeAgentTestDbContext(options));
+}
+
+sealed class TestAttendanceLogProcessor : IAttendanceLogProcessor
+{
+    public List<int> ProcessedIds { get; } = new();
+
+    public Task<AttendanceProcessingResult> ProcessAsync(int attendanceLogId, CancellationToken cancellationToken = default)
+    {
+        ProcessedIds.Add(attendanceLogId);
+        return Task.FromResult(new AttendanceProcessingResult { Success = true, IsSuccess = true, Message = "Processed" });
     }
 }

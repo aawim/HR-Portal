@@ -3,6 +3,7 @@ using HRM.AttendanceEdgeAgent.Adapters;
 using HRM.AttendanceEdgeAgent.Configuration;
 using HRM.AttendanceEdgeAgent.Diagnostics;
 using HRM.AttendanceEdgeAgent.Ingestion;
+using HRM.AttendanceEdgeAgent.Installation;
 using HRM.AttendanceEdgeAgent.Storage;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -12,6 +13,22 @@ using Microsoft.Extensions.Options;
 
 var isProbeCommand = args.Length > 0 && args[0].Equals("probe", StringComparison.OrdinalIgnoreCase);
 var isStatusCommand = args.Length > 0 && args[0].Equals("status", StringComparison.OrdinalIgnoreCase);
+var isInstallCommand = args.Length > 0 && args[0].Equals("install", StringComparison.OrdinalIgnoreCase);
+var isUninstallCommand = args.Length > 0 && args[0].Equals("uninstall", StringComparison.OrdinalIgnoreCase);
+var isEnrollCommand = args.Length > 0 && args[0].Equals("enroll", StringComparison.OrdinalIgnoreCase);
+var isCliCommand = isProbeCommand || isStatusCommand || isInstallCommand || isUninstallCommand || isEnrollCommand;
+
+if (isInstallCommand)
+{
+    await ServiceInstaller.InstallAsync();
+    return;
+}
+
+if (isUninstallCommand)
+{
+    await ServiceInstaller.UninstallAsync();
+    return;
+}
 
 var builder = Host.CreateApplicationBuilder(args);
 builder.Configuration.AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
@@ -22,6 +39,17 @@ builder.Services.AddOptions<AttendanceEdgeOptions>()
     .ValidateOnStart();
 
 var edge = builder.Configuration.GetSection("AttendanceEdge").Get<AttendanceEdgeOptions>() ?? new();
+
+if (isEnrollCommand)
+{
+    var agentId = args.Length > 1 ? args[1] : (!string.IsNullOrWhiteSpace(edge.AgentId) && edge.AgentId != "replace-after-enrolment" ? edge.AgentId : "edge-agent-01");
+    var pfxPath = !string.IsNullOrWhiteSpace(edge.ClientCertificatePath) && edge.ClientCertificatePath != "/secure/edge-agent.pfx"
+        ? edge.ClientCertificatePath
+        : "./certs/edge-agent.pfx";
+    var password = edge.ClientCertificatePassword ?? "ChangeThisPassword123!";
+    await CertificateEnrollmentHelper.GenerateEnrollmentArtifactsAsync(agentId, pfxPath, password);
+    return;
+}
 
 // Core storage & diagnostics
 builder.Services.AddSingleton<IDeviceCursorStore, FileDeviceCursorStore>();
@@ -44,9 +72,9 @@ if (!string.IsNullOrWhiteSpace(edge.ClientCertificatePath) && File.Exists(edge.C
         throw new InvalidOperationException("The mTLS certificate must include a private key.");
     }
 }
-else if (!isProbeCommand)
+else if (!isCliCommand)
 {
-    throw new InvalidOperationException($"A valid mTLS client certificate path is required at '{edge.ClientCertificatePath}'.");
+    throw new InvalidOperationException($"A valid mTLS client certificate path is required at '{edge.ClientCertificatePath}'. Run 'dotnet run -- enroll' to generate a machine identity certificate.");
 }
 
 if (certificate != null)

@@ -4,18 +4,499 @@
 @inject HRM.Services.Contracts.EdgeAgentManagementContracts.IOperations Agents
 @rendermode InteractiveServer
 <PageTitle>Edge Agent Management</PageTitle>
-<section class="w-full min-w-0 p-2 space-y-4">
-  <header class="sticky top-0 z-30 border-b border-slate-200 bg-white/95 px-3 py-3 shadow-xs"><div class="flex items-center justify-between"><div><h1 class="text-lg font-bold text-slate-900">Attendance Edge Agents</h1><p class="text-xs text-slate-500">MDS-managed machine identities and device bindings.</p></div><button class="app-button app-button-secondary app-button-sm" @onclick="LoadAsync">Refresh</button></div></header>
-  @if (error is not null) { <div class="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">@error</div> }
-  else if (loading) { <div class="rounded-xl border border-slate-200 bg-white p-6 text-xs text-slate-500">Loading registered agents...</div> }
-  else {
-    <div class="overflow-x-auto rounded-xl border border-slate-200"><table class="w-full text-left text-xs"><thead class="border-b border-slate-200 bg-slate-50 text-slate-700"><tr><th class="p-2.5">Agent</th><th class="p-2.5">Certificate</th><th class="p-2.5">Health</th><th class="p-2.5">Devices</th><th class="p-2.5">Failures</th><th class="p-2.5">Status</th></tr></thead><tbody class="divide-y divide-slate-100">@foreach (var agent in agents) { <tr><td class="p-2.5 font-semibold">@agent.AgentIdentifier<br/><span class="font-normal text-slate-500">Organisation #@agent.OrganisationId</span></td><td class="p-2.5 font-mono text-[11px] text-blue-700">@agent.Thumbprint<br/><span class="font-sans text-slate-500">Expires @agent.ExpiresUtc.ToString("yyyy-MM-dd")</span></td><td class="p-2.5">@(agent.HealthStatus ?? "No contact")<br/><span class="text-slate-500">@agent.LastSeenUtc?.ToString("u")</span></td><td class="p-2.5">@agent.DeviceCount</td><td class="p-2.5">@agent.FailureCount</td><td class="p-2.5"><span class="@(agent.IsActive ? "bg-emerald-100 text-emerald-800" : "bg-rose-100 text-rose-800") rounded-full px-2.5 py-0.5 font-semibold">@(agent.IsActive ? "Active" : "Revoked")</span></td></tr> }</tbody></table></div>
-    <div class="mt-4 rounded-xl border border-slate-200 bg-white p-3"><h2 class="text-sm font-bold text-slate-800">Enrol agent</h2><p class="text-xs text-slate-500">Only configured devices in the selected organisation can be bound. Certificate trust remains fail-closed until PKI is configured.</p><div class="mt-3 grid gap-3 md:grid-cols-4"><label class="text-xs text-slate-700">Agent identifier<input class="app-input mt-1 w-full" @bind="enrolment.AgentIdentifier" /></label><label class="text-xs text-slate-700">Organisation ID<input class="app-input mt-1 w-full" type="number" @bind="enrolment.OrganisationId" /></label><label class="text-xs text-slate-700">Certificate thumbprint<input class="app-input mt-1 w-full" @bind="enrolment.CertificateThumbprint" /></label><label class="text-xs text-slate-700">Certificate issuer<input class="app-input mt-1 w-full" @bind="enrolment.CertificateIssuer" /></label><label class="text-xs text-slate-700">Certificate expiry<input class="app-input mt-1 w-full" type="date" @bind="enrolment.CertificateNotAfterUtc" /></label></div><div class="mt-3 grid gap-2 md:grid-cols-3">@foreach(var device in devices.Where(x=>x.OrganisationId==enrolment.OrganisationId && !x.AgentId.HasValue)){<label class="flex items-center gap-2 rounded border border-slate-200 px-2 py-1 text-xs"><input type="checkbox" checked="@enrolment.AttendanceDeviceIds.Contains(device.Id)" @onchange="()=>ToggleDevice(device.Id)" />@device.IpAddress:@device.Port — @(device.Location ?? "Device #" + device.Id)</label>}</div><button class="app-button app-button-primary app-button-sm mt-3" @onclick="EnrolAsync">Enrol selected devices</button></div>
-    <div class="mt-2 flex flex-wrap gap-2">@foreach(var agent in agents.Where(x=>x.IsActive)){<button class="app-button app-button-danger app-button-sm" @onclick="()=>RevokeAsync(agent.Id)">Revoke @agent.AgentIdentifier</button>}</div>
-    <div class="mt-4 rounded-xl border border-slate-200 bg-white p-3"><h2 class="text-sm font-bold text-slate-800">Trusted PKI roots</h2><p class="text-xs text-slate-500">Paste a Base64-encoded, self-signed CA root certificate. This immediately enables only chains signed by an active trusted root.</p><textarea class="app-input mt-2 min-h-20 w-full" @bind="issuerInput.CertificateBase64" placeholder="Base64 CA certificate"></textarea><button class="app-button app-button-primary app-button-sm mt-2" @onclick="AddIssuerAsync">Add trusted root</button><div class="mt-3 space-y-1">@foreach(var issuer in trustedIssuers){<div class="flex items-center justify-between rounded border border-slate-200 p-2 text-xs"><span><strong>@issuer.Subject</strong><br/><span class="font-mono text-slate-500">@issuer.Thumbprint</span></span><button class="app-button app-button-danger app-button-sm" disabled="@(!issuer.IsActive)" @onclick="()=>RevokeIssuerAsync(issuer.Id)">@(issuer.IsActive ? "Revoke" : "Revoked")</button></div>}</div></div>
-    <div class="mt-4 rounded-xl border border-slate-200 bg-white"><div class="border-b border-slate-200 px-3 py-2"><h2 class="text-sm font-bold text-slate-800">Organisation devices</h2><p class="text-xs text-slate-500">Configure each existing device once; one agent can securely manage many devices in its organisation.</p></div><div class="overflow-x-auto"><table class="w-full text-left text-xs"><thead class="border-b border-slate-200 bg-slate-50 text-slate-700"><tr><th class="p-2.5">Device</th><th class="p-2.5">Current binding</th><th class="p-2.5">Adapter</th><th class="p-2.5">Edge</th><th class="p-2.5"></th></tr></thead><tbody class="divide-y divide-slate-100">@foreach (var device in devices) { <tr><td class="p-2.5 font-mono">@device.IpAddress:@device.Port<br/><span class="font-sans text-slate-500">@(device.Location ?? "No location") · #@device.Id</span></td><td class="p-2.5">Organisation #@(device.OrganisationId?.ToString() ?? "Not assigned")<br/><span class="text-slate-500">Agent #@(device.AgentId?.ToString() ?? "Not bound")</span></td><td class="p-2.5">@(device.AdapterType ?? "Vendor adapter pending")</td><td class="p-2.5">@(device.IsEdgeEnabled ? "Enabled" : "Disabled")</td><td class="p-2.5"><button class="app-button app-button-secondary app-button-sm" @onclick="()=>Edit(device)">Configure</button></td></tr> }</tbody></table></div></div>
-    @if (editing is not null) { <div class="mt-4 rounded-xl border border-blue-200 bg-blue-50 p-3"><h2 class="text-sm font-bold text-slate-800">Configure device #@editing.AttendanceDeviceId</h2><div class="mt-3 grid gap-3 md:grid-cols-4"><label class="text-xs text-slate-700">Organisation ID<input class="app-input mt-1 w-full" type="number" @bind="editing.OrganisationId" /></label><label class="text-xs text-slate-700">Agent<select class="app-input mt-1 w-full" @bind="editing.EdgeAttendanceAgentId"><option value="">Not bound</option>@foreach(var agent in agents.Where(x=>x.IsActive && x.OrganisationId==editing.OrganisationId)){<option value="@agent.Id">@agent.AgentIdentifier</option>}</select></label><label class="text-xs text-slate-700">Adapter type<input class="app-input mt-1 w-full" @bind="editing.AdapterType" placeholder="e.g. ZKTeco" /></label><label class="flex items-end gap-2 pb-2 text-xs text-slate-700"><input type="checkbox" @bind="editing.IsEdgeEnabled" /> Enable edge ingestion</label></div><div class="mt-3 flex gap-2"><button class="app-button app-button-primary app-button-sm" @onclick="SaveDeviceAsync">Save configuration</button><button class="app-button app-button-secondary app-button-sm" @onclick="()=>editing=null">Cancel</button></div></div> }
-    <div class="mt-4 overflow-x-auto rounded-xl border border-slate-200 bg-white"><div class="border-b border-slate-200 px-3 py-2"><h2 class="text-sm font-bold text-slate-800">Recent ingestion failures</h2></div><table class="w-full text-left text-xs"><thead class="border-b border-slate-200 bg-slate-50 text-slate-700"><tr><th class="p-2.5">Time</th><th class="p-2.5">Agent / device</th><th class="p-2.5">Reason</th></tr></thead><tbody class="divide-y divide-slate-100">@foreach(var failure in failures){<tr><td class="p-2.5 text-slate-600">@failure.OccurredAtUtc.ToString("u")</td><td class="p-2.5">Agent #@(failure.AgentId?.ToString() ?? "—") / Device #@(failure.DeviceId?.ToString() ?? "—")</td><td class="p-2.5"><span class="font-semibold text-rose-700">@failure.Code</span><br/><span class="text-slate-600">@failure.Detail</span></td></tr>}</tbody></table></div>
+
+<section class="w-full min-w-0 p-3 space-y-4">
+  <header class="sticky top-0 z-30 border-b border-slate-200 bg-white/95 px-4 py-3 shadow-xs rounded-xl flex items-center justify-between">
+    <div>
+      <h1 class="text-lg font-bold text-slate-900">Attendance Edge Agents</h1>
+      <p class="text-xs text-slate-500">Machine identity certificates, trusted PKI roots, and local LAN timeclock bindings.</p>
+    </div>
+    <div class="flex items-center gap-2">
+      <button class="app-button app-button-secondary app-button-sm" @onclick="LoadAsync">Refresh</button>
+    </div>
+  </header>
+
+  @if (error is not null)
+  {
+    <div class="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">@error</div>
+  }
+  else if (loading)
+  {
+    <div class="rounded-xl border border-slate-200 bg-white p-6 text-xs text-slate-500">Loading registered agents...</div>
+  }
+  else
+  {
+    <!-- KPI Summary Cards -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div class="rounded-xl border border-slate-200 bg-white p-3 shadow-xs">
+        <span class="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Enrolled Agents</span>
+        <div class="mt-1 flex items-baseline gap-2">
+          <span class="text-xl font-bold text-slate-900">@agents.Count(a => a.IsActive)</span>
+          <span class="text-xs text-slate-400">active / @agents.Count total</span>
+        </div>
+      </div>
+      <div class="rounded-xl border border-slate-200 bg-white p-3 shadow-xs">
+        <span class="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Bound Devices</span>
+        <div class="mt-1 flex items-baseline gap-2">
+          <span class="text-xl font-bold text-blue-600">@devices.Count(d => d.AgentId.HasValue && d.IsEdgeEnabled)</span>
+          <span class="text-xs text-slate-400">of @devices.Count configured</span>
+        </div>
+      </div>
+      <div class="rounded-xl border border-slate-200 bg-white p-3 shadow-xs">
+        <span class="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Trusted CA Roots</span>
+        <div class="mt-1 flex items-baseline gap-2">
+          <span class="text-xl font-bold text-emerald-600">@trustedIssuers.Count(i => i.IsActive)</span>
+          <span class="text-xs text-slate-400">active roots</span>
+        </div>
+      </div>
+      <div class="rounded-xl border border-slate-200 bg-white p-3 shadow-xs">
+        <span class="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Recent Failures</span>
+        <div class="mt-1 flex items-baseline gap-2">
+          <span class="text-xl font-bold @(failures.Count > 0 ? "text-rose-600" : "text-slate-700")">@failures.Count</span>
+          <span class="text-xs text-slate-400">logged</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quick Setup Instructions -->
+    <div class="rounded-xl border border-blue-100 bg-blue-50/60 p-3 text-xs text-blue-900 space-y-1">
+      <div class="font-bold flex items-center gap-1.5 text-blue-950">
+        <span>Quick Agent Setup via CLI</span>
+      </div>
+      <p class="text-blue-800">
+        Run <code class="rounded bg-blue-100 px-1.5 py-0.5 font-mono text-[11px]">dotnet HRM.AttendanceEdgeAgent.dll enroll &lt;agent-id&gt;</code> on the edge gateway.
+        Copy the generated Base64 CA into <strong>Trusted PKI roots</strong> below, and enrol the agent with its certificate thumbprint.
+      </p>
+    </div>
+
+    <!-- Enrolled Agents Table -->
+    <div class="rounded-xl border border-slate-200 bg-white shadow-xs overflow-hidden">
+      <div class="border-b border-slate-200 px-4 py-2.5 bg-slate-50/50 flex items-center justify-between">
+        <h2 class="text-sm font-bold text-slate-800">Registered Machine Identities</h2>
+        <span class="text-xs text-slate-500">@agents.Count agent(s)</span>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs">
+          <thead class="border-b border-slate-200 bg-slate-50 text-slate-700">
+            <tr>
+              <th class="p-2.5">Agent</th>
+              <th class="p-2.5">Certificate</th>
+              <th class="p-2.5">Health</th>
+              <th class="p-2.5">Devices</th>
+              <th class="p-2.5">Failures</th>
+              <th class="p-2.5">Status</th>
+              <th class="p-2.5 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100">
+            @if (agents.Count == 0)
+            {
+              <tr><td colspan="7" class="p-4 text-center text-slate-400">No agents enrolled yet.</td></tr>
+            }
+            @foreach (var agent in agents)
+            {
+              <tr>
+                <td class="p-2.5 font-semibold text-slate-900">
+                  @agent.AgentIdentifier<br/>
+                  <span class="font-normal text-slate-500">Organisation #@agent.OrganisationId</span>
+                </td>
+                <td class="p-2.5 font-mono text-[11px] text-blue-700">
+                  @agent.Thumbprint<br/>
+                  <span class="font-sans text-slate-500">Expires @agent.ExpiresUtc.ToString("yyyy-MM-dd")</span>
+                </td>
+                <td class="p-2.5">
+                  <span class="inline-flex items-center gap-1 font-semibold @(agent.HealthStatus == "Online" ? "text-emerald-700" : (agent.HealthStatus == "Degraded" ? "text-amber-700" : "text-slate-500"))">
+                    <span class="h-1.5 w-1.5 rounded-full @(agent.HealthStatus == "Online" ? "bg-emerald-500" : (agent.HealthStatus == "Degraded" ? "bg-amber-500" : "bg-slate-400"))"></span>
+                    @(agent.HealthStatus ?? "No contact")
+                  </span><br/>
+                  <span class="text-slate-500 text-[11px]">Last seen: @(agent.LastSeenUtc?.ToString("u") ?? "Never")</span>
+                </td>
+                <td class="p-2.5 font-semibold text-slate-800">@agent.DeviceCount bound</td>
+                <td class="p-2.5">
+                  @if (agent.FailureCount > 0)
+                  {
+                    <span class="rounded bg-rose-100 px-1.5 py-0.5 font-semibold text-rose-800">@agent.FailureCount</span>
+                  }
+                  else
+                  {
+                    <span class="text-slate-400">0</span>
+                  }
+                </td>
+                <td class="p-2.5">
+                  <span class="@(agent.IsActive ? "bg-emerald-100 text-emerald-800" : "bg-rose-100 text-rose-800") rounded-full px-2.5 py-0.5 font-semibold text-[11px]">
+                    @(agent.IsActive ? "Active" : "Revoked")
+                  </span>
+                </td>
+                <td class="p-2.5 text-right">
+                  @if (agent.IsActive)
+                  {
+                    <button class="app-button app-button-danger app-button-sm" @onclick="() => RevokeAsync(agent.Id)">Revoke</button>
+                  }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Enrol Agent Card -->
+    <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-xs">
+      <h2 class="text-sm font-bold text-slate-800">Enrol New Agent</h2>
+      <p class="text-xs text-slate-500">Register an agent identifier and bound devices. Certificate trust remains fail-closed until an active PKI root signs it.</p>
+      
+      <div class="mt-3 grid gap-3 md:grid-cols-5">
+        <label class="text-xs text-slate-700 font-medium">
+          Agent identifier
+          <input class="app-input mt-1 w-full" placeholder="e.g. edge-agent-male-01" @bind="enrolment.AgentIdentifier" />
+        </label>
+        <label class="text-xs text-slate-700 font-medium">
+          Organisation ID
+          <input class="app-input mt-1 w-full" type="number" @bind="enrolment.OrganisationId" />
+        </label>
+        <label class="text-xs text-slate-700 font-medium">
+          Certificate thumbprint
+          <input class="app-input mt-1 w-full font-mono text-[11px]" placeholder="40-hex SHA1 thumbprint" @bind="enrolment.CertificateThumbprint" />
+        </label>
+        <label class="text-xs text-slate-700 font-medium">
+          Certificate issuer
+          <input class="app-input mt-1 w-full" placeholder="CN=..., O=..." @bind="enrolment.CertificateIssuer" />
+        </label>
+        <label class="text-xs text-slate-700 font-medium">
+          Certificate expiry
+          <input class="app-input mt-1 w-full" type="date" @bind="enrolment.CertificateNotAfterUtc" />
+        </label>
+      </div>
+
+      <div class="mt-3">
+        <span class="text-xs font-medium text-slate-700">Bind Unassigned Devices:</span>
+        <div class="mt-1.5 grid gap-2 md:grid-cols-3">
+          @{
+            var availableDevices = devices.Where(x => x.OrganisationId == enrolment.OrganisationId && !x.AgentId.HasValue).ToList();
+          }
+          @if (availableDevices.Count == 0)
+          {
+            <div class="text-xs text-slate-400 py-1">No unassigned devices in Organisation #@enrolment.OrganisationId.</div>
+          }
+          @foreach (var device in availableDevices)
+          {
+            <label class="flex items-center gap-2 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs hover:bg-slate-50 cursor-pointer">
+              <input type="checkbox" checked="@enrolment.AttendanceDeviceIds.Contains(device.Id)" @onchange="() => ToggleDevice(device.Id)" />
+              <span class="font-mono text-slate-800">@device.IpAddress:@device.Port</span>
+              <span class="text-slate-500">— @(device.Location ?? "Device #" + device.Id)</span>
+            </label>
+          }
+        </div>
+      </div>
+
+      <button class="app-button app-button-primary app-button-sm mt-3" @onclick="EnrolAsync">Enrol Agent &amp; Bind Devices</button>
+    </div>
+
+    <!-- Trusted PKI Roots -->
+    <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-xs">
+      <h2 class="text-sm font-bold text-slate-800">Trusted PKI CA Roots</h2>
+      <p class="text-xs text-slate-500">Paste a Base64-encoded self-signed CA root certificate. Only client certificates signed by an active trusted root will be accepted.</p>
+      
+      <div class="mt-3 flex gap-2">
+        <textarea class="app-input font-mono text-xs w-full min-h-16" @bind="issuerInput.CertificateBase64" placeholder="Paste Base64 CA certificate here..."></textarea>
+      </div>
+      <button class="app-button app-button-primary app-button-sm mt-2" @onclick="AddIssuerAsync">Add Trusted Root</button>
+
+      <div class="mt-3 space-y-2">
+        @if (trustedIssuers.Count == 0)
+        {
+          <div class="rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-800">
+            No trusted PKI roots configured. Edge agent mTLS ingestion will reject certificates until a root is added.
+          </div>
+        }
+        @foreach (var issuer in trustedIssuers)
+        {
+          <div class="flex items-center justify-between rounded-lg border border-slate-200 p-2.5 text-xs bg-slate-50/50">
+            <div>
+              <strong class="text-slate-900">@issuer.Subject</strong>
+              <div class="font-mono text-[11px] text-slate-500 mt-0.5">Thumbprint: @issuer.Thumbprint</div>
+            </div>
+            <button class="app-button app-button-danger app-button-sm" disabled="@(!issuer.IsActive)" @onclick="() => RevokeIssuerAsync(issuer.Id)">
+              @(issuer.IsActive ? "Revoke Root" : "Revoked")
+            </button>
+          </div>
+        }
+      </div>
+    </div>
+
+    <!-- Organisation Devices Table -->
+    <div class="rounded-xl border border-slate-200 bg-white shadow-xs overflow-hidden">
+      <div class="border-b border-slate-200 px-4 py-2.5 bg-slate-50/50 flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h2 class="text-sm font-bold text-slate-800">Organisation Devices</h2>
+          <p class="text-xs text-slate-500">Configure terminal device adapter protocol and assign to an edge agent.</p>
+        </div>
+        <!-- Device Filter Tabs -->
+        <div class="flex items-center gap-1">
+          <button type="button" class="rounded px-2 py-1 text-xs font-semibold @(deviceFilter == "all" ? "bg-blue-600 text-white" : "bg-white text-slate-600 border border-slate-200")"
+                  @onclick='() => deviceFilter = "all"'>All (@devices.Count)</button>
+          <button type="button" class="rounded px-2 py-1 text-xs font-semibold @(deviceFilter == "enabled" ? "bg-blue-600 text-white" : "bg-white text-slate-600 border border-slate-200")"
+                  @onclick='() => deviceFilter = "enabled"'>Enabled (@devices.Count(d => d.IsEdgeEnabled))</button>
+          <button type="button" class="rounded px-2 py-1 text-xs font-semibold @(deviceFilter == "bound" ? "bg-blue-600 text-white" : "bg-white text-slate-600 border border-slate-200")"
+                  @onclick='() => deviceFilter = "bound"'>Bound (@devices.Count(d => d.AgentId.HasValue))</button>
+          <button type="button" class="rounded px-2 py-1 text-xs font-semibold @(deviceFilter == "unbound" ? "bg-blue-600 text-white" : "bg-white text-slate-600 border border-slate-200")"
+                  @onclick='() => deviceFilter = "unbound"'>Unbound (@devices.Count(d => !d.AgentId.HasValue))</button>
+        </div>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs">
+          <thead class="border-b border-slate-200 bg-slate-50 text-slate-700">
+            <tr>
+              <th class="p-2.5">Device</th>
+              <th class="p-2.5">Current Binding</th>
+              <th class="p-2.5">Adapter Protocol</th>
+              <th class="p-2.5">Edge Ingestion</th>
+              <th class="p-2.5 text-right"></th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100">
+            @{
+              var filteredDevices = devices.Where(d =>
+                deviceFilter == "all" ||
+                (deviceFilter == "enabled" && d.IsEdgeEnabled) ||
+                (deviceFilter == "bound" && d.AgentId.HasValue) ||
+                (deviceFilter == "unbound" && !d.AgentId.HasValue)).ToList();
+            }
+            @if (filteredDevices.Count == 0)
+            {
+              <tr><td colspan="5" class="p-4 text-center text-slate-400">No matching devices found.</td></tr>
+            }
+            @foreach (var device in filteredDevices)
+            {
+              <tr>
+                <td class="p-2.5">
+                  <span class="font-mono font-semibold text-slate-900">@device.IpAddress:@device.Port</span><br/>
+                  <span class="text-slate-500">@(device.Location ?? "No location specified") · Device #@device.Id</span>
+                </td>
+                <td class="p-2.5">
+                  <span class="font-medium text-slate-800">Organisation #@(device.OrganisationId?.ToString() ?? "None")</span><br/>
+                  @if (device.AgentId.HasValue)
+                  {
+                    var boundAgent = agents.FirstOrDefault(a => a.Id == device.AgentId.Value);
+                    <span class="text-blue-700 font-semibold">Agent: @(boundAgent?.AgentIdentifier ?? $"#{device.AgentId}")</span>
+                  }
+                  else
+                  {
+                    <span class="text-slate-400">Not bound</span>
+                  }
+                </td>
+                <td class="p-2.5">
+                  <span class="rounded bg-slate-100 px-2 py-0.5 font-mono text-[11px] text-slate-700">
+                    @(device.AdapterType ?? "zkteco")
+                  </span>
+                </td>
+                <td class="p-2.5">
+                  <span class="@(device.IsEdgeEnabled ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-600") rounded-full px-2 py-0.5 font-semibold text-[11px]">
+                    @(device.IsEdgeEnabled ? "Enabled" : "Disabled")
+                  </span>
+                </td>
+                <td class="p-2.5 text-right">
+                  <button class="app-button app-button-secondary app-button-sm" @onclick="() => Edit(device)">Configure</button>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Configure Device Modal / Inline Card -->
+    @if (editing is not null)
+    {
+      <div class="rounded-xl border border-blue-200 bg-blue-50/70 p-4 shadow-xs space-y-3">
+        <h2 class="text-sm font-bold text-slate-800">Configure Device #@editing.AttendanceDeviceId</h2>
+        <div class="grid gap-3 md:grid-cols-4">
+          <label class="text-xs text-slate-700 font-medium">
+            Organisation ID
+            <input class="app-input mt-1 w-full" type="number" @bind="editing.OrganisationId" />
+          </label>
+          <label class="text-xs text-slate-700 font-medium">
+            Assigned Agent
+            <select class="app-input mt-1 w-full" @bind="editing.EdgeAttendanceAgentId">
+              <option value="">Not bound</option>
+              @foreach (var agent in agents.Where(x => x.IsActive && x.OrganisationId == editing.OrganisationId))
+              {
+                <option value="@agent.Id">@agent.AgentIdentifier (#@agent.Id)</option>
+              }
+            </select>
+          </label>
+          <label class="text-xs text-slate-700 font-medium">
+            Adapter Protocol
+            <select class="app-input mt-1 w-full" @bind="editing.AdapterType">
+              <option value="zkteco">ZKTeco Biometric Terminal (TCP 4370)</option>
+              <option value="generic-file">Generic File Drop (CSV / JSON folder)</option>
+              <option value="placeholder">Placeholder / Test Adapter</option>
+            </select>
+          </label>
+          <label class="flex items-end gap-2 pb-2 text-xs text-slate-700 font-medium cursor-pointer">
+            <input type="checkbox" @bind="editing.IsEdgeEnabled" />
+            Enable edge ingestion for this device
+          </label>
+        </div>
+        <div class="flex gap-2">
+          <button class="app-button app-button-primary app-button-sm" @onclick="SaveDeviceAsync">Save Configuration</button>
+          <button class="app-button app-button-secondary app-button-sm" @onclick="() => editing = null">Cancel</button>
+        </div>
+      </div>
+    }
+
+    <!-- Ingestion Failures Table -->
+    <div class="rounded-xl border border-slate-200 bg-white shadow-xs overflow-hidden">
+      <div class="border-b border-slate-200 px-4 py-2.5 bg-slate-50/50 flex items-center justify-between">
+        <h2 class="text-sm font-bold text-slate-800">Recent Ingestion Failures</h2>
+        <span class="text-xs text-slate-500">Audit log of unmatched enrolments and unbound devices</span>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs">
+          <thead class="border-b border-slate-200 bg-slate-50 text-slate-700">
+            <tr>
+              <th class="p-2.5">Time (UTC)</th>
+              <th class="p-2.5">Agent / Device</th>
+              <th class="p-2.5">Reason &amp; Detail</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100">
+            @if (failures.Count == 0)
+            {
+              <tr><td colspan="3" class="p-4 text-center text-slate-400">No ingestion failures recorded.</td></tr>
+            }
+            @foreach (var failure in failures)
+            {
+              <tr>
+                <td class="p-2.5 text-slate-600 font-mono text-[11px]">@failure.OccurredAtUtc.ToString("u")</td>
+                <td class="p-2.5 font-medium text-slate-800">
+                  Agent #@(failure.AgentId?.ToString() ?? "—") / Device #@(failure.DeviceId?.ToString() ?? "—")
+                </td>
+                <td class="p-2.5">
+                  <span class="font-semibold text-rose-700">@failure.Code</span><br/>
+                  <span class="text-slate-600">@failure.Detail</span>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </div>
   }
 </section>
-@code { private bool loading = true; private string? error; private List<EdgeAgentSummaryDto> agents = []; private List<EdgeAttendanceDeviceDto> devices = []; private List<EdgeAttendanceIngestionFailureDto> failures = []; private List<EdgeTrustedIssuerDto> trustedIssuers = []; private EdgeAttendanceDeviceConfigurationInput? editing; private EdgeAgentRegistrationInput enrolment = new() { CertificateNotAfterUtc = DateTime.UtcNow.AddYears(1) }; private EdgeTrustedIssuerInput issuerInput = new(); protected override Task OnInitializedAsync() => LoadAsync(); private async Task LoadAsync() { loading = true; error = null; try { agents = (await Agents.ListAsync()).ToList(); devices = (await Agents.ListDevicesAsync()).ToList(); failures = (await Agents.ListFailuresAsync()).ToList(); trustedIssuers = (await Agents.ListTrustedIssuersAsync()).ToList(); } catch (UnauthorizedAccessException) { error = "You do not have permission to manage Edge Agents."; } catch { error = "Agent data could not be loaded."; } finally { loading = false; } } private async Task AddIssuerAsync() { var result = await Agents.AddTrustedIssuerAsync(issuerInput); if (!result.Success) { error = result.Message; return; } issuerInput = new(); await LoadAsync(); } private async Task RevokeIssuerAsync(int id) { var result = await Agents.RevokeTrustedIssuerAsync(id); if (!result.Success) { error = result.Message; return; } await LoadAsync(); } private void ToggleDevice(int id) { if (!enrolment.AttendanceDeviceIds.Remove(id)) enrolment.AttendanceDeviceIds.Add(id); } private async Task EnrolAsync() { enrolment.CertificateNotAfterUtc = enrolment.CertificateNotAfterUtc.ToUniversalTime(); var result = await Agents.RegisterAsync(enrolment); if (!result.Success) { error = result.Message; return; } enrolment = new() { CertificateNotAfterUtc = DateTime.UtcNow.AddYears(1) }; await LoadAsync(); } private async Task RevokeAsync(int id) { var result = await Agents.RevokeAsync(id); if (!result.Success) { error = result.Message; return; } await LoadAsync(); } private void Edit(EdgeAttendanceDeviceDto device) => editing = new() { AttendanceDeviceId = device.Id, OrganisationId = device.OrganisationId ?? 0, EdgeAttendanceAgentId = device.AgentId, AdapterType = device.AdapterType, IsEdgeEnabled = device.IsEdgeEnabled }; private async Task SaveDeviceAsync() { if (editing is null) return; var result = await Agents.SaveDeviceConfigurationAsync(editing); if (!result.Success) { error = result.Message; return; } editing = null; await LoadAsync(); } }
+
+@code {
+  private bool loading = true;
+  private string? error;
+  private string deviceFilter = "all";
+  private List<EdgeAgentSummaryDto> agents = [];
+  private List<EdgeAttendanceDeviceDto> devices = [];
+  private List<EdgeAttendanceIngestionFailureDto> failures = [];
+  private List<EdgeTrustedIssuerDto> trustedIssuers = [];
+  private EdgeAttendanceDeviceConfigurationInput? editing;
+  private EdgeAgentRegistrationInput enrolment = new() { CertificateNotAfterUtc = DateTime.UtcNow.AddYears(1) };
+  private EdgeTrustedIssuerInput issuerInput = new();
+
+  protected override Task OnInitializedAsync() => LoadAsync();
+
+  private async Task LoadAsync()
+  {
+    loading = true;
+    error = null;
+    try
+    {
+      agents = (await Agents.ListAsync()).ToList();
+      devices = (await Agents.ListDevicesAsync()).ToList();
+      failures = (await Agents.ListFailuresAsync()).ToList();
+      trustedIssuers = (await Agents.ListTrustedIssuersAsync()).ToList();
+    }
+    catch (UnauthorizedAccessException)
+    {
+      error = "You do not have permission to manage Edge Agents.";
+    }
+    catch
+    {
+      error = "Agent data could not be loaded.";
+    }
+    finally
+    {
+      loading = false;
+    }
+  }
+
+  private async Task AddIssuerAsync()
+  {
+    var result = await Agents.AddTrustedIssuerAsync(issuerInput);
+    if (!result.Success)
+    {
+      error = result.Message;
+      return;
+    }
+    issuerInput = new();
+    await LoadAsync();
+  }
+
+  private async Task RevokeIssuerAsync(int id)
+  {
+    var result = await Agents.RevokeTrustedIssuerAsync(id);
+    if (!result.Success)
+    {
+      error = result.Message;
+      return;
+    }
+    await LoadAsync();
+  }
+
+  private void ToggleDevice(int id)
+  {
+    if (!enrolment.AttendanceDeviceIds.Remove(id))
+      enrolment.AttendanceDeviceIds.Add(id);
+  }
+
+  private async Task EnrolAsync()
+  {
+    enrolment.CertificateNotAfterUtc = enrolment.CertificateNotAfterUtc.ToUniversalTime();
+    var result = await Agents.RegisterAsync(enrolment);
+    if (!result.Success)
+    {
+      error = result.Message;
+      return;
+    }
+    enrolment = new() { CertificateNotAfterUtc = DateTime.UtcNow.AddYears(1) };
+    await LoadAsync();
+  }
+
+  private async Task RevokeAsync(int id)
+  {
+    var result = await Agents.RevokeAsync(id);
+    if (!result.Success)
+    {
+      error = result.Message;
+      return;
+    }
+    await LoadAsync();
+  }
+
+  private void Edit(EdgeAttendanceDeviceDto device) => editing = new()
+  {
+    AttendanceDeviceId = device.Id,
+    OrganisationId = device.OrganisationId ?? 0,
+    EdgeAttendanceAgentId = device.AgentId,
+    AdapterType = device.AdapterType ?? "zkteco",
+    IsEdgeEnabled = device.IsEdgeEnabled
+  };
+
+  private async Task SaveDeviceAsync()
+  {
+    if (editing is null) return;
+    var result = await Agents.SaveDeviceConfigurationAsync(editing);
+    if (!result.Success)
+    {
+      error = result.Message;
+      return;
+    }
+    editing = null;
+    await LoadAsync();
+  }
+}
