@@ -24,6 +24,20 @@ public partial class HrmTeContext
         modelBuilder.ApplyConfiguration<HRM.Models.Recruitment.RecruitmentPolicyVersion>(new HRM.Api.Data.EntityConfigurations.RecruitmentComplianceMapping());
         modelBuilder.ApplyConfiguration<HRM.Models.Recruitment.RecruitmentComplianceRule>(new HRM.Api.Data.EntityConfigurations.RecruitmentComplianceMapping());
         modelBuilder.ApplyConfiguration<HRM.Models.Recruitment.RecruitmentPolicyAssignment>(new HRM.Api.Data.EntityConfigurations.RecruitmentComplianceMapping());
+        modelBuilder.ApplyConfiguration<HRM.Models.Recruitment.RecruitmentRequisition>(new HRM.Api.Data.EntityConfigurations.RecruitmentOperationsMapping());
+        modelBuilder.ApplyConfiguration<HRM.Models.Recruitment.RecruitmentPositionReservation>(new HRM.Api.Data.EntityConfigurations.RecruitmentOperationsMapping());
+        modelBuilder.ApplyConfiguration<HRM.Models.Recruitment.RecruitmentVacancy>(new HRM.Api.Data.EntityConfigurations.RecruitmentOperationsMapping());
+        modelBuilder.ApplyConfiguration<HRM.Models.Recruitment.RecruitmentApplicant>(new HRM.Api.Data.EntityConfigurations.RecruitmentApplicantsMapping());
+        modelBuilder.ApplyConfiguration<HRM.Models.Recruitment.RecruitmentApplication>(new HRM.Api.Data.EntityConfigurations.RecruitmentApplicantsMapping());
+        modelBuilder.ApplyConfiguration<HRM.Models.Recruitment.RecruitmentOfficialTemplate>(new HRM.Api.Data.EntityConfigurations.RecruitmentOfficialTemplatesMapping());
+        modelBuilder.ApplyConfiguration<HRM.Models.Recruitment.RecruitmentScreeningDecision>(new HRM.Api.Data.EntityConfigurations.RecruitmentScreeningMapping());
+        modelBuilder.ApplyConfiguration<HRM.Models.Recruitment.RecruitmentPanelConflictDeclaration>(new HRM.Api.Data.EntityConfigurations.RecruitmentScreeningMapping());
+        modelBuilder.ApplyConfiguration<HRM.Models.Recruitment.RecruitmentAssessment>(new HRM.Api.Data.EntityConfigurations.RecruitmentAssessmentsMapping());
+        modelBuilder.ApplyConfiguration<HRM.Models.Recruitment.RecruitmentPanelScorecard>(new HRM.Api.Data.EntityConfigurations.RecruitmentAssessmentsMapping());
+        modelBuilder.ApplyConfiguration<HRM.Models.Recruitment.RecruitmentResultPublication>(new HRM.Api.Data.EntityConfigurations.RecruitmentResultsMapping());
+        modelBuilder.ApplyConfiguration<HRM.Models.Recruitment.RecruitmentMeritResult>(new HRM.Api.Data.EntityConfigurations.RecruitmentResultsMapping());
+        modelBuilder.ApplyConfiguration<HRM.Models.Recruitment.RecruitmentObjection>(new HRM.Api.Data.EntityConfigurations.RecruitmentResultsMapping());
+        modelBuilder.ApplyConfiguration<HRM.Models.Recruitment.RecruitmentOffer>(new HRM.Api.Data.EntityConfigurations.RecruitmentOffersMapping());
         modelBuilder.Entity<UserTodo>(entity =>
         {
             entity.ToTable("UT_UserTodos", "dbo", table => table.HasCheckConstraint("CK_UserTodos_Priority", "[Priority] IN ('Normal','Medium','High')"));

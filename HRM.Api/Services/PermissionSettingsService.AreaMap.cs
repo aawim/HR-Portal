@@ -55,6 +55,10 @@ public partial class PermissionSettingsService
         new("Staff.Admin.Edit", "Admin Edit Staff Record", "Perform administrative updates on employee records.", "Admin", "HR"),
         new("Staff.EnrolmentNumbers.Manage", "Manage Staff Enrollment Numbers", "Assign and update biometric/device enrollment numbers for staff.", "Admin", "HR"),
 
+        // Recruitment
+        new("Recruitment.View", "View Recruitment", "View recruitment requisitions, vacancies, candidate progress, and recruitment reports within organisational scope.", "Admin", "HR"),
+        new("Recruitment.Manage", "Manage Recruitment", "Create and manage CSC-controlled recruitment requisitions, vacancies, screening, assessment, results, offers, and onboarding handoffs.", "Admin", "HR"),
+
         // Data Classification & Field-Level Permissions
         new("Employee.PrivateRecord.View", "View Full Employee Private Record", "Access private personnel dossier fields and confidential employee records.", "Admin", "HR"),
         new("Employee.Salary.View", "View Employee Salary & Bank Details", "View basic salary, allowances, and employee bank account numbers.", "Admin", "Payroll"),

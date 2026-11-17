@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace HRM.Migrations;
 
 /// <summary>Adds the source-verification and effective-dated CSC recruitment policy foundation.</summary>
-[Migration("20261116141000_AddRecruitmentComplianceFoundation")]
+
 public partial class AddRecruitmentComplianceFoundation : Migration
 {
     protected override void Up(MigrationBuilder migrationBuilder)
@@ -45,7 +45,7 @@ public partial class AddRecruitmentComplianceFoundation : Migration
 
         migrationBuilder.CreateTable(name: "RM_RecruitmentComplianceRules", columns: table => new
         {
-            Id = table.Column<int>(type: "int", nullable: false).Annotation("SqlServer:Identity", "1, 1"), RecruitmentPolicyVersionId = table.Column<int>(type: "int", nullable: false), RuleCode = table.Column<string>(type: "varchar(100)", maxLength: 100, nullable: false), Requirement = table.Column<string>(type: "nvarchar(2000)", maxLength: 2000, nullable: false), OfficialProvision = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: false), RecruitmentType = table.Column<string>(type: "nvarchar(60)", maxLength: 60, nullable: false), PositionCategory = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false), EnforcementLevel = table.Column<string>(type: "nvarchar(30)", maxLength: 30, nullable: false), ValidationDefinitionJson = table.Column<string>(type: "nvarchar(8000)", maxLength: 8000, nullable: false), ResponsibleAuthority = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: false), VerificationStatus = table.Column<string>(type: "nvarchar(40)", maxLength: 40, nullable: false), IsActive = table.Column<bool>(type: "bit", nullable: false), Version = table.Column<int>(type: "int", nullable: false)
+            Id = table.Column<int>(type: "int", nullable: false).Annotation("SqlServer:Identity", "1, 1"), RecruitmentPolicyVersionId = table.Column<int>(type: "int", nullable: false), RuleCode = table.Column<string>(type: "varchar(100)", maxLength: 100, nullable: false), Requirement = table.Column<string>(type: "nvarchar(2000)", maxLength: 2000, nullable: false), OfficialProvision = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: false), RecruitmentType = table.Column<string>(type: "nvarchar(60)", maxLength: 60, nullable: false), PositionCategory = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false), EnforcementLevel = table.Column<string>(type: "nvarchar(30)", maxLength: 30, nullable: false), ValidationDefinitionJson = table.Column<string>(type: "nvarchar(max)", maxLength: 8000, nullable: false), ResponsibleAuthority = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: false), VerificationStatus = table.Column<string>(type: "nvarchar(40)", maxLength: 40, nullable: false), IsActive = table.Column<bool>(type: "bit", nullable: false), Version = table.Column<int>(type: "int", nullable: false)
         }, constraints: table => { table.PrimaryKey("PK_RM_RecruitmentComplianceRules", x => x.Id); table.ForeignKey("FK_RM_RecruitmentComplianceRules_RM_RecruitmentPolicyVersions_RecruitmentPolicyVersionId", x => x.RecruitmentPolicyVersionId, "RM_RecruitmentPolicyVersions", "Id", onDelete: ReferentialAction.Restrict); });
 
         migrationBuilder.CreateTable(name: "RM_RecruitmentPolicyAssignments", columns: table => new

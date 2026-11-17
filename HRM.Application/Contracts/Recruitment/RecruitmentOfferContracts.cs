@@ -1,0 +1,1 @@
+using HRM.DTOs;namespace HRM.Application.Contracts.Recruitment;public sealed record CreateRecruitmentOfferInput(int MeritResultId,string TermsSnapshotJson);public interface IRecruitmentOfferService{Task<ServiceResult>CreateAsync(CreateRecruitmentOfferInput input,CancellationToken ct=default);Task<ServiceResult>AcceptMyOfferAsync(int offerId,CancellationToken ct=default);}

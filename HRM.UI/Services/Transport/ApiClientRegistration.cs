@@ -30,6 +30,12 @@ public static class ApiClientRegistration
         foreach (var contract in ApplicationContractCatalog.All)
             services.AddScoped(contract, provider => create.MakeGenericMethod(contract).Invoke(null, [provider.GetRequiredService<IApiOperationClient>()])!);
         services.AddScoped<IUserContextService, EmployeeContextClient>();
+        services.AddScoped<HRM.UI.Services.Recruitment.IRecruitmentApiClient>(provider =>
+        {
+            var origins = provider.GetRequiredService<BackendOrigins>();
+            var handler = new CircuitBackendHandler(provider.GetRequiredService<Microsoft.AspNetCore.Components.Authorization.AuthenticationStateProvider>(), provider.GetRequiredService<BackendSessionStore>(), provider.GetRequiredService<IHttpClientFactory>(), origins, provider.GetRequiredService<Microsoft.AspNetCore.DataProtection.IDataProtectionProvider>(), provider.GetRequiredService<ILogger<BackendSession>>());
+            return new HRM.UI.Services.Recruitment.RecruitmentApiClient(new HttpClient(handler) { BaseAddress = origins.Api });
+        });
         services.AddScoped<IUserService, UserProfileClient>();
         services.AddScoped<IGeographyService, GeographyClient>();
         services.AddScoped<HRM.Services.ToastService>();

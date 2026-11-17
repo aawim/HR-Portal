@@ -227,6 +227,8 @@ public static class BackendServiceRegistration
         services.AddScoped<HRM.Services.JobTypeConfigurationService>();
         services.AddScoped<HRM.Services.StaffOnboardingService>();
         services.AddScoped<HRM.Services.PositionOverviewService>();
+        services.AddScoped<HRM.Application.Contracts.Recruitment.IRecruitmentRequisitionService, HRM.Services.RecruitmentRequisitionService>();
+        services.AddScoped<HRM.Application.Contracts.Recruitment.IRecruitmentApplicationService, HRM.Services.RecruitmentApplicationService>();
         services.AddScoped<HRM.Services.StaffPositionManagementService>();
         services.AddScoped<HRM.Services.PermissionSettingsService>();
         services.AddScoped<HRM.Services.UserSettingsService>();
@@ -247,6 +249,12 @@ public static class BackendServiceRegistration
         services.AddScoped<IDocumentStorageProvider, HRM.Api.Services.PrivateSqlDocumentStorageProvider>();
         services.AddScoped<HRM.Api.Services.DocumentManagementService>();
         services.AddScoped<HRM.Services.Contracts.DocumentManagementServiceContracts.IOperations>(provider => provider.GetRequiredService<HRM.Api.Services.DocumentManagementService>());
+        services.AddScoped<HRM.Application.Contracts.Recruitment.IRecruitmentOfficialTemplateService, HRM.Services.RecruitmentOfficialTemplateService>();
+        services.AddScoped<HRM.Application.Contracts.Recruitment.IRecruitmentScreeningService, HRM.Services.RecruitmentScreeningService>();
+        services.AddScoped<HRM.Application.Contracts.Recruitment.IRecruitmentAssessmentService, HRM.Services.RecruitmentAssessmentService>();
+        services.AddScoped<HRM.Application.Contracts.Recruitment.IRecruitmentResultService, HRM.Services.RecruitmentResultService>();
+        services.AddScoped<HRM.Application.Contracts.Recruitment.IRecruitmentOfferService, HRM.Services.RecruitmentOfferService>();
+        services.AddScoped<HRM.Application.Contracts.Recruitment.IRecruitmentOnboardingHandoffService, HRM.Services.RecruitmentOnboardingHandoffService>();
         if (includeBackgroundWorkers) services.AddHostedService<HRM.Services.StaffTransferActivationWorker>();
 
         services.AddUserAppData();

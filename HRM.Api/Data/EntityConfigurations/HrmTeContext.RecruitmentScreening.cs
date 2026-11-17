@@ -1,0 +1,1 @@
+using HRM.Models.Recruitment;using Microsoft.EntityFrameworkCore;namespace HRM.Models;public partial class HrmTeContext{public DbSet<RecruitmentScreeningDecision> RecruitmentScreeningDecisions=>Set<RecruitmentScreeningDecision>();public DbSet<RecruitmentPanelConflictDeclaration> RecruitmentPanelConflictDeclarations=>Set<RecruitmentPanelConflictDeclaration>();}

@@ -461,6 +461,10 @@ namespace HRM.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("AttendanceDeviceId"));
 
+                    b.Property<string>("AdapterType")
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
                     b.Property<int>("AttendanceClientId")
                         .HasColumnType("int")
                         .HasColumnName("AttendanceClientID");
@@ -475,11 +479,20 @@ namespace HRM.Migrations
                         .HasColumnType("int")
                         .HasColumnName("AttendanceDeviceStateID");
 
+                    b.Property<int?>("EdgeAttendanceAgentId")
+                        .HasColumnType("int")
+                        .HasColumnName("EdgeAttendanceAgentID");
+
                     b.Property<string>("Ipaddress")
                         .IsRequired()
                         .HasMaxLength(250)
                         .HasColumnType("nvarchar(250)")
                         .HasColumnName("IPAddress");
+
+                    b.Property<bool>("IsEdgeEnabled")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
 
                     b.Property<bool>("IsPrimary")
                         .HasColumnType("bit");
@@ -492,14 +505,24 @@ namespace HRM.Migrations
                         .HasColumnType("int")
                         .HasColumnName("OperationLogID");
 
+                    b.Property<int?>("OrganisationId")
+                        .HasColumnType("int")
+                        .HasColumnName("OrganisationID");
+
                     b.Property<int>("Port")
                         .HasColumnType("int");
 
                     b.HasKey("AttendanceDeviceId");
 
+                    b.HasIndex("EdgeAttendanceAgentId")
+                        .HasDatabaseName("IX_EA_AttendanceDevices_EdgeAttendanceAgentID");
+
                     b.HasIndex("OperationLogId");
 
-                    b.ToTable("AttendanceDevices");
+                    b.HasIndex("OrganisationId")
+                        .HasDatabaseName("IX_EA_AttendanceDevices_OrganisationID");
+
+                    b.ToTable("EA_AttendanceDevices", (string)null);
                 });
 
             modelBuilder.Entity("HRM.Models.Archives.BusinessEntityCalendar", b =>
@@ -9041,6 +9064,222 @@ namespace HRM.Migrations
                     b.ToTable("DMS_StoredObjects", (string)null);
                 });
 
+            modelBuilder.Entity("HRM.Models.EdgeAttendance.EdgeAttendanceAgent", b =>
+                {
+                    b.Property<int>("EdgeAttendanceAgentId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("EdgeAttendanceAgentId"));
+
+                    b.Property<string>("AgentIdentifier")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("CertificateIssuer")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime>("CertificateNotAfterUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CertificateThumbprint")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("LastHealthStatus")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("LastSeenAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("OrganisationId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("RevokedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("EdgeAttendanceAgentId");
+
+                    b.HasIndex("AgentIdentifier")
+                        .IsUnique();
+
+                    b.HasIndex("CertificateThumbprint")
+                        .IsUnique();
+
+                    b.HasIndex("OrganisationId");
+
+                    b.ToTable("EA_Agents", (string)null);
+                });
+
+            modelBuilder.Entity("HRM.Models.EdgeAttendance.EdgeAttendanceAgentDevice", b =>
+                {
+                    b.Property<int>("EdgeAttendanceAgentDeviceId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("EdgeAttendanceAgentDeviceId"));
+
+                    b.Property<int>("AttendanceDeviceId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("EdgeAttendanceAgentId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.HasKey("EdgeAttendanceAgentDeviceId");
+
+                    b.HasIndex("AttendanceDeviceId");
+
+                    b.HasIndex("EdgeAttendanceAgentId", "AttendanceDeviceId")
+                        .IsUnique();
+
+                    b.ToTable("EA_AgentDevices", (string)null);
+                });
+
+            modelBuilder.Entity("HRM.Models.EdgeAttendance.EdgeAttendanceEventReceipt", b =>
+                {
+                    b.Property<long>("EdgeAttendanceEventReceiptId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("EdgeAttendanceEventReceiptId"));
+
+                    b.Property<int>("AttendanceDeviceId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("AttendanceLogId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("DeviceEventId")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTime>("DeviceTimestampUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("EdgeAttendanceAgentId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("EventHash")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<string>("LocalUserId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("ProcessingStatus")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<DateTime>("ReceivedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("EdgeAttendanceEventReceiptId");
+
+                    b.HasIndex("AttendanceLogId");
+
+                    b.HasIndex("EdgeAttendanceAgentId");
+
+                    b.HasIndex("EventHash")
+                        .IsUnique();
+
+                    b.HasIndex("AttendanceDeviceId", "DeviceEventId")
+                        .IsUnique();
+
+                    b.ToTable("EA_EventReceipts", (string)null);
+                });
+
+            modelBuilder.Entity("HRM.Models.EdgeAttendance.EdgeAttendanceIngestionFailure", b =>
+                {
+                    b.Property<long>("EdgeAttendanceIngestionFailureId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("EdgeAttendanceIngestionFailureId"));
+
+                    b.Property<int?>("AttendanceDeviceId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Detail")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<int?>("EdgeAttendanceAgentId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("FailureCode")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<DateTime>("OccurredAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("EdgeAttendanceIngestionFailureId");
+
+                    b.HasIndex("AttendanceDeviceId");
+
+                    b.HasIndex("EdgeAttendanceAgentId", "OccurredAtUtc");
+
+                    b.ToTable("EA_IngestionFailures", (string)null);
+                });
+
+            modelBuilder.Entity("HRM.Models.EdgeAttendance.EdgeAttendanceTrustedIssuer", b =>
+                {
+                    b.Property<int>("EdgeAttendanceTrustedIssuerId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("EdgeAttendanceTrustedIssuerId"));
+
+                    b.Property<byte[]>("CertificateRawData")
+                        .HasColumnType("varbinary(max)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Subject")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("Thumbprint")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.HasKey("EdgeAttendanceTrustedIssuerId");
+
+                    b.HasIndex("Thumbprint")
+                        .IsUnique();
+
+                    b.ToTable("EA_TrustedIssuers", (string)null);
+                });
+
             modelBuilder.Entity("HRM.Models.Evaluation", b =>
                 {
                     b.Property<int>("EvaluationId")
@@ -11881,6 +12120,319 @@ namespace HRM.Migrations
                     b.HasIndex("OrganisationId", "IndividualId");
 
                     b.ToTable("LC_LateCheckInRequests", (string)null);
+                });
+
+            modelBuilder.Entity("HRM.Models.Leadership.LeadershipAppointment", b =>
+                {
+                    b.Property<int>("LeadershipAppointmentId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("LeadershipAppointmentId"));
+
+                    b.Property<int?>("AdministrativeOrganisationId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("AppointingOrganisationId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("AppointmentReference")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateOnly>("EffectiveFrom")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly?>("EffectiveTo")
+                        .HasColumnType("date");
+
+                    b.Property<int>("IndividualId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("LeadershipAppointmentTypeId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("OperationLogId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("PositionTitle")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.HasKey("LeadershipAppointmentId");
+
+                    b.HasIndex("AdministrativeOrganisationId");
+
+                    b.HasIndex("AppointingOrganisationId");
+
+                    b.HasIndex("LeadershipAppointmentTypeId");
+
+                    b.HasIndex("OperationLogId");
+
+                    b.HasIndex("IndividualId", "Status", "EffectiveFrom");
+
+                    b.ToTable("LM_Appointments", (string)null);
+                });
+
+            modelBuilder.Entity("HRM.Models.Leadership.LeadershipAppointmentOrganisation", b =>
+                {
+                    b.Property<int>("LeadershipAppointmentOrganisationId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("LeadershipAppointmentOrganisationId"));
+
+                    b.Property<DateOnly>("EffectiveFrom")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly?>("EffectiveTo")
+                        .HasColumnType("date");
+
+                    b.Property<int>("LeadershipAppointmentId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("OrganisationId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("RelationshipType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.HasKey("LeadershipAppointmentOrganisationId");
+
+                    b.HasIndex("OrganisationId");
+
+                    b.HasIndex("LeadershipAppointmentId", "OrganisationId", "RelationshipType", "EffectiveFrom")
+                        .IsUnique();
+
+                    b.ToTable("LM_AppointmentOrganisations", (string)null);
+                });
+
+            modelBuilder.Entity("HRM.Models.Leadership.LeadershipAppointmentType", b =>
+                {
+                    b.Property<int>("LeadershipAppointmentTypeId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("LeadershipAppointmentTypeId"));
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.HasKey("LeadershipAppointmentTypeId");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("LM_AppointmentTypes", (string)null);
+                });
+
+            modelBuilder.Entity("HRM.Models.Leadership.LeadershipAttendancePolicy", b =>
+                {
+                    b.Property<int>("LeadershipAttendancePolicyId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("LeadershipAttendancePolicyId"));
+
+                    b.Property<bool>("AttendanceRequired")
+                        .HasColumnType("bit");
+
+                    b.Property<DateOnly>("EffectiveFrom")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly?>("EffectiveTo")
+                        .HasColumnType("date");
+
+                    b.Property<int>("LeadershipAppointmentId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ManagingOrganisationId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("VerificationMode")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.HasKey("LeadershipAttendancePolicyId");
+
+                    b.HasIndex("ManagingOrganisationId");
+
+                    b.HasIndex("LeadershipAppointmentId", "EffectiveFrom");
+
+                    b.ToTable("LM_AttendancePolicies", (string)null);
+                });
+
+            modelBuilder.Entity("HRM.Models.Leadership.LeadershipAuditLog", b =>
+                {
+                    b.Property<long>("LeadershipAuditLogId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("LeadershipAuditLogId"));
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<string>("Detail")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<int>("LeadershipAppointmentId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("OrganisationId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("PerformedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("TimestampUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("LeadershipAuditLogId");
+
+                    b.HasIndex("PerformedByUserId");
+
+                    b.HasIndex("LeadershipAppointmentId", "TimestampUtc");
+
+                    b.ToTable("LM_AuditLogs", (string)null);
+                });
+
+            modelBuilder.Entity("HRM.Models.Leadership.LeadershipAuthorityGrant", b =>
+                {
+                    b.Property<int>("LeadershipAuthorityGrantId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("LeadershipAuthorityGrantId"));
+
+                    b.Property<string>("Conditions")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("LeadershipAppointmentOrganisationId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("PermissionCode")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<string>("ScopeType")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<DateOnly>("ValidFrom")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly?>("ValidTo")
+                        .HasColumnType("date");
+
+                    b.HasKey("LeadershipAuthorityGrantId");
+
+                    b.HasIndex("LeadershipAppointmentOrganisationId", "PermissionCode", "IsActive", "ValidFrom");
+
+                    b.ToTable("LM_AuthorityGrants", (string)null);
+                });
+
+            modelBuilder.Entity("HRM.Models.Leadership.LeadershipDelegation", b =>
+                {
+                    b.Property<int>("LeadershipDelegationId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("LeadershipDelegationId"));
+
+                    b.Property<int>("FromLeadershipAppointmentId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("OrganisationId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("PermissionScope")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<int>("ToUserId")
+                        .HasColumnType("int");
+
+                    b.Property<DateOnly>("ValidFrom")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly?>("ValidTo")
+                        .HasColumnType("date");
+
+                    b.HasKey("LeadershipDelegationId");
+
+                    b.HasIndex("FromLeadershipAppointmentId");
+
+                    b.HasIndex("OrganisationId");
+
+                    b.HasIndex("ToUserId", "OrganisationId", "IsActive", "ValidFrom");
+
+                    b.ToTable("LM_Delegations", (string)null);
+                });
+
+            modelBuilder.Entity("HRM.Models.Leadership.LeadershipDeviceAccess", b =>
+                {
+                    b.Property<int>("LeadershipDeviceAccessId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("LeadershipDeviceAccessId"));
+
+                    b.Property<int>("AttendanceDeviceId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("DeviceUserId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("LeadershipAppointmentId")
+                        .HasColumnType("int");
+
+                    b.Property<DateOnly>("ValidFrom")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly?>("ValidTo")
+                        .HasColumnType("date");
+
+                    b.HasKey("LeadershipDeviceAccessId");
+
+                    b.HasIndex("LeadershipAppointmentId");
+
+                    b.HasIndex("AttendanceDeviceId", "DeviceUserId", "ValidFrom");
+
+                    b.ToTable("LM_DeviceAccesses", (string)null);
                 });
 
             modelBuilder.Entity("HRM.Models.Leaf", b =>
@@ -16964,6 +17516,1046 @@ namespace HRM.Migrations
                     b.ToTable("PR_ProjectTasks", (string)null);
                 });
 
+            modelBuilder.Entity("HRM.Models.Recruitment.RecruitmentApplicant", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("EfaasIdNumber")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("nvarchar(320)");
+
+                    b.Property<string>("FullName")
+                        .IsRequired()
+                        .HasMaxLength(250)
+                        .HasColumnType("nvarchar(250)");
+
+                    b.Property<string>("Mobile")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<string>("Reference")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EfaasIdNumber")
+                        .IsUnique();
+
+                    b.HasIndex("Email")
+                        .IsUnique();
+
+                    b.HasIndex("Reference")
+                        .IsUnique();
+
+                    b.ToTable("RM_RecruitmentApplicants", (string)null);
+                });
+
+            modelBuilder.Entity("HRM.Models.Recruitment.RecruitmentApplication", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("OperationLogId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("OrganisationId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ProfileSnapshotJson")
+                        .IsRequired()
+                        .HasMaxLength(16000)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("RecruitmentApplicantId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("RecruitmentVacancyId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Reference")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<DateTime?>("SubmittedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OperationLogId");
+
+                    b.HasIndex("RecruitmentVacancyId");
+
+                    b.HasIndex("Reference")
+                        .IsUnique();
+
+                    b.HasIndex("RecruitmentApplicantId", "RecruitmentVacancyId")
+                        .IsUnique();
+
+                    b.HasIndex("OrganisationId", "Status", "SubmittedAtUtc");
+
+                    b.ToTable("RM_RecruitmentApplications", (string)null);
+                });
+
+            modelBuilder.Entity("HRM.Models.Recruitment.RecruitmentAssessment", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("OperationLogId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("OrganisationId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("RecruitmentVacancyId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("ScheduledAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<string>("TemplateCode")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OperationLogId");
+
+                    b.HasIndex("OrganisationId");
+
+                    b.HasIndex("RecruitmentVacancyId", "ScheduledAtUtc");
+
+                    b.ToTable("RM_RecruitmentAssessments", (string)null);
+                });
+
+            modelBuilder.Entity("HRM.Models.Recruitment.RecruitmentComplianceRule", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("EnforcementLevel")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("OfficialProvision")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("PositionCategory")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("RecruitmentPolicyVersionId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("RecruitmentType")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<string>("Requirement")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<string>("ResponsibleAuthority")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("RuleCode")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(100)");
+
+                    b.Property<string>("ValidationDefinitionJson")
+                        .IsRequired()
+                        .HasMaxLength(8000)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("VerificationStatus")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RecruitmentPolicyVersionId", "RuleCode")
+                        .IsUnique();
+
+                    b.ToTable("RM_RecruitmentComplianceRules", (string)null);
+                });
+
+            modelBuilder.Entity("HRM.Models.Recruitment.RecruitmentMeritResult", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("CalculationSnapshotJson")
+                        .IsRequired()
+                        .HasMaxLength(16000)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("Rank")
+                        .HasColumnType("int");
+
+                    b.Property<int>("RecruitmentApplicationId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("RecruitmentResultPublicationId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("Score")
+                        .HasPrecision(8, 2)
+                        .HasColumnType("decimal(8,2)");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RecruitmentApplicationId");
+
+                    b.HasIndex("RecruitmentResultPublicationId", "RecruitmentApplicationId")
+                        .IsUnique();
+
+                    b.ToTable("RM_RecruitmentMeritResults", (string)null);
+                });
+
+            modelBuilder.Entity("HRM.Models.Recruitment.RecruitmentObjection", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Grounds")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
+
+                    b.Property<int>("OperationLogId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("RecruitmentApplicationId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("RecruitmentResultPublicationId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Resolution")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("ResolvedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("ResolvedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<DateTime>("SubmittedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OperationLogId");
+
+                    b.HasIndex("RecruitmentApplicationId");
+
+                    b.HasIndex("RecruitmentResultPublicationId", "RecruitmentApplicationId")
+                        .IsUnique();
+
+                    b.ToTable("RM_RecruitmentObjections", (string)null);
+                });
+
+            modelBuilder.Entity("HRM.Models.Recruitment.RecruitmentOffer", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime?>("AcceptedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("AppointmentAuthorityUserId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("OfferedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("OnboardingRequestId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("OperationLogId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("OrganisationId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("RecruitmentMeritResultId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<string>("TermsSnapshotJson")
+                        .IsRequired()
+                        .HasMaxLength(16000)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OperationLogId");
+
+                    b.HasIndex("OrganisationId");
+
+                    b.HasIndex("RecruitmentMeritResultId")
+                        .IsUnique();
+
+                    b.ToTable("RM_RecruitmentOffers", (string)null);
+                });
+
+            modelBuilder.Entity("HRM.Models.Recruitment.RecruitmentOfficialTemplate", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Direction")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("nvarchar(3)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Language")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(250)
+                        .HasColumnType("nvarchar(250)");
+
+                    b.Property<string>("PositionCategory")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("RecruitmentPolicyVersionId")
+                        .HasColumnType("int");
+
+                    b.Property<long>("SourceDocumentId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("SourceSha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("SourceUrl")
+                        .IsRequired()
+                        .HasMaxLength(2048)
+                        .HasColumnType("nvarchar(2048)");
+
+                    b.Property<string>("TemplateCode")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("TemplateDefinitionJson")
+                        .IsRequired()
+                        .HasMaxLength(16000)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("VerificationStatus")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SourceDocumentId");
+
+                    b.HasIndex("RecruitmentPolicyVersionId", "TemplateCode", "PositionCategory")
+                        .IsUnique();
+
+                    b.ToTable("RM_RecruitmentOfficialTemplates", (string)null);
+                });
+
+            modelBuilder.Entity("HRM.Models.Recruitment.RecruitmentPanelConflictDeclaration", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Declaration")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<DateTime>("DeclaredAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("DeclaredByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("HasConflict")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Mitigation")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<int>("OperationLogId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("OrganisationId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("RecruitmentVacancyId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OperationLogId");
+
+                    b.HasIndex("OrganisationId");
+
+                    b.HasIndex("RecruitmentVacancyId", "DeclaredByUserId")
+                        .IsUnique();
+
+                    b.ToTable("RM_RecruitmentPanelConflictDeclarations", (string)null);
+                });
+
+            modelBuilder.Entity("HRM.Models.Recruitment.RecruitmentPanelScorecard", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("CriterionScoresJson")
+                        .IsRequired()
+                        .HasMaxLength(16000)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsLocked")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("OperationLogId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("RecruitmentApplicationId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("RecruitmentAssessmentId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ScorerUserId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("SubmittedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<decimal>("TotalScore")
+                        .HasPrecision(8, 2)
+                        .HasColumnType("decimal(8,2)");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OperationLogId");
+
+                    b.HasIndex("RecruitmentApplicationId");
+
+                    b.HasIndex("RecruitmentAssessmentId", "RecruitmentApplicationId", "ScorerUserId")
+                        .IsUnique();
+
+                    b.ToTable("RM_RecruitmentPanelScorecards", (string)null);
+                });
+
+            modelBuilder.Entity("HRM.Models.Recruitment.RecruitmentPolicyAssignment", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("EffectiveFrom")
+                        .HasColumnType("date");
+
+                    b.Property<DateTime?>("EffectiveTo")
+                        .HasColumnType("date");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("OperationLogId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("OrganisationId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("PositionCategory")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("RecruitmentPolicyVersionId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("RecruitmentType")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OperationLogId");
+
+                    b.HasIndex("RecruitmentPolicyVersionId");
+
+                    b.HasIndex("OrganisationId", "RecruitmentType", "PositionCategory", "EffectiveFrom")
+                        .IsUnique();
+
+                    b.ToTable("RM_RecruitmentPolicyAssignments", (string)null);
+                });
+
+            modelBuilder.Entity("HRM.Models.Recruitment.RecruitmentPolicyProfile", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(64)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsCscProfile")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Jurisdiction")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique();
+
+                    b.ToTable("RM_RecruitmentPolicyProfiles", (string)null);
+                });
+
+            modelBuilder.Entity("HRM.Models.Recruitment.RecruitmentPolicyVersion", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("EffectiveFrom")
+                        .HasColumnType("date");
+
+                    b.Property<DateTime?>("EffectiveTo")
+                        .HasColumnType("date");
+
+                    b.Property<bool>("IsApprovedForUse")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("OfficialSourceReference")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("OfficialSourceUrl")
+                        .IsRequired()
+                        .HasMaxLength(2048)
+                        .HasColumnType("nvarchar(2048)");
+
+                    b.Property<int>("RecruitmentPolicyProfileId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("VerificationStatus")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<DateTime?>("VerifiedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("VerifiedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("int");
+
+                    b.Property<string>("VersionCode")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("VerifiedByUserId");
+
+                    b.HasIndex("RecruitmentPolicyProfileId", "VersionCode")
+                        .IsUnique();
+
+                    b.ToTable("RM_RecruitmentPolicyVersions", (string)null);
+                });
+
+            modelBuilder.Entity("HRM.Models.Recruitment.RecruitmentPositionReservation", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("OperationLogId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("OrganisationId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("PositionMatrixId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("RecruitmentRequisitionId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("ReleasedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("ReservedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("ReservedSlots")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OperationLogId");
+
+                    b.HasIndex("OrganisationId");
+
+                    b.HasIndex("PositionMatrixId", "Status");
+
+                    b.HasIndex("RecruitmentRequisitionId", "Status")
+                        .IsUnique()
+                        .HasFilter("[Status] = 'Active'");
+
+                    b.ToTable("RM_RecruitmentPositionReservations", (string)null);
+                });
+
+            modelBuilder.Entity("HRM.Models.Recruitment.RecruitmentRequisition", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime?>("ApprovedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("EmploymentType")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<int>("OperationLogId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("OrganisationId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("OrganisationStructureId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("PositionMatrixId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("PositionSnapshotJson")
+                        .IsRequired()
+                        .HasMaxLength(8000)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<int>("RecruitmentPolicyVersionId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("RecruitmentType")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<string>("Reference")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<int>("RequestedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("RequestedSlots")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<DateTime?>("SubmittedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OperationLogId");
+
+                    b.HasIndex("OrganisationStructureId");
+
+                    b.HasIndex("PositionMatrixId");
+
+                    b.HasIndex("RecruitmentPolicyVersionId");
+
+                    b.HasIndex("Reference")
+                        .IsUnique();
+
+                    b.HasIndex("RequestedByUserId");
+
+                    b.HasIndex("OrganisationId", "Status", "CreatedAtUtc");
+
+                    b.ToTable("RM_RecruitmentRequisitions", (string)null);
+                });
+
+            modelBuilder.Entity("HRM.Models.Recruitment.RecruitmentResultPublication", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("IsFinal")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime>("ObjectionClosesAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("OperationLogId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("OrganisationId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("PublishedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("RecruitmentVacancyId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OperationLogId");
+
+                    b.HasIndex("OrganisationId");
+
+                    b.HasIndex("RecruitmentVacancyId")
+                        .IsUnique();
+
+                    b.ToTable("RM_RecruitmentResultPublications", (string)null);
+                });
+
+            modelBuilder.Entity("HRM.Models.Recruitment.RecruitmentScreeningDecision", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("DecidedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("DecidedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("DecisionReason")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<string>("EvidenceSnapshotJson")
+                        .IsRequired()
+                        .HasMaxLength(16000)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsEligible")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsLocked")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsShortlisted")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("OperationLogId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("OrganisationId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("RecruitmentApplicationId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("RecruitmentVacancyId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OperationLogId");
+
+                    b.HasIndex("OrganisationId");
+
+                    b.HasIndex("RecruitmentApplicationId")
+                        .IsUnique();
+
+                    b.HasIndex("RecruitmentVacancyId", "IsEligible", "IsShortlisted");
+
+                    b.ToTable("RM_RecruitmentScreeningDecisions", (string)null);
+                });
+
+            modelBuilder.Entity("HRM.Models.Recruitment.RecruitmentVacancy", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AdvertisementSnapshotJson")
+                        .IsRequired()
+                        .HasMaxLength(16000)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("ClosingAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("OperationLogId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("OrganisationId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("PositionMatrixId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("PublishedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("RecruitmentPolicyVersionId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("RecruitmentRequisitionId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Reference")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<int>("VacancySlots")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OperationLogId");
+
+                    b.HasIndex("PositionMatrixId");
+
+                    b.HasIndex("RecruitmentPolicyVersionId");
+
+                    b.HasIndex("RecruitmentRequisitionId");
+
+                    b.HasIndex("Reference")
+                        .IsUnique();
+
+                    b.HasIndex("OrganisationId", "Status", "ClosingAtUtc");
+
+                    b.ToTable("RM_RecruitmentVacancies", (string)null);
+                });
+
             modelBuilder.Entity("HRM.Models.Request", b =>
                 {
                     b.Property<int>("RequestId")
@@ -20759,6 +22351,182 @@ namespace HRM.Migrations
                     b.ToTable("Users");
                 });
 
+            modelBuilder.Entity("HRM.Models.UserAccessScope", b =>
+                {
+                    b.Property<int>("UserAccessScopeId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("UserAccessScopeId"));
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("GrantedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IncludeDescendants")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<int?>("OperationLogId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("OrganisationId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("PermissionFilter")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("RevocationReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime?>("RevokedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("RevokedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ScopeType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<int?>("TeamId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("UnitId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("UserGroupId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("UserId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("ValidFrom")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("ValidTo")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("UserAccessScopeId");
+
+                    b.HasIndex("GrantedByUserId");
+
+                    b.HasIndex("OperationLogId");
+
+                    b.HasIndex("RevokedByUserId");
+
+                    b.HasIndex("TeamId");
+
+                    b.HasIndex("UnitId");
+
+                    b.HasIndex("UserGroupId");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("OrganisationId", "UnitId", "IsActive");
+
+                    b.HasIndex("OrganisationId", "UserGroupId", "IsActive");
+
+                    b.HasIndex("OrganisationId", "UserId", "IsActive");
+
+                    b.ToTable("AC_UserAccessScopes", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_AC_UserAccessScopes_ScopeType", "[ScopeType] IN ('Self', 'Team', 'Department', 'Division', 'DivisionAndDescendants', 'Organisation', 'Custom')");
+
+                            t.HasCheckConstraint("CK_AC_UserAccessScopes_Subject", "([UserId] IS NOT NULL AND [UserGroupId] IS NULL) OR ([UserId] IS NULL AND [UserGroupId] IS NOT NULL)");
+                        });
+                });
+
+            modelBuilder.Entity("HRM.Models.UserAccessScopeAudit", b =>
+                {
+                    b.Property<long>("UserAccessScopeAuditId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("UserAccessScopeAuditId"));
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Detail")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<bool>("IncludeDescendants")
+                        .HasColumnType("bit");
+
+                    b.Property<int?>("OperationLogId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("OrganisationId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("PerformedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ScopeType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<int?>("TargetUserGroupId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("TargetUserId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("TeamId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("TimestampUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("UnitId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("UserAccessScopeId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("ValidFrom")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("ValidTo")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("UserAccessScopeAuditId");
+
+                    b.HasIndex("OperationLogId");
+
+                    b.HasIndex("PerformedByUserId");
+
+                    b.HasIndex("TargetUserGroupId");
+
+                    b.HasIndex("TeamId");
+
+                    b.HasIndex("UnitId");
+
+                    b.HasIndex("UserAccessScopeId");
+
+                    b.HasIndex("OrganisationId", "TimestampUtc");
+
+                    b.HasIndex("TargetUserId", "TimestampUtc");
+
+                    b.ToTable("AC_UserAccessScopeAudits", (string)null);
+                });
+
             modelBuilder.Entity("HRM.Models.UserAssignedUserGroup", b =>
                 {
                     b.Property<int>("UserGroupId")
@@ -23584,10 +25352,22 @@ namespace HRM.Migrations
 
             modelBuilder.Entity("HRM.Models.Archives.AttendanceDevice", b =>
                 {
+                    b.HasOne("HRM.Models.EdgeAttendance.EdgeAttendanceAgent", null)
+                        .WithMany()
+                        .HasForeignKey("EdgeAttendanceAgentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("FK_EA_AttendanceDevices_Agents");
+
                     b.HasOne("HRM.Models.OperationLog", "OperationLog")
                         .WithMany("AttendanceDevices")
                         .HasForeignKey("OperationLogId")
                         .HasConstraintName("FK_AttendanceDevices_OperationLogs");
+
+                    b.HasOne("HRM.Models.Organisation", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("FK_EA_AttendanceDevices_Organisations");
 
                     b.Navigation("OperationLog");
                 });
@@ -26967,6 +28747,63 @@ namespace HRM.Migrations
                     b.Navigation("Organisation");
                 });
 
+            modelBuilder.Entity("HRM.Models.EdgeAttendance.EdgeAttendanceAgent", b =>
+                {
+                    b.HasOne("HRM.Models.Organisation", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("HRM.Models.EdgeAttendance.EdgeAttendanceAgentDevice", b =>
+                {
+                    b.HasOne("HRM.Models.Archives.AttendanceDevice", null)
+                        .WithMany()
+                        .HasForeignKey("AttendanceDeviceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.EdgeAttendance.EdgeAttendanceAgent", null)
+                        .WithMany()
+                        .HasForeignKey("EdgeAttendanceAgentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("HRM.Models.EdgeAttendance.EdgeAttendanceEventReceipt", b =>
+                {
+                    b.HasOne("HRM.Models.Archives.AttendanceDevice", null)
+                        .WithMany()
+                        .HasForeignKey("AttendanceDeviceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.AttendanceLog", null)
+                        .WithMany()
+                        .HasForeignKey("AttendanceLogId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("HRM.Models.EdgeAttendance.EdgeAttendanceAgent", null)
+                        .WithMany()
+                        .HasForeignKey("EdgeAttendanceAgentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("HRM.Models.EdgeAttendance.EdgeAttendanceIngestionFailure", b =>
+                {
+                    b.HasOne("HRM.Models.Archives.AttendanceDevice", null)
+                        .WithMany()
+                        .HasForeignKey("AttendanceDeviceId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("HRM.Models.EdgeAttendance.EdgeAttendanceAgent", null)
+                        .WithMany()
+                        .HasForeignKey("EdgeAttendanceAgentId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
             modelBuilder.Entity("HRM.Models.EvaluationScore", b =>
                 {
                     b.HasOne("HRM.Models.Evaluation", "Evaluation")
@@ -27907,6 +29744,127 @@ namespace HRM.Migrations
                         .IsRequired();
 
                     b.Navigation("Request");
+                });
+
+            modelBuilder.Entity("HRM.Models.Leadership.LeadershipAppointment", b =>
+                {
+                    b.HasOne("HRM.Models.Organisation", null)
+                        .WithMany()
+                        .HasForeignKey("AdministrativeOrganisationId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("HRM.Models.Organisation", null)
+                        .WithMany()
+                        .HasForeignKey("AppointingOrganisationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.Individual", null)
+                        .WithMany()
+                        .HasForeignKey("IndividualId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.Leadership.LeadershipAppointmentType", null)
+                        .WithMany()
+                        .HasForeignKey("LeadershipAppointmentTypeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.OperationLog", null)
+                        .WithMany()
+                        .HasForeignKey("OperationLogId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("HRM.Models.Leadership.LeadershipAppointmentOrganisation", b =>
+                {
+                    b.HasOne("HRM.Models.Leadership.LeadershipAppointment", null)
+                        .WithMany("Organisations")
+                        .HasForeignKey("LeadershipAppointmentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.Organisation", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("HRM.Models.Leadership.LeadershipAttendancePolicy", b =>
+                {
+                    b.HasOne("HRM.Models.Leadership.LeadershipAppointment", null)
+                        .WithMany()
+                        .HasForeignKey("LeadershipAppointmentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.Organisation", null)
+                        .WithMany()
+                        .HasForeignKey("ManagingOrganisationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("HRM.Models.Leadership.LeadershipAuditLog", b =>
+                {
+                    b.HasOne("HRM.Models.Leadership.LeadershipAppointment", null)
+                        .WithMany()
+                        .HasForeignKey("LeadershipAppointmentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("PerformedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("HRM.Models.Leadership.LeadershipAuthorityGrant", b =>
+                {
+                    b.HasOne("HRM.Models.Leadership.LeadershipAppointmentOrganisation", null)
+                        .WithMany("AuthorityGrants")
+                        .HasForeignKey("LeadershipAppointmentOrganisationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("HRM.Models.Leadership.LeadershipDelegation", b =>
+                {
+                    b.HasOne("HRM.Models.Leadership.LeadershipAppointment", null)
+                        .WithMany()
+                        .HasForeignKey("FromLeadershipAppointmentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.Organisation", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("ToUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("HRM.Models.Leadership.LeadershipDeviceAccess", b =>
+                {
+                    b.HasOne("HRM.Models.Archives.AttendanceDevice", null)
+                        .WithMany()
+                        .HasForeignKey("AttendanceDeviceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.Leadership.LeadershipAppointment", null)
+                        .WithMany()
+                        .HasForeignKey("LeadershipAppointmentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("HRM.Models.Leaf", b =>
@@ -29359,6 +31317,364 @@ namespace HRM.Migrations
                         .IsRequired();
 
                     b.Navigation("Project");
+                });
+
+            modelBuilder.Entity("HRM.Models.Recruitment.RecruitmentApplication", b =>
+                {
+                    b.HasOne("HRM.Models.OperationLog", null)
+                        .WithMany()
+                        .HasForeignKey("OperationLogId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.Organisation", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.Recruitment.RecruitmentApplicant", null)
+                        .WithMany()
+                        .HasForeignKey("RecruitmentApplicantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.Recruitment.RecruitmentVacancy", null)
+                        .WithMany()
+                        .HasForeignKey("RecruitmentVacancyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("HRM.Models.Recruitment.RecruitmentAssessment", b =>
+                {
+                    b.HasOne("HRM.Models.OperationLog", null)
+                        .WithMany()
+                        .HasForeignKey("OperationLogId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.Organisation", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.Recruitment.RecruitmentVacancy", null)
+                        .WithMany()
+                        .HasForeignKey("RecruitmentVacancyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("HRM.Models.Recruitment.RecruitmentComplianceRule", b =>
+                {
+                    b.HasOne("HRM.Models.Recruitment.RecruitmentPolicyVersion", "RecruitmentPolicyVersion")
+                        .WithMany()
+                        .HasForeignKey("RecruitmentPolicyVersionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("RecruitmentPolicyVersion");
+                });
+
+            modelBuilder.Entity("HRM.Models.Recruitment.RecruitmentMeritResult", b =>
+                {
+                    b.HasOne("HRM.Models.Recruitment.RecruitmentApplication", null)
+                        .WithMany()
+                        .HasForeignKey("RecruitmentApplicationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.Recruitment.RecruitmentResultPublication", null)
+                        .WithMany()
+                        .HasForeignKey("RecruitmentResultPublicationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("HRM.Models.Recruitment.RecruitmentObjection", b =>
+                {
+                    b.HasOne("HRM.Models.OperationLog", null)
+                        .WithMany()
+                        .HasForeignKey("OperationLogId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.Recruitment.RecruitmentApplication", null)
+                        .WithMany()
+                        .HasForeignKey("RecruitmentApplicationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.Recruitment.RecruitmentResultPublication", null)
+                        .WithMany()
+                        .HasForeignKey("RecruitmentResultPublicationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("HRM.Models.Recruitment.RecruitmentOffer", b =>
+                {
+                    b.HasOne("HRM.Models.OperationLog", null)
+                        .WithMany()
+                        .HasForeignKey("OperationLogId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.Organisation", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.Recruitment.RecruitmentMeritResult", null)
+                        .WithMany()
+                        .HasForeignKey("RecruitmentMeritResultId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("HRM.Models.Recruitment.RecruitmentOfficialTemplate", b =>
+                {
+                    b.HasOne("HRM.Models.Recruitment.RecruitmentPolicyVersion", null)
+                        .WithMany()
+                        .HasForeignKey("RecruitmentPolicyVersionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.DmsDocument", null)
+                        .WithMany()
+                        .HasForeignKey("SourceDocumentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("HRM.Models.Recruitment.RecruitmentPanelConflictDeclaration", b =>
+                {
+                    b.HasOne("HRM.Models.OperationLog", null)
+                        .WithMany()
+                        .HasForeignKey("OperationLogId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.Organisation", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.Recruitment.RecruitmentVacancy", null)
+                        .WithMany()
+                        .HasForeignKey("RecruitmentVacancyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("HRM.Models.Recruitment.RecruitmentPanelScorecard", b =>
+                {
+                    b.HasOne("HRM.Models.OperationLog", null)
+                        .WithMany()
+                        .HasForeignKey("OperationLogId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.Recruitment.RecruitmentApplication", null)
+                        .WithMany()
+                        .HasForeignKey("RecruitmentApplicationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.Recruitment.RecruitmentAssessment", null)
+                        .WithMany()
+                        .HasForeignKey("RecruitmentAssessmentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("HRM.Models.Recruitment.RecruitmentPolicyAssignment", b =>
+                {
+                    b.HasOne("HRM.Models.OperationLog", null)
+                        .WithMany()
+                        .HasForeignKey("OperationLogId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.Organisation", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.Recruitment.RecruitmentPolicyVersion", "RecruitmentPolicyVersion")
+                        .WithMany()
+                        .HasForeignKey("RecruitmentPolicyVersionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("RecruitmentPolicyVersion");
+                });
+
+            modelBuilder.Entity("HRM.Models.Recruitment.RecruitmentPolicyVersion", b =>
+                {
+                    b.HasOne("HRM.Models.Recruitment.RecruitmentPolicyProfile", "RecruitmentPolicyProfile")
+                        .WithMany()
+                        .HasForeignKey("RecruitmentPolicyProfileId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("VerifiedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("RecruitmentPolicyProfile");
+                });
+
+            modelBuilder.Entity("HRM.Models.Recruitment.RecruitmentPositionReservation", b =>
+                {
+                    b.HasOne("HRM.Models.OperationLog", null)
+                        .WithMany()
+                        .HasForeignKey("OperationLogId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.Organisation", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.PositionMatrix", null)
+                        .WithMany()
+                        .HasForeignKey("PositionMatrixId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.Recruitment.RecruitmentRequisition", null)
+                        .WithMany()
+                        .HasForeignKey("RecruitmentRequisitionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("HRM.Models.Recruitment.RecruitmentRequisition", b =>
+                {
+                    b.HasOne("HRM.Models.OperationLog", null)
+                        .WithMany()
+                        .HasForeignKey("OperationLogId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.Organisation", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.OrganisationStructure", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationStructureId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("HRM.Models.PositionMatrix", null)
+                        .WithMany()
+                        .HasForeignKey("PositionMatrixId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.Recruitment.RecruitmentPolicyVersion", null)
+                        .WithMany()
+                        .HasForeignKey("RecruitmentPolicyVersionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("RequestedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("HRM.Models.Recruitment.RecruitmentResultPublication", b =>
+                {
+                    b.HasOne("HRM.Models.OperationLog", null)
+                        .WithMany()
+                        .HasForeignKey("OperationLogId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.Organisation", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.Recruitment.RecruitmentVacancy", null)
+                        .WithMany()
+                        .HasForeignKey("RecruitmentVacancyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("HRM.Models.Recruitment.RecruitmentScreeningDecision", b =>
+                {
+                    b.HasOne("HRM.Models.OperationLog", null)
+                        .WithMany()
+                        .HasForeignKey("OperationLogId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.Organisation", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.Recruitment.RecruitmentApplication", null)
+                        .WithMany()
+                        .HasForeignKey("RecruitmentApplicationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.Recruitment.RecruitmentVacancy", null)
+                        .WithMany()
+                        .HasForeignKey("RecruitmentVacancyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("HRM.Models.Recruitment.RecruitmentVacancy", b =>
+                {
+                    b.HasOne("HRM.Models.OperationLog", null)
+                        .WithMany()
+                        .HasForeignKey("OperationLogId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.Organisation", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.PositionMatrix", null)
+                        .WithMany()
+                        .HasForeignKey("PositionMatrixId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.Recruitment.RecruitmentPolicyVersion", null)
+                        .WithMany()
+                        .HasForeignKey("RecruitmentPolicyVersionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.Recruitment.RecruitmentRequisition", null)
+                        .WithMany()
+                        .HasForeignKey("RecruitmentRequisitionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("HRM.Models.Request", b =>
@@ -30938,6 +33254,95 @@ namespace HRM.Migrations
                     b.Navigation("UserOrganisation");
 
                     b.Navigation("UserPreference");
+                });
+
+            modelBuilder.Entity("HRM.Models.UserAccessScope", b =>
+                {
+                    b.HasOne("HRM.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("GrantedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("HRM.Models.OperationLog", null)
+                        .WithMany()
+                        .HasForeignKey("OperationLogId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("HRM.Models.Organisation", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("RevokedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("HRM.Models.Team", null)
+                        .WithMany()
+                        .HasForeignKey("TeamId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("HRM.Models.OrganisationStructure", null)
+                        .WithMany()
+                        .HasForeignKey("UnitId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("HRM.Models.UserGroup", null)
+                        .WithMany()
+                        .HasForeignKey("UserGroupId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("HRM.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("HRM.Models.UserAccessScopeAudit", b =>
+                {
+                    b.HasOne("HRM.Models.OperationLog", null)
+                        .WithMany()
+                        .HasForeignKey("OperationLogId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("HRM.Models.Organisation", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("PerformedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.UserGroup", null)
+                        .WithMany()
+                        .HasForeignKey("TargetUserGroupId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("HRM.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("TargetUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("HRM.Models.Team", null)
+                        .WithMany()
+                        .HasForeignKey("TeamId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("HRM.Models.OrganisationStructure", null)
+                        .WithMany()
+                        .HasForeignKey("UnitId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("HRM.Models.UserAccessScope", null)
+                        .WithMany()
+                        .HasForeignKey("UserAccessScopeId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("HRM.Models.UserAssignedUserGroup", b =>
@@ -32665,6 +35070,16 @@ namespace HRM.Migrations
                     b.Navigation("LeaveConfigurableValues");
 
                     b.Navigation("SalaryRateDefinitions");
+                });
+
+            modelBuilder.Entity("HRM.Models.Leadership.LeadershipAppointment", b =>
+                {
+                    b.Navigation("Organisations");
+                });
+
+            modelBuilder.Entity("HRM.Models.Leadership.LeadershipAppointmentOrganisation", b =>
+                {
+                    b.Navigation("AuthorityGrants");
                 });
 
             modelBuilder.Entity("HRM.Models.Leaf", b =>
