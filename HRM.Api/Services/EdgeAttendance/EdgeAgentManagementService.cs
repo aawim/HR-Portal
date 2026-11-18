@@ -18,8 +18,8 @@ public sealed class EdgeAgentManagementService(
     private async Task Guard()
     {
         var a = await access.RequireContextAsync();
-        if (!a.IsSuperAdministrator && !await access.HasPermissionAsync("Edge.Agent.Manage"))
-            throw new UnauthorizedAccessException("MDS Superadmin or Edge.Agent.Manage is required.");
+        if (!a.IsSuperAdministrator && !await access.HasPermissionAsync("Edge.Agent.Manage") && !await access.HasUserGroupAsync("Developer"))
+            throw new UnauthorizedAccessException("MDS Superadmin, Developer, or Edge.Agent.Manage is required.");
     }
 
     public async Task<IReadOnlyList<HRM.DTOs.Organisation.OrganisationSettingsOption>> ListOrganisationsAsync(CancellationToken ct = default)

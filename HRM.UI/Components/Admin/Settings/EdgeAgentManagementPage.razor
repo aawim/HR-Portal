@@ -249,10 +249,25 @@
           <input class="w-full rounded-lg border border-slate-300 p-2" placeholder="e.g. gateway-male-hq-01" @bind="enrolment.AgentIdentifier" />
         </label>
         <div class="space-y-1">
-          <HRM.Components.Shared.SearchableSelect Label="Organisation"
-                                                  Placeholder="Search & select organisation..."
-                                                  Options="@organisations.Select(o => new HRM.Components.Shared.SearchableSelect.Option(o.Id, $"{o.Name} (#{o.Id})"))"
-                                                  @bind-Value="enrolment.OrganisationId" />
+          <span class="block font-medium text-slate-700">Organisation</span>
+          @if (organisations.Count > 0)
+          {
+            <HRM.Components.Shared.SearchableSelect Label=""
+                                                    Placeholder="Search & select organisation..."
+                                                    Options="@organisations.Select(o => new HRM.Components.Shared.SearchableSelect.Option(o.Id, $"{o.Name} (#{o.Id})"))"
+                                                    @bind-Value="enrolment.OrganisationId" />
+          }
+          else
+          {
+            <HRM.Components.Admin.My.Workspace.WorkspaceSearch OnSelected="OnWorkspaceOrgSelected" />
+            @if (enrolment.OrganisationId > 0)
+            {
+              <div class="mt-1 flex items-center justify-between rounded-lg border border-teal-200 bg-teal-50 px-2.5 py-1.5 text-xs text-teal-900">
+                <span>Selected: <strong>@(selectedOrgName ?? $"Organisation #{enrolment.OrganisationId}")</strong> (#@enrolment.OrganisationId)</span>
+                <button type="button" class="text-teal-700 hover:underline font-semibold" @onclick="() => { enrolment.OrganisationId = 0; selectedOrgName = null; }">Clear</button>
+              </div>
+            }
+          }
         </div>
         <label class="block space-y-1">
           <span class="font-medium text-slate-700">Client Certificate Thumbprint (SHA-1)</span>
@@ -654,6 +669,8 @@
   private List<EdgeTrustedIssuerDto> trustedIssuers = [];
   private List<EdgePendingReceiptDto> pendingReceipts = [];
   private List<HRM.DTOs.Organisation.OrganisationSettingsOption> organisations = [];
+  private string? orgLoadError;
+  private string? selectedOrgName;
   private EdgePendingReceiptDto? resolvingReceipt;
   private string staffSearchQuery = "";
   private List<EdgeStaffOptionDto> matchingStaff = [];
@@ -692,7 +709,9 @@
       failures = (await Agents.ListFailuresAsync()).ToList();
       trustedIssuers = (await Agents.ListTrustedIssuersAsync()).ToList();
       pendingReceipts = (await Agents.ListPendingReceiptsAsync(new EdgeReconciliationFilterInput())).ToList();
-      try { organisations = (await Agents.ListOrganisationsAsync()).ToList(); } catch { organisations = []; }
+      orgLoadError = null;
+      try { organisations = (await Agents.ListOrganisationsAsync()).ToList(); }
+      catch (Exception ex) { organisations = []; orgLoadError = $"Org fetch failed: {ex.Message}"; }
       if (organisations.Count == 0)
       {
         try { organisations = (await OrgSettings.GetTeamOrganisationsAsync()).ToList(); } catch { }
@@ -736,6 +755,7 @@
           .Select(id => new HRM.DTOs.Organisation.OrganisationSettingsOption(id, $"Organisation #{id}"))
           .ToList();
       }
+      if (organisations.Count > 0) orgLoadError = null;
       if (enrolment.OrganisationId <= 0 && organisations.Count == 1)
       {
         enrolment.OrganisationId = organisations[0].Id;
@@ -864,6 +884,22 @@
   }
 
   private void OnOrganisationSelected(int? orgId) => enrolment.OrganisationId = orgId ?? 0;
+
+  private void OnWorkspaceOrgSelected(WorkspaceSearchResult item)
+  {
+    if (item.EntityType == HRM.Enum.WorkspaceEntityType.Organisation)
+    {
+      enrolment.OrganisationId = item.Id;
+      selectedOrgName = item.Name;
+      error = null;
+    }
+    else if (item.OrganisationId is > 0)
+    {
+      enrolment.OrganisationId = item.OrganisationId.Value;
+      selectedOrgName = item.OrganisationName;
+      error = null;
+    }
+  }
 
   private void ToggleDevice(int id)
   {
