@@ -1,0 +1,23 @@
+@using HRM.Application.Contracts.Recruitment
+@inject HRM.UI.Services.Recruitment.IRecruitmentApiClient Api
+<section class="p-2 rounded-2xl border border-slate-200 app-surface space-y-3">
+    <h2 class="p-1 font-bold">Vacancies</h2>
+    <label class="block p-1 text-xs font-medium">Approved requisition<select class="@InputClass" @bind="requisition"><option value="0">Select requisition</option>@foreach(var row in Rows.Where(x=>x.Status=="Approved")){<option value="@row.Id">@row.Reference</option>}</select></label>
+    <label class="block p-1 text-xs font-medium">Advertisement title<input maxlength="250" class="@InputClass" @bind="title" /></label>
+    <label class="block p-1 text-xs font-medium">Advertisement details<textarea maxlength="8000" class="@InputClass" @bind="details"></textarea></label>
+    <label class="block p-1 text-xs font-medium">Closing date and time (Maldives)<input type="datetime-local" class="@InputClass" @bind="closing" /></label>
+    <button class="app-button app-button-primary app-button-sm" disabled="@(busy||requisition<=0||string.IsNullOrWhiteSpace(title)||string.IsNullOrWhiteSpace(details))" @onclick="Create">Create draft vacancy</button>
+    @foreach(var vacancy in vacancies){<div class="flex flex-wrap justify-between gap-2 rounded-xl border border-slate-200 p-3 text-xs"><span>@vacancy.Reference · @vacancy.Status · @vacancy.Slots slots · @(vacancy.ClosingAtUtc?.AddHours(5).ToString("dd MMM yyyy HH:mm")) MVT</span>@if(vacancy.Status=="Draft"){<button class="app-button app-button-secondary app-button-sm" disabled="@busy" @onclick="()=>Publish(vacancy.Id)">Publish vacancy</button>}</div>}
+    @if(!string.IsNullOrEmpty(message)){<p role="status" class="p-2 text-sm">@message</p>}
+</section>
+@code{
+    [Parameter] public IReadOnlyList<RecruitmentRequisitionRow> Rows{get;set;}=[];
+    private IReadOnlyList<RecruitmentVacancyRow> vacancies=[];
+    private int requisition; private string title="",details="";private string? message;private bool busy;
+    private DateTime closing=DateTime.UtcNow.AddHours(5).AddDays(14);
+    private const string InputClass="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100";
+    protected override async Task OnInitializedAsync(){try{vacancies=await Api.GetVacanciesAsync();}catch(HttpRequestException){message="Vacancies could not be loaded. Refresh the page.";}}
+    private Task Create()=>Run(()=>Api.CreateVacancyAsync(new(requisition,DateTime.SpecifyKind(closing.AddHours(-5),DateTimeKind.Utc),System.Text.Json.JsonSerializer.Serialize(new{Title=title,Details=details}))));
+    private Task Publish(int id)=>Run(()=>Api.PublishVacancyAsync(id));
+    private async Task Run(Func<Task<HRM.DTOs.ServiceResult>> action){if(busy)return;busy=true;try{var result=await action();message=result.Message;if(result.Success)vacancies=await Api.GetVacanciesAsync();}catch(HttpRequestException){message="The action could not be completed. Check vacancy state and recruitment permissions.";}finally{busy=false;}}
+}

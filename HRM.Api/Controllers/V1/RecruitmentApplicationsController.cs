@@ -2,6 +2,7 @@ using HRM.Api.Infrastructure;
 using Microsoft.AspNetCore.Mvc;
 namespace HRM.Api.Controllers.V1;
 [Route("api/v1/recruitment/applications")]
+[AllowMissingEmployee]
 public sealed class RecruitmentApplicationsController(global::HRM.Application.Contracts.Recruitment.IRecruitmentApplicationService service):HrmApiController
 {
     [HttpGet("vacancies")]

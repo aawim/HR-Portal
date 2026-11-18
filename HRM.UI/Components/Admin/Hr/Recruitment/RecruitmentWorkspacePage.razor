@@ -2,6 +2,45 @@
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
 @rendermode RenderMode.InteractiveServer
 @inject HRM.UI.Services.Recruitment.IRecruitmentApiClient RecruitmentApi
+@inject ILogger<RecruitmentWorkspacePage> Logger
+@inject HRM.Services.Interfaces.IUserAccessService Access
 <PageTitle>Recruitment Workspace - HR Portal</PageTitle>
+@if (canManage && !accessDenied)
+{
+    <RecruitmentRequisitionActions Rows="rows" Changed="LoadAsync" />
+    <RecruitmentVacancyActions Rows="rows" />
+}
+@if (canAdministerAccess)
+{
+    <div class="p-2 flex flex-wrap items-center gap-2">
+        <a class="app-button app-button-secondary app-button-sm" href="/admin/settings/admin-access">Manage recruitment access</a>
+        <span class="text-xs text-slate-500">Select the account and request Recruitment.View or Recruitment.Manage for approval.</span>
+    </div>
+}
+@if (accessDenied)
+{
+    <div role="alert" class="p-2 rounded-xl border border-amber-200 bg-amber-50 text-xs text-amber-900">
+        Ask your account administrator to assign Recruitment.View for this organisation. Recruitment.Manage is required for recruitment processing. After approval, sign out and sign in again, then refresh this page.
+    </div>
+}
 <section class="w-full min-w-0 p-2 space-y-4"><header class="sticky top-0 z-30 m-0 flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-white/95 px-3 py-3 shadow-xs"><div><h1 class="text-lg font-bold text-slate-900">Recruitment Workspace</h1><p class="mt-0.5 text-xs text-slate-500">CSC-controlled requisitions and vacancies.</p></div><button class="app-button app-button-secondary app-button-sm" @onclick="LoadAsync">Refresh</button></header>@if(!string.IsNullOrEmpty(error)){<div class="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">@error</div>}<div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs"><h2 class="font-bold text-slate-800 p-1">Requisitions</h2><div class="overflow-x-auto rounded-xl border border-slate-200"><table class="w-full text-left text-xs"><thead class="bg-slate-50 text-slate-700 font-semibold border-b border-slate-200"><tr><th class="p-2.5">Reference</th><th class="p-2.5">Policy</th><th class="p-2.5">Slots</th><th class="p-2.5">Status</th></tr></thead><tbody class="divide-y divide-slate-100">@foreach(var row in rows){<tr class="hover:bg-slate-50/50"><td class="p-2.5 font-mono text-[11px] text-blue-700">@row.Reference</td><td class="p-2.5">@row.PolicyVersion</td><td class="p-2.5">@row.RequestedSlots</td><td class="p-2.5"><span class="bg-amber-100 text-amber-800 rounded-full px-2.5 py-0.5 font-semibold text-[11px]">@row.Status</span></td></tr>}</tbody></table></div></div></section>
-@code { private List<HRM.Application.Contracts.Recruitment.RecruitmentRequisitionRow> rows=[]; private string? error; protected override async Task OnInitializedAsync()=>await LoadAsync(); private async Task LoadAsync(){try{error=null;rows=(await RecruitmentApi.GetRequisitionsAsync()).ToList();}catch{error="Recruitment data could not be loaded.";}} }
+@code {
+    private List<HRM.Application.Contracts.Recruitment.RecruitmentRequisitionRow> rows=[];
+    private string? error;
+    private bool accessDenied;
+    private bool canAdministerAccess;
+    private bool canManage;
+    protected override async Task OnInitializedAsync()
+    {
+        canAdministerAccess = await Access.HasPermissionAsync("Users.Roles.Edit") || await Access.HasPermissionAsync("Admin");
+        canManage = await Access.HasPermissionAsync("Recruitment.Manage");
+        await LoadAsync();
+    }
+    private async Task LoadAsync()
+    {
+        try { error=null; accessDenied=false; rows=(await RecruitmentApi.GetRequisitionsAsync()).ToList(); }
+        catch (UnauthorizedAccessException ex) { accessDenied=true; rows.Clear(); error=ex.Message; Logger.LogWarning(ex,"Recruitment workspace access failed"); }
+        catch (HttpRequestException ex) { error=ex.StatusCode.HasValue ? $"Recruitment API returned HTTP {(int)ex.StatusCode.Value}. Contact your administrator." : "The recruitment API could not be reached. Try again shortly."; Logger.LogError(ex,"Recruitment workspace request failed"); }
+        catch (Exception ex) { error="Recruitment data could not be loaded. Contact your administrator."; Logger.LogError(ex,"Recruitment workspace load failed"); }
+    }
+}
