@@ -81,8 +81,17 @@ else if (!isCliCommand)
 
 if (certificate != null)
 {
-    builder.Services.AddHttpClient<DhrIngestionClient>()
-        .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { ClientCertificates = { certificate } });
+    builder.Services.AddHttpClient<DhrIngestionClient>(client =>
+    {
+        client.DefaultRequestVersion = System.Net.HttpVersion.Version11;
+        client.DefaultVersionPolicy = HttpVersionPolicy.RequestVersionExact;
+    })
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+    {
+        ClientCertificateOptions = ClientCertificateOption.Manual,
+        ClientCertificates = { certificate },
+        CheckCertificateRevocationList = false
+    });
 }
 else
 {
