@@ -2,8 +2,8 @@
 @using Microsoft.AspNetCore.Components.Authorization
 @using HRM.Models
 @using HRM.Services
-
- 
+@using HRM.Services.Interfaces
+@inject IUserAccessService UserAccess
 
 @rendermode RenderMode.InteractiveServer
 
@@ -20,9 +20,21 @@
             </div>
 
             <!-- Grid: 4 columns on large screens, 2 on medium -->
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                @foreach (var cat in mainCategories.Where(c => new[]{"user","org","requests","leaves","config","roles","positions","workplaning","projects"}.Contains(c.Url)))
-                {
+            @if (loading)
+            {
+                <div class="rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-500">Checking settings permissions…</div>
+            }
+            else if (visibleCategories.Count == 0)
+            {
+                <div class="rounded-xl border border-amber-200 bg-amber-50 p-6 text-sm text-amber-900">
+                    You do not have permission to view any System Settings categories.
+                </div>
+            }
+            else
+            {
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    @foreach (var cat in visibleCategories)
+                    {
                     <a href="/admin/settings/@cat.Url"
                        class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md hover:border-blue-400 hover:bg-slate-50 transition-all duration-200 group flex items-center gap-6">
 
@@ -43,28 +55,72 @@
                         </div>
                     </a>
                 }
-            </div>
+                </div>
+            }
         </div>
 
         @code {
-        private record Category(string Title, string Url, string Icon, string Description);
+        private record Category(string Title, string Url, string Icon, string Description, params string[] Permissions);
+
+        private bool loading = true;
+        private List<Category> visibleCategories = new();
 
         private List<Category> mainCategories = new() {
-            new("User", "user", "bi-people", "Manage user accounts and admin portal access."),
-            new("Organisation", "org", "bi-building", "Configure organizational structure and hierarchy."),
-            new("Document Types", "documents", "bi-file-earmark-text", "Define system document classifications."),
-            new("Request Types", "requests", "bi-ui-checks", "Manage workflows for leave and internal requests."),
-            new("Teams", "teams", "bi-people-fill", "Manage departments and internal work teams."),
-            new("Schedules", "schedules", "bi-clock-history", "Configure work shifts, breaks, and special days."),
-            new("Leaves", "leaves", "bi-calendar2-week", "Setup leave types, sets, and global policies."),
-            new("Payroll", "payroll", "bi-cash-stack", "Manage periods, wage codes, and payroll items."),
-            new("Performance", "performance", "bi-graph-up-arrow", "Define checklists and work priorities."),
-            new("Configurations", "config", "bi-gear", "Manage job types, request approval flows and application configuration."),
-            new("Roles & Permissions", "roles", "bi-shield-lock", "Manage roles (user groups) and grouped permissions."),
-            new("Positions", "positions", "bi-briefcase", "Manage job positions and configurations."),
-            new("Work Planning", "workplaning", "bi-calendar3", "Manage work templates, schedules."),
-            new("Projects & Tasks", "projects", "bi-kanban", "Manage organization projects, departments, deliverables, milestones, and task assignments.")
+            new("User", "user", "bi-people", "Manage user accounts and admin portal access.", "Admin", "User.View", "User.Manage", "AdminAccess.Manage"),
+            new("Organisation", "org", "bi-building", "Configure organizational structure and hierarchy.", "Admin", "Organisation.View", "Organisation.Manage", "Configuration.View"),
+            new("Document Types", "documents", "bi-file-earmark-text", "Define system document classifications.", "Admin", "Configuration.View"),
+            new("Request Types", "requests", "bi-ui-checks", "Manage workflows for leave and internal requests.", "Admin", "Configuration.View"),
+            new("Teams", "teams", "bi-people-fill", "Manage departments and internal work teams.", "Admin", "Organisation.View"),
+            new("Schedules", "schedules", "bi-clock-history", "Configure work shifts, breaks, and special days.", "Admin", "Configuration.View"),
+            new("Leaves", "leaves", "bi-calendar2-week", "Setup leave types, sets, and global policies.", "Admin", "Leave.Configure", "Configuration.View"),
+            new("Payroll", "payroll", "bi-cash-stack", "Manage periods, wage codes, and payroll items.", "Admin", "Payroll.View", "Payroll.Configure"),
+            new("Performance", "performance", "bi-graph-up-arrow", "Define checklists and work priorities.", "Admin", "Configuration.View"),
+            new("Configurations", "config", "bi-gear", "Manage job types, request approval flows and application configuration.", "Admin", "Configuration.View", "WorkTypes.Manage"),
+            new("Roles & Permissions", "roles", "bi-shield-lock", "Manage roles (user groups) and grouped permissions.", "Admin", "Roles.View", "UserOrganisation.Groups.View", "Organisation.Groups.View", "Developer"),
+            new("Positions", "positions", "bi-briefcase", "Manage job positions and configurations.", "Admin", "Position.Details", "Staff.Positions.Manage", "Positions.Configure"),
+            new("Work Planning", "workplaning", "bi-calendar3", "Manage work templates, schedules.", "Admin", "WorkPlanning.Manage", "Schedules.Manage", "Configuration.View"),
+            new("Projects & Tasks", "projects", "bi-kanban", "Manage organization projects, departments, deliverables, milestones, and task assignments.", "Admin", "Project.Manage", "Project.View", "Configuration.View")
          };
+
+        protected override async Task OnInitializedAsync()
+        {
+            try
+            {
+                var actor = await UserAccess.RequireContextAsync();
+                var allowedUrls = new HashSet<string> { "user", "org", "requests", "leaves", "config", "roles", "positions", "workplaning", "projects" };
+                var candidates = mainCategories.Where(c => allowedUrls.Contains(c.Url)).ToList();
+
+                if (actor.IsSuperAdministrator || await UserAccess.HasPermissionAsync("Admin"))
+                {
+                    visibleCategories = candidates;
+                    return;
+                }
+
+                var result = new List<Category>();
+                foreach (var cat in candidates)
+                {
+                    var granted = false;
+                    foreach (var perm in cat.Permissions)
+                    {
+                        if (await UserAccess.HasPermissionAsync(perm))
+                        {
+                            granted = true;
+                            break;
+                        }
+                    }
+                    if (granted) result.Add(cat);
+                }
+                visibleCategories = result;
+            }
+            catch
+            {
+                visibleCategories = new();
+            }
+            finally
+            {
+                loading = false;
+            }
+        }
         }
       
     </Authorized>
