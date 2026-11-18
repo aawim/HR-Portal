@@ -147,19 +147,50 @@ public sealed class EdgeAgentManagementService(
     public async Task<ServiceResult> SaveDeviceConfigurationAsync(EdgeAttendanceDeviceConfigurationInput i, CancellationToken ct = default)
     {
         await Guard();
-        if (i.AttendanceDeviceId <= 0 || i.OrganisationId <= 0)
-            return ServiceResult.Fail("An existing device and organisation are required.");
+        if (i.OrganisationId <= 0)
+            return ServiceResult.Fail("An organisation is required.");
+        if (i.AttendanceDeviceId <= 0 && string.IsNullOrWhiteSpace(i.IpAddress))
+            return ServiceResult.Fail("Enter an IP address / host for the new device.");
         if (i.AdapterType?.Length > 80)
             return ServiceResult.Fail("Adapter type cannot exceed 80 characters.");
 
         await using var db = await factory.CreateDbContextAsync(ct);
-        var device = await db.AttendanceDevices.SingleOrDefaultAsync(x => x.AttendanceDeviceId == i.AttendanceDeviceId, ct);
-        if (device == null) return ServiceResult.Fail("Attendance device not found.");
         if (!await db.Organisations.AnyAsync(x => x.BusinessEntityID == i.OrganisationId, ct))
             return ServiceResult.Fail("Organisation not found.");
 
         if (i.EdgeAttendanceAgentId.HasValue && !await db.EdgeAttendanceAgents.AnyAsync(x => x.EdgeAttendanceAgentId == i.EdgeAttendanceAgentId && x.OrganisationId == i.OrganisationId && x.IsActive && x.RevokedAtUtc == null, ct))
             return ServiceResult.Fail("The selected active agent does not belong to this organisation.");
+
+        AttendanceDevice? device;
+        if (i.AttendanceDeviceId == 0)
+        {
+            var sample = await db.AttendanceDevices.AsNoTracking()
+                .Select(d => new { d.AttendanceClientId, d.AttendanceDeviceStateId, d.AttendanceDeviceInOutTypeId })
+                .FirstOrDefaultAsync(ct);
+
+            device = new AttendanceDevice
+            {
+                Ipaddress = i.IpAddress!.Trim(),
+                Port = i.Port is > 0 ? i.Port.Value : 4370,
+                Location = string.IsNullOrWhiteSpace(i.Location) ? "Biometric Device" : i.Location.Trim(),
+                IsPrimary = false,
+                AttendanceDeviceStateId = sample?.AttendanceDeviceStateId ?? 1,
+                AttendanceClientId = sample?.AttendanceClientId ?? 1,
+                AttendanceDeviceInOutTypeId = sample?.AttendanceDeviceInOutTypeId ?? 1,
+                OrganisationId = i.OrganisationId,
+                AdapterType = string.IsNullOrWhiteSpace(i.AdapterType) ? "zkteco" : i.AdapterType.Trim(),
+                EdgeAttendanceAgentId = i.EdgeAttendanceAgentId,
+                IsEdgeEnabled = i.IsEdgeEnabled
+            };
+            db.AttendanceDevices.Add(device);
+            await db.SaveChangesAsync(ct);
+            i.AttendanceDeviceId = device.AttendanceDeviceId;
+        }
+        else
+        {
+            device = await db.AttendanceDevices.SingleOrDefaultAsync(x => x.AttendanceDeviceId == i.AttendanceDeviceId, ct);
+            if (device == null) return ServiceResult.Fail("Attendance device not found.");
+        }
 
         var bindings = await db.EdgeAttendanceAgentDevices.Where(x => x.AttendanceDeviceId == i.AttendanceDeviceId).ToListAsync(ct);
         foreach (var binding in bindings) binding.IsActive = false;

@@ -8,6 +8,7 @@
 @inject HRM.Services.Contracts.OrganisationSettingsServiceContracts.IOperations OrgSettings
 @inject HRM.Services.Interfaces.IWorkspaceDirectoryService Directory
 @inject HRM.Services.Interfaces.IUserAccessService UserAccess
+@inject Microsoft.Extensions.Configuration.IConfiguration Config
 @inject IJSRuntime JS
 @rendermode InteractiveServer
 <PageTitle>Edge Agent Management</PageTitle>
@@ -294,7 +295,10 @@
       </div>
 
       <div class="space-y-1 text-xs">
-        <span class="font-medium text-slate-700">Initial Bound Devices (must belong to this organisation)</span>
+        <div class="flex items-center justify-between gap-2">
+          <span class="font-medium text-slate-700">Initial Bound Devices (must belong to this organisation)</span>
+          <button type="button" class="text-xs font-semibold text-teal-700 hover:underline" @onclick="StartAddDevice">+ Add Device (e.g. Virtual 127.0.0.1:4370)</button>
+        </div>
         <div class="max-h-40 overflow-y-auto rounded-lg border border-slate-200 divide-y divide-slate-100">
           @if (devices.Count == 0)
           {
@@ -474,8 +478,23 @@
     @if (editing is not null)
     {
       <div class="rounded-xl border border-blue-200 bg-blue-50/40 p-4 shadow-xs space-y-3 text-xs">
-        <h3 class="font-bold text-slate-800">Configure Hardware Device #@editing.AttendanceDeviceId</h3>
+        <h3 class="font-bold text-slate-800">@(editing.AttendanceDeviceId == 0 ? "Add Attendance / Virtual Device" : $"Configure Hardware Device #{editing.AttendanceDeviceId}")</h3>
         <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+          @if (editing.AttendanceDeviceId == 0)
+          {
+            <label class="block space-y-1">
+              <span class="font-medium text-slate-700">IP Address / Host *</span>
+              <input type="text" class="w-full rounded-lg border border-slate-300 p-2 bg-white" placeholder="127.0.0.1" @bind="editing.IpAddress" />
+            </label>
+            <label class="block space-y-1">
+              <span class="font-medium text-slate-700">Port</span>
+              <input type="number" class="w-full rounded-lg border border-slate-300 p-2 bg-white" placeholder="4370" @bind="editing.Port" />
+            </label>
+            <label class="block space-y-1 md:col-span-2">
+              <span class="font-medium text-slate-700">Location / Name</span>
+              <input type="text" class="w-full rounded-lg border border-slate-300 p-2 bg-white" placeholder="Virtual Biometric Device" @bind="editing.Location" />
+            </label>
+          }
           <label class="block space-y-1">
             <span class="font-medium text-slate-700">Organisation ID</span>
             <input type="number" class="w-full rounded-lg border border-slate-300 p-2 bg-white" @bind="editing.OrganisationId" />
@@ -973,6 +992,8 @@
       enrolment.CertificateIssuer = cert.Issuer;
       enrolment.CertificateNotAfterUtc = cert.NotAfterUtc;
 
+      var orgId = enrolment.OrganisationId;
+      var apiUrl = Config["Api:BaseUrl"] ?? Config["ApiBaseUrl"] ?? "https://localhost:62840/";
       var result = await Agents.RegisterAsync(enrolment);
       if (!result.Success)
       {
@@ -992,7 +1013,7 @@
         URL.revokeObjectURL(url);
       }})();");
 
-      generatedConfigSnippet = $"{{\n  \"AttendanceEdge\": {{\n    \"AgentId\": \"{agentId}\",\n    \"ClientCertificatePath\": \"./certs/{cert.FileName}\",\n    \"ClientCertificatePassword\": \"{password}\"\n  }}\n}}";
+      generatedConfigSnippet = $"{{\n  \"AttendanceEdge\": {{\n    \"AgentId\": \"{agentId}\",\n    \"OrganisationId\": \"{orgId}\",\n    \"ApiBaseUrl\": \"{apiUrl}\",\n    \"ClientCertificatePath\": \"./certs/{cert.FileName}\",\n    \"ClientCertificatePassword\": \"{password}\",\n    \"PollSeconds\": 30,\n    \"Devices\": [\n      {{ \"DeviceId\": \"device-1\", \"Adapter\": \"zkteco\", \"Host\": \"127.0.0.1\", \"Port\": 4370 }}\n    ]\n  }}\n}}";
       successMessage = $"Generated certificate {cert.Thumbprint} and enrolled agent '{agentId}'.";
       enrolment = new() { CertificateNotAfterUtc = DateTime.UtcNow.AddYears(1) };
       pendingPfxBytes = null;
@@ -1033,6 +1054,17 @@
     }
     await LoadAsync();
   }
+
+  private void StartAddDevice() => editing = new()
+  {
+    AttendanceDeviceId = 0,
+    OrganisationId = enrolment.OrganisationId > 0 ? enrolment.OrganisationId : (organisations.FirstOrDefault()?.Id ?? 0),
+    IpAddress = "127.0.0.1",
+    Port = 4370,
+    Location = "Virtual Biometric Device",
+    AdapterType = "zkteco",
+    IsEdgeEnabled = true
+  };
 
   private void Edit(EdgeAttendanceDeviceDto device) => editing = new()
   {
