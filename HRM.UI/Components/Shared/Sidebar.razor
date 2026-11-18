@@ -59,17 +59,28 @@
 
                             <NavItem Compact="collapsed" Href="/admin/my/workspace" Icon="briefcase" Text="Home" IsActive="true" />
                             <NavItem Compact="collapsed" Href="/admin" Icon="home" Text="Dashboard" />
-                            <NavItem Compact="collapsed" Href="admin/hr" Icon="users" Text="HR" />
-                            <NavItem Compact="collapsed" Href="admin/settings" Icon="cog" Text="Settings" />
+                            @if (canViewHr)
+                            {
+                                <NavItem Compact="collapsed" Href="admin/hr" Icon="users" Text="HR" />
+                            }
+                            @if (canViewSettings)
+                            {
+                                <NavItem Compact="collapsed" Href="admin/settings" Icon="cog" Text="Settings" />
+                            }
                             @if (canManageLeadership)
                             {
-                                <NavItem Compact="collapsed" Href="/admin/settings/leadership" Icon="briefcase" Text="Leadership administration" />
                                 <NavItem Compact="collapsed" Href="/admin/settings/leadership/management" Icon="document" Text="Leadership records & audit" />
                             }
-                            <NavItem Compact="collapsed" Href="/admin/goods-loans" Icon="currency-dollar" Text="Goods Loans" />
+                            @if (canViewGoodsLoans)
+                            {
+                                <NavItem Compact="collapsed" Href="/admin/goods-loans" Icon="currency-dollar" Text="Goods Loans" />
+                            }
                             <NavItem Compact="collapsed" Href="/admin/intranet" Icon="document" Text="Intranet" />
-                            <hr class="my-2 border-white/15" />
-                            <NavItem Compact="collapsed" Href="admin/hr/recruitment" Icon="user-plus" Text="Recruitment" />
+                            @if (canViewRecruitment)
+                            {
+                                <hr class="my-2 border-white/15" />
+                                <NavItem Compact="collapsed" Href="admin/hr/recruitment" Icon="user-plus" Text="Recruitment" />
+                            }
                             @if (isDeveloper)
                             {
                                 <NavItem Compact="collapsed" Href="/developer" Icon="code" Text="Developer" />
@@ -153,6 +164,10 @@
     private bool collapsed;
     private bool isDeveloper;
     private bool canManageLeadership;
+    private bool canViewHr;
+    private bool canViewSettings;
+    private bool canViewRecruitment;
+    private bool canViewGoodsLoans;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -160,16 +175,30 @@
         try
         {
             canManageLeadership = false;
+            canViewHr = false;
+            canViewSettings = false;
+            canViewRecruitment = false;
+            canViewGoodsLoans = false;
             if (HasSystemAccess)
             {
                 var actor = await UserAccess.RequireContextAsync();
+                var isAdmin = actor.IsSuperAdministrator || await UserAccess.HasPermissionAsync("Admin");
+                var isHrGroup = await UserAccess.HasUserGroupAsync("Human Resource: Staff") || await UserAccess.HasUserGroupAsync("Human Resource :Head");
                 canManageLeadership = actor.IsSuperAdministrator || await UserAccess.HasPermissionAsync("Leadership.Appointment.Manage");
+                canViewRecruitment = isAdmin || await UserAccess.HasPermissionAsync("Recruitment.View") || await UserAccess.HasPermissionAsync("Recruitment.Manage");
+                canViewHr = isAdmin || isHrGroup || await UserAccess.HasPermissionAsync("Employee.View") || await UserAccess.HasPermissionAsync("Staff.Details") || await UserAccess.HasPermissionAsync("Attendance.View") || await UserAccess.HasPermissionAsync("Payroll.View");
+                canViewSettings = isAdmin || await UserAccess.HasPermissionAsync("Configuration.View") || await UserAccess.HasPermissionAsync("Roles.View") || await UserAccess.HasPermissionAsync("UserOrganisation.Groups.View") || await UserAccess.HasPermissionAsync("Organisation.View") || await UserAccess.HasPermissionAsync("User.View") || await UserAccess.HasPermissionAsync("WorkTypes.Manage") || await UserAccess.HasPermissionAsync("WorkPlanning.Manage");
+                canViewGoodsLoans = isAdmin || isHrGroup || await UserAccess.HasPermissionAsync("GoodsLoans.View") || await UserAccess.HasPermissionAsync("GoodsLoans.Manage") || await UserAccess.HasPermissionAsync("Payroll.View");
             }
             isDeveloper = CanAccessDeveloperPortal || (HasSystemAccess && (await UserAccess.HasUserGroupAsync("Developer") || await UserAccess.HasPermissionAsync("Developer")));
         }
         catch
         {
             canManageLeadership = false;
+            canViewHr = false;
+            canViewSettings = false;
+            canViewRecruitment = false;
+            canViewGoodsLoans = false;
             isDeveloper = CanAccessDeveloperPortal;
         }
     }

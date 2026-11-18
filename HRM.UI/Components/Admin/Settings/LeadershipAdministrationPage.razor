@@ -1,13 +1,33 @@
 @page "/admin/settings/leadership"
 @attribute [Authorize]
 @using HRM.DTOs.Leadership
+@using HRM.Services.Interfaces
 @inject HRM.Services.Contracts.LeadershipAdministrationServiceContracts.IOperations Administration
+@inject IUserAccessService UserAccess
+@inject NavigationManager Navigation
 @using Microsoft.JSInterop
 @inject IJSRuntime JS
 @rendermode InteractiveServer
-<PageTitle>Leadership Administration</PageTitle>
-<section class="mx-auto w-full min-w-0 p-2 space-y-2">
- <header class="sticky top-0 z-30 border-b border-slate-200 bg-white/95 p-2 shadow-xs"><div><h1 class="text-lg font-bold text-slate-900">Leadership administration</h1><p class="mt-0.5 text-xs text-slate-500">MDS-managed appointments, organisation responsibilities, and explicit authority grants.</p></div><div class="mt-2 flex flex-wrap gap-2"><button class="app-button app-button-secondary app-button-sm" @onclick="ToggleWidthAsync">@(isFullWidth ? "Shrink View" : "Full Width")</button><a href="/admin/settings/leadership/management" class="app-button app-button-secondary app-button-sm">View records and audit</a></div></header><div class="rounded-xl border border-blue-200 bg-blue-50/40 p-2 text-xs leading-relaxed text-slate-700"><strong>How to complete this form</strong><p class="mt-1">Work through sections 1–4 in order. Save each section before continuing. Reference IDs are the numeric record IDs shown in the records screen; they are not national identity numbers. Delegation and attendance policy are additional settings.</p></div>
+@if (!Embedded)
+{
+    <PageTitle>Leadership Administration</PageTitle>
+}
+<section class="mx-auto w-full min-w-0 @(Embedded ? "pt-2" : "p-2") space-y-2">
+ @if (!Embedded)
+ {
+     <header class="sticky top-0 z-30 border-b border-slate-200 bg-white/95 p-2 shadow-xs"><div><h1 class="text-lg font-bold text-slate-900">Leadership administration</h1><p class="mt-0.5 text-xs text-slate-500">MDS-managed appointments, organisation responsibilities, and explicit authority grants.</p></div><div class="mt-2 flex flex-wrap gap-2"><button class="app-button app-button-secondary app-button-sm" @onclick="ToggleWidthAsync">@(isFullWidth ? "Shrink View" : "Full Width")</button><a href="/admin/settings/leadership/management" class="app-button app-button-secondary app-button-sm">View records and audit</a></div></header>
+ }
+ else
+ {
+     <div class="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 shadow-2xs">
+         <div>
+             <h2 class="text-sm font-bold text-slate-900 dark:text-slate-100">Leadership administration</h2>
+             <p class="text-xs text-slate-500 dark:text-slate-400">MDS-managed appointments, organisation responsibilities, and explicit authority grants.</p>
+         </div>
+         <a href="/admin/settings/leadership/management" class="app-button app-button-secondary app-button-sm">View records and audit</a>
+     </div>
+ }
+ <div class="rounded-xl border border-blue-200 bg-blue-50/40 p-2 text-xs leading-relaxed text-slate-700"><strong>How to complete this form</strong><p class="mt-1">Work through sections 1–4 in order. Save each section before continuing. Reference IDs are the numeric record IDs shown in the records screen; they are not national identity numbers. Delegation and attendance policy are additional settings.</p></div>
  @if(error is not null){<div class="rounded-xl border border-rose-200 bg-rose-50 p-2 text-xs text-rose-800">@error</div>}
  @if(message is not null){<div class="rounded-xl border border-emerald-200 bg-emerald-50 p-2 text-xs text-emerald-800">@message</div>}
  <div class="grid items-start gap-2 @(isFullWidth ? "max-w-none" : "mx-auto max-w-7xl") lg:grid-cols-2"><div class="page-panel-left min-w-0 rounded-2xl border border-slate-200 bg-white p-2 shadow-xs space-y-2">
@@ -20,4 +40,24 @@
   <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-2"><h2 class="font-bold text-slate-800 p-1">Attendance policy</h2><p class="mb-2 px-1 text-xs leading-relaxed text-slate-500">Set which organisation manages the officer’s attendance. For a minister employed by PO, this will normally be PO, even when the officer oversees another organisation.</p><div class="grid gap-2"><label class="block text-xs font-medium text-slate-700 p-1">Appointment<select class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100" @bind="policy.LeadershipAppointmentId"><option value="0">Select appointment</option>@if(configuration is not null){@foreach(var option in configuration.Appointments){<option value="@option.Id">@option.Name</option>}}</select></label><label class="block text-xs font-medium text-slate-700 p-1">Attendance managing organisation<select class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100" @bind="policy.ManagingOrganisationId"><option value="0">Select attendance managing organisation</option>@if(configuration is not null){@foreach(var option in configuration.Organisations){<option value="@option.Id">@option.Name</option>}}</select></label><label class="block text-xs font-medium text-slate-700 p-1">Verification mode<select class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs" @bind="policy.VerificationMode"><option value="Standard">Standard</option></select></label><label class="flex items-center gap-2 p-2 text-xs"><input type="checkbox" @bind="policy.AttendanceRequired" /> Attendance required</label><label class="block text-xs font-medium text-slate-700 p-1">Policy starts<input class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100" type="date" @bind="policy.EffectiveFrom" /></label><label class="block text-xs font-medium text-slate-700 p-1">Policy ends (optional)<input class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100" type="date" @bind="policy.EffectiveTo" /></label></div><button class="app-button app-button-primary app-button-sm mt-2" @onclick="SavePolicyAsync">Save attendance policy</button></div><p class="rounded-xl border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900">Authority does not change the officer’s employer, payroll, or default HR organisation. Every grant is scoped and date-checked by the API.</p>
  </aside></div>
 </section>
-@code { private LeadershipConfigurationDto? configuration; protected override async Task OnInitializedAsync(){try{configuration=await Administration.GetConfigurationAsync();}catch{error="Configuration could not be loaded. Check the API and Leadership database setup.";}}  private bool isFullWidth; protected override async Task OnAfterRenderAsync(bool firstRender){if(firstRender){isFullWidth=await JS.InvokeAsync<string?>("localStorage.getItem","hrm.leadership.full-width")=="true";StateHasChanged();}} private async Task ToggleWidthAsync(){isFullWidth=!isFullWidth;await JS.InvokeVoidAsync("localStorage.setItem","hrm.leadership.full-width",isFullWidth?"true":"false");} private string? error; private string? message; private LeadershipAppointmentTypeInput type=new(); private LeadershipAppointmentInput appointment=new(){EffectiveFrom=DateOnly.FromDateTime(DateTime.UtcNow)}; private LeadershipResponsibilityInput responsibility=new(){EffectiveFrom=DateOnly.FromDateTime(DateTime.UtcNow)}; private LeadershipAuthorityGrantInput grant=new(){ValidFrom=DateOnly.FromDateTime(DateTime.UtcNow)}; private LeadershipDelegationInput delegation=new(){ValidFrom=DateOnly.FromDateTime(DateTime.UtcNow)}; private LeadershipAttendancePolicyInput policy=new(){EffectiveFrom=DateOnly.FromDateTime(DateTime.UtcNow)}; private async Task Run(Func<Task<HRM.DTOs.ServiceResult>> action){error=null;message=null;try{var result=await action();if(result.Success){message=result.Message;configuration=await Administration.GetConfigurationAsync();}else error=result.Message;}catch{error="The section could not be saved. Check the required fields, reference IDs, and administration access.";}} private Task SaveTypeAsync()=>Run(()=>Administration.SaveAppointmentTypeAsync(type)); private Task SaveAppointmentAsync()=>Run(()=>Administration.SaveAppointmentAsync(appointment)); private Task SaveResponsibilityAsync()=>Run(()=>Administration.AddResponsibilityAsync(responsibility)); private Task SaveGrantAsync()=>Run(()=>Administration.AddAuthorityGrantAsync(grant)); private Task SaveDelegationAsync()=>Run(()=>Administration.AddDelegationAsync(delegation)); private Task SavePolicyAsync()=>Run(()=>Administration.SaveAttendancePolicyAsync(policy)); }
+@code {
+    [Parameter] public bool Embedded { get; set; }
+    [Parameter] public int? InitialOrganisationId { get; set; }
+    private LeadershipConfigurationDto? configuration;
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Embedded)
+        {
+            var orgId = 0;
+            try { orgId = await UserAccess.GetCurrentOrganisationIdAsync(); } catch { }
+            Navigation.NavigateTo($"/admin/my/workspace/organisation/{(orgId > 0 ? orgId : 3)}/overview", replace: true);
+            return;
+        }
+        if (InitialOrganisationId is > 0)
+        {
+            responsibility.OrganisationId = InitialOrganisationId.Value;
+            delegation.OrganisationId = InitialOrganisationId.Value;
+        }
+        try { configuration = await Administration.GetConfigurationAsync(); }
+        catch { error = "Configuration could not be loaded. Check the API and Leadership database setup."; }
+    }  private bool isFullWidth; protected override async Task OnAfterRenderAsync(bool firstRender){if(firstRender){isFullWidth=await JS.InvokeAsync<string?>("localStorage.getItem","hrm.leadership.full-width")=="true";StateHasChanged();}} private async Task ToggleWidthAsync(){isFullWidth=!isFullWidth;await JS.InvokeVoidAsync("localStorage.setItem","hrm.leadership.full-width",isFullWidth?"true":"false");} private string? error; private string? message; private LeadershipAppointmentTypeInput type=new(); private LeadershipAppointmentInput appointment=new(){EffectiveFrom=DateOnly.FromDateTime(DateTime.UtcNow)}; private LeadershipResponsibilityInput responsibility=new(){EffectiveFrom=DateOnly.FromDateTime(DateTime.UtcNow)}; private LeadershipAuthorityGrantInput grant=new(){ValidFrom=DateOnly.FromDateTime(DateTime.UtcNow)}; private LeadershipDelegationInput delegation=new(){ValidFrom=DateOnly.FromDateTime(DateTime.UtcNow)}; private LeadershipAttendancePolicyInput policy=new(){EffectiveFrom=DateOnly.FromDateTime(DateTime.UtcNow)}; private async Task Run(Func<Task<HRM.DTOs.ServiceResult>> action){error=null;message=null;try{var result=await action();if(result.Success){message=result.Message;configuration=await Administration.GetConfigurationAsync();}else error=result.Message;}catch{error="The section could not be saved. Check the required fields, reference IDs, and administration access.";}} private Task SaveTypeAsync()=>Run(()=>Administration.SaveAppointmentTypeAsync(type)); private Task SaveAppointmentAsync()=>Run(()=>Administration.SaveAppointmentAsync(appointment)); private Task SaveResponsibilityAsync()=>Run(()=>Administration.AddResponsibilityAsync(responsibility)); private Task SaveGrantAsync()=>Run(()=>Administration.AddAuthorityGrantAsync(grant)); private Task SaveDelegationAsync()=>Run(()=>Administration.AddDelegationAsync(delegation)); private Task SavePolicyAsync()=>Run(()=>Administration.SaveAttendancePolicyAsync(policy)); }

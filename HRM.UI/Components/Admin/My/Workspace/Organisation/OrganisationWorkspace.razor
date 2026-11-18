@@ -1,6 +1,8 @@
 @using HRM.DTOs
 @using HRM.Enum
+@using HRM.Services.Interfaces
 @inject HRM.Services.Contracts.OrganisationWorkspaceServiceContracts.IOperations WorkspaceService
+@inject IUserAccessService UserAccess
 @inject ILogger<OrganisationWorkspace> Logger
 
 <div class="min-w-0 space-y-2">
@@ -100,6 +102,10 @@
                     }
                 </section>
             </div>
+            @if (canManageLeadership)
+            {
+                <HRM.Components.Admin.Settings.LeadershipAdministrationPage Embedded="true" InitialOrganisationId="OrganisationId" />
+            }
         }
         else if (ActiveTab == WorkspaceTab.Staff)
         {
@@ -223,6 +229,10 @@
             <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-2 shadow-2xs">
                 <HRM.Components.Admin.Attendance.Attendance.OrganisationDaily />
             </div>
+            @if (canManageLeadership)
+            {
+                <HRM.Components.Admin.Settings.LeadershipAdministrationPage Embedded="true" InitialOrganisationId="OrganisationId" />
+            }
         }
         else if (ActiveTab == WorkspaceTab.Documents)
         {
@@ -277,6 +287,7 @@
     [Parameter] public int OrganisationId { get; set; }
     [Parameter] public WorkspaceTab ActiveTab { get; set; }
     [Parameter] public bool IsSuperAdmin { get; set; }
+    private bool canManageLeadership;
     [Parameter] public EventCallback<WorkspaceSearchResult> OnStaffSelected { get; set; }
     [Parameter] public EventCallback<OrganisationWorkspaceData> OnLoaded { get; set; }
 
@@ -300,6 +311,12 @@
     protected override async Task OnParametersSetAsync()
     {
         if (loadedId == OrganisationId && loadedTab == ActiveTab) return;
+        try
+        {
+            var actor = await UserAccess.RequireContextAsync();
+            canManageLeadership = actor.IsSuperAdministrator || await UserAccess.HasPermissionAsync("Leadership.Appointment.Manage");
+        }
+        catch { canManageLeadership = false; }
         if (loadedId != OrganisationId) { data = null; search = ""; department = 0; }
         loadedId = OrganisationId; loadedTab = ActiveTab; page = 0; resourceSearch = ""; resourceLimit = 50;
         await LoadAsync();
