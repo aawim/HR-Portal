@@ -1,0 +1,27 @@
+@using HRM.Application.Contracts.Recruitment
+@inject HRM.UI.Services.Recruitment.IRecruitmentApiClient Api
+<section class="p-2 rounded-2xl border border-slate-200 app-surface space-y-3">
+    <h2 class="p-1 font-bold">Screening and shortlisting</h2>
+    <label class="block p-1 text-xs font-medium">Vacancy<select class="@InputClass" @bind="vacancyId" @bind:after="Load"><option value="0">Select vacancy</option>@foreach(var v in vacancies){<option value="@v.Id">@v.Reference · @v.Status</option>}</select></label>
+    @foreach(var row in applications){<button class="app-button app-button-secondary app-button-sm" disabled="@busy" @onclick="()=>Select(row)">@row.Reference · @row.ApplicantName · @row.Status</button>}
+    @if(selected is not null){<h3 class="p-1 font-bold">@selected.ApplicantName</h3><label class="block p-1 text-xs"><input type="checkbox" @bind="eligible" /> Meets advertised eligibility requirements</label><label class="block p-1 text-xs"><input type="checkbox" disabled="@(!eligible)" @bind="shortlisted" /> Shortlist for assessment</label><label class="block p-1 text-xs">Decision reason<textarea class="@InputClass" maxlength="2000" @bind="reason"></textarea></label><label class="block p-1 text-xs">Evidence reviewed<textarea class="@InputClass" maxlength="8000" @bind="evidence"></textarea></label><p class="p-1 text-xs text-slate-500">Submitting locks this decision. Check the evidence and eligibility before continuing.</p><button class="app-button app-button-primary app-button-sm" disabled="@(busy||selected.Status!="Submitted"||string.IsNullOrWhiteSpace(reason)||string.IsNullOrWhiteSpace(evidence))" @onclick="Save">Submit and lock screening</button>}
+    <h3 class="p-1 font-bold">Your conflict declaration</h3>
+    <label class="block p-1 text-xs"><input type="checkbox" @bind="conflict" /> I have a conflict relating to this vacancy</label>
+    <label class="block p-1 text-xs">Declaration<textarea class="@InputClass" maxlength="2000" @bind="declaration"></textarea></label>
+    <button class="app-button app-button-secondary app-button-sm" disabled="@(busy||vacancyId<=0||string.IsNullOrWhiteSpace(declaration))" @onclick="Declare">Record declaration</button>
+    @if(message is not null){<p role="status" class="p-2 text-sm">@message</p>}
+</section>
+@code{
+    private IReadOnlyList<RecruitmentVacancyRow> vacancies=[];
+    private IReadOnlyList<RecruitmentScreeningApplicationRow> applications=[];
+    private RecruitmentScreeningApplicationRow? selected;
+    private int vacancyId;private bool busy,eligible,shortlisted,conflict;
+    private string reason="",evidence="",declaration="";private string? message;
+    private const string InputClass="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100";
+    protected override async Task OnInitializedAsync(){try{vacancies=await Api.GetVacanciesAsync();}catch(HttpRequestException){message="Vacancies could not be loaded.";}}
+    private async Task Load(){selected=null;applications=[];try{if(vacancyId>0)applications=await Api.GetScreeningApplicationsAsync(vacancyId);}catch(HttpRequestException){message="Applications could not be loaded. Check your recruitment access.";}}
+    private void Select(RecruitmentScreeningApplicationRow row){selected=row;eligible=false;shortlisted=false;reason="";evidence="";}
+    private Task Save()=>Run(()=>Api.RecordScreeningAsync(new(selected!.Id,eligible,eligible&&shortlisted,reason,System.Text.Json.JsonSerializer.Serialize(new{EvidenceReviewed=evidence}))));
+    private Task Declare()=>Run(()=>Api.DeclareConflictAsync(new(vacancyId,conflict,declaration,null)));
+    private async Task Run(Func<Task<HRM.DTOs.ServiceResult>> action){if(busy)return;busy=true;try{var result=await action();message=result.Message;if(result.Success)await Load();}catch(HttpRequestException){message="The action failed. Refresh and verify the application state and access.";}finally{busy=false;}}
+}
