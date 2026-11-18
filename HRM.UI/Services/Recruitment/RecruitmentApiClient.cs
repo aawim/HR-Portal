@@ -11,9 +11,15 @@ public interface IRecruitmentApiClient {
     Task<IReadOnlyList<RecruitmentScreeningApplicationRow>> GetScreeningApplicationsAsync(int vacancyId);
     Task<HRM.DTOs.ServiceResult> RecordScreeningAsync(RecordScreeningInput input);
     Task<HRM.DTOs.ServiceResult> DeclareConflictAsync(DeclareRecruitmentConflictInput input);
+    Task<RecruitmentAssessmentWorkspace> GetAssessmentWorkspaceAsync(int vacancyId);
+    Task<HRM.DTOs.ServiceResult> CreateAssessmentAsync(CreateRecruitmentAssessmentInput input);
+    Task<HRM.DTOs.ServiceResult> SubmitScorecardAsync(SubmitPanelScorecardInput input);
 }
 public sealed class RecruitmentApiClient(HttpClient http) : IRecruitmentApiClient
 {
+    public async Task<RecruitmentAssessmentWorkspace> GetAssessmentWorkspaceAsync(int vacancyId)=>await http.GetFromJsonAsync<RecruitmentAssessmentWorkspace>($"/api/v1/recruitment/assessment-workspace/{vacancyId}")??new([],[]);
+    public Task<HRM.DTOs.ServiceResult> CreateAssessmentAsync(CreateRecruitmentAssessmentInput input)=>PostAsync("/api/v1/recruitment/assessments",input,default);
+    public Task<HRM.DTOs.ServiceResult> SubmitScorecardAsync(SubmitPanelScorecardInput input)=>PostAsync("/api/v1/recruitment/assessments/scorecards",input,default);
     public async Task<IReadOnlyList<RecruitmentScreeningApplicationRow>> GetScreeningApplicationsAsync(int vacancyId)=>await http.GetFromJsonAsync<List<RecruitmentScreeningApplicationRow>>($"/api/v1/recruitment/screening/applications/{vacancyId}")??[];
     public Task<HRM.DTOs.ServiceResult> RecordScreeningAsync(RecordScreeningInput input)=>PostAsync("/api/v1/recruitment/screening",input,default);
     public Task<HRM.DTOs.ServiceResult> DeclareConflictAsync(DeclareRecruitmentConflictInput input)=>PostAsync("/api/v1/recruitment/screening/conflicts",input,default);

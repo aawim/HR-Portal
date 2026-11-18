@@ -1,0 +1,35 @@
+@using HRM.Application.Contracts.Recruitment
+@inject HRM.UI.Services.Recruitment.IRecruitmentApiClient Api
+<section class="p-2 rounded-2xl border border-slate-200 app-surface space-y-3">
+    <h2 class="p-1 font-bold">Assessments and scorecards</h2>
+    <label class="block p-1 text-xs">Vacancy<select class="@InputClass" @bind="vacancy" @bind:after="Load"><option value="0">Select vacancy</option>@foreach(var v in vacancies){<option value="@v.Id">@v.Reference</option>}</select></label>
+    @if(workspace is not null){
+        <label class="block p-1 text-xs">Assessment type<select class="@InputClass" @bind="type"><option>Interview</option><option>Assessment</option><option>Presentation</option></select></label>
+        <label class="block p-1 text-xs">Verified template<select class="@InputClass" @bind="template"><option value="">Select template</option>@foreach(var t in workspace.Templates){<option value="@t.Code">@t.Name</option>}</select></label>
+        @if(workspace.Templates.Count==0){<p class="p-2 text-xs text-amber-800">No verified scoring template is available for this vacancy's policy. Register and verify its official template before assessment.</p>}
+        <label class="block p-1 text-xs">Scheduled time (Maldives)<input type="datetime-local" class="@InputClass" @bind="scheduled" /></label>
+        <button class="app-button app-button-primary app-button-sm" disabled="@(busy||string.IsNullOrEmpty(template))" @onclick="Create">Schedule assessment</button>
+        <label class="block p-1 text-xs">Assessment<select class="@InputClass" @bind="assessment" @bind:after="SelectAssessment"><option value="0">Select assessment</option>@foreach(var a in workspace.Assessments){<option value="@a.Id">@a.Type · @a.ScheduledAtUtc.AddHours(5).ToString("dd MMM HH:mm") MVT</option>}</select></label>
+        <label class="block p-1 text-xs">Shortlisted applicant<select class="@InputClass" @bind="application"><option value="0">Select applicant</option>@foreach(var a in applicants.Where(x=>x.Status=="Shortlisted")){<option value="@a.Id">@a.ApplicantName · @a.Reference</option>}</select></label>
+        @foreach(var criterion in criteria){<label class="block p-1 text-xs">@criterion.Name (maximum @criterion.Maximum)<input type="number" min="0" max="@criterion.Maximum" step="0.01" class="@InputClass" @bind="criterion.Score" /></label>}
+        <p class="p-1 text-xs">Total: @criteria.Sum(x=>x.Score). Submitted scorecards are locked. Record your conflict declaration in Screening first.</p>
+        <button class="app-button app-button-primary app-button-sm" disabled="@(busy||assessment<=0||application<=0||criteria.Count==0)" @onclick="Submit">Submit and lock scorecard</button>
+    }
+    @if(message is not null){<p role="status" class="p-2 text-sm">@message</p>}
+</section>
+@code{
+    private IReadOnlyList<RecruitmentVacancyRow> vacancies=[];
+    private IReadOnlyList<RecruitmentScreeningApplicationRow> applicants=[];
+    private RecruitmentAssessmentWorkspace? workspace;
+    private int vacancy,assessment,application;private string template="",type="Interview";private string? message;private bool busy;
+    private DateTime scheduled=DateTime.UtcNow.AddHours(5).AddDays(3);
+    private List<Criterion> criteria=[];
+    private sealed class Criterion{public string Name{get;set;}="";public decimal Maximum{get;set;}public decimal Score{get;set;}}
+    private const string InputClass="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100";
+    protected override async Task OnInitializedAsync(){try{vacancies=await Api.GetVacanciesAsync();}catch(HttpRequestException){message="Vacancies could not be loaded.";}}
+    private async Task Load(){criteria=[];assessment=application=0;workspace=null;try{if(vacancy>0){workspace=await Api.GetAssessmentWorkspaceAsync(vacancy);applicants=await Api.GetScreeningApplicationsAsync(vacancy);}}catch(HttpRequestException){message="Assessment workspace could not be loaded.";}}
+    private void SelectAssessment(){criteria=[];var code=workspace?.Assessments.FirstOrDefault(x=>x.Id==assessment)?.TemplateCode;var t=workspace?.Templates.FirstOrDefault(x=>x.Code==code);if(t is null)return;try{using var json=System.Text.Json.JsonDocument.Parse(t.DefinitionJson);foreach(var c in json.RootElement.GetProperty("components").EnumerateArray())criteria.Add(new(){Name=c[0].GetString()!,Maximum=c[1].GetDecimal()});}catch(Exception ex) when(ex is System.Text.Json.JsonException or InvalidOperationException or KeyNotFoundException){criteria=[];message="The verified template definition is invalid. Contact the policy administrator.";}}
+    private Task Create()=>Run(()=>Api.CreateAssessmentAsync(new(vacancy,type,template,DateTime.SpecifyKind(scheduled.AddHours(-5),DateTimeKind.Utc))));
+    private Task Submit()=>Run(()=>Api.SubmitScorecardAsync(new(assessment,application,criteria.Sum(x=>x.Score),System.Text.Json.JsonSerializer.Serialize(criteria.ToDictionary(x=>x.Name,x=>x.Score)))));
+    private async Task Run(Func<Task<HRM.DTOs.ServiceResult>> action){if(busy)return;busy=true;try{var result=await action();message=result.Message;if(result.Success)await Load();}catch(HttpRequestException){message="The assessment action failed. Check the template, declaration and application status.";}finally{busy=false;}}
+}
