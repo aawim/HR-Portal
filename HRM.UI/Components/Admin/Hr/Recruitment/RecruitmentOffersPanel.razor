@@ -1,0 +1,34 @@
+@using HRM.Application.Contracts.Recruitment
+@inject HRM.UI.Services.Recruitment.IRecruitmentApiClient Api
+<section class="p-2 rounded-2xl border border-slate-200 app-surface space-y-3">
+    <h2 class="p-1 font-bold">Offers and onboarding</h2>
+    <label class="block p-1 text-xs">Vacancy<select class="@InputClass" @bind="vacancy" @bind:after="Load"><option value="0">Select vacancy</option>@foreach(var v in vacancies){<option value="@v.Id">@v.Reference</option>}</select></label>
+    @if(workspace is not null){
+        <label class="block p-1 text-xs">Selected candidate<select class="@InputClass" @bind="candidate"><option value="0">Select candidate from final results</option>@foreach(var c in workspace.Candidates){<option value="@c.MeritResultId">@c.ApplicantName · @c.ApplicationReference · rank @c.Rank</option>}</select></label>
+        <label class="block p-1 text-xs">Offer terms<textarea class="@InputClass" maxlength="8000" @bind="terms"></textarea></label>
+        <button class="app-button app-button-primary app-button-sm" disabled="@(busy||candidate<=0||string.IsNullOrWhiteSpace(terms))" @onclick="Issue">Issue offer</button>
+        @if(workspace.Candidates.Count==0){<p class="p-2 text-xs text-slate-500">No unoffered candidate within the available slots has finalised results.</p>}
+        @foreach(var o in workspace.Offers){<div class="rounded-xl border border-slate-200 p-3 text-xs"><span>@o.ApplicantName · @o.ApplicationReference · @o.Status</span>@if(o.OnboardingRequestId.HasValue){<a class="app-button app-button-secondary app-button-sm" href="@($"/admin/my/workspace/onboarding?requestId={o.OnboardingRequestId}")">Open onboarding request</a>}@if(o.Status=="Accepted"&&!o.OnboardingRequestId.HasValue){<button class="app-button app-button-secondary app-button-sm" @onclick="()=>offer=o.Id">Prepare onboarding</button>}</div>}
+        @if(offer>0){
+            <h3 class="p-1 font-bold">Onboarding for offer @offer</h3>
+            <label class="block p-1 text-xs">Individual registry ID<input type="number" min="1" class="@InputClass" @bind="individual" /></label>
+            <label class="block p-1 text-xs">Organisation structure ID<input type="number" min="1" class="@InputClass" @bind="structure" /></label>
+            <label class="block p-1 text-xs">Job type ID<input type="number" min="1" class="@InputClass" @bind="jobType" /></label>
+            <label class="block p-1 text-xs">Position ID<input type="number" min="1" class="@InputClass" @bind="position" /></label>
+            <label class="block p-1 text-xs">Joining date<input type="date" class="@InputClass" @bind="joined" /></label>
+            <p class="p-1 text-xs text-slate-500">The applicant identity and existing onboarding approval requirements are checked when submitted.</p>
+            <button class="app-button app-button-primary app-button-sm" disabled="@(busy||individual<=0||structure<=0||jobType<=0||position<=0)" @onclick="Onboard">Submit onboarding request</button>
+        }
+    }
+    @if(message is not null){<p role="status" class="p-2 text-sm">@message</p>}
+</section>
+@code{
+    private IReadOnlyList<RecruitmentVacancyRow> vacancies=[];private RecruitmentOfferWorkspace? workspace;
+    private int vacancy,candidate,offer,individual,structure,jobType,position;private string terms="";private bool busy;private string? message;private DateTime joined=DateTime.UtcNow.AddHours(5).Date;
+    private const string InputClass="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100";
+    protected override async Task OnInitializedAsync(){try{vacancies=await Api.GetVacanciesAsync();}catch(HttpRequestException){message="Vacancies could not be loaded.";}}
+    private async Task Load(){workspace=null;candidate=offer=0;individual=structure=jobType=position=0;terms="";try{if(vacancy>0)workspace=await Api.GetOfferWorkspaceAsync(vacancy);}catch(HttpRequestException){message="Offers could not be loaded.";}}
+    private Task Issue()=>Run(()=>Api.CreateOfferAsync(new(candidate,System.Text.Json.JsonSerializer.Serialize(new{Terms=terms}))));
+    private Task Onboard()=>Run(()=>Api.SubmitOnboardingAsync(new(offer,individual,structure,jobType,position,joined,"Recruitment offer onboarding")));
+    private async Task Run(Func<Task<HRM.DTOs.ServiceResult>> action){if(busy)return;busy=true;try{var result=await action();message=result.Message;if(result.Success)await Load();}catch(HttpRequestException){message="The action failed. Verify recruitment permissions, final results and onboarding requirements.";}finally{busy=false;}}
+}
