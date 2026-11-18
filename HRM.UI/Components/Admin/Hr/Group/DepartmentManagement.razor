@@ -5,7 +5,9 @@
 @using HRM.DTOs.Organisation
 @implements IDisposable
 
-<section class="departments-page w-full min-w-0 p-2 flex flex-col gap-3">
+<section class="departments-page w-full min-w-0 @(HideHeader ? "" : "p-2") flex flex-col gap-3">
+    @if (!HideHeader)
+    {
     <!-- Full-Width Sticky Header -->
     <header class="departments-header sticky top-0 z-30 m-0 flex w-full min-w-0 flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white/95 backdrop-blur-xs p-3 shadow-xs">
         <div class="flex items-center gap-3">
@@ -70,6 +72,7 @@
             </a>
         </div>
     </header>
+    }
 
     @if (error != null)
     {
@@ -490,6 +493,7 @@
 </style>
 
 @code {
+    [Parameter] public bool HideHeader { get; set; }
     [Inject] private HRM.Services.Interfaces.IUserAccessService Access { get; set; } = null!;
 
     private const string FullWidthSettingKey = "hrm.departments-management.full-width";

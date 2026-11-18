@@ -432,6 +432,11 @@
                         Staff
                     </button>
                     <button type="button"
+                            class="rounded-t-xl px-3.5 py-1.5 font-bold text-xs transition-all border-t border-l border-r @(inspectedOrgTab == WorkspaceTab.Departments ? "bg-emerald-600 dark:bg-emerald-500 text-white border-emerald-600 dark:border-emerald-500 shadow-sm" : "bg-emerald-50/80 hover:bg-emerald-100 text-emerald-950 dark:bg-slate-800 dark:text-slate-300 border-emerald-200/90 dark:border-slate-700")"
+                            @onclick="() => SetOrgTab(WorkspaceTab.Departments)">
+                        Departments
+                    </button>
+                    <button type="button"
                             class="rounded-t-xl px-3.5 py-1.5 font-bold text-xs transition-all border-t border-l border-r @(inspectedOrgTab == WorkspaceTab.Teams ? "bg-emerald-600 dark:bg-emerald-500 text-white border-emerald-600 dark:border-emerald-500 shadow-sm" : "bg-emerald-50/80 hover:bg-emerald-100 text-emerald-950 dark:bg-slate-800 dark:text-slate-300 border-emerald-200/90 dark:border-slate-700")"
                             @onclick="() => SetOrgTab(WorkspaceTab.Teams)">
                         Teams
@@ -3811,6 +3816,7 @@
                 {
                     "staff" => WorkspaceTab.Staff,
                     "teams" or "team" => WorkspaceTab.Teams,
+                    "departments" or "department" => WorkspaceTab.Departments,
                     "assigned-roles" or "assignedroles" or "roles" or "role" => WorkspaceTab.AssignedRoles,
                     "permissions" or "permission" => WorkspaceTab.Permissions,
                     "leave-type" or "leavetype" or "leave-types" or "leavetypes" => WorkspaceTab.LeaveType,
@@ -3871,8 +3877,15 @@
                 "attendance" => "Attendance",
                 "time-change" or "shift" => "TimeChange",
                 "org-daily" or "daily" => "OrgDaily",
+                "organisation" or "myorganisation" => "Organisation",
                 _ => "Home"
             };
+            if (activeWorkspaceTab == "Organisation" && !inspectedOrgId.HasValue)
+            {
+                inspectedOrgId = currentUserContext?.ActiveJob?.OrganisationId ?? 3;
+                inspectedOrgName = currentUserContext?.ActiveJob?.OrganisationName ?? $"Organisation #{inspectedOrgId}";
+                inspectedOrgTab = WorkspaceTab.Departments;
+            }
             if (ActiveSection.ToLowerInvariant() is "projects" or "project" or "tasks" or "task")
             {
                 teamCenterSubTab = "projects";
@@ -3913,8 +3926,15 @@
                 "attendance" => "Attendance",
                 "time-change" or "shift" => "TimeChange",
                 "org-daily" or "daily" => "OrgDaily",
+                "organisation" or "myorganisation" => "Organisation",
                 _ => "Home"
             };
+            if (activeWorkspaceTab == "Organisation" && !inspectedOrgId.HasValue)
+            {
+                inspectedOrgId = currentUserContext?.ActiveJob?.OrganisationId ?? 3;
+                inspectedOrgName = currentUserContext?.ActiveJob?.OrganisationName ?? $"Organisation #{inspectedOrgId}";
+                inspectedOrgTab = WorkspaceTab.Departments;
+            }
             if (ActiveSection.ToLowerInvariant() is "projects" or "project" or "tasks" or "task")
             {
                 teamCenterSubTab = "projects";

@@ -29,6 +29,8 @@ namespace HRM.Enum
 
         Teams,
 
+        Departments,
+
         Reports,
 
         Analytics,
