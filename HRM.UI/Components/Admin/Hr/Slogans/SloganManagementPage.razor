@@ -1,0 +1,447 @@
+@page "/admin/hr/slogans"
+@using HRM.Services
+@using HRM.Services.Contracts
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Components.Forms
+@using static HRM.Services.Contracts.SloganServiceContracts
+@attribute [Authorize]
+@rendermode RenderMode.InteractiveServer
+
+@inject SloganServiceContracts.IOperations SloganService
+@inject ToastService ToastService
+@inject IJSRuntime JS
+
+<PageTitle>Document Slogans - HR Portal</PageTitle>
+
+<section class="w-full min-w-0 p-2 flex flex-col gap-2 bg-slate-50/50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-all duration-300 @(isFullWidth ? "max-w-none" : "max-w-7xl mx-auto")">
+    <!-- Header -->
+    <div class="flex flex-col gap-2 p-2">
+        <div class="flex items-center justify-between flex-wrap gap-2">
+            <div>
+                <div class="flex items-center gap-2">
+                    <a href="/admin/hr" class="text-xs font-semibold text-teal-700 dark:text-teal-400 hover:underline">← HR</a>
+                    <span class="text-slate-300 dark:text-slate-700">/</span>
+                    <h1 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">Document Slogans</h1>
+                </div>
+                <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                    Create text or image slogans with custom colors, rounded rectangle or plain styling, and assign them to Leave Chits, Salary Slips, and HRM documents.
+                </p>
+            </div>
+            <div class="flex items-center gap-2">
+                <button type="button"
+                        class="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200 shadow-xs hover:bg-slate-50 dark:hover:bg-slate-700 transition"
+                        @onclick="ToggleFullWidthAsync">
+                    <span>@(isFullWidth ? "⤢ Shrink View" : "⤡ Full Width")</span>
+                </button>
+                <button type="button"
+                        class="inline-flex items-center gap-1.5 rounded-lg bg-teal-700 hover:bg-teal-800 text-white px-3.5 py-1.5 text-xs font-semibold shadow-xs transition"
+                        @onclick="StartNewSlogan">
+                    <span>+ New Slogan</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <div class="flex items-center justify-between rounded-xl border border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/40 p-3 text-xs text-rose-800 dark:text-rose-200">
+            <span>@errorMessage</span>
+            <button type="button" class="font-bold" @onclick="() => errorMessage = null">✕</button>
+        </div>
+    }
+
+    @if (loading && workspace == null)
+    {
+        <div class="flex flex-col items-center justify-center p-12 my-6 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs">
+            <div class="w-10 h-10 border-4 border-teal-600 border-t-transparent rounded-full animate-spin"></div>
+            <p class="mt-3 text-sm font-semibold text-slate-700 dark:text-slate-200">Loading Document Slogans...</p>
+        </div>
+    }
+    else if (workspace != null)
+    {
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-3 items-start">
+            <!-- LEFT: Slogan Editor & Live Preview -->
+            <div class="lg:col-span-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-xs space-y-3">
+                <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2">
+                    <h2 class="text-sm font-bold">@(form.SloganId == 0 ? "Create Slogan" : $"Edit Slogan: {form.Name}")</h2>
+                    @if (form.SloganId != 0)
+                    {
+                        <button type="button" class="text-xs font-semibold text-slate-500 hover:text-slate-800" @onclick="StartNewSlogan">+ New</button>
+                    }
+                </div>
+
+                <div class="space-y-2.5 text-xs">
+                    <div>
+                        <label class="block font-semibold p-1">Slogan Name *</label>
+                        <input type="text" @bind="form.Name" placeholder="e.g. Integrity &amp; Excellence 2026"
+                               class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs" />
+                    </div>
+
+                    <div class="grid grid-cols-3 gap-2">
+                        <div>
+                            <label class="block font-semibold p-1">Type</label>
+                            <select @bind="form.SloganType" class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1.5 text-xs">
+                                <option value="Text">Text</option>
+                                <option value="Image">Image</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block font-semibold p-1">Placement</label>
+                            <select @bind="form.Placement" class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1.5 text-xs">
+                                <option value="Header">Header</option>
+                                <option value="Footer">Footer</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block font-semibold p-1">Alignment</label>
+                            <select @bind="form.Alignment" class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1.5 text-xs">
+                                <option value="Left">Left</option>
+                                <option value="Center">Center</option>
+                                <option value="Right">Right</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    @if (form.SloganType == "Text")
+                    {
+                        <div>
+                            <label class="block font-semibold p-1">Slogan Text *</label>
+                            <textarea rows="2" @bind="form.TextContent" @bind:event="oninput" placeholder="Enter slogan text..."
+                                      class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs"></textarea>
+                        </div>
+
+                        <div>
+                            <label class="block font-semibold p-1">Text Box Style</label>
+                            <div class="grid grid-cols-2 gap-2">
+                                <button type="button"
+                                        class="rounded-lg border p-2 text-left transition @(form.BoxStyle == "RoundedRectangle" ? "border-teal-600 bg-teal-50/60 dark:bg-teal-950/30 font-bold" : "border-slate-200 dark:border-slate-700")"
+                                        @onclick='() => form.BoxStyle = "RoundedRectangle"'>
+                                    Rounded Rectangle
+                                </button>
+                                <button type="button"
+                                        class="rounded-lg border p-2 text-left transition @(form.BoxStyle == "None" ? "border-teal-600 bg-teal-50/60 dark:bg-teal-950/30 font-bold" : "border-slate-200 dark:border-slate-700")"
+                                        @onclick='() => form.BoxStyle = "None"'>
+                                    Without Rectangle
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-3 gap-2">
+                            <div>
+                                <label class="block font-semibold p-1">Text Color</label>
+                                <div class="flex items-center gap-1.5">
+                                    <input type="color" @bind="form.TextColor" class="h-7 w-9 rounded border border-slate-300 cursor-pointer" />
+                                    <input type="text" @bind="form.TextColor" class="w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-1.5 py-1 text-[11px] font-mono" />
+                                </div>
+                            </div>
+                            @if (form.BoxStyle == "RoundedRectangle")
+                            {
+                                <div>
+                                    <label class="block font-semibold p-1">Background</label>
+                                    <div class="flex items-center gap-1.5">
+                                        <input type="color" @bind="form.BackgroundColor" class="h-7 w-9 rounded border border-slate-300 cursor-pointer" />
+                                        <input type="text" @bind="form.BackgroundColor" class="w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-1.5 py-1 text-[11px] font-mono" />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="block font-semibold p-1">Border Color</label>
+                                    <div class="flex items-center gap-1.5">
+                                        <input type="color" @bind="form.BorderColor" class="h-7 w-9 rounded border border-slate-300 cursor-pointer" />
+                                        <input type="text" @bind="form.BorderColor" class="w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-1.5 py-1 text-[11px] font-mono" />
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <div>
+                            <label class="block font-semibold p-1">Upload Slogan Image (PNG/JPG/SVG, max 2 MB)</label>
+                            <InputFile OnChange="OnImageSelectedAsync" accept="image/*" class="block w-full text-xs text-slate-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-teal-50 file:text-teal-700 hover:file:bg-teal-100" />
+                        </div>
+                    }
+
+                    <div class="flex items-center gap-4 pt-1">
+                        <label class="flex items-center gap-1.5 cursor-pointer">
+                            <input type="checkbox" @bind="form.IsDefault" class="rounded border-slate-300" />
+                            <span class="font-semibold">Set as Default Slogan</span>
+                        </label>
+                        <label class="flex items-center gap-1.5 cursor-pointer">
+                            <input type="checkbox" @bind="form.IsActive" class="rounded border-slate-300" />
+                            <span class="font-semibold">Active</span>
+                        </label>
+                    </div>
+
+                    <!-- Live Preview -->
+                    <div class="rounded-xl border border-dashed border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 p-3">
+                        <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-2">Live Preview (@form.Placement · @form.Alignment)</span>
+                        <div class="flex @(form.Alignment == "Left" ? "justify-start" : form.Alignment == "Right" ? "justify-end" : "justify-center")">
+                            @if (form.SloganType == "Image")
+                            {
+                                @if (!string.IsNullOrWhiteSpace(form.ImageBase64))
+                                {
+                                    <img src="@form.ImageBase64" alt="Slogan preview" class="max-h-14 object-contain" />
+                                }
+                                else
+                                {
+                                    <span class="text-slate-400 italic">No image selected</span>
+                                }
+                            }
+                            else
+                            {
+                                var boxCss = form.BoxStyle == "RoundedRectangle"
+                                    ? $"border-radius: 0.75rem; padding: 0.45rem 0.9rem; border: 1px solid {form.BorderColor ?? "#93c5fd"}; background-color: {form.BackgroundColor ?? "#eff6ff"}; color: {form.TextColor ?? "#1e3a8a"};"
+                                    : $"color: {form.TextColor ?? "#1e3a8a"}; padding: 0.25rem 0;";
+                                <div class="text-xs font-semibold" style="@boxCss">
+                                    @(string.IsNullOrWhiteSpace(form.TextContent) ? "Your slogan text appears here" : form.TextContent)
+                                </div>
+                            }
+                        </div>
+                    </div>
+
+                    <div class="flex justify-end gap-2 pt-2">
+                        <button type="button" disabled="@saving" class="rounded-lg bg-teal-700 hover:bg-teal-800 text-white px-4 py-1.5 text-xs font-semibold disabled:opacity-50" @onclick="SaveSloganAsync">
+                            @(saving ? "Saving..." : "Save Slogan")
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- RIGHT: Saved Slogans + Document Assignments -->
+            <div class="lg:col-span-7 flex flex-col gap-3">
+                <!-- Saved Slogans -->
+                <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-xs space-y-2">
+                    <h2 class="text-sm font-bold border-b border-slate-200 dark:border-slate-800 pb-2">Configured Slogans (@workspace.Slogans.Count)</h2>
+                    <div class="divide-y divide-slate-100 dark:divide-slate-800">
+                        @foreach (var s in workspace.Slogans)
+                        {
+                            <div class="py-2.5 flex items-center justify-between gap-2 text-xs">
+                                <div class="min-w-0">
+                                    <div class="flex items-center gap-1.5 flex-wrap">
+                                        <span class="font-bold text-slate-900 dark:text-slate-100">@s.Name</span>
+                                        <span class="rounded bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 text-[10px] font-semibold">@s.SloganType</span>
+                                        <span class="rounded bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 text-[10px] font-semibold">@s.Placement · @s.Alignment</span>
+                                        @if (s.IsDefault)
+                                        {
+                                            <span class="rounded-full bg-emerald-100 text-emerald-800 px-2 py-0.5 text-[10px] font-bold">Default</span>
+                                        }
+                                        @if (!s.IsActive)
+                                        {
+                                            <span class="rounded-full bg-slate-200 text-slate-600 px-2 py-0.5 text-[10px] font-bold">Inactive</span>
+                                        }
+                                    </div>
+                                    <div class="text-[11px] text-slate-500 truncate mt-0.5">
+                                        @(s.SloganType == "Text" ? s.TextContent : "Uploaded image slogan")
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-1.5 shrink-0">
+                                    @if (!s.IsDefault && s.IsActive)
+                                    {
+                                        <button type="button" class="rounded border border-emerald-300 text-emerald-700 hover:bg-emerald-50 px-2 py-1 text-[11px] font-semibold" @onclick="() => SetDefaultAsync(s.SloganId)">Set Default</button>
+                                    }
+                                    <button type="button" class="rounded border border-slate-300 dark:border-slate-700 px-2 py-1 text-[11px] font-semibold hover:bg-slate-50" @onclick="() => EditSlogan(s)">Edit</button>
+                                    <button type="button" class="rounded border border-rose-200 text-rose-700 hover:bg-rose-50 px-2 py-1 text-[11px] font-semibold" @onclick="() => DeleteSloganAsync(s.SloganId)">Delete</button>
+                                </div>
+                            </div>
+                        }
+                        @if (workspace.Slogans.Count == 0)
+                        {
+                            <p class="py-6 text-center text-xs text-slate-500">No slogans configured yet.</p>
+                        }
+                    </div>
+                </div>
+
+                <!-- Document Type Assignments -->
+                <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-xs space-y-2">
+                    <div>
+                        <h2 class="text-sm font-bold">Document Slogan Assignments</h2>
+                        <p class="text-[11px] text-slate-500">Choose which slogan appears on each HRM document type (Leave Chit, Salary Slip, Certificates, etc.).</p>
+                    </div>
+                    <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
+                        <table class="w-full text-left text-xs">
+                            <thead class="bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-semibold border-b border-slate-200 dark:border-slate-700">
+                                <tr>
+                                    <th class="p-2">Document Type</th>
+                                    <th class="p-2">Active Selection</th>
+                                    <th class="p-2">Assign Slogan</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                                @foreach (var a in workspace.Assignments)
+                                {
+                                    <tr>
+                                        <td class="p-2 font-semibold">@a.DocumentLabel</td>
+                                        <td class="p-2 text-slate-500">
+                                            @if (!a.HasExplicitAssignment)
+                                            {
+                                                <span>Default (@a.EffectiveSloganName)</span>
+                                            }
+                                            else
+                                            {
+                                                <span>@a.EffectiveSloganName</span>
+                                            }
+                                        </td>
+                                        <td class="p-2">
+                                            <select class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-xs"
+                                                    value="@(a.HasExplicitAssignment ? (a.SloganId?.ToString() ?? "none") : "default")"
+                                                    @onchange="(e) => OnAssignmentChangedAsync(a.DocumentType, e.Value?.ToString())">
+                                                <option value="default">Use Organisation Default</option>
+                                                <option value="none">None (No Slogan)</option>
+                                                @foreach (var s in workspace.Slogans.Where(x => x.IsActive))
+                                                {
+                                                    <option value="@s.SloganId">@s.Name (@s.Placement)</option>
+                                                }
+                                            </select>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</section>
+
+@code {
+    private const string FullWidthKey = "hrm.slogans.full-width";
+    private bool isFullWidth;
+    private bool loading = true;
+    private bool saving;
+    private string? errorMessage;
+
+    private SloganWorkspaceDto? workspace;
+    private SloganSaveRequest form = new();
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                var saved = await JS.InvokeAsync<string?>("localStorage.getItem", FullWidthKey);
+                if (bool.TryParse(saved, out var val)) { isFullWidth = val; StateHasChanged(); }
+            }
+            catch { }
+        }
+    }
+
+    private async Task ToggleFullWidthAsync()
+    {
+        isFullWidth = !isFullWidth;
+        try { await JS.InvokeVoidAsync("localStorage.setItem", FullWidthKey, isFullWidth ? "true" : "false"); } catch { }
+    }
+
+    private async Task LoadAsync()
+    {
+        loading = true;
+        errorMessage = null;
+        try { workspace = await SloganService.LoadAsync(); }
+        catch (Exception ex) { errorMessage = ex.Message; }
+        finally { loading = false; }
+    }
+
+    private void StartNewSlogan() => form = new SloganSaveRequest();
+
+    private void EditSlogan(SloganDto s)
+    {
+        form = new SloganSaveRequest
+        {
+            SloganId = s.SloganId,
+            Name = s.Name,
+            SloganType = s.SloganType,
+            TextContent = s.TextContent,
+            TextColor = s.TextColor ?? "#1e3a8a",
+            BackgroundColor = s.BackgroundColor ?? "#eff6ff",
+            BorderColor = s.BorderColor ?? "#93c5fd",
+            BoxStyle = s.BoxStyle,
+            ImageBase64 = s.ImageBase64,
+            ImageContentType = s.ImageContentType,
+            Placement = s.Placement,
+            Alignment = s.Alignment,
+            IsDefault = s.IsDefault,
+            IsActive = s.IsActive
+        };
+    }
+
+    private async Task OnImageSelectedAsync(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        if (file == null) return;
+        if (file.Size > 2 * 1024 * 1024)
+        {
+            errorMessage = "Image must be 2 MB or smaller.";
+            return;
+        }
+        await using var stream = file.OpenReadStream(2 * 1024 * 1024);
+        using var ms = new MemoryStream();
+        await stream.CopyToAsync(ms);
+        form.ImageContentType = file.ContentType;
+        form.ImageBase64 = $"data:{file.ContentType};base64,{Convert.ToBase64String(ms.ToArray())}";
+    }
+
+    private async Task SaveSloganAsync()
+    {
+        saving = true;
+        errorMessage = null;
+        try
+        {
+            await SloganService.SaveSloganAsync(form);
+            ToastService.Success("Slogan saved.");
+            StartNewSlogan();
+            await LoadAsync();
+        }
+        catch (Exception ex) { errorMessage = ex.Message; }
+        finally { saving = false; }
+    }
+
+    private async Task SetDefaultAsync(int sloganId)
+    {
+        try
+        {
+            await SloganService.SetDefaultSloganAsync(sloganId);
+            ToastService.Success("Default slogan updated.");
+            await LoadAsync();
+        }
+        catch (Exception ex) { errorMessage = ex.Message; }
+    }
+
+    private async Task DeleteSloganAsync(int sloganId)
+    {
+        try
+        {
+            await SloganService.DeleteSloganAsync(sloganId);
+            ToastService.Info("Slogan deleted.");
+            if (form.SloganId == sloganId) StartNewSlogan();
+            await LoadAsync();
+        }
+        catch (Exception ex) { errorMessage = ex.Message; }
+    }
+
+    private async Task OnAssignmentChangedAsync(string documentType, string? value)
+    {
+        try
+        {
+            if (value == "default")
+            {
+                // Keep default behavior by clearing explicit row if needed; passing null sets explicit None,
+                // so only explicit slogan IDs or None are saved.
+                await SloganService.SaveDocumentAssignmentAsync(documentType, null);
+            }
+            else if (value == "none")
+            {
+                await SloganService.SaveDocumentAssignmentAsync(documentType, null);
+            }
+            else if (int.TryParse(value, out var id))
+            {
+                await SloganService.SaveDocumentAssignmentAsync(documentType, id);
+            }
+            ToastService.Success("Document slogan assignment updated.");
+            await LoadAsync();
+        }
+        catch (Exception ex) { errorMessage = ex.Message; }
+    }
+}

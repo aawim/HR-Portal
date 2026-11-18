@@ -18,6 +18,25 @@ public static class EffectiveStaffSchedules
             var mask=(a.Sunday?1:0)+(a.Monday?2:0)+(a.Tuesday?4:0)+(a.Wednesday?8:0)+(a.Thursday?16:0)+(a.Friday?32:0)+(a.Saturday?64:0);
             result.Add(new(new() {JobWorkTemplateAssignmentID=int.MinValue,JobID=job.JobId,WorkTemplateID=a.WorkTemplateId,WorkTemplate=a.WorkTemplate,SchedulePurpose="Official",ScheduleMode="Weekly",WorkingDaysMask=mask,EffectiveFrom=a.EffectiveFrom,EffectiveTo=a.EffectiveTo,IsActive=true},0,a.Priority,"Legacy staff schedule"));
         }
+        if(db.Model.FindEntityType(typeof(StaffGroupMember))!=null)
+        {
+            var sgMembers=await db.StaffGroupMembers.AsNoTracking()
+                .Include(m=>m.StaffGroup).ThenInclude(g=>g.WorkTemplate!).ThenInclude(t=>t.WorkTemplateSegments).ThenInclude(s=>s.WorkSegmentType)
+                .Where(m=>m.OrganisationId==job.OrganisationID && m.IndividualId==job.IndividualID && m.IsActive &&
+                    m.StaffGroup.IsActive && !m.StaffGroup.IsDissolved && m.StaffGroup.WorkTemplateId.HasValue &&
+                    m.StaffGroup.EffectiveFrom<=to && (!m.StaffGroup.EffectiveTo.HasValue || m.StaffGroup.EffectiveTo>=from))
+                .ToListAsync(ct);
+            foreach(var m in sgMembers)
+            {
+                var g=m.StaffGroup;
+                var first=g.EffectiveFrom.Date<from.Date?from.Date:g.EffectiveFrom.Date;
+                var last=g.EffectiveTo?.Date??to.Date; if(last>to.Date) last=to.Date;
+                if(last>=first && g.WorkTemplate!=null)
+                    result.Add(new(new() {JobWorkTemplateAssignmentID=-100000-g.StaffGroupId,JobID=job.JobId,WorkTemplateID=g.WorkTemplateId!.Value,WorkTemplate=g.WorkTemplate,
+                        SchedulePurpose="Official",ScheduleMode=g.ScheduleMode,WorkingDaysMask=g.WorkingDaysMask,EffectiveFrom=first,EffectiveTo=last,IsActive=true},
+                        -1,int.MaxValue,"Staff Group: "+g.Name));
+            }
+        }
         if(db.Model.FindEntityType(typeof(ScopeScheduleAssignment))==null) return Valid(result,job.OrganisationID);
         var rows=await db.ScopeScheduleAssignments.AsNoTracking().Include(a=>a.WorkTemplate).ThenInclude(t=>t.WorkTemplateSegments).ThenInclude(s=>s.WorkSegmentType)
             .Where(a=>a.OrganisationId==job.OrganisationID && a.IsActive && a.EffectiveFrom<=to && (!a.EffectiveTo.HasValue || a.EffectiveTo>=from)).ToListAsync(ct);

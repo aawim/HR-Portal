@@ -57,6 +57,8 @@ public static class BackendServiceRegistration
         services.AddScoped<JobTypeOvertimeSettingsService>();
         services.AddScoped<ScopeScheduleSettingsService>();
         services.AddScoped<GroupsManagementService>();
+        services.AddScoped<StaffGroupService>();
+        services.AddScoped<SloganService>();
         services.AddScoped<LeaveConfigurationSettingsService>();
         services.AddScoped<IndividualRegistrationService>();
         services.AddScoped<OvertimeRequestService>();

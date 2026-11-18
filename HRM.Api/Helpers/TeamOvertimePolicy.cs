@@ -7,6 +7,28 @@ public static class TeamOvertimePolicy
 {
     public static async Task<JobTypeOvertimeRule?> ResolveAsync(HrmTeContext db, Job job, DateTime date, CancellationToken ct = default)
     {
+        if (db.Model.FindEntityType(typeof(StaffGroupMember)) != null)
+        {
+            var sg = await db.StaffGroupMembers.AsNoTracking()
+                .Where(m => m.OrganisationId == job.OrganisationID && m.IndividualId == job.IndividualID && m.IsActive &&
+                            m.StaffGroup.IsActive && !m.StaffGroup.IsDissolved && m.StaffGroup.OvertimeEnabled.HasValue &&
+                            m.StaffGroup.EffectiveFrom <= date && (!m.StaffGroup.EffectiveTo.HasValue || m.StaffGroup.EffectiveTo >= date))
+                .Select(m => new { m.StaffGroup.OvertimeEnabled, m.StaffGroup.MaximumDailyOvertimeHours, m.StaffGroup.MaximumWeeklyOvertimeHours })
+                .FirstOrDefaultAsync(ct);
+            if (sg != null)
+            {
+                if (sg.OvertimeEnabled == false) return null;
+                return new JobTypeOvertimeRule
+                {
+                    OrganisationId = job.OrganisationID,
+                    JobTypeId = job.JobTypeId,
+                    IsAllowed = true,
+                    MaximumWeeklyHours = sg.MaximumWeeklyOvertimeHours ?? 40m,
+                    MaximumDailyHours = sg.MaximumDailyOvertimeHours,
+                    Version = 1
+                };
+            }
+        }
         var policy = await db.JobTypeOvertimeRules.AsNoTracking().SingleOrDefaultAsync(p =>
             p.OrganisationId == job.OrganisationID && p.JobTypeId == job.JobTypeId && p.IsAllowed, ct);
         if (policy != null) return policy;

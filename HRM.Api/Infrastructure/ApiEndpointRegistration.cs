@@ -110,6 +110,10 @@ public static class ApiEndpointRegistration
         services.TryAddScoped<global::HRM.Services.Contracts.FormerStaffServiceContracts.IOperations>(provider => provider.GetRequiredService<global::HRM.Services.FormerStaffService>());
         services.TryAddScoped<global::HRM.Services.GroupsManagementService>();
         services.TryAddScoped<global::HRM.Services.Contracts.GroupsManagementServiceContracts.IOperations>(provider => provider.GetRequiredService<global::HRM.Services.GroupsManagementService>());
+        services.TryAddScoped<global::HRM.Services.StaffGroupService>();
+        services.TryAddScoped<global::HRM.Services.Contracts.StaffGroupServiceContracts.IOperations>(provider => provider.GetRequiredService<global::HRM.Services.StaffGroupService>());
+        services.TryAddScoped<global::HRM.Services.SloganService>();
+        services.TryAddScoped<global::HRM.Services.Contracts.SloganServiceContracts.IOperations>(provider => provider.GetRequiredService<global::HRM.Services.SloganService>());
         services.TryAddScoped<global::HRM.Services.IndividualRegistrationService>();
         services.TryAddScoped<global::HRM.Services.Contracts.IndividualRegistrationServiceContracts.IOperations>(provider => provider.GetRequiredService<global::HRM.Services.IndividualRegistrationService>());
         services.TryAddScoped<global::HRM.Services.HrRequestInboxService>();

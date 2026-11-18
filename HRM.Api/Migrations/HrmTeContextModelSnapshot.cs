@@ -9064,6 +9064,44 @@ namespace HRM.Migrations
                     b.ToTable("DMS_StoredObjects", (string)null);
                 });
 
+            modelBuilder.Entity("HRM.Models.DocumentSloganAssignment", b =>
+                {
+                    b.Property<int>("DocumentSloganAssignmentId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("DocumentSloganAssignmentId"));
+
+                    b.Property<string>("DocumentType")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<int>("OperationLogId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("OrganisationId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("SloganId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("UpdatedByUserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("DocumentSloganAssignmentId");
+
+                    b.HasIndex("SloganId");
+
+                    b.HasIndex("OrganisationId", "DocumentType")
+                        .IsUnique();
+
+                    b.ToTable("SL_DocumentSlogans", (string)null);
+                });
+
             modelBuilder.Entity("HRM.Models.EdgeAttendance.EdgeAttendanceAgent", b =>
                 {
                     b.Property<int>("EdgeAttendanceAgentId")
@@ -19494,6 +19532,90 @@ namespace HRM.Migrations
                     b.ToTable("SequenceNumberTypes");
                 });
 
+            modelBuilder.Entity("HRM.Models.Slogan", b =>
+                {
+                    b.Property<int>("SloganId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("SloganId"));
+
+                    b.Property<string>("Alignment")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("BackgroundColor")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<string>("BorderColor")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<string>("BoxStyle")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("CreatedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ImageContentType")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<byte[]>("ImageData")
+                        .HasColumnType("varbinary(max)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsDefault")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<int>("OperationLogId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("OrganisationId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Placement")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("SloganType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("TextColor")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<string>("TextContent")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("SloganId");
+
+                    b.HasIndex("OrganisationId", "IsActive", "IsDefault");
+
+                    b.ToTable("SL_Slogans", (string)null);
+                });
+
             modelBuilder.Entity("HRM.Models.Staff", b =>
                 {
                     b.Property<int>("IndividualId")
@@ -20244,6 +20366,165 @@ namespace HRM.Migrations
                     b.ToTable("AD_FinanceRequests", (string)null);
 
                     b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
+                });
+
+            modelBuilder.Entity("HRM.Models.StaffGroup", b =>
+                {
+                    b.Property<int>("StaffGroupId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("StaffGroupId"));
+
+                    b.Property<bool>("AdminPortalAccessEnabled")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Code")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("CreatedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("DissolveReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime?>("DissolvedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("DissolvedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("EffectiveFrom")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("EffectiveTo")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsDissolved")
+                        .HasColumnType("bit");
+
+                    b.Property<int?>("LeaveSetId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal?>("MaximumDailyOvertimeHours")
+                        .HasColumnType("decimal(5,2)");
+
+                    b.Property<decimal?>("MaximumWeeklyOvertimeHours")
+                        .HasColumnType("decimal(5,2)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<int>("OperationLogId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("OrganisationId")
+                        .HasColumnType("int");
+
+                    b.Property<bool?>("OvertimeEnabled")
+                        .HasColumnType("bit");
+
+                    b.Property<decimal?>("OvertimeRateMultiplier")
+                        .HasColumnType("decimal(5,2)");
+
+                    b.Property<string>("ScheduleMode")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("WorkTemplateId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("WorkTypeId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("WorkingDaysMask")
+                        .HasColumnType("int");
+
+                    b.HasKey("StaffGroupId");
+
+                    b.HasIndex("LeaveSetId");
+
+                    b.HasIndex("WorkTemplateId");
+
+                    b.HasIndex("WorkTypeId");
+
+                    b.HasIndex("OrganisationId", "IsActive", "IsDissolved");
+
+                    b.ToTable("SG_StaffGroups", (string)null);
+                });
+
+            modelBuilder.Entity("HRM.Models.StaffGroupMember", b =>
+                {
+                    b.Property<int>("StaffGroupMemberId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("StaffGroupMemberId"));
+
+                    b.Property<int>("AddedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("GrantedAdminPortalAccess")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("HadDirectAdminPortalAccess")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("IndividualId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("JobId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("JoinedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("LeftAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("OperationLogId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("OrganisationId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("RemovedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("StaffGroupId")
+                        .HasColumnType("int");
+
+                    b.HasKey("StaffGroupMemberId");
+
+                    b.HasIndex("OrganisationId", "IndividualId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_SG_StaffGroupMembers_ActiveIndividual")
+                        .HasFilter("[IsActive] = 1");
+
+                    b.HasIndex("StaffGroupId", "IsActive");
+
+                    b.ToTable("SG_StaffGroupMembers", (string)null);
                 });
 
             modelBuilder.Entity("HRM.Models.StaffNotification", b =>
@@ -28820,6 +29101,16 @@ namespace HRM.Migrations
                     b.Navigation("Organisation");
                 });
 
+            modelBuilder.Entity("HRM.Models.DocumentSloganAssignment", b =>
+                {
+                    b.HasOne("HRM.Models.Slogan", "Slogan")
+                        .WithMany()
+                        .HasForeignKey("SloganId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Slogan");
+                });
+
             modelBuilder.Entity("HRM.Models.EdgeAttendance.EdgeAttendanceAgent", b =>
                 {
                     b.HasOne("HRM.Models.Organisation", null)
@@ -32458,6 +32749,41 @@ namespace HRM.Migrations
                     b.Navigation("Request");
                 });
 
+            modelBuilder.Entity("HRM.Models.StaffGroup", b =>
+                {
+                    b.HasOne("HRM.Models.Archives.LeaveSet", "LeaveSet")
+                        .WithMany()
+                        .HasForeignKey("LeaveSetId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("HRM.Models.WorkPlanning.WorkTemplate", "WorkTemplate")
+                        .WithMany()
+                        .HasForeignKey("WorkTemplateId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("HRM.Models.Archives.WorkType", "WorkType")
+                        .WithMany()
+                        .HasForeignKey("WorkTypeId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("LeaveSet");
+
+                    b.Navigation("WorkTemplate");
+
+                    b.Navigation("WorkType");
+                });
+
+            modelBuilder.Entity("HRM.Models.StaffGroupMember", b =>
+                {
+                    b.HasOne("HRM.Models.StaffGroup", "StaffGroup")
+                        .WithMany("Members")
+                        .HasForeignKey("StaffGroupId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("StaffGroup");
+                });
+
             modelBuilder.Entity("HRM.Models.StaffNotification", b =>
                 {
                     b.HasOne("HRM.Models.User", null)
@@ -35736,6 +36062,11 @@ namespace HRM.Migrations
                     b.Navigation("Members");
 
                     b.Navigation("Messages");
+                });
+
+            modelBuilder.Entity("HRM.Models.StaffGroup", b =>
+                {
+                    b.Navigation("Members");
                 });
 
             modelBuilder.Entity("HRM.Models.StaffSeparation", b =>
