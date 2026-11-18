@@ -254,7 +254,12 @@
         </div>
         <label class="block space-y-1">
           <span class="font-medium text-slate-700">Client Certificate Thumbprint (SHA-1)</span>
-          <input class="w-full rounded-lg border border-slate-300 p-2 font-mono" placeholder="40-hex string" @bind="enrolment.CertificateThumbprint" />
+          <div class="flex gap-1.5">
+            <input class="w-full rounded-lg border border-slate-300 p-2 font-mono" placeholder="40-hex string" @bind="enrolment.CertificateThumbprint" />
+            <button type="button" class="app-button app-button-secondary app-button-sm shrink-0" disabled="@generatingCert" @onclick="AutoGenerateThumbprintAsync">
+              Auto Generate
+            </button>
+          </div>
         </label>
         <label class="block space-y-1">
           <span class="font-medium text-slate-700">Certificate Issuer Subject</span>
@@ -659,6 +664,9 @@
   private string certPassword = "ChangeThisPassword123!";
   private bool generatingCert;
   private string? generatedConfigSnippet;
+  private byte[]? pendingPfxBytes;
+  private string? pendingCaBase64;
+  private string? pendingFileName;
   private EdgeTrustedIssuerInput issuerInput = new();
 
   private List<EdgeAttendanceDeviceDto> FilteredDevices => deviceFilter switch
@@ -814,6 +822,49 @@
       enrolment.AttendanceDeviceIds.Add(id);
   }
 
+  private (string Thumbprint, string Issuer, DateTime NotAfterUtc, byte[] PfxBytes, string CaBase64, string FileName) BuildCertificateArtifacts(string agentId, string password, DateTime expiryUtc)
+  {
+    var notBefore = DateTimeOffset.UtcNow.AddMinutes(-5);
+    var notAfter = new DateTimeOffset(expiryUtc.ToUniversalTime(), TimeSpan.Zero);
+    if (notAfter <= notBefore) notAfter = DateTimeOffset.UtcNow.AddYears(1);
+
+    using var caRsa = RSA.Create(2048);
+    var caReq = new CertificateRequest("CN=DHR Edge Authority Root CA, O=HRM Attendance Edge", caRsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+    caReq.CertificateExtensions.Add(new X509BasicConstraintsExtension(true, false, 0, true));
+    caReq.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.KeyCertSign | X509KeyUsageFlags.CrlSign, true));
+    using var caCert = caReq.CreateSelfSigned(notBefore, DateTimeOffset.UtcNow.AddYears(10));
+
+    using var clientRsa = RSA.Create(2048);
+    var clientReq = new CertificateRequest($"CN={agentId}, O=HRM Attendance Edge", clientRsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+    clientReq.CertificateExtensions.Add(new X509BasicConstraintsExtension(false, false, 0, false));
+    clientReq.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.KeyEncipherment, true));
+    clientReq.CertificateExtensions.Add(new X509EnhancedKeyUsageExtension(new OidCollection { new Oid("1.3.6.1.5.5.7.3.2") }, false));
+
+    var serial = new byte[8];
+    RandomNumberGenerator.Fill(serial);
+    using var clientCert = clientReq.Create(caCert, notBefore, notAfter, serial);
+    using var clientWithKey = clientCert.CopyWithPrivateKey(clientRsa);
+    var pfxBytes = clientWithKey.Export(X509ContentType.Pfx, password);
+    return (clientCert.Thumbprint, clientCert.Issuer, notAfter.UtcDateTime, pfxBytes, Convert.ToBase64String(caCert.RawData), $"{agentId}.pfx");
+  }
+
+  private void AutoGenerateThumbprintAsync()
+  {
+    error = null;
+    successMessage = null;
+    var agentId = string.IsNullOrWhiteSpace(enrolment.AgentIdentifier) ? "edge-agent-01" : enrolment.AgentIdentifier.Trim();
+    if (string.IsNullOrWhiteSpace(enrolment.AgentIdentifier)) enrolment.AgentIdentifier = agentId;
+    var password = string.IsNullOrWhiteSpace(certPassword) ? "ChangeThisPassword123!" : certPassword;
+    var cert = BuildCertificateArtifacts(agentId, password, enrolment.CertificateNotAfterUtc);
+    enrolment.CertificateThumbprint = cert.Thumbprint;
+    enrolment.CertificateIssuer = cert.Issuer;
+    enrolment.CertificateNotAfterUtc = cert.NotAfterUtc;
+    pendingPfxBytes = cert.PfxBytes;
+    pendingCaBase64 = cert.CaBase64;
+    pendingFileName = cert.FileName;
+    successMessage = $"Generated thumbprint {cert.Thumbprint}. Click 'Enrol with Existing Thumbprint' or 'Generate, Enrol & Download .pfx' to save.";
+  }
+
   private async Task GenerateAndEnrolAsync()
   {
     error = null;
@@ -821,7 +872,7 @@
     generatedConfigSnippet = null;
     if (string.IsNullOrWhiteSpace(enrolment.AgentIdentifier) || enrolment.OrganisationId <= 0)
     {
-      error = "Enter Agent Identifier and Organisation ID before generating a certificate.";
+      error = "Enter Agent Identifier and select an Organisation before generating a certificate.";
       return;
     }
 
@@ -830,34 +881,13 @@
     {
       var agentId = enrolment.AgentIdentifier.Trim();
       var password = string.IsNullOrWhiteSpace(certPassword) ? "ChangeThisPassword123!" : certPassword;
-      var notBefore = DateTimeOffset.UtcNow.AddMinutes(-5);
-      var notAfter = new DateTimeOffset(enrolment.CertificateNotAfterUtc.ToUniversalTime(), TimeSpan.Zero);
-      if (notAfter <= notBefore) notAfter = DateTimeOffset.UtcNow.AddYears(1);
+      var cert = BuildCertificateArtifacts(agentId, password, enrolment.CertificateNotAfterUtc);
 
-      using var caRsa = RSA.Create(2048);
-      var caReq = new CertificateRequest("CN=DHR Edge Authority Root CA, O=HRM Attendance Edge", caRsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
-      caReq.CertificateExtensions.Add(new X509BasicConstraintsExtension(true, false, 0, true));
-      caReq.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.KeyCertSign | X509KeyUsageFlags.CrlSign, true));
-      using var caCert = caReq.CreateSelfSigned(notBefore, DateTimeOffset.UtcNow.AddYears(10));
+      await Agents.AddTrustedIssuerAsync(new EdgeTrustedIssuerInput { CertificateBase64 = cert.CaBase64 });
 
-      using var clientRsa = RSA.Create(2048);
-      var clientReq = new CertificateRequest($"CN={agentId}, O=HRM Attendance Edge", clientRsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
-      clientReq.CertificateExtensions.Add(new X509BasicConstraintsExtension(false, false, 0, false));
-      clientReq.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.KeyEncipherment, true));
-      clientReq.CertificateExtensions.Add(new X509EnhancedKeyUsageExtension(new OidCollection { new Oid("1.3.6.1.5.5.7.3.2") }, false));
-
-      var serial = new byte[8];
-      RandomNumberGenerator.Fill(serial);
-      using var clientCert = clientReq.Create(caCert, notBefore, notAfter, serial);
-      using var clientWithKey = clientCert.CopyWithPrivateKey(clientRsa);
-      var pfxBytes = clientWithKey.Export(X509ContentType.Pfx, password);
-
-      var caBase64 = Convert.ToBase64String(caCert.RawData);
-      await Agents.AddTrustedIssuerAsync(new EdgeTrustedIssuerInput { CertificateBase64 = caBase64 });
-
-      enrolment.CertificateThumbprint = clientCert.Thumbprint;
-      enrolment.CertificateIssuer = clientCert.Issuer;
-      enrolment.CertificateNotAfterUtc = notAfter.UtcDateTime;
+      enrolment.CertificateThumbprint = cert.Thumbprint;
+      enrolment.CertificateIssuer = cert.Issuer;
+      enrolment.CertificateNotAfterUtc = cert.NotAfterUtc;
 
       var result = await Agents.RegisterAsync(enrolment);
       if (!result.Success)
@@ -866,22 +896,24 @@
         return;
       }
 
-      var base64Pfx = Convert.ToBase64String(pfxBytes);
-      var fileName = $"{agentId}.pfx";
+      var base64Pfx = Convert.ToBase64String(cert.PfxBytes);
       await JS.InvokeVoidAsync("eval", $@"(function(){{
         const b = atob('{base64Pfx}');
         const a = new Uint8Array(b.length);
         for (let i = 0; i < b.length; i++) a[i] = b.charCodeAt(i);
         const url = URL.createObjectURL(new Blob([a], {{type:'application/x-pkcs12'}}));
         const link = document.createElement('a');
-        link.href = url; link.download = '{fileName}';
+        link.href = url; link.download = '{cert.FileName}';
         document.body.appendChild(link); link.click(); link.remove();
         URL.revokeObjectURL(url);
       }})();");
 
-      generatedConfigSnippet = $"{{\n  \"AttendanceEdge\": {{\n    \"AgentId\": \"{agentId}\",\n    \"ClientCertificatePath\": \"./certs/{fileName}\",\n    \"ClientCertificatePassword\": \"{password}\"\n  }}\n}}";
-      successMessage = $"Generated certificate {clientCert.Thumbprint} and enrolled agent '{agentId}'.";
+      generatedConfigSnippet = $"{{\n  \"AttendanceEdge\": {{\n    \"AgentId\": \"{agentId}\",\n    \"ClientCertificatePath\": \"./certs/{cert.FileName}\",\n    \"ClientCertificatePassword\": \"{password}\"\n  }}\n}}";
+      successMessage = $"Generated certificate {cert.Thumbprint} and enrolled agent '{agentId}'.";
       enrolment = new() { CertificateNotAfterUtc = DateTime.UtcNow.AddYears(1) };
+      pendingPfxBytes = null;
+      pendingCaBase64 = null;
+      pendingFileName = null;
       await LoadAsync();
     }
     catch (Exception ex)
