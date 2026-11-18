@@ -3,6 +3,7 @@ using HRM.Application.Contracts.Recruitment;
 namespace HRM.UI.Services.Recruitment;
 public interface IRecruitmentApiClient {
     Task<IReadOnlyList<RecruitmentRequisitionRow>> GetRequisitionsAsync(CancellationToken ct = default);
+    Task<IReadOnlyList<AvailablePositionMatrixOption>> GetAvailablePositionsAsync(CancellationToken ct = default);
     Task<HRM.DTOs.ServiceResult> CreateRequisitionAsync(RecruitmentRequisitionInput input, CancellationToken ct = default);
     Task<HRM.DTOs.ServiceResult> ApproveRequisitionAsync(int id, CancellationToken ct = default);
     Task<IReadOnlyList<RecruitmentVacancyRow>> GetVacanciesAsync();
@@ -59,6 +60,7 @@ public sealed class RecruitmentApiClient(HttpClient http) : IRecruitmentApiClien
     public Task<HRM.DTOs.ServiceResult> CreateVacancyAsync(RecruitmentVacancyInput input)=>PostAsync("/api/v1/recruitment/requisitions/vacancies",new{input},default);
     public Task<HRM.DTOs.ServiceResult> PublishVacancyAsync(int id)=>PostAsync($"/api/v1/recruitment/requisitions/vacancies/{id}/publish",new{},default);
     public Task<HRM.DTOs.ServiceResult> CreateRequisitionAsync(RecruitmentRequisitionInput input, CancellationToken ct = default) => PostAsync("/api/v1/recruitment/requisitions", new { input }, ct);
+    public async Task<IReadOnlyList<AvailablePositionMatrixOption>> GetAvailablePositionsAsync(CancellationToken ct = default) => await http.GetFromJsonAsync<List<AvailablePositionMatrixOption>>("/api/v1/recruitment/requisitions/available-positions", ct) ?? [];
     public Task<HRM.DTOs.ServiceResult> ApproveRequisitionAsync(int id, CancellationToken ct = default) => PostAsync($"/api/v1/recruitment/requisitions/{id}/approve", new { }, ct);
     private async Task<HRM.DTOs.ServiceResult> PostAsync<T>(string path, T input, CancellationToken ct)
     {

@@ -9,6 +9,9 @@ public sealed class RecruitmentRequisitionsController(global::HRM.Application.Co
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<global::HRM.Application.Contracts.Recruitment.RecruitmentRequisitionRow>>> List(CancellationToken ct) => Ok(await service.ListAsync(ct));
 
+    [HttpGet("available-positions")]
+    public async Task<ActionResult<IReadOnlyList<global::HRM.Application.Contracts.Recruitment.AvailablePositionMatrixOption>>> AvailablePositions(CancellationToken ct) => Ok(await service.ListAvailablePositionsAsync(ct));
+
     [HttpPost]
     public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> Create([FromBody] CreateRequest request,CancellationToken ct) => Ok(await service.CreateAsync(request.Input,ct));
 

@@ -5,7 +5,15 @@
     <h2 class="p-1 font-bold">Create requisition</h2>
     <p class="p-1 text-xs text-slate-500">An active position matrix and a verified policy assigned to your organisation are required.</p>
     <div class="grid gap-3 sm:grid-cols-2">
-        <label class="block p-1 text-xs font-medium">Position matrix ID<input type="number" min="1" @bind="matrixId" class="@InputClass" /></label>
+        <label class="block p-1 text-xs font-medium">Available position
+            <select @bind="matrixId" class="@InputClass">
+                <option value="0">-- Select available position --</option>
+                @foreach (var pos in availablePositions)
+                {
+                    <option value="@pos.PositionMatrixId" disabled="@(pos.RemainingSlots <= 0)">@pos.Label</option>
+                }
+            </select>
+        </label>
         <label class="block p-1 text-xs font-medium">Number of vacancies<input type="number" min="1" @bind="slots" class="@InputClass" /></label>
         <label class="block p-1 text-xs font-medium">Employment type<select @bind="employment" class="@InputClass"><option>Permanent</option><option>Contract</option><option>Temporary</option></select></label>
         <label class="block p-1 text-xs font-medium">Reason<textarea maxlength="2000" @bind="reason" class="@InputClass"></textarea></label>
@@ -29,14 +37,21 @@
     private string employment = "Permanent", reason = "";
     private string? message;
     private bool busy;
+    private IReadOnlyList<AvailablePositionMatrixOption> availablePositions = [];
     private const string InputClass = "mt-1 w-full rounded-lg border border-slate-300 bg-white p-1 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100";
+    protected override async Task OnInitializedAsync() => await LoadPositionsAsync();
+    private async Task LoadPositionsAsync()
+    {
+        try { availablePositions = await Api.GetAvailablePositionsAsync(); }
+        catch { availablePositions = []; }
+    }
     private Task CreateAsync() => ExecuteAsync(() => Api.CreateRequisitionAsync(new(matrixId, slots, employment, "CivilService", reason)));
     private Task ApproveAsync(int id) => ExecuteAsync(() => Api.ApproveRequisitionAsync(id));
     private async Task ExecuteAsync(Func<Task<HRM.DTOs.ServiceResult>> action)
     {
         if (busy) return;
         busy = true;
-        try { var result = await action(); message = result.Message; if (result.Success) await Changed.InvokeAsync(); }
+        try { var result = await action(); message = result.Message; if (result.Success) { await LoadPositionsAsync(); await Changed.InvokeAsync(); } }
         catch (HttpRequestException ex) { message = ex.StatusCode == System.Net.HttpStatusCode.Conflict ? "The policy, capacity or requisition state prevents this action. Ask your recruitment administrator to check the configuration." : "The action failed. Refresh and try again."; }
         finally { busy = false; }
     }

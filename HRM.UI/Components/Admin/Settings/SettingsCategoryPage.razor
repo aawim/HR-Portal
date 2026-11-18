@@ -291,7 +291,6 @@
             new("Location Types", "bi-tags", "Manage the shared location type catalogue.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationResources)),
             new("Organisation Types", "bi-buildings", "Manage organisation classifications.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationResources)),
             new("Structure Request Types", "bi-inbox", "Manage request types used for organisation structure changes.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationResources)),
-            new("Organisation Permissions", "bi-shield-check", "Manage the permissions available to this organisation.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationPermissions)),
         },
         "payroll" => new() {
             new("Manage Period", "bi-hourglass-split", "Configure pay cycles and deadlines.", null),
@@ -394,6 +393,11 @@
         if (TeamSection != null) { CategoryName = "org"; Section = "teams"; }
         if (CategoryName.Equals("org", StringComparison.OrdinalIgnoreCase) && Section == "organisations") Section = "manage";
         if (CategoryName.Equals("org", StringComparison.OrdinalIgnoreCase) && Section == "requests") Section = "structure-request-types";
+        if (CategoryName.Equals("org", StringComparison.OrdinalIgnoreCase) && Section == "permissions")
+        {
+            Navigation.NavigateTo($"/admin/my/workspace/organisation/{currentOrgId}/permissions", replace: true);
+            return;
+        }
         if (CategoryName.Equals("org", StringComparison.OrdinalIgnoreCase) && Section == "teams")
         {
             var current = new Uri(Navigation.Uri);
@@ -406,8 +410,11 @@
             VisibleItems.FirstOrDefault(x => HRM.Helpers.SectionRoutes.Matches(Section, ItemSlug(x)));
     }
 
+    private int currentOrgId = 3;
+
     protected override async Task OnInitializedAsync()
     {
+        try { var id = await UserAccess.GetCurrentOrganisationIdAsync(); if (id > 0) currentOrgId = id; } catch { }
         isDeveloper = await UserAccess.HasUserGroupAsync("Developer");
         canViewCarryForward = await UserAccess.HasPermissionAsync(HRM.Services.Leave.LeaveCarryForwardPermissions.View) &&
             (await UserAccess.HasUserGroupAsync("Human Resource: Staff") || await UserAccess.HasUserGroupAsync("Human Resource :Head"));

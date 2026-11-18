@@ -93,6 +93,8 @@
     }
 </div>
 @code {
+    [Parameter] public int? InitialOrganisationId { get; set; }
+    private int? lastInitialOrgId;
     private OrganisationPermissionData? data;
     private HashSet<int> selected = [], baseline = [];
     private string search = "", filter = "all", area = "", reason = "", error = "";
@@ -103,7 +105,19 @@
     private IEnumerable<PermissionDefinitionDto> Visible => (data?.Permissions ?? []).Where(p =>
         (area == "" || area == p.Group) && (p.Name.Contains(search, StringComparison.OrdinalIgnoreCase) || p.Key.Contains(search, StringComparison.OrdinalIgnoreCase) || p.Group.Contains(search, StringComparison.OrdinalIgnoreCase)) &&
         (filter == "all" || filter == "enabled" && selected.Contains(p.Id) || filter == "disabled" && !selected.Contains(p.Id) || filter == "changed" && selected.Contains(p.Id) != baseline.Contains(p.Id)));
-    protected override async Task OnInitializedAsync() => await Load();
+    protected override async Task OnInitializedAsync()
+    {
+        lastInitialOrgId = InitialOrganisationId;
+        await Load(InitialOrganisationId);
+    }
+    protected override async Task OnParametersSetAsync()
+    {
+        if (InitialOrganisationId != lastInitialOrgId && !Dirty)
+        {
+            lastInitialOrgId = InitialOrganisationId;
+            await Load(InitialOrganisationId);
+        }
+    }
     private async Task Refresh() { if (!Dirty) await Load(data?.OrganisationId); }
     private async Task Load(int? org = null)
     {
