@@ -719,8 +719,22 @@
           {
             organisations = [new(job.OrganisationId, string.IsNullOrWhiteSpace(job.OrganisationName) ? $"Organisation #{job.OrganisationId}" : job.OrganisationName)];
           }
+          else if (actor.Organisation is { OrganisationBusinessEntityId: > 0 } org)
+          {
+            organisations = [new(org.OrganisationBusinessEntityId, string.IsNullOrWhiteSpace(org.OrganisationName) ? $"Organisation #{org.OrganisationBusinessEntityId}" : org.OrganisationName)];
+          }
         }
         catch { }
+      }
+      if (organisations.Count == 0)
+      {
+        organisations = agents.Select(a => a.OrganisationId)
+          .Concat(devices.Where(d => d.OrganisationId.HasValue).Select(d => d.OrganisationId!.Value))
+          .Where(id => id > 0)
+          .Distinct()
+          .OrderBy(id => id)
+          .Select(id => new HRM.DTOs.Organisation.OrganisationSettingsOption(id, $"Organisation #{id}"))
+          .ToList();
       }
       if (enrolment.OrganisationId <= 0 && organisations.Count == 1)
       {
