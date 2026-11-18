@@ -7,6 +7,7 @@
     <header class="sticky top-0 z-30 flex flex-wrap justify-between gap-2 border-b border-slate-200 bg-white/95 px-3 py-3 shadow-xs"><div><h1 class="text-lg font-bold text-slate-900">My applications and offers</h1><p class="mt-0.5 text-xs text-slate-500">Track your recruitment applications and respond to your offers.</p></div><button class="app-button app-button-secondary app-button-sm" disabled="@busy" @onclick="Load">Refresh</button></header>
     @if(message is not null){<p role="status" class="p-3 rounded-xl border border-slate-200 text-sm">@message</p>}
     @if(workspace is not null){
+        <RecruitmentApplyPanel Registered="workspace.ApplicantId.HasValue" Changed="Load" />
         <div class="p-4 rounded-2xl border border-slate-200 app-surface space-y-3"><h2 class="p-1 font-bold">Applications</h2>
             @if(workspace.Applications.Count==0){<p class="p-3 text-xs text-slate-500">No applications are linked to your signed-in eFaas identity.</p>}
             @foreach(var a in workspace.Applications){<div class="p-3 rounded-xl border border-slate-200 text-xs">@a.Reference · @a.VacancyReference · @a.Status</div>}
