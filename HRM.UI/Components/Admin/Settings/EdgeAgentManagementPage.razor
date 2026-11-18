@@ -5,6 +5,8 @@
 @using HRM.DTOs.EdgeAttendance
 @inject HRM.Services.Contracts.EdgeAgentManagementContracts.IOperations Agents
 @inject HRM.Services.Contracts.OrganisationSettingsServiceContracts.IOperations OrgSettings
+@inject HRM.Services.Interfaces.IWorkspaceDirectoryService Directory
+@inject HRM.Services.Interfaces.IUserAccessService UserAccess
 @inject IJSRuntime JS
 @rendermode InteractiveServer
 <PageTitle>Edge Agent Management</PageTitle>
@@ -691,6 +693,35 @@
       trustedIssuers = (await Agents.ListTrustedIssuersAsync()).ToList();
       pendingReceipts = (await Agents.ListPendingReceiptsAsync(new EdgeReconciliationFilterInput())).ToList();
       try { organisations = (await OrgSettings.GetTeamOrganisationsAsync()).ToList(); } catch { organisations = []; }
+      if (organisations.Count == 0)
+      {
+        try
+        {
+          var dir = await Directory.SearchAsync(new("", false, false, null, null));
+          organisations = dir.Organisations
+            .Select(i => new HRM.DTOs.Organisation.OrganisationSettingsOption(i.Id, i.Name))
+            .DistinctBy(o => o.Id)
+            .OrderBy(o => o.Name)
+            .ToList();
+        }
+        catch { }
+      }
+      if (organisations.Count == 0)
+      {
+        try
+        {
+          var actor = await UserAccess.RequireContextAsync();
+          if (actor.ActiveJob is { OrganisationId: > 0 } job)
+          {
+            organisations = [new(job.OrganisationId, string.IsNullOrWhiteSpace(job.OrganisationName) ? $"Organisation #{job.OrganisationId}" : job.OrganisationName)];
+          }
+        }
+        catch { }
+      }
+      if (enrolment.OrganisationId <= 0 && organisations.Count == 1)
+      {
+        enrolment.OrganisationId = organisations[0].Id;
+      }
     }
     catch (UnauthorizedAccessException)
     {
