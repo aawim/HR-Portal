@@ -13,6 +13,10 @@ public sealed class EdgeAgentManagementController(EdgeAgentManagementContracts.I
     public async Task<ActionResult<IReadOnlyList<EdgeAgentSummaryDto>>> List(CancellationToken ct) =>
         Ok(await service.ListAsync(ct));
 
+    [HttpGet("organisations")]
+    public async Task<ActionResult<IReadOnlyList<HRM.DTOs.Organisation.OrganisationSettingsOption>>> ListOrganisations(CancellationToken ct) =>
+        Ok(await service.ListOrganisationsAsync(ct));
+
     [HttpGet("devices")]
     public async Task<ActionResult<IReadOnlyList<EdgeAttendanceDeviceDto>>> ListDevices(CancellationToken ct) =>
         Ok(await service.ListDevicesAsync(ct));

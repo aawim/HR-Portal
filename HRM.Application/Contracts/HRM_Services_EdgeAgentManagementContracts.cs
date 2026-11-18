@@ -3,6 +3,7 @@ namespace HRM.Services.Contracts;
 public abstract class EdgeAgentManagementContracts {
     public interface IOperations {
         Task<IReadOnlyList<EdgeAgentSummaryDto>> ListAsync(CancellationToken ct=default);
+        Task<IReadOnlyList<HRM.DTOs.Organisation.OrganisationSettingsOption>> ListOrganisationsAsync(CancellationToken ct=default);
         Task<IReadOnlyList<EdgeAttendanceDeviceDto>> ListDevicesAsync(CancellationToken ct=default);
         Task<IReadOnlyList<EdgeAttendanceIngestionFailureDto>> ListFailuresAsync(CancellationToken ct=default);
         Task<IReadOnlyList<EdgeTrustedIssuerDto>> ListTrustedIssuersAsync(CancellationToken ct=default);

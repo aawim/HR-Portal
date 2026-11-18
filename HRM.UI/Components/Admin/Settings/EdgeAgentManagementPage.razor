@@ -692,7 +692,11 @@
       failures = (await Agents.ListFailuresAsync()).ToList();
       trustedIssuers = (await Agents.ListTrustedIssuersAsync()).ToList();
       pendingReceipts = (await Agents.ListPendingReceiptsAsync(new EdgeReconciliationFilterInput())).ToList();
-      try { organisations = (await OrgSettings.GetTeamOrganisationsAsync()).ToList(); } catch { organisations = []; }
+      try { organisations = (await Agents.ListOrganisationsAsync()).ToList(); } catch { organisations = []; }
+      if (organisations.Count == 0)
+      {
+        try { organisations = (await OrgSettings.GetTeamOrganisationsAsync()).ToList(); } catch { }
+      }
       if (organisations.Count == 0)
       {
         try

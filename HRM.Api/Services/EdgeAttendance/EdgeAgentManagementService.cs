@@ -22,6 +22,16 @@ public sealed class EdgeAgentManagementService(
             throw new UnauthorizedAccessException("MDS Superadmin or Edge.Agent.Manage is required.");
     }
 
+    public async Task<IReadOnlyList<HRM.DTOs.Organisation.OrganisationSettingsOption>> ListOrganisationsAsync(CancellationToken ct = default)
+    {
+        await Guard();
+        await using var db = await factory.CreateDbContextAsync(ct);
+        return await db.Organisations.AsNoTracking()
+            .OrderBy(o => o.OrganisationName)
+            .Select(o => new HRM.DTOs.Organisation.OrganisationSettingsOption(o.BusinessEntityID, o.OrganisationName))
+            .ToListAsync(ct);
+    }
+
     public async Task<IReadOnlyList<EdgeAgentSummaryDto>> ListAsync(CancellationToken ct = default)
     {
         await Guard();
