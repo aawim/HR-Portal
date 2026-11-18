@@ -17633,6 +17633,79 @@ namespace HRM.Migrations
                     b.ToTable("RM_RecruitmentApplications", (string)null);
                 });
 
+            modelBuilder.Entity("HRM.Models.Recruitment.RecruitmentApplicationDocument", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("ApplicationId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(260)
+                        .HasColumnType("nvarchar(260)");
+
+                    b.Property<long>("StoredObjectId")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StoredObjectId");
+
+                    b.HasIndex("ApplicationId", "StoredObjectId")
+                        .IsUnique();
+
+                    b.ToTable("RM_RecruitmentApplicationDocuments", (string)null);
+                });
+
+            modelBuilder.Entity("HRM.Models.Recruitment.RecruitmentApplicationEvent", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("ApplicationId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<string>("Message")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<string>("SnapshotJson")
+                        .IsRequired()
+                        .HasMaxLength(16000)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ApplicationId", "CreatedAtUtc");
+
+                    b.ToTable("RM_RecruitmentApplicationEvents", (string)null);
+                });
+
             modelBuilder.Entity("HRM.Models.Recruitment.RecruitmentAssessment", b =>
                 {
                     b.Property<int>("Id")
@@ -31342,6 +31415,30 @@ namespace HRM.Migrations
                     b.HasOne("HRM.Models.Recruitment.RecruitmentVacancy", null)
                         .WithMany()
                         .HasForeignKey("RecruitmentVacancyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("HRM.Models.Recruitment.RecruitmentApplicationDocument", b =>
+                {
+                    b.HasOne("HRM.Models.Recruitment.RecruitmentApplication", null)
+                        .WithMany()
+                        .HasForeignKey("ApplicationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.DmsStoredObject", null)
+                        .WithMany()
+                        .HasForeignKey("StoredObjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("HRM.Models.Recruitment.RecruitmentApplicationEvent", b =>
+                {
+                    b.HasOne("HRM.Models.Recruitment.RecruitmentApplication", null)
+                        .WithMany()
+                        .HasForeignKey("ApplicationId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

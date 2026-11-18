@@ -28,6 +28,7 @@ public partial class HrmTeContext
         modelBuilder.ApplyConfiguration<HRM.Models.Recruitment.RecruitmentPositionReservation>(new HRM.Api.Data.EntityConfigurations.RecruitmentOperationsMapping());
         modelBuilder.ApplyConfiguration<HRM.Models.Recruitment.RecruitmentVacancy>(new HRM.Api.Data.EntityConfigurations.RecruitmentOperationsMapping());
         modelBuilder.ApplyConfiguration<HRM.Models.Recruitment.RecruitmentApplicant>(new HRM.Api.Data.EntityConfigurations.RecruitmentApplicantsMapping());
+        HRM.Api.Data.EntityConfigurations.RecruitmentApplicationLifecycleMapping.ConfigureRecruitmentLifecycle(modelBuilder);
         modelBuilder.ApplyConfiguration<HRM.Models.Recruitment.RecruitmentApplication>(new HRM.Api.Data.EntityConfigurations.RecruitmentApplicantsMapping());
         modelBuilder.ApplyConfiguration<HRM.Models.Recruitment.RecruitmentOfficialTemplate>(new HRM.Api.Data.EntityConfigurations.RecruitmentOfficialTemplatesMapping());
         modelBuilder.ApplyConfiguration<HRM.Models.Recruitment.RecruitmentScreeningDecision>(new HRM.Api.Data.EntityConfigurations.RecruitmentScreeningMapping());

@@ -9,14 +9,17 @@
         <button class="app-button app-button-primary app-button-sm" disabled="@(busy||string.IsNullOrWhiteSpace(name)||string.IsNullOrWhiteSpace(email))" @onclick="Register">Register profile</button>
     }
     <h2 class="p-1 font-bold">Open vacancies</h2>
-    <label class="block p-1 text-xs">Vacancy<select class="@InputClass" @bind="vacancy"><option value="0">Select vacancy</option>@foreach(var v in vacancies){<option value="@v.Id">@v.Reference · @v.VacancySlots slots · closes @v.ClosingAtUtc.AddHours(5).ToString("dd MMM yyyy HH:mm") MVT</option>}</select></label>
+    <label class="block p-1 text-xs">Vacancy<select class="@InputClass" @bind="vacancy" @bind:after="Resume"><option value="0">Select vacancy</option>@foreach(var v in vacancies){<option value="@v.Id">@v.Reference · @v.VacancySlots slots · closes @v.ClosingAtUtc.AddHours(5).ToString("dd MMM yyyy HH:mm") MVT</option>}</select></label>
     @if(vacancies.Count==0){<p class="p-2 text-xs text-slate-500">No open vacancies are currently available.</p>}
     @if(Registered&&vacancy>0){
         <label class="block p-1 text-xs">Qualifications<textarea maxlength="4000" class="@InputClass" @bind="qualifications"></textarea></label>
         <label class="block p-1 text-xs">Relevant experience<textarea maxlength="4000" class="@InputClass" @bind="experience"></textarea></label>
         <label class="block p-1 text-xs">Supporting statement<textarea maxlength="4000" class="@InputClass" @bind="statement"></textarea></label>
+        <button class="app-button app-button-secondary app-button-sm" disabled="@busy" @onclick="Save">Save draft / correction</button>
+        @if(draft is not null){<p class="p-2 text-xs">@draft.Reference · @draft.Status</p><label class="block p-1 text-xs">Document category<select class="@InputClass" @bind="category"><option>Identity</option><option>Qualification</option><option>Experience</option></select></label><InputFile OnChange="Upload" accept=".pdf,.png,.jpg,.jpeg" disabled="@(busy||draft.Status!="Draft")" />@foreach(var doc in draft.Documents){<p class="p-1 text-xs">@doc.Category · @doc.FileName</p>}<button class="app-button app-button-secondary app-button-sm" disabled="@busy" @onclick="()=>review=true">Review saved application</button>@if(review){<div class="p-3 border rounded-xl text-xs whitespace-pre-wrap"><p>@draft.SnapshotJson</p><p>Check the saved content and attached documents above before confirming submission.</p></div>}@foreach(var n in draft.Notifications){<p class="p-2 text-xs">@n.CreatedAtUtc.AddHours(5).ToString("dd MMM HH:mm") MVT · @n.Message</p>}}
         <label class="block p-1 text-xs"><input type="checkbox" @bind="confirmed" /> I have reviewed the vacancy requirements and confirm these details are accurate.</label>
-        <button class="app-button app-button-primary app-button-sm" disabled="@(busy||!confirmed||string.IsNullOrWhiteSpace(qualifications)||string.IsNullOrWhiteSpace(experience)||string.IsNullOrWhiteSpace(statement))" @onclick="Apply">Submit application</button>
+        <button class="app-button app-button-primary app-button-sm" disabled="@(busy||!review||draft is null||draft.Status!="Draft"||!confirmed||string.IsNullOrWhiteSpace(qualifications)||string.IsNullOrWhiteSpace(experience)||string.IsNullOrWhiteSpace(statement))" @onclick="Apply">Submit application</button>
+        @if(draft is not null&&draft.Status is "Draft" or "Submitted"){<button class="app-button app-button-danger app-button-sm" disabled="@(busy||!confirmed)" @onclick="Withdraw">Withdraw application (confirm above)</button>}
     }
     @if(message is not null){<p role="status" class="p-2 text-sm">@message</p>}
 </section>
@@ -28,6 +31,13 @@
     private const string InputClass="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100";
     protected override async Task OnInitializedAsync(){try{vacancies=await Api.BrowseVacanciesAsync();}catch(HttpRequestException){message="Vacancies could not be loaded. Try again shortly.";}}
     private Task Register()=>Run(()=>Api.RegisterApplicantAsync(new(name,email,mobile)));
-    private Task Apply()=>Run(()=>Api.ApplyAsync(new(vacancy,qualifications,experience,statement)));
-    private async Task Run(Func<Task<HRM.DTOs.ServiceResult>> action){if(busy)return;busy=true;try{var result=await action();message=result.Message;if(result.Success){confirmed=false;await Changed.InvokeAsync();}}catch(HttpRequestException){message="The action failed. Check your session and whether this vacancy is still open.";}finally{busy=false;}}
+    private RecruitmentDraftDetail? draft;private bool review;private string category="Identity";
+    private async Task Resume(){draft=null;review=false;confirmed=false;qualifications=experience=statement="";if(vacancy<=0)return;try{draft=await Api.GetDraftAsync(vacancy);if(draft is not null){using var d=System.Text.Json.JsonDocument.Parse(draft.SnapshotJson);qualifications=Value(d,"Qualifications");experience=Value(d,"Experience");statement=Value(d,"SupportingStatement");}}catch(HttpRequestException){message="Draft could not be loaded.";}}
+    private static string Value(System.Text.Json.JsonDocument d,string name)=>d.RootElement.TryGetProperty(name,out var v)?v.GetString()??"":"";
+    private Task Save()=>Run(()=>Api.SaveDraftAsync(new(vacancy,draft?.Version??0,qualifications,experience,statement)));
+    private Task Apply()=>Run(()=>Api.SubmitDraftAsync(draft!.Id,new(draft.Version,confirmed)));
+    private Task Withdraw()=>Run(()=>Api.WithdrawAsync(draft!.Id,new(draft.Version,confirmed)));
+    private async Task Upload(Microsoft.AspNetCore.Components.Forms.InputFileChangeEventArgs e){if(draft is null||busy)return;try{using var stream=e.File.OpenReadStream(5*1024*1024);using var data=new MemoryStream();await stream.CopyToAsync(data);await Run(()=>Api.UploadAsync(draft.Id,category,e.File.Name,data.ToArray()));}catch(IOException){message="Maximum upload size is 5 MB.";}}
+
+    private async Task Run(Func<Task<HRM.DTOs.ServiceResult>> action){if(busy)return;busy=true;try{var result=await action();message=result.Message;if(result.Success){confirmed=false;await Resume();await Changed.InvokeAsync();}}catch(HttpRequestException){message="The action failed. Check your session and whether this vacancy is still open.";}finally{busy=false;}}
 }
