@@ -4,6 +4,7 @@
 @using System.Security.Cryptography.X509Certificates
 @using HRM.DTOs.EdgeAttendance
 @inject HRM.Services.Contracts.EdgeAgentManagementContracts.IOperations Agents
+@inject HRM.Services.Contracts.OrganisationSettingsServiceContracts.IOperations OrgSettings
 @inject IJSRuntime JS
 @rendermode InteractiveServer
 <PageTitle>Edge Agent Management</PageTitle>
@@ -245,10 +246,12 @@
           <span class="font-medium text-slate-700">Agent Identifier</span>
           <input class="w-full rounded-lg border border-slate-300 p-2" placeholder="e.g. gateway-male-hq-01" @bind="enrolment.AgentIdentifier" />
         </label>
-        <label class="block space-y-1">
-          <span class="font-medium text-slate-700">Organisation ID</span>
-          <input type="number" class="w-full rounded-lg border border-slate-300 p-2" @bind="enrolment.OrganisationId" />
-        </label>
+        <div class="space-y-1">
+          <HRM.Components.Shared.SearchableSelect Label="Organisation"
+                                                  Placeholder="Search & select organisation..."
+                                                  Options="@organisations.Select(o => new HRM.Components.Shared.SearchableSelect.Option(o.Id, $"{o.Name} (#{o.Id})"))"
+                                                  @bind-Value="enrolment.OrganisationId" />
+        </div>
         <label class="block space-y-1">
           <span class="font-medium text-slate-700">Client Certificate Thumbprint (SHA-1)</span>
           <input class="w-full rounded-lg border border-slate-300 p-2 font-mono" placeholder="40-hex string" @bind="enrolment.CertificateThumbprint" />
@@ -643,6 +646,7 @@
   private List<EdgeAttendanceIngestionFailureDto> failures = [];
   private List<EdgeTrustedIssuerDto> trustedIssuers = [];
   private List<EdgePendingReceiptDto> pendingReceipts = [];
+  private List<HRM.DTOs.Organisation.OrganisationSettingsOption> organisations = [];
   private EdgePendingReceiptDto? resolvingReceipt;
   private string staffSearchQuery = "";
   private List<EdgeStaffOptionDto> matchingStaff = [];
@@ -678,6 +682,7 @@
       failures = (await Agents.ListFailuresAsync()).ToList();
       trustedIssuers = (await Agents.ListTrustedIssuersAsync()).ToList();
       pendingReceipts = (await Agents.ListPendingReceiptsAsync(new EdgeReconciliationFilterInput())).ToList();
+      try { organisations = (await OrgSettings.GetTeamOrganisationsAsync()).ToList(); } catch { organisations = []; }
     }
     catch (UnauthorizedAccessException)
     {
@@ -800,6 +805,8 @@
     }
     await LoadAsync();
   }
+
+  private void OnOrganisationSelected(int? orgId) => enrolment.OrganisationId = orgId ?? 0;
 
   private void ToggleDevice(int id)
   {
