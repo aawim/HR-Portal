@@ -65,8 +65,10 @@ builder.Services.AddSingleton<IDeviceAdapter, ZkTecoTcpAdapter>();
 X509Certificate2? certificate = null;
 if (!string.IsNullOrWhiteSpace(edge.ClientCertificatePath) && File.Exists(edge.ClientCertificatePath))
 {
-    certificate = new X509Certificate2(edge.ClientCertificatePath, edge.ClientCertificatePassword,
-        X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.EphemeralKeySet);
+    var keyFlags = OperatingSystem.IsWindows()
+        ? X509KeyStorageFlags.UserKeySet | X509KeyStorageFlags.PersistKeySet
+        : X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.EphemeralKeySet;
+    certificate = new X509Certificate2(edge.ClientCertificatePath, edge.ClientCertificatePassword, keyFlags);
     if (!certificate.HasPrivateKey)
     {
         throw new InvalidOperationException("The mTLS certificate must include a private key.");
