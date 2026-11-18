@@ -15,7 +15,11 @@ using HRM.Services.Diagnostics;
 
 var builder = WebApplication.CreateBuilder(args);
 // Edge ingestion independently validates an enrolled client certificate.  Other HTTPS endpoints remain usable without one.
-builder.WebHost.ConfigureKestrel(options => options.ConfigureHttpsDefaults(https => https.ClientCertificateMode = ClientCertificateMode.AllowCertificate));
+builder.WebHost.ConfigureKestrel(options => options.ConfigureHttpsDefaults(https =>
+{
+    https.ClientCertificateMode = ClientCertificateMode.AllowCertificate;
+    https.AllowAnyClientCertificate();
+}));
 RuntimeRequirements.RequireCurrent(builder.Environment);
 var publicOrigin = HRM.Application.Transport.DeploymentOrigin.Require(builder.Configuration["Application:PublicOrigin"], "Application:PublicOrigin", !builder.Environment.IsDevelopment());
 builder.Services.AddProtectedHostKeys(builder.Configuration, builder.Environment, "HRM.Api");
