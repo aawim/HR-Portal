@@ -1,0 +1,27 @@
+@using HRM.Application.Contracts.Recruitment
+@inject HRM.UI.Services.Recruitment.IRecruitmentApiClient Api
+<section class="p-2 rounded-2xl border border-slate-200 app-surface space-y-3">
+    <h2 class="p-1 font-bold">Results and objections</h2>
+    <label class="block p-1 text-xs">Vacancy<select class="@InputClass" @bind="vacancy" @bind:after="Load"><option value="0">Select vacancy</option>@foreach(var v in vacancies){<option value="@v.Id">@v.Reference</option>}</select></label>
+    @if(workspace is not null){
+        @if(workspace.PublicationId is null){<p class="p-2 text-xs text-slate-500">No result publication exists for this vacancy.</p>}
+        else{
+            <p class="p-2 text-xs">@(workspace.IsFinal?"Finalised":"Objection review") · Objections close @(workspace.ObjectionClosesAtUtc?.AddHours(5).ToString("dd MMM yyyy HH:mm")) MVT</p>
+            <div class="overflow-x-auto rounded-xl border border-slate-200"><table class="w-full text-left text-xs"><thead class="bg-slate-50 text-slate-700"><tr><th class="p-2.5">Rank</th><th class="p-2.5">Application</th><th class="p-2.5">Score</th></tr></thead><tbody>@foreach(var r in workspace.Results){<tr><td class="p-2.5">@r.Rank</td><td class="p-2.5">@r.ApplicationId</td><td class="p-2.5">@r.Score</td></tr>}</tbody></table></div>
+            @foreach(var objection in workspace.Objections){<div class="p-3 rounded-xl border border-slate-200 text-xs"><p>Application @objection.ApplicationId · @objection.Status</p><p class="whitespace-pre-wrap">@objection.Grounds</p><p class="whitespace-pre-wrap">@objection.Resolution</p>@if(objection.Status=="Submitted"){<button class="app-button app-button-secondary app-button-sm" @onclick="()=>selected=objection.Id">Review objection</button>}</div>}
+            @if(selected>0){<label class="block p-1 text-xs">Written resolution<textarea class="@InputClass" maxlength="4000" @bind="resolution"></textarea></label><label class="block p-1 text-xs"><input type="checkbox" @bind="upheld" /> Uphold objection (requires corrected publication)</label><button class="app-button app-button-primary app-button-sm" disabled="@(busy||string.IsNullOrWhiteSpace(resolution))" @onclick="Resolve">Record resolution</button>}
+            <button class="app-button app-button-primary app-button-sm" disabled="@(busy||workspace.IsFinal||workspace.ObjectionClosesAtUtc>DateTime.UtcNow||workspace.Objections.Any(x=>x.Status is "Submitted" or "Upheld"))" @onclick="FinalizeResults">Finalise results</button>
+        }
+    }
+    @if(message is not null){<p role="status" class="p-2 text-sm">@message</p>}
+</section>
+@code{
+    private IReadOnlyList<RecruitmentVacancyRow> vacancies=[];private RecruitmentResultWorkspace? workspace;
+    private int vacancy,selected;private string resolution="";private bool upheld,busy;private string? message;
+    private const string InputClass="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100";
+    protected override async Task OnInitializedAsync(){try{vacancies=await Api.GetVacanciesAsync();}catch(HttpRequestException){message="Vacancies could not be loaded.";}}
+    private async Task Load(){workspace=null;selected=0;resolution="";upheld=false;try{if(vacancy>0)workspace=await Api.GetResultWorkspaceAsync(vacancy);}catch(HttpRequestException){message="Results could not be loaded. Check your recruitment access.";}}
+    private Task Resolve()=>Run(()=>Api.ResolveObjectionAsync(new(selected,resolution,upheld)));
+    private Task FinalizeResults()=>Run(()=>Api.FinalizeResultsAsync(workspace!.PublicationId!.Value));
+    private async Task Run(Func<Task<HRM.DTOs.ServiceResult>> action){if(busy)return;busy=true;try{var result=await action();message=result.Message;if(result.Success)await Load();}catch(HttpRequestException){message="The action failed. Check the objection period and publication state.";}finally{busy=false;}}
+}

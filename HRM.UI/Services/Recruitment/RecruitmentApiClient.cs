@@ -14,9 +14,15 @@ public interface IRecruitmentApiClient {
     Task<RecruitmentAssessmentWorkspace> GetAssessmentWorkspaceAsync(int vacancyId);
     Task<HRM.DTOs.ServiceResult> CreateAssessmentAsync(CreateRecruitmentAssessmentInput input);
     Task<HRM.DTOs.ServiceResult> SubmitScorecardAsync(SubmitPanelScorecardInput input);
+    Task<RecruitmentResultWorkspace> GetResultWorkspaceAsync(int vacancyId);
+    Task<HRM.DTOs.ServiceResult> ResolveObjectionAsync(ResolveRecruitmentObjectionInput input);
+    Task<HRM.DTOs.ServiceResult> FinalizeResultsAsync(int id);
 }
 public sealed class RecruitmentApiClient(HttpClient http) : IRecruitmentApiClient
 {
+    public async Task<RecruitmentResultWorkspace> GetResultWorkspaceAsync(int vacancyId)=>await http.GetFromJsonAsync<RecruitmentResultWorkspace>($"/api/v1/recruitment/result-workspace/{vacancyId}")??new(null,false,null,[],[]);
+    public Task<HRM.DTOs.ServiceResult> ResolveObjectionAsync(ResolveRecruitmentObjectionInput input)=>PostAsync("/api/v1/recruitment/results/objections/resolve",input,default);
+    public Task<HRM.DTOs.ServiceResult> FinalizeResultsAsync(int id)=>PostAsync($"/api/v1/recruitment/results/{id}/finalize",new{},default);
     public async Task<RecruitmentAssessmentWorkspace> GetAssessmentWorkspaceAsync(int vacancyId)=>await http.GetFromJsonAsync<RecruitmentAssessmentWorkspace>($"/api/v1/recruitment/assessment-workspace/{vacancyId}")??new([],[]);
     public Task<HRM.DTOs.ServiceResult> CreateAssessmentAsync(CreateRecruitmentAssessmentInput input)=>PostAsync("/api/v1/recruitment/assessments",input,default);
     public Task<HRM.DTOs.ServiceResult> SubmitScorecardAsync(SubmitPanelScorecardInput input)=>PostAsync("/api/v1/recruitment/assessments/scorecards",input,default);
