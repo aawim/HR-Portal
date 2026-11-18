@@ -164,11 +164,11 @@
                 @Pagination
             </section>
         }
-        else if (ActiveTab == WorkspaceTab.Permissions)
+        else if (ActiveTab == WorkspaceTab.Permissions && IsSuperAdmin)
         {
-            <HRM.Components.Admin.Settings.Organisations.OrganisationPermissions InitialOrganisationId="OrganisationId" />
+            <HRM.Components.Admin.Settings.Organisations.OrganisationPermissions InitialOrganisationId="OrganisationId" HideHeader="true" />
         }
-        else if (ActiveTab is WorkspaceTab.Teams or WorkspaceTab.AssignedRoles or WorkspaceTab.LeaveType)
+        else if (ActiveTab is WorkspaceTab.Teams or WorkspaceTab.AssignedRoles or WorkspaceTab.Permissions or WorkspaceTab.LeaveType)
         {
             <section class="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs">
                 <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 p-4">
@@ -217,6 +217,12 @@
                     <button type="button" class="m-4 text-xs font-semibold text-teal-600 dark:text-teal-400 hover:underline" @onclick="() => resourceLimit += 50">Show more</button>
                 }
             </section>
+        }
+        else if (ActiveTab == WorkspaceTab.Attendance)
+        {
+            <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-2 shadow-2xs">
+                <HRM.Components.Admin.Attendance.Attendance.OrganisationDaily />
+            </div>
         }
         else if (ActiveTab == WorkspaceTab.Documents)
         {
@@ -270,6 +276,7 @@
 @code {
     [Parameter] public int OrganisationId { get; set; }
     [Parameter] public WorkspaceTab ActiveTab { get; set; }
+    [Parameter] public bool IsSuperAdmin { get; set; }
     [Parameter] public EventCallback<WorkspaceSearchResult> OnStaffSelected { get; set; }
     [Parameter] public EventCallback<OrganisationWorkspaceData> OnLoaded { get; set; }
 

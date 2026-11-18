@@ -9,13 +9,16 @@
 
 <PageTitle>Organisation permissions</PageTitle>
 <div class="space-y-4">
-    <div class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-            <h1 class="text-xl font-bold text-slate-900">Organisation permissions</h1>
-            <p class="mt-1 text-sm text-slate-500">Control which resources the organisation can access. Direct permissions and User Groups cannot exceed these limits.</p>
+    @if (!HideHeader)
+    {
+        <div class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+                <h1 class="text-xl font-bold text-slate-900">Organisation permissions</h1>
+                <p class="mt-1 text-sm text-slate-500">Control which resources the organisation can access. Direct permissions and User Groups cannot exceed these limits.</p>
+            </div>
+            <button type="button" @onclick="Refresh" disabled="@(busy || Dirty)" class="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50">Refresh</button>
         </div>
-        <button type="button" @onclick="Refresh" disabled="@(busy || Dirty)" class="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50">Refresh</button>
-    </div>
+    }
     @if (!string.IsNullOrEmpty(error)) { <p class="rounded-xl border p-4" role="alert">@error</p> }
     @if (data == null && string.IsNullOrEmpty(error)) { <p role="status">Loading organisation permissions…</p> }
     @if (data != null)
@@ -94,6 +97,7 @@
 </div>
 @code {
     [Parameter] public int? InitialOrganisationId { get; set; }
+    [Parameter] public bool HideHeader { get; set; }
     private int? lastInitialOrgId;
     private OrganisationPermissionData? data;
     private HashSet<int> selected = [], baseline = [];
