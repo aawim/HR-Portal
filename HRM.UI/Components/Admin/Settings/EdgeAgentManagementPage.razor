@@ -2,6 +2,7 @@
 @attribute [Authorize]
 @using System.Security.Cryptography
 @using System.Security.Cryptography.X509Certificates
+@using HRM.DTOs
 @using HRM.DTOs.EdgeAttendance
 @inject HRM.Services.Contracts.EdgeAgentManagementContracts.IOperations Agents
 @inject HRM.Services.Contracts.OrganisationSettingsServiceContracts.IOperations OrgSettings
@@ -893,11 +894,9 @@
       selectedOrgName = item.Name;
       error = null;
     }
-    else if (item.OrganisationId is > 0)
+    else
     {
-      enrolment.OrganisationId = item.OrganisationId.Value;
-      selectedOrgName = item.OrganisationName;
-      error = null;
+      error = "Please select an organisation from the search results.";
     }
   }
 
