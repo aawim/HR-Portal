@@ -394,23 +394,30 @@
           <h2 class="text-sm font-bold text-slate-800">Attendance Device Hardware &amp; Protocol Bindings</h2>
           <span class="text-xs text-slate-500">Configure hardware adapters (ZKTeco TCP, Generic File Drop) and edge bindings</span>
         </div>
-        <!-- Device Filter Tabs -->
-        <div class="inline-flex rounded-lg border border-slate-200 bg-slate-100 p-0.5 text-xs">
-          <button class="px-2.5 py-1 rounded-md font-medium @(deviceFilter == "all" ? "bg-white text-slate-900 shadow-xs" : "text-slate-600 hover:text-slate-900")"
-                  @onclick='() => deviceFilter = "all"'>
-            All (@devices.Count)
-          </button>
-          <button class="px-2.5 py-1 rounded-md font-medium @(deviceFilter == "bound" ? "bg-white text-slate-900 shadow-xs" : "text-slate-600 hover:text-slate-900")"
-                  @onclick='() => deviceFilter = "bound"'>
-            Bound (@devices.Count(d => d.AgentId.HasValue))
-          </button>
-          <button class="px-2.5 py-1 rounded-md font-medium @(deviceFilter == "unbound" ? "bg-white text-slate-900 shadow-xs" : "text-slate-600 hover:text-slate-900")"
-                  @onclick='() => deviceFilter = "unbound"'>
-            Unbound (@devices.Count(d => !d.AgentId.HasValue))
-          </button>
-          <button class="px-2.5 py-1 rounded-md font-medium @(deviceFilter == "enabled" ? "bg-white text-slate-900 shadow-xs" : "text-slate-600 hover:text-slate-900")"
-                  @onclick='() => deviceFilter = "enabled"'>
-            Edge Enabled (@devices.Count(d => d.IsEdgeEnabled))
+        <div class="flex flex-wrap items-center gap-2">
+          <!-- Device Filter Tabs -->
+          <div class="inline-flex rounded-lg border border-slate-200 bg-slate-100 p-0.5 text-xs">
+            <button class="px-2.5 py-1 rounded-md font-medium @(deviceFilter == "all" ? "bg-white text-slate-900 shadow-xs" : "text-slate-600 hover:text-slate-900")"
+                    @onclick='() => deviceFilter = "all"'>
+              All (@devices.Count)
+            </button>
+            <button class="px-2.5 py-1 rounded-md font-medium @(deviceFilter == "bound" ? "bg-white text-slate-900 shadow-xs" : "text-slate-600 hover:text-slate-900")"
+                    @onclick='() => deviceFilter = "bound"'>
+              Bound (@devices.Count(d => d.AgentId.HasValue))
+            </button>
+            <button class="px-2.5 py-1 rounded-md font-medium @(deviceFilter == "unbound" ? "bg-white text-slate-900 shadow-xs" : "text-slate-600 hover:text-slate-900")"
+                    @onclick='() => deviceFilter = "unbound"'>
+              Unbound (@devices.Count(d => !d.AgentId.HasValue))
+            </button>
+            <button class="px-2.5 py-1 rounded-md font-medium @(deviceFilter == "enabled" ? "bg-white text-slate-900 shadow-xs" : "text-slate-600 hover:text-slate-900")"
+                    @onclick='() => deviceFilter = "enabled"'>
+              Edge Enabled (@devices.Count(d => d.IsEdgeEnabled))
+            </button>
+          </div>
+          <button type="button"
+                  class="rounded-lg bg-teal-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-teal-700"
+                  @onclick="StartAddDevice">
+            + Add Device
           </button>
         </div>
       </div>
