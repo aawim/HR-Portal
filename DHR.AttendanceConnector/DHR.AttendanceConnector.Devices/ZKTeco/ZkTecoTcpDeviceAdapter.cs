@@ -142,7 +142,7 @@ public sealed class ZkTecoTcpDeviceAdapter(
         }
     }
 
-    private static async Task<ushort?> ConnectSessionAsync(NetworkStream stream, CancellationToken ct)
+    private static async Task<ushort?> ConnectSessionAsync(NetworkStream stream, CancellationToken ct, int commKey = 0)
     {
         var connectPacket = BuildPacket(1000, 0, 0, []);
         await stream.WriteAsync(connectPacket, ct);
@@ -152,7 +152,49 @@ public sealed class ZkTecoTcpDeviceAdapter(
 
         var replyCode = BitConverter.ToUInt16(response, 8);
         var sessionId = BitConverter.ToUInt16(response, 12);
-        return replyCode == 2000 ? sessionId : null;
+
+        if (replyCode == 2000)
+            return sessionId;
+
+        // 2005 = CMD_ACK_UNAUTH: physical ZKTeco firmware requires CMD_AUTH (1102) with scrambled Comm Key
+        if (replyCode == 2005)
+        {
+            var authPayload = MakeCommKey(commKey, sessionId);
+            var authPacket = BuildPacket(1102, sessionId, 1, authPayload);
+            await stream.WriteAsync(authPacket, ct);
+
+            var authResp = await ReadPacketAsync(stream, ct);
+            if (authResp is null || authResp.Length < 16) return null;
+
+            var authReply = BitConverter.ToUInt16(authResp, 8);
+            return authReply == 2000 ? sessionId : null;
+        }
+
+        return null;
+    }
+
+    internal static byte[] MakeCommKey(int key, ushort sessionId, int ticks = 50)
+    {
+        uint k = 0;
+        for (var i = 0; i < 32; i++)
+        {
+            k = (key & (1 << i)) != 0 ? (k << 1) | 1u : k << 1;
+        }
+        k += sessionId;
+
+        var bytes = BitConverter.GetBytes(k);
+        bytes[0] ^= (byte)'Z';
+        bytes[1] ^= (byte)'K';
+        bytes[2] ^= (byte)'S';
+        bytes[3] ^= (byte)'O';
+
+        var h0 = BitConverter.ToUInt16(bytes, 0);
+        var h1 = BitConverter.ToUInt16(bytes, 2);
+        BitConverter.TryWriteBytes(bytes.AsSpan(0, 2), h1);
+        BitConverter.TryWriteBytes(bytes.AsSpan(2, 2), h0);
+
+        var b = (byte)(ticks & 0xFF);
+        return [(byte)(bytes[0] ^ b), (byte)(bytes[1] ^ b), b, (byte)(bytes[3] ^ b)];
     }
 
     private static async Task DisconnectSessionAsync(NetworkStream stream, ushort sessionId, CancellationToken ct)
@@ -338,14 +380,16 @@ public sealed class ZkTecoTcpDeviceAdapter(
         if (data.Length > 0)
             data.CopyTo(buf.AsSpan(16));
 
-        ushort checksum = 0;
+        uint sum = 0;
         for (var i = 8; i < buf.Length; i += 2)
         {
             if (i == 10) continue;
-            var val = i + 1 < buf.Length ? BitConverter.ToUInt16(buf, i) : buf[i];
-            checksum += val;
+            uint val = i + 1 < buf.Length ? BitConverter.ToUInt16(buf, i) : buf[i];
+            sum += val;
+            while (sum > 0xFFFF)
+                sum = (sum & 0xFFFF) + (sum >> 16);
         }
-        checksum = (ushort)~checksum;
+        var checksum = (ushort)~sum;
         BitConverter.TryWriteBytes(buf.AsSpan(10, 2), checksum);
 
         return buf;
