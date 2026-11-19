@@ -83,8 +83,9 @@ public sealed class DeviceIdentityKeyManager(ISecretStore secretStore) : IDevice
         using var ephemeral = X509Certificate2.CreateFromPem(certPem, keyPem);
         // Re-import via PFX on Windows so SChannel can access the private key during mTLS handshake
         var pfx = ephemeral.Export(X509ContentType.Pfx);
+        // Windows SChannel requires PersistKeySet (EphemeralKeySet fails mTLS handshake with SEC_E_UNKNOWN_CREDENTIALS)
         var flags = OperatingSystem.IsWindows()
-            ? X509KeyStorageFlags.UserKeySet | X509KeyStorageFlags.EphemeralKeySet
+            ? X509KeyStorageFlags.UserKeySet | X509KeyStorageFlags.PersistKeySet
             : X509KeyStorageFlags.EphemeralKeySet;
         return new X509Certificate2(pfx, (string?)null, flags);
     }

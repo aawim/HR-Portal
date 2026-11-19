@@ -123,7 +123,8 @@ public sealed class DhrConnectorHttpClient(
         catch (Exception ex)
         {
             logger.LogWarning(ex, "DHR connectivity test failed for {Url}", apiBaseUrl);
-            return (false, ex.Message);
+            var detail = ex.InnerException is not null ? $"{ex.Message} ({ex.InnerException.Message})" : ex.Message;
+            return (false, detail);
         }
     }
 
@@ -160,7 +161,9 @@ public sealed class DhrConnectorHttpClient(
         return new HttpClient(handler, disposeHandler: true)
         {
             BaseAddress = new Uri(uri.ToString().TrimEnd('/') + "/"),
-            Timeout = TimeSpan.FromSeconds(30)
+            Timeout = TimeSpan.FromSeconds(30),
+            DefaultRequestVersion = System.Net.HttpVersion.Version11,
+            DefaultVersionPolicy = HttpVersionPolicy.RequestVersionExact
         };
     }
 
