@@ -99,23 +99,73 @@ public sealed class ZkTecoTcpAdapter : IDeviceAdapter
     {
         var results = new List<DeviceAttendanceEvent>();
 
-        // CMD_ATTLOG_RRQ = 9
-        var requestPacket = BuildPacket(9, sessionId, 2, []);
+        // CMD_DATA_WRRQ (1503) requesting attendance logs (sub-command 0x0d = CMD_ATTLOG_RRQ)
+        var requestData = new byte[] { 0x01, 0x0d, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+        ushort replyId = 2;
+        var requestPacket = BuildPacket(1503, sessionId, replyId++, requestData);
         await stream.WriteAsync(requestPacket, ct);
 
         var response = await ReadPacketAsync(stream, ct);
         if (response == null || response.Length < 16) return results;
 
         var replyCode = BitConverter.ToUInt16(response, 8);
-        if (replyCode != 2000) return results; // No data or busy
-
-        // If data follows in subsequent packets or payload, parse ZK log format:
-        // Standard ZK 40-byte record:
-        // [User PIN: 24 bytes] + [Verify Type: 1 byte] + [Timestamp: 4 bytes encoded] + [Status: 1 byte]
         var payload = response.Length > 16 ? response[16..] : [];
-        if (payload.Length >= 40)
+
+        byte[] dataset;
+        if (replyCode == 1501)
         {
-            ParseLogPayload(payload, deviceId, cursor, results);
+            // Direct burst: CMD_DATA payload is [u32 LE totalBytes][records...]
+            dataset = payload.Length > 4 ? payload[4..] : [];
+        }
+        else if (replyCode == 2000 && payload.Length >= 5 && payload.Length < 40)
+        {
+            // Chunked mode: ACK_OK + 9-byte stat (u32 LE totalBytes at offset 1)
+            var totalBytes = BitConverter.ToUInt32(payload, 1);
+            if (totalBytes == 0) return results;
+
+            var buffer = new List<byte>((int)Math.Min(totalBytes, int.MaxValue));
+            const uint maxChunk = 65472;
+            uint offset = 0;
+
+            while (offset < totalBytes)
+            {
+                var reqSize = Math.Min(maxChunk, totalBytes - offset);
+                var rdyData = new byte[8];
+                BitConverter.TryWriteBytes(rdyData.AsSpan(0, 4), offset);
+                BitConverter.TryWriteBytes(rdyData.AsSpan(4, 4), reqSize);
+
+                var rdyPacket = BuildPacket(1504, sessionId, replyId++, rdyData);
+                await stream.WriteAsync(rdyPacket, ct);
+
+                var chunkResp = await ReadPacketAsync(stream, ct);
+                if (chunkResp == null || chunkResp.Length < 16) break;
+
+                var chunkReply = BitConverter.ToUInt16(chunkResp, 8);
+                if (chunkReply != 1501 || chunkResp.Length <= 24) break;
+
+                // Each chunk CMD_DATA payload has an 8-byte subheader before slice bytes
+                var chunkSlice = chunkResp[24..];
+                if (chunkSlice.Length == 0) break;
+
+                buffer.AddRange(chunkSlice);
+                offset += (uint)chunkSlice.Length;
+            }
+
+            var assembled = buffer.ToArray();
+            dataset = assembled.Length > 4 ? assembled[4..] : [];
+        }
+        else if (replyCode == 2000 && payload.Length >= 40)
+        {
+            dataset = payload;
+        }
+        else
+        {
+            return results;
+        }
+
+        if (dataset.Length >= 40)
+        {
+            ParseLogPayload(dataset, deviceId, cursor, results);
         }
 
         return results;
@@ -126,14 +176,19 @@ public sealed class ZkTecoTcpAdapter : IDeviceAdapter
         var offset = 0;
         while (offset + 40 <= payload.Length)
         {
-            var userSpan = payload.AsSpan(offset, 24);
+            // Standard ZK 40-byte attendance record:
+            // [0..1] userSn (u16 LE), [2..25] deviceUserId (ASCII, null-terminated),
+            // [26] verifyType, [27..30] encoded timestamp (u32 LE), [31] state
+            var userSpan = payload.AsSpan(offset + 2, 24);
             var zeroIdx = userSpan.IndexOf((byte)0);
             var userBytes = zeroIdx >= 0 ? userSpan[..zeroIdx] : userSpan;
             var userId = Encoding.ASCII.GetString(userBytes).Trim();
 
             if (!string.IsNullOrWhiteSpace(userId))
             {
-                var timeVal = BitConverter.ToUInt32(payload, offset + 26);
+                var verifyType = payload[offset + 26];
+                var timeVal = BitConverter.ToUInt32(payload, offset + 27);
+                var state = payload[offset + 31];
                 var dt = DecodeZkTime(timeVal);
 
                 if (cursor == null || !cursor.LastEventTimestampUtc.HasValue || dt > cursor.LastEventTimestampUtc.Value)
@@ -144,7 +199,7 @@ public sealed class ZkTecoTcpAdapter : IDeviceAdapter
                         LocalUserId: userId,
                         DeviceTimestamp: dt,
                         DeviceEventId: eventId,
-                        RawMetadata: $"VerifyType={payload[offset + 24]};Status={payload[offset + 30]}"));
+                        RawMetadata: $"VerifyType={verifyType};Status={state}"));
                 }
             }
 

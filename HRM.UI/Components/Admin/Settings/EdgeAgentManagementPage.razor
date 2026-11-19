@@ -6,6 +6,7 @@
 @using HRM.DTOs.EdgeAttendance
 @inject HRM.Services.Contracts.EdgeAgentManagementContracts.IOperations Agents
 @inject HRM.Services.Contracts.OrganisationSettingsServiceContracts.IOperations OrgSettings
+@inject HRM.Services.Contracts.UserSettingsServiceContracts.IOperations UserSettings
 @inject HRM.Services.Interfaces.IWorkspaceDirectoryService Directory
 @inject HRM.Services.Interfaces.IUserAccessService UserAccess
 @inject Microsoft.Extensions.Configuration.IConfiguration Config
@@ -13,14 +14,29 @@
 @rendermode InteractiveServer
 <PageTitle>Edge Agent Management</PageTitle>
 
-<section class="w-full min-w-0 p-3 space-y-4">
-  <header class="sticky top-0 z-30 border-b border-slate-200 bg-white/95 px-4 py-3 shadow-xs rounded-xl flex items-center justify-between">
+<section class="w-full min-w-0 p-2 space-y-4 @(isFullWidth ? "max-w-none" : "max-w-7xl mx-auto")">
+  <header class="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur-xs px-4 py-3 shadow-xs rounded-xl flex flex-wrap items-center justify-between gap-3">
     <div>
       <h1 class="text-lg font-bold text-slate-900">Attendance Edge Agents</h1>
-      <p class="text-xs text-slate-500">Machine identity certificates, trusted PKI roots, local LAN timeclock bindings, and punch reconciliation.</p>
+      <p class="text-xs text-slate-500">Multi-organisation edge gateways, hardware bindings, staff badge mapping, and trusted PKI roots.</p>
     </div>
-    <div class="flex items-center gap-2">
-      <button class="app-button app-button-secondary app-button-sm" @onclick="LoadAsync">Refresh</button>
+    <div class="flex flex-wrap items-center gap-2">
+      <select class="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700"
+              value="@selectedFilterOrgId"
+              @onchange="OnFilterOrgChangedAsync">
+        <option value="0">All Organisations (@organisations.Count)</option>
+        @foreach (var org in organisations)
+        {
+          <option value="@org.Id">@org.Name (#@org.Id)</option>
+        }
+      </select>
+      <button type="button" class="app-button app-button-secondary app-button-sm" @onclick="() => isFullWidth = !isFullWidth">
+        @(isFullWidth ? "Shrink View" : "Full Width")
+      </button>
+      <button type="button" class="app-button app-button-secondary app-button-sm" @onclick="LoadAsync">Refresh</button>
+      <button type="button" class="rounded-lg bg-teal-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-teal-700" @onclick="OpenAddDeviceFromHeader">
+        + Add Device
+      </button>
     </div>
   </header>
 
@@ -46,130 +62,298 @@
   {
     <!-- KPI Summary Cards -->
     <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
-      <div class="rounded-xl border border-slate-200 bg-white p-3 shadow-xs">
+      <button type="button" class="text-left rounded-xl border border-slate-200 bg-white p-3 shadow-xs hover:border-slate-300 transition" @onclick='() => SetActiveTabAsync("agents")'>
         <span class="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Enrolled Agents</span>
         <div class="mt-1 flex items-baseline gap-2">
-          <span class="text-xl font-bold text-slate-900">@agents.Count(a => a.IsActive)</span>
-          <span class="text-xs text-slate-400">active / @agents.Count total</span>
+          <span class="text-xl font-bold text-slate-900">@FilteredAgents.Count(a => a.IsActive)</span>
+          <span class="text-xs text-slate-400">active / @FilteredAgents.Count total</span>
         </div>
-      </div>
-      <div class="rounded-xl border border-slate-200 bg-white p-3 shadow-xs">
+      </button>
+      <button type="button" class="text-left rounded-xl border border-slate-200 bg-white p-3 shadow-xs hover:border-slate-300 transition" @onclick='() => SetActiveTabAsync("devices")'>
         <span class="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Bound Devices</span>
         <div class="mt-1 flex items-baseline gap-2">
-          <span class="text-xl font-bold text-blue-600">@devices.Count(d => d.AgentId.HasValue && d.IsEdgeEnabled)</span>
-          <span class="text-xs text-slate-400">of @devices.Count configured</span>
+          <span class="text-xl font-bold text-blue-600">@OrgFilteredDevices.Count(d => d.AgentId.HasValue && d.IsEdgeEnabled)</span>
+          <span class="text-xs text-slate-400">of @OrgFilteredDevices.Count configured</span>
         </div>
-      </div>
-      <div class="rounded-xl border border-slate-200 bg-white p-3 shadow-xs">
+      </button>
+      <button type="button" class="text-left rounded-xl border border-slate-200 bg-white p-3 shadow-xs hover:border-slate-300 transition" @onclick='() => SetActiveTabAsync("mapping")'>
+        <span class="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Unmapped Punches</span>
+        <div class="mt-1 flex items-baseline gap-2">
+          <span class="text-xl font-bold @(FilteredPendingReceipts.Count > 0 ? "text-amber-600" : "text-emerald-600")">@FilteredPendingReceipts.Count</span>
+          <span class="text-xs text-slate-400">awaiting match</span>
+        </div>
+      </button>
+      <button type="button" class="text-left rounded-xl border border-slate-200 bg-white p-3 shadow-xs hover:border-slate-300 transition" @onclick='() => SetActiveTabAsync("failures")'>
+        <span class="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Recent Failures</span>
+        <div class="mt-1 flex items-baseline gap-2">
+          <span class="text-xl font-bold @(FilteredFailures.Count > 0 ? "text-rose-600" : "text-slate-700")">@FilteredFailures.Count</span>
+          <span class="text-xs text-slate-400">logged</span>
+        </div>
+      </button>
+      <button type="button" class="text-left rounded-xl border border-slate-200 bg-white p-3 shadow-xs hover:border-slate-300 transition" @onclick='() => SetActiveTabAsync("trust")'>
         <span class="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Trusted CA Roots</span>
         <div class="mt-1 flex items-baseline gap-2">
           <span class="text-xl font-bold text-emerald-600">@trustedIssuers.Count(i => i.IsActive)</span>
           <span class="text-xs text-slate-400">active roots</span>
         </div>
-      </div>
-      <div class="rounded-xl border border-slate-200 bg-white p-3 shadow-xs">
-        <span class="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Pending Reconciliation</span>
-        <div class="mt-1 flex items-baseline gap-2">
-          <span class="text-xl font-bold @(pendingReceipts.Count > 0 ? "text-amber-600" : "text-emerald-600")">@pendingReceipts.Count</span>
-          <span class="text-xs text-slate-400">awaiting match</span>
-        </div>
-      </div>
-      <div class="rounded-xl border border-slate-200 bg-white p-3 shadow-xs">
-        <span class="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Recent Failures</span>
-        <div class="mt-1 flex items-baseline gap-2">
-          <span class="text-xl font-bold @(failures.Count > 0 ? "text-rose-600" : "text-slate-700")">@failures.Count</span>
-          <span class="text-xs text-slate-400">logged</span>
-        </div>
-      </div>
+      </button>
     </div>
 
-    <!-- Quick Setup Instructions -->
-    <div class="rounded-xl border border-blue-100 bg-blue-50/60 p-3 text-xs text-blue-900 space-y-1">
-      <div class="font-bold flex items-center gap-1.5 text-blue-950">
-        <span>Quick Agent Setup via CLI</span>
-      </div>
-      <p class="text-blue-800">
-        Run <code class="rounded bg-blue-100 px-1.5 py-0.5 font-mono text-[11px]">dotnet HRM.AttendanceEdgeAgent.dll enroll &lt;agent-id&gt;</code> on the edge gateway.
-        Copy the generated Base64 CA into <strong>Trusted PKI roots</strong> below, and enrol the agent with its certificate thumbprint.
-      </p>
-    </div>
-
-    <!-- Pending Attendance Reconciliation Table -->
-    <div class="rounded-xl border border-slate-200 bg-white shadow-xs overflow-hidden">
-      <div class="border-b border-slate-200 px-4 py-2.5 bg-slate-50/50 flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h2 class="text-sm font-bold text-slate-800 flex items-center gap-2">
-            <span>Pending Event Reconciliation</span>
-            @if (pendingReceipts.Count > 0)
-            {
-              <span class="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800">@pendingReceipts.Count pending</span>
-            }
-          </h2>
-          <p class="text-xs text-slate-500">Terminal attendance punches awaiting staff enrolment number mapping or active employment attachment.</p>
-        </div>
-        <button class="app-button app-button-secondary app-button-sm flex items-center gap-1.5" disabled="@(reconciling || pendingReceipts.Count == 0)" @onclick="ReevaluateAllPendingAsync">
-          @if (reconciling)
+    <!-- Primary Page Tabs -->
+    <div class="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white p-2 shadow-xs">
+      <div class="inline-flex flex-wrap rounded-lg border border-slate-200 bg-slate-100 p-0.5 text-xs">
+        <button type="button"
+                class="px-3 py-1.5 rounded-md font-semibold @(activeTab == "agents" ? "bg-white text-slate-900 shadow-xs" : "text-slate-600 hover:text-slate-900")"
+                @onclick='() => SetActiveTabAsync("agents")'>
+          Edge Agents (@FilteredAgents.Count)
+        </button>
+        <button type="button"
+                class="px-3 py-1.5 rounded-md font-semibold @(activeTab == "devices" ? "bg-white text-slate-900 shadow-xs" : "text-slate-600 hover:text-slate-900")"
+                @onclick='() => SetActiveTabAsync("devices")'>
+          Devices &amp; Bindings (@OrgFilteredDevices.Count)
+        </button>
+        <button type="button"
+                class="px-3 py-1.5 rounded-md font-semibold flex items-center gap-1.5 @(activeTab == "mapping" ? "bg-white text-slate-900 shadow-xs" : "text-slate-600 hover:text-slate-900")"
+                @onclick='() => SetActiveTabAsync("mapping")'>
+          <span>Map Staff</span>
+          @if (FilteredPendingReceipts.Count > 0)
           {
-            <span class="inline-block animate-spin">↻</span>
-            <span>Re-evaluating...</span>
-          }
-          else
-          {
-            <span>Re-evaluate All Pending</span>
+            <span class="rounded-full bg-amber-100 px-1.5 py-0.2 text-[10px] font-bold text-amber-800">@FilteredPendingReceipts.Count</span>
           }
         </button>
+        <button type="button"
+                class="px-3 py-1.5 rounded-md font-semibold @(activeTab == "failures" ? "bg-white text-slate-900 shadow-xs" : "text-slate-600 hover:text-slate-900")"
+                @onclick='() => SetActiveTabAsync("failures")'>
+          Failures (@FilteredFailures.Count)
+        </button>
+        <button type="button"
+                class="px-3 py-1.5 rounded-md font-semibold @(activeTab == "trust" ? "bg-white text-slate-900 shadow-xs" : "text-slate-600 hover:text-slate-900")"
+                @onclick='() => SetActiveTabAsync("trust")'>
+          Trusted PKI &amp; Setup (@trustedIssuers.Count(i => i.IsActive))
+        </button>
       </div>
-      <div class="overflow-x-auto">
-        <table class="w-full text-left text-xs">
-          <thead class="border-b border-slate-200 bg-slate-50 text-slate-700">
-            <tr>
-              <th class="p-2.5">Received (UTC)</th>
-              <th class="p-2.5">Agent / Device</th>
-              <th class="p-2.5">Badge ID (Local User)</th>
-              <th class="p-2.5">Punch Timestamp</th>
-              <th class="p-2.5">Pending Reason</th>
-              <th class="p-2.5 text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-slate-100">
-            @if (pendingReceipts.Count == 0)
-            {
-              <tr><td colspan="6" class="p-4 text-center text-slate-400">All edge attendance punches have been reconciled and processed into attendance logs.</td></tr>
-            }
-            @foreach (var receipt in pendingReceipts)
-            {
-              <tr>
-                <td class="p-2.5 text-slate-600 font-mono text-[11px]">@receipt.ReceivedAtUtc.ToString("u")</td>
-                <td class="p-2.5 font-medium text-slate-800">
-                  <span class="font-semibold text-slate-900">@receipt.AgentIdentifier</span><br/>
-                  <span class="text-slate-500 text-[11px]">Device #@receipt.DeviceId (Org #@receipt.OrganisationId)</span>
-                </td>
-                <td class="p-2.5">
-                  <span class="inline-block rounded bg-amber-50 px-2 py-0.5 font-mono text-xs font-bold text-amber-900 border border-amber-200">@receipt.LocalUserId</span>
-                </td>
-                <td class="p-2.5 text-slate-600 font-mono text-[11px]">@receipt.DeviceTimestampUtc.ToString("u")</td>
-                <td class="p-2.5">
-                  <span class="inline-flex items-center gap-1 font-semibold @(receipt.ProcessingStatus == "PendingStaffMapping" ? "text-amber-700" : "text-blue-700")">
-                    @(receipt.ProcessingStatus == "PendingStaffMapping" ? "Unmatched Staff Badge" : "No Active Job at Punch Time")
-                  </span>
-                </td>
-                <td class="p-2.5 text-right">
-                  <button class="app-button app-button-primary app-button-sm" @onclick="() => OpenResolveModal(receipt)">
-                    Map to Staff
-                  </button>
-                </td>
-              </tr>
-            }
-          </tbody>
-        </table>
-      </div>
+      @if (selectedFilterOrgId > 0)
+      {
+        <span class="text-xs font-medium text-teal-700 bg-teal-50 border border-teal-200 rounded-full px-2.5 py-0.5">
+          Filtered: @(organisations.FirstOrDefault(o => o.Id == selectedFilterOrgId)?.Name ?? $"Org #{selectedFilterOrgId}")
+        </span>
+      }
     </div>
 
+    @if (activeTab == "mapping")
+    {
+      <!-- Map Staff (Unmapped Punches & Mapped Staff Badges) -->
+      <div class="rounded-xl border border-slate-200 bg-white shadow-xs overflow-hidden">
+        <div class="border-b border-slate-200 px-4 py-2.5 bg-slate-50/50 flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 class="text-sm font-bold text-slate-800 flex items-center gap-2">
+              <span>Staff Badge Mapping &amp; Reconciliation</span>
+              @if (FilteredPendingReceipts.Count > 0)
+              {
+                <span class="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800">@FilteredPendingReceipts.Count unmapped</span>
+              }
+            </h2>
+            <p class="text-xs text-slate-500">Map unmatched device punches to staff, inspect mapped badge IDs, or edit existing badge mappings.</p>
+          </div>
+          <div class="flex flex-wrap items-center gap-2">
+            <!-- Mapping Sub-Tabs -->
+            <div class="inline-flex rounded-lg border border-slate-200 bg-slate-100 p-0.5 text-xs">
+              <button type="button"
+                      class="px-2.5 py-1 rounded-md font-medium @(mappingFilter == "unmapped" ? "bg-white text-slate-900 shadow-xs" : "text-slate-600 hover:text-slate-900")"
+                      @onclick='() => SetMappingFilterAsync("unmapped")'>
+                Unmapped (@FilteredPendingReceipts.Count)
+              </button>
+              <button type="button"
+                      class="px-2.5 py-1 rounded-md font-medium @(mappingFilter == "mapped" ? "bg-white text-slate-900 shadow-xs" : "text-slate-600 hover:text-slate-900")"
+                      @onclick='() => SetMappingFilterAsync("mapped")'>
+                Mapped (@MappedStaffList.Count)
+              </button>
+              <button type="button"
+                      class="px-2.5 py-1 rounded-md font-medium @(mappingFilter == "all" ? "bg-white text-slate-900 shadow-xs" : "text-slate-600 hover:text-slate-900")"
+                      @onclick='() => SetMappingFilterAsync("all")'>
+                All Staff (@staffDirectory.Count)
+              </button>
+            </div>
+            @if (mappingFilter == "unmapped")
+            {
+              <button class="app-button app-button-secondary app-button-sm flex items-center gap-1.5" disabled="@(reconciling || FilteredPendingReceipts.Count == 0)" @onclick="ReevaluateAllPendingAsync">
+                @if (reconciling)
+                {
+                  <span class="inline-block animate-spin">↻</span>
+                  <span>Re-evaluating...</span>
+                }
+                else
+                {
+                  <span>Re-evaluate All Pending</span>
+                }
+              </button>
+            }
+          </div>
+        </div>
+
+        @if (mappingFilter == "unmapped")
+        {
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs">
+              <thead class="border-b border-slate-200 bg-slate-50 text-slate-700">
+                <tr>
+                  <th class="p-2.5">Received (UTC)</th>
+                  <th class="p-2.5">Agent / Device</th>
+                  <th class="p-2.5">Badge ID (Local User)</th>
+                  <th class="p-2.5">Punch Timestamp</th>
+                  <th class="p-2.5">Pending Reason</th>
+                  <th class="p-2.5 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100">
+                @if (FilteredPendingReceipts.Count == 0)
+                {
+                  <tr><td colspan="6" class="p-4 text-center text-slate-400">All edge attendance punches have been reconciled and processed into attendance logs.</td></tr>
+                }
+                @foreach (var receipt in FilteredPendingReceipts)
+                {
+                  <tr>
+                    <td class="p-2.5 text-slate-600 font-mono text-[11px]">@receipt.ReceivedAtUtc.ToString("u")</td>
+                    <td class="p-2.5 font-medium text-slate-800">
+                      <span class="font-semibold text-slate-900">@receipt.AgentIdentifier</span><br/>
+                      <span class="text-slate-500 text-[11px]">Device #@receipt.DeviceId (Org #@receipt.OrganisationId)</span>
+                    </td>
+                    <td class="p-2.5">
+                      <span class="inline-block rounded bg-amber-50 px-2 py-0.5 font-mono text-xs font-bold text-amber-900 border border-amber-200">@receipt.LocalUserId</span>
+                    </td>
+                    <td class="p-2.5 text-slate-600 font-mono text-[11px]">@receipt.DeviceTimestampUtc.ToString("u")</td>
+                    <td class="p-2.5">
+                      <span class="inline-flex items-center gap-1 font-semibold @(receipt.ProcessingStatus == "PendingStaffMapping" ? "text-amber-700" : "text-blue-700")">
+                        @(receipt.ProcessingStatus == "PendingStaffMapping" ? "Unmatched Staff Badge" : "No Active Job at Punch Time")
+                      </span>
+                    </td>
+                    <td class="p-2.5 text-right">
+                      <button class="app-button app-button-primary app-button-sm" @onclick="() => OpenResolveModal(receipt)">
+                        Map to Staff
+                      </button>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+        else
+        {
+          <div class="p-3 border-b border-slate-100 bg-slate-50/40 flex flex-wrap items-center gap-2 text-xs">
+            <select class="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs"
+                    value="@mappingOrgId"
+                    @onchange="OnMappingOrgChangedAsync">
+              @foreach (var org in organisations)
+              {
+                <option value="@org.Id">@org.Name (#@org.Id)</option>
+              }
+            </select>
+            <input type="text"
+                   class="w-64 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs"
+                   placeholder="Search staff name, SAP, or badge ID..."
+                   @bind="mappingSearchQuery"
+                   @bind:event="oninput" />
+            <button type="button" class="app-button app-button-secondary app-button-sm" @onclick="LoadStaffDirectoryAsync">
+              @(loadingDirectory ? "Loading..." : "Search")
+            </button>
+            @if (mappingOrgId != currentUserOrgId && currentUserOrgId > 0)
+            {
+              <span class="text-[11px] text-amber-700">Viewing Org #@mappingOrgId (badge edits apply to your active session Org #@currentUserOrgId or via Unmapped punches).</span>
+            }
+          </div>
+
+          @if (editingEnrollment is not null)
+          {
+            <div class="p-3 border-b border-blue-200 bg-blue-50/50 flex flex-wrap items-end gap-3 text-xs">
+              <div>
+                <span class="block font-medium text-slate-700">Staff Member</span>
+                <span class="font-semibold text-slate-900">@editingEnrollment.Name (#@editingEnrollment.IndividualId)</span>
+              </div>
+              <label class="block space-y-1">
+                <span class="font-medium text-slate-700">Device Badge / Enrollment Number</span>
+                <input type="text" class="w-44 rounded-lg border border-slate-300 bg-white p-1.5 font-mono" maxlength="10" placeholder="e.g. 1001" @bind="editingEnrollment.Number" />
+              </label>
+              <button type="button" class="app-button app-button-primary app-button-sm" disabled="@savingEnrollment" @onclick="SaveStaffEnrollmentAsync">
+                @(savingEnrollment ? "Saving..." : "Save Badge Mapping")
+              </button>
+              <button type="button" class="app-button app-button-secondary app-button-sm" @onclick="() => editingEnrollment = null">Cancel</button>
+            </div>
+          }
+
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs">
+              <thead class="border-b border-slate-200 bg-slate-50 text-slate-700">
+                <tr>
+                  <th class="p-2.5">Staff Member</th>
+                  <th class="p-2.5">SAP / ID</th>
+                  <th class="p-2.5">Device Badge / Enrollment #</th>
+                  <th class="p-2.5">Status</th>
+                  <th class="p-2.5 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100">
+                @{
+                  var displayRows = mappingFilter == "mapped" ? MappedStaffList : FilteredDirectoryStaff;
+                }
+                @if (displayRows.Count == 0)
+                {
+                  <tr><td colspan="5" class="p-4 text-center text-slate-400">No matching staff records found for this organisation.</td></tr>
+                }
+                @foreach (var staff in displayRows)
+                {
+                  var isMapped = !string.IsNullOrWhiteSpace(staff.CurrentEnrollmentNumber);
+                  <tr>
+                    <td class="p-2.5 font-semibold text-slate-900">@staff.FullName</td>
+                    <td class="p-2.5 font-mono text-slate-600">#@staff.IndividualId @(string.IsNullOrWhiteSpace(staff.SapNumber) ? "" : $"· {staff.SapNumber}")</td>
+                    <td class="p-2.5">
+                      @if (isMapped)
+                      {
+                        <span class="inline-block rounded bg-emerald-50 px-2 py-0.5 font-mono text-xs font-bold text-emerald-900 border border-emerald-200">@staff.CurrentEnrollmentNumber</span>
+                      }
+                      else
+                      {
+                        <span class="text-slate-400">Not assigned</span>
+                      }
+                    </td>
+                    <td class="p-2.5">
+                      @if (isMapped)
+                      {
+                        <span class="inline-flex rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-800">Mapped</span>
+                      }
+                      else
+                      {
+                        <span class="inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">Unmapped</span>
+                      }
+                    </td>
+                    <td class="p-2.5 text-right">
+                      @if (mappingOrgId == currentUserOrgId || currentUserOrgId == 0)
+                      {
+                        <button type="button" class="app-button app-button-secondary app-button-sm" @onclick="() => StartEditEnrollment(staff)">
+                          @(isMapped ? "Edit Mapped" : "Assign Badge")
+                        </button>
+                      }
+                      else
+                      {
+                        <span class="text-[11px] text-slate-400">Active org only</span>
+                      }
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      </div>
+    }
+
+    @if (activeTab == "agents")
+    {
     <!-- Enrolled Agents Table -->
     <div class="rounded-xl border border-slate-200 bg-white shadow-xs overflow-hidden">
       <div class="border-b border-slate-200 px-4 py-2.5 bg-slate-50/50 flex items-center justify-between">
         <h2 class="text-sm font-bold text-slate-800">Registered Machine Identities</h2>
-        <span class="text-xs text-slate-500">@agents.Count agent(s)</span>
+        <span class="text-xs text-slate-500">@FilteredAgents.Count agent(s)</span>
       </div>
       <div class="overflow-x-auto">
         <table class="w-full text-left text-xs">
@@ -185,11 +369,11 @@
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-100">
-            @if (agents.Count == 0)
+            @if (FilteredAgents.Count == 0)
             {
               <tr><td colspan="7" class="p-4 text-center text-slate-400">No agents enrolled yet.</td></tr>
             }
-            @foreach (var agent in agents)
+            @foreach (var agent in FilteredAgents)
             {
               <tr>
                 <td class="p-2.5 font-semibold text-slate-900">
@@ -332,6 +516,21 @@
       }
     </div>
 
+    }
+
+    @if (activeTab == "trust")
+    {
+    <!-- Quick Setup Instructions -->
+    <div class="rounded-xl border border-blue-100 bg-blue-50/60 p-3 text-xs text-blue-900 space-y-1">
+      <div class="font-bold flex items-center gap-1.5 text-blue-950">
+        <span>Quick Agent Setup via CLI</span>
+      </div>
+      <p class="text-blue-800">
+        Run <code class="rounded bg-blue-100 px-1.5 py-0.5 font-mono text-[11px]">dotnet HRM.AttendanceEdgeAgent.dll enroll &lt;agent-id&gt;</code> on the edge gateway.
+        Copy the generated Base64 CA into <strong>Trusted PKI roots</strong> below, and enrol the agent with its certificate thumbprint.
+      </p>
+    </div>
+
     <!-- Trusted PKI Roots -->
     <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-xs space-y-3">
       <h2 class="text-sm font-bold text-slate-800">Trusted PKI Roots (Edge CA)</h2>
@@ -386,7 +585,10 @@
         <button class="app-button app-button-primary app-button-sm" @onclick="AddIssuerAsync">Add CA Root</button>
       </div>
     </div>
+    }
 
+    @if (activeTab == "devices")
+    {
     <!-- Attendance Device Hardware & Protocol Bindings -->
     <div class="rounded-xl border border-slate-200 bg-white shadow-xs overflow-hidden">
       <div class="border-b border-slate-200 px-4 py-2.5 bg-slate-50/50 flex flex-wrap items-center justify-between gap-2">
@@ -399,19 +601,19 @@
           <div class="inline-flex rounded-lg border border-slate-200 bg-slate-100 p-0.5 text-xs">
             <button class="px-2.5 py-1 rounded-md font-medium @(deviceFilter == "all" ? "bg-white text-slate-900 shadow-xs" : "text-slate-600 hover:text-slate-900")"
                     @onclick='() => deviceFilter = "all"'>
-              All (@devices.Count)
+              All (@OrgFilteredDevices.Count)
             </button>
             <button class="px-2.5 py-1 rounded-md font-medium @(deviceFilter == "bound" ? "bg-white text-slate-900 shadow-xs" : "text-slate-600 hover:text-slate-900")"
                     @onclick='() => deviceFilter = "bound"'>
-              Bound (@devices.Count(d => d.AgentId.HasValue))
+              Bound (@OrgFilteredDevices.Count(d => d.AgentId.HasValue))
             </button>
             <button class="px-2.5 py-1 rounded-md font-medium @(deviceFilter == "unbound" ? "bg-white text-slate-900 shadow-xs" : "text-slate-600 hover:text-slate-900")"
                     @onclick='() => deviceFilter = "unbound"'>
-              Unbound (@devices.Count(d => !d.AgentId.HasValue))
+              Unbound (@OrgFilteredDevices.Count(d => !d.AgentId.HasValue))
             </button>
             <button class="px-2.5 py-1 rounded-md font-medium @(deviceFilter == "enabled" ? "bg-white text-slate-900 shadow-xs" : "text-slate-600 hover:text-slate-900")"
                     @onclick='() => deviceFilter = "enabled"'>
-              Edge Enabled (@devices.Count(d => d.IsEdgeEnabled))
+              Edge Enabled (@OrgFilteredDevices.Count(d => d.IsEdgeEnabled))
             </button>
           </div>
           <button type="button"
@@ -503,8 +705,20 @@
             </label>
           }
           <label class="block space-y-1">
-            <span class="font-medium text-slate-700">Organisation ID</span>
-            <input type="number" class="w-full rounded-lg border border-slate-300 p-2 bg-white" @bind="editing.OrganisationId" />
+            <span class="font-medium text-slate-700">Organisation / Tenant *</span>
+            @if (organisations.Count > 0)
+            {
+              <select class="w-full rounded-lg border border-slate-300 p-2 bg-white" @bind="editing.OrganisationId">
+                @foreach (var org in organisations)
+                {
+                  <option value="@org.Id">@org.Name (#@org.Id)</option>
+                }
+              </select>
+            }
+            else
+            {
+              <input type="number" class="w-full rounded-lg border border-slate-300 p-2 bg-white" @bind="editing.OrganisationId" />
+            }
           </label>
           <label class="block space-y-1">
             <span class="font-medium text-slate-700">Bound Edge Agent</span>
@@ -536,6 +750,10 @@
       </div>
     }
 
+    }
+
+    @if (activeTab == "failures")
+    {
     <!-- Ingestion Failures Table -->
     <div class="rounded-xl border border-slate-200 bg-white shadow-xs overflow-hidden">
       <div class="border-b border-slate-200 px-4 py-2.5 bg-slate-50/50 flex items-center justify-between">
@@ -552,11 +770,11 @@
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-100">
-            @if (failures.Count == 0)
+            @if (FilteredFailures.Count == 0)
             {
               <tr><td colspan="3" class="p-4 text-center text-slate-400">No ingestion failures recorded.</td></tr>
             }
-            @foreach (var failure in failures)
+            @foreach (var failure in FilteredFailures)
             {
               <tr>
                 <td class="p-2.5 text-slate-600 font-mono text-[11px]">@failure.OccurredAtUtc.ToString("u")</td>
@@ -573,6 +791,7 @@
         </table>
       </div>
     </div>
+    }
 
     <!-- Quick Resolution Modal -->
     @if (resolvingReceipt is not null)
@@ -689,6 +908,10 @@
   private bool loading = true;
   private string? error;
   private string? successMessage;
+  private bool isFullWidth;
+  private string activeTab = "agents";
+  private string mappingFilter = "unmapped";
+  private int selectedFilterOrgId;
   private string deviceFilter = "all";
   private List<EdgeAgentSummaryDto> agents = [];
   private List<EdgeAttendanceDeviceDto> devices = [];
@@ -705,6 +928,14 @@
   private bool assignBadgePermanently = true;
   private bool reconciling;
   private bool resolving;
+  private int mappingOrgId;
+  private string mappingSearchQuery = "";
+  private bool loadingDirectory;
+  private List<EdgeStaffOptionDto> staffDirectory = [];
+  private int currentUserOrgId;
+  private List<ManagedEnrollmentDto> orgEnrollments = [];
+  private ManagedEnrollmentDto? editingEnrollment;
+  private bool savingEnrollment;
   private EdgeAttendanceDeviceConfigurationInput? editing;
   private EdgeAgentRegistrationInput enrolment = new() { CertificateNotAfterUtc = DateTime.UtcNow.AddYears(1) };
   private string certPassword = "ChangeThisPassword123!";
@@ -715,13 +946,41 @@
   private string? pendingFileName;
   private EdgeTrustedIssuerInput issuerInput = new();
 
+  private List<EdgeAgentSummaryDto> FilteredAgents =>
+    selectedFilterOrgId > 0 ? agents.Where(a => a.OrganisationId == selectedFilterOrgId).ToList() : agents;
+
+  private List<EdgeAttendanceDeviceDto> OrgFilteredDevices =>
+    selectedFilterOrgId > 0 ? devices.Where(d => d.OrganisationId == selectedFilterOrgId).ToList() : devices;
+
   private List<EdgeAttendanceDeviceDto> FilteredDevices => deviceFilter switch
   {
-    "bound" => devices.Where(d => d.AgentId.HasValue).ToList(),
-    "unbound" => devices.Where(d => !d.AgentId.HasValue).ToList(),
-    "enabled" => devices.Where(d => d.IsEdgeEnabled).ToList(),
-    _ => devices
+    "bound" => OrgFilteredDevices.Where(d => d.AgentId.HasValue).ToList(),
+    "unbound" => OrgFilteredDevices.Where(d => !d.AgentId.HasValue).ToList(),
+    "enabled" => OrgFilteredDevices.Where(d => d.IsEdgeEnabled).ToList(),
+    _ => OrgFilteredDevices
   };
+
+  private List<EdgePendingReceiptDto> FilteredPendingReceipts =>
+    selectedFilterOrgId > 0 ? pendingReceipts.Where(r => r.OrganisationId == selectedFilterOrgId).ToList() : pendingReceipts;
+
+  private List<EdgeAttendanceIngestionFailureDto> FilteredFailures =>
+    selectedFilterOrgId > 0
+      ? failures.Where(f =>
+          (f.AgentId.HasValue && agents.Any(a => a.Id == f.AgentId.Value && a.OrganisationId == selectedFilterOrgId)) ||
+          (f.DeviceId.HasValue && devices.Any(d => d.Id == f.DeviceId.Value && d.OrganisationId == selectedFilterOrgId))).ToList()
+      : failures;
+
+  private List<EdgeStaffOptionDto> FilteredDirectoryStaff =>
+    string.IsNullOrWhiteSpace(mappingSearchQuery)
+      ? staffDirectory
+      : staffDirectory.Where(s =>
+          s.FullName.Contains(mappingSearchQuery, StringComparison.OrdinalIgnoreCase) ||
+          (s.SapNumber?.Contains(mappingSearchQuery, StringComparison.OrdinalIgnoreCase) ?? false) ||
+          (s.CurrentEnrollmentNumber?.Contains(mappingSearchQuery, StringComparison.OrdinalIgnoreCase) ?? false) ||
+          s.IndividualId.ToString().Contains(mappingSearchQuery, StringComparison.OrdinalIgnoreCase)).ToList();
+
+  private List<EdgeStaffOptionDto> MappedStaffList =>
+    FilteredDirectoryStaff.Where(s => !string.IsNullOrWhiteSpace(s.CurrentEnrollmentNumber)).ToList();
 
   protected override Task OnInitializedAsync() => LoadAsync();
 
@@ -1065,13 +1324,142 @@
   private void StartAddDevice() => editing = new()
   {
     AttendanceDeviceId = 0,
-    OrganisationId = enrolment.OrganisationId > 0 ? enrolment.OrganisationId : (organisations.FirstOrDefault()?.Id ?? 0),
+    OrganisationId = selectedFilterOrgId > 0
+      ? selectedFilterOrgId
+      : (enrolment.OrganisationId > 0 ? enrolment.OrganisationId : (organisations.FirstOrDefault()?.Id ?? 0)),
     IpAddress = "127.0.0.1",
     Port = 4370,
     Location = "Virtual Biometric Device",
     AdapterType = "zkteco",
     IsEdgeEnabled = true
   };
+
+  private void OpenAddDeviceFromHeader()
+  {
+    activeTab = "devices";
+    StartAddDevice();
+  }
+
+  private async Task SetActiveTabAsync(string tab)
+  {
+    activeTab = tab;
+    if (tab == "mapping" && staffDirectory.Count == 0)
+    {
+      await LoadStaffDirectoryAsync();
+    }
+  }
+
+  private async Task SetMappingFilterAsync(string filter)
+  {
+    mappingFilter = filter;
+    if (filter != "unmapped" && staffDirectory.Count == 0)
+    {
+      await LoadStaffDirectoryAsync();
+    }
+  }
+
+  private async Task OnFilterOrgChangedAsync(ChangeEventArgs e)
+  {
+    selectedFilterOrgId = int.TryParse(e.Value?.ToString(), out var id) ? id : 0;
+    if (selectedFilterOrgId > 0)
+    {
+      enrolment.OrganisationId = selectedFilterOrgId;
+      mappingOrgId = selectedFilterOrgId;
+      if (activeTab == "mapping" && mappingFilter != "unmapped")
+      {
+        await LoadStaffDirectoryAsync();
+      }
+    }
+  }
+
+  private async Task OnMappingOrgChangedAsync(ChangeEventArgs e)
+  {
+    mappingOrgId = int.TryParse(e.Value?.ToString(), out var id) ? id : 0;
+    editingEnrollment = null;
+    await LoadStaffDirectoryAsync();
+  }
+
+  private async Task LoadStaffDirectoryAsync()
+  {
+    if (mappingOrgId <= 0)
+    {
+      mappingOrgId = selectedFilterOrgId > 0
+        ? selectedFilterOrgId
+        : (currentUserOrgId > 0 ? currentUserOrgId : (organisations.FirstOrDefault()?.Id ?? 0));
+    }
+    if (mappingOrgId <= 0) return;
+
+    loadingDirectory = true;
+    try
+    {
+      staffDirectory = (await Agents.SearchStaffAsync(new EdgeStaffSearchInput
+      {
+        OrganisationId = mappingOrgId,
+        Query = string.IsNullOrWhiteSpace(mappingSearchQuery) ? null : mappingSearchQuery.Trim()
+      })).ToList();
+
+      try
+      {
+        var userSettings = await UserSettings.LoadAsync(UserSettingsTab.Enrollment);
+        currentUserOrgId = userSettings.UserOrganisationId;
+        orgEnrollments = userSettings.Enrollments ?? [];
+      }
+      catch
+      {
+        // Ignore if user lacks UserSettings permission; SearchStaffAsync still shows CurrentEnrollmentNumber
+      }
+    }
+    catch (Exception ex)
+    {
+      error = $"Failed to load staff directory: {ex.Message}";
+    }
+    finally
+    {
+      loadingDirectory = false;
+    }
+  }
+
+  private void StartEditEnrollment(EdgeStaffOptionDto staff)
+  {
+    var existing = orgEnrollments.FirstOrDefault(e => e.IndividualId == staff.IndividualId);
+    editingEnrollment = new ManagedEnrollmentDto
+    {
+      Id = existing?.Id ?? 0,
+      IndividualId = staff.IndividualId,
+      Name = staff.FullName,
+      Number = existing?.Number ?? staff.CurrentEnrollmentNumber ?? ""
+    };
+  }
+
+  private async Task SaveStaffEnrollmentAsync()
+  {
+    if (editingEnrollment is null) return;
+    savingEnrollment = true;
+    error = null;
+    successMessage = null;
+    try
+    {
+      var result = await UserSettings.SaveEnrollmentAsync(editingEnrollment);
+      if (!result.Success)
+      {
+        error = result.Message;
+        return;
+      }
+      successMessage = $"Saved badge #{editingEnrollment.Number} for {editingEnrollment.Name}.";
+      editingEnrollment = null;
+      await Agents.ReevaluatePendingReceiptsAsync(new EdgeReconciliationFilterInput { OrganisationId = mappingOrgId > 0 ? mappingOrgId : null });
+      await LoadAsync();
+      await LoadStaffDirectoryAsync();
+    }
+    catch (Exception ex)
+    {
+      error = ex.Message;
+    }
+    finally
+    {
+      savingEnrollment = false;
+    }
+  }
 
   private void Edit(EdgeAttendanceDeviceDto device) => editing = new()
   {
