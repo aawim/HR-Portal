@@ -87,7 +87,10 @@ public sealed record RawAttendanceEvent(
     OutboxEventState State = OutboxEventState.Collected,
     int RetryCount = 0,
     DateTime? NextRetryAtUtc = null,
-    string? LastError = null);
+    string? LastError = null)
+{
+    public DateTime DeviceTimestampLocal => DeviceTimestampUtc.ToLocalTime();
+}
 
 public sealed record SyncAcknowledgement(
     long Id,
@@ -114,7 +117,10 @@ public sealed record ConnectorHealthLogEntry(
     string Level,
     string Component,
     string Message,
-    string? Detail = null);
+    string? Detail = null)
+{
+    public DateTime TimestampLocal => TimestampUtc.ToLocalTime();
+}
 
 public sealed record ConfigurationVersionRecord(
     int VersionNumber,

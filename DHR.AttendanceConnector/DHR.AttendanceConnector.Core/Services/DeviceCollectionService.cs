@@ -65,17 +65,25 @@ public sealed class DeviceCollectionService(
             if (events.Count > 0)
             {
                 var persisted = await repository.PersistCollectedEventsAsync(events, ct);
-                var maxEvent = events.OrderByDescending(e => e.DeviceTimestampUtc).First();
+                // Guard checkpoint against corrupt far-future device RTC records (e.g. year 2103)
+                var validMaxEvent = events
+                    .Where(e => e.DeviceTimestampUtc <= now.AddMinutes(5))
+                    .OrderByDescending(e => e.DeviceTimestampUtc)
+                    .FirstOrDefault();
 
-                var newCheckpoint = new DeviceSyncCheckpoint(
-                    DeviceId: device.DeviceId,
-                    LastEventId: maxEvent.DeviceEventId,
-                    LastEventTimestampUtc: maxEvent.DeviceTimestampUtc,
-                    TotalEventsCollected: (checkpoint?.TotalEventsCollected ?? 0) + persisted,
-                    UpdatedAtUtc: now);
+                if (validMaxEvent is not null)
+                {
+                    var newCheckpoint = new DeviceSyncCheckpoint(
+                        DeviceId: device.DeviceId,
+                        LastEventId: validMaxEvent.DeviceEventId,
+                        LastEventTimestampUtc: validMaxEvent.DeviceTimestampUtc,
+                        TotalEventsCollected: (checkpoint?.TotalEventsCollected ?? 0) + persisted,
+                        UpdatedAtUtc: now);
 
-                await repository.SaveCheckpointAsync(newCheckpoint, ct);
-                await repository.UpdateDeviceHealthAsync(device.DeviceId, "Online", now, maxEvent.DeviceTimestampUtc, null, ct);
+                    await repository.SaveCheckpointAsync(newCheckpoint, ct);
+                }
+
+                await repository.UpdateDeviceHealthAsync(device.DeviceId, "Online", now, validMaxEvent?.DeviceTimestampUtc ?? checkpoint?.LastEventTimestampUtc, null, ct);
                 if (persisted > 0)
                 {
                     await repository.WriteHealthLogAsync("Info", "DevicePolling", $"Collected {persisted} new event(s) from {device.Name}.", ct: ct);

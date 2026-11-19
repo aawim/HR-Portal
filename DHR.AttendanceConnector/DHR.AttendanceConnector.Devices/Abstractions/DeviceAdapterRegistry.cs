@@ -15,10 +15,26 @@ public sealed class DeviceAdapterRegistry : IDeviceAdapterRegistry
         }
     }
 
-    public IBiometricDeviceAdapter? Resolve(string protocolCode) =>
-        string.IsNullOrWhiteSpace(protocolCode)
-            ? null
-            : _adapters.TryGetValue(protocolCode.Trim(), out var adapter) ? adapter : null;
+    public IBiometricDeviceAdapter? Resolve(string protocolCode)
+    {
+        if (string.IsNullOrWhiteSpace(protocolCode))
+            return null;
+
+        var trimmed = protocolCode.Trim();
+        if (_adapters.TryGetValue(trimmed, out var exact))
+            return exact;
+
+        // Support parameterized protocol strings like "zkteco:1" or "zkteco?key=1234"
+        var sepIdx = trimmed.IndexOfAny([':', '?']);
+        if (sepIdx > 0)
+        {
+            var baseProto = trimmed[..sepIdx].Trim();
+            if (_adapters.TryGetValue(baseProto, out var matched))
+                return matched;
+        }
+
+        return null;
+    }
 
     public IReadOnlyList<string> SupportedProtocols => _adapters.Keys.OrderBy(k => k).ToList();
 }

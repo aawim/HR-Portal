@@ -40,7 +40,7 @@ public sealed class ZkTecoTcpDeviceAdapter(
             await client.ConnectAsync(device.IpAddress, port, timeoutCts.Token);
             await using var stream = client.GetStream();
 
-            var sessionId = await ConnectSessionAsync(stream, timeoutCts.Token);
+            var sessionId = await ConnectSessionAsync(stream, device.ProtocolCode, timeoutCts.Token);
             sw.Stop();
 
             if (sessionId is null)
@@ -86,7 +86,7 @@ public sealed class ZkTecoTcpDeviceAdapter(
         await client.ConnectAsync(device.IpAddress, port, timeoutCts.Token);
         await using var stream = client.GetStream();
 
-        var sessionId = await ConnectSessionAsync(stream, timeoutCts.Token)
+        var sessionId = await ConnectSessionAsync(stream, device.ProtocolCode, timeoutCts.Token)
             ?? throw new InvalidOperationException("ZKTeco terminal rejected connection handshake.");
 
         try
@@ -128,7 +128,7 @@ public sealed class ZkTecoTcpDeviceAdapter(
         await client.ConnectAsync(device.IpAddress, port, timeoutCts.Token);
         await using var stream = client.GetStream();
 
-        var sessionId = await ConnectSessionAsync(stream, timeoutCts.Token)
+        var sessionId = await ConnectSessionAsync(stream, device.ProtocolCode, timeoutCts.Token)
             ?? throw new InvalidOperationException($"ZKTeco terminal at {device.IpAddress}:{port} refused handshake.");
 
         try
@@ -142,7 +142,7 @@ public sealed class ZkTecoTcpDeviceAdapter(
         }
     }
 
-    private static async Task<ushort?> ConnectSessionAsync(NetworkStream stream, CancellationToken ct, int commKey = 0)
+    private static async Task<ushort?> ConnectSessionAsync(NetworkStream stream, string? protocolCode, CancellationToken ct)
     {
         var connectPacket = BuildPacket(1000, 0, 0, []);
         await stream.WriteAsync(connectPacket, ct);
@@ -156,21 +156,45 @@ public sealed class ZkTecoTcpDeviceAdapter(
         if (replyCode == 2000)
             return sessionId;
 
-        // 2005 = CMD_ACK_UNAUTH: physical ZKTeco firmware requires CMD_AUTH (1102) with scrambled Comm Key
+        // 2005 = CMD_ACK_UNAUTH: physical ZKTeco / iClock firmware requires CMD_AUTH (1102) with scrambled Comm Key
         if (replyCode == 2005)
         {
-            var authPayload = MakeCommKey(commKey, sessionId);
-            var authPacket = BuildPacket(1102, sessionId, 1, authPayload);
-            await stream.WriteAsync(authPacket, ct);
+            var keysToTry = ResolveCommKeys(protocolCode);
+            ushort replyId = 1;
+            foreach (var key in keysToTry)
+            {
+                var authPayload = MakeCommKey(key, sessionId);
+                var authPacket = BuildPacket(1102, sessionId, replyId++, authPayload);
+                await stream.WriteAsync(authPacket, ct);
 
-            var authResp = await ReadPacketAsync(stream, ct);
-            if (authResp is null || authResp.Length < 16) return null;
+                var authResp = await ReadPacketAsync(stream, ct);
+                if (authResp is null || authResp.Length < 16) return null;
 
-            var authReply = BitConverter.ToUInt16(authResp, 8);
-            return authReply == 2000 ? sessionId : null;
+                var authReply = BitConverter.ToUInt16(authResp, 8);
+                if (authReply == 2000)
+                    return sessionId;
+            }
         }
 
         return null;
+    }
+
+    internal static int[] ResolveCommKeys(string? protocolCode)
+    {
+        if (!string.IsNullOrWhiteSpace(protocolCode))
+        {
+            var trimmed = protocolCode.Trim();
+            var colonIdx = trimmed.IndexOf(':');
+            if (colonIdx > 0 && int.TryParse(trimmed[(colonIdx + 1)..].Trim(), out var explicitKey))
+                return [explicitKey];
+
+            var keyMarker = trimmed.IndexOf("key=", StringComparison.OrdinalIgnoreCase);
+            if (keyMarker >= 0 && int.TryParse(trimmed[(keyMarker + 4)..].Trim(), out var queryKey))
+                return [queryKey];
+        }
+
+        // Default: try Comm Key 0, then Comm Key 1 (common iClock 680/360 default)
+        return [0, 1];
     }
 
     internal static byte[] MakeCommKey(int key, ushort sessionId, int ticks = 50)
@@ -230,7 +254,7 @@ public sealed class ZkTecoTcpDeviceAdapter(
     {
         var results = new List<RawAttendanceEvent>();
         var requestData = new byte[] { 0x01, 0x0d, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
-        ushort replyId = 2;
+        ushort replyId = 10; // Start above any CMD_CONNECT/CMD_AUTH replyIds (0, 1, 2...)
         var requestPacket = BuildPacket(1503, sessionId, replyId++, requestData);
         await stream.WriteAsync(requestPacket, ct);
 
@@ -268,14 +292,40 @@ public sealed class ZkTecoTcpDeviceAdapter(
                 if (chunkResp is null || chunkResp.Length < 16) break;
 
                 var chunkReply = BitConverter.ToUInt16(chunkResp, 8);
-                if (chunkReply != 1501 || chunkResp.Length <= 24) break;
+                byte[] chunkSlice;
 
-                var chunkSlice = chunkResp[24..];
+                if (chunkReply == 1500)
+                {
+                    // Classic iClock Ver 6.60 framing: CMD_PREPARE_DATA (1500) followed by one or more CMD_DATA (1501) packets
+                    var dataResp = await ReadPacketAsync(stream, ct);
+                    if (dataResp is null || dataResp.Length <= 16) break;
+                    var dataReply = BitConverter.ToUInt16(dataResp, 8);
+                    if (dataReply != 1501) break;
+                    chunkSlice = dataResp[16..];
+                }
+                else if (chunkReply == 1501 && chunkResp.Length > 24)
+                {
+                    // Newer ZK chunk framing: 8-byte subheader before slice bytes
+                    chunkSlice = chunkResp[24..];
+                }
+                else
+                {
+                    break;
+                }
+
                 if (chunkSlice.Length == 0) break;
 
                 buffer.AddRange(chunkSlice);
                 offset += (uint)chunkSlice.Length;
             }
+
+            // Free device data buffer cleanly (CMD_FREE_DATA = 1502)
+            try
+            {
+                var freePacket = BuildPacket(1502, sessionId, replyId++, []);
+                await stream.WriteAsync(freePacket, ct);
+            }
+            catch { /* ignore */ }
 
             var assembled = buffer.ToArray();
             dataset = assembled.Length > 4 ? assembled[4..] : [];
