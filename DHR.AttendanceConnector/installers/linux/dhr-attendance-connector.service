@@ -1,0 +1,24 @@
+[Unit]
+Description=DHR Attendance Connector Background Service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=notify
+User=dhr-connector
+Group=dhr-connector
+WorkingDirectory=/opt/dhr-attendance-connector
+ExecStart=/opt/dhr-attendance-connector/DHR.AttendanceConnector.Worker
+Restart=always
+RestartSec=10
+StateDirectory=dhr-attendance-connector
+StateDirectoryMode=0700
+Environment=DHR_CONNECTOR_DhrConnector__DataDirectory=/var/lib/dhr-attendance-connector
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/dhr-attendance-connector
+
+[Install]
+WantedBy=multi-user.target

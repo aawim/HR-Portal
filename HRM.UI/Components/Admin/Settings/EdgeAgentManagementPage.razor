@@ -1,4 +1,5 @@
 @page "/admin/settings/edge-agents"
+@page "/admin/attendance/connectors"
 @attribute [Authorize]
 @using System.Security.Cryptography
 @using System.Security.Cryptography.X509Certificates
@@ -130,6 +131,20 @@
                 class="px-3 py-1.5 rounded-md font-semibold @(activeTab == "trust" ? "bg-white text-slate-900 shadow-xs" : "text-slate-600 hover:text-slate-900")"
                 @onclick='() => SetActiveTabAsync("trust")'>
           Trusted PKI &amp; Setup (@trustedIssuers.Count(i => i.IsActive))
+        </button>
+        <button type="button"
+                class="px-3 py-1.5 rounded-md font-semibold @(activeTab == "activation" ? "bg-white text-slate-900 shadow-xs" : "text-slate-600 hover:text-slate-900")"
+                @onclick='() => SetActiveTabAsync("activation")'>
+          Activation &amp; Download (@activationCodes.Count(c => !c.IsRevoked && !c.UsedAtUtc.HasValue && c.ExpiresAtUtc > DateTime.UtcNow))
+        </button>
+        <button type="button"
+                class="px-3 py-1.5 rounded-md font-semibold flex items-center gap-1.5 @(activeTab == "alerts" ? "bg-white text-slate-900 shadow-xs" : "text-slate-600 hover:text-slate-900")"
+                @onclick='() => SetActiveTabAsync("alerts")'>
+          <span>Alerts &amp; Commands</span>
+          @if (FilteredAlerts.Count > 0)
+          {
+            <span class="rounded-full bg-rose-100 px-1.5 py-0.2 text-[10px] font-bold text-rose-800">@FilteredAlerts.Count</span>
+          }
         </button>
       </div>
       @if (selectedFilterOrgId > 0)
@@ -901,6 +916,199 @@
         </div>
       </div>
     }
+
+    @if (activeTab == "activation")
+    {
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <!-- Generate One-Time Activation Code -->
+        <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-xs space-y-3">
+          <div>
+            <h2 class="text-sm font-bold text-slate-900">Generate One-Time Connector Activation Code</h2>
+            <p class="text-xs text-slate-500">Issue a short-lived, single-use code (DHR-ACT-XXXX-XXXX) to securely enroll an organisation computer using proof-of-possession mTLS.</p>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+            <div>
+              <label class="block font-semibold text-slate-700 mb-1">Organisation</label>
+              <select class="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5" @bind="newActivationInput.OrganisationId">
+                <option value="0">Select organisation...</option>
+                @foreach (var org in organisations)
+                {
+                  <option value="@org.Id">@org.Name (#@org.Id)</option>
+                }
+              </select>
+            </div>
+            <div>
+              <label class="block font-semibold text-slate-700 mb-1">Site Name</label>
+              <input class="w-full rounded-lg border border-slate-300 px-2.5 py-1.5" @bind="newActivationInput.SiteName" placeholder="e.g. Male HQ / Annex" />
+            </div>
+            <div>
+              <label class="block font-semibold text-slate-700 mb-1">Suggested Connector Name</label>
+              <input class="w-full rounded-lg border border-slate-300 px-2.5 py-1.5" @bind="newActivationInput.SuggestedConnectorName" placeholder="e.g. hq-reception-pc" />
+            </div>
+            <div>
+              <label class="block font-semibold text-slate-700 mb-1">Expires In (Minutes)</label>
+              <input type="number" min="5" max="1440" class="w-full rounded-lg border border-slate-300 px-2.5 py-1.5" @bind="newActivationInput.ExpiresInMinutes" />
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <button type="button" class="rounded-lg bg-teal-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-teal-700"
+                    disabled="@creatingCode" @onclick="GenerateActivationCodeAsync">
+              @(creatingCode ? "Generating..." : "Generate One-Time Code")
+            </button>
+          </div>
+
+          @if (lastCreatedCode is not null)
+          {
+            <div class="rounded-lg border border-emerald-200 bg-emerald-50 p-3 space-y-1 text-xs">
+              <div class="font-bold text-emerald-900">One-Time Activation Code (shown once):</div>
+              <div class="font-mono text-base font-bold text-emerald-800 tracking-wider">@lastCreatedCode.PlaintextCode</div>
+              <div class="text-emerald-700">Expires at @lastCreatedCode.ExpiresAtUtc.ToString("yyyy-MM-dd HH:mm") UTC • Single-use only</div>
+            </div>
+          }
+        </div>
+
+        <!-- Download Attendance Connector -->
+        <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-xs space-y-3">
+          <div>
+            <h2 class="text-sm font-bold text-slate-900">Download DHR Attendance Connector</h2>
+            <p class="text-xs text-slate-500">Install on any existing office Windows, Linux, or macOS computer on the organisation LAN. No local SQL Server or inbound firewall ports required.</p>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+            <div class="rounded-lg border border-slate-200 p-3 space-y-1">
+              <div class="font-bold text-slate-900">Windows (x64)</div>
+              <div class="text-[11px] text-slate-500">Windows Service + Desktop App</div>
+              <div class="text-[11px] font-mono text-teal-700">win-x64 / Inno Setup</div>
+            </div>
+            <div class="rounded-lg border border-slate-200 p-3 space-y-1">
+              <div class="font-bold text-slate-900">Linux (x64 / ARM64)</div>
+              <div class="text-[11px] text-slate-500">DEB Package + systemd</div>
+              <div class="text-[11px] font-mono text-teal-700">linux-x64 / linux-arm64</div>
+            </div>
+            <div class="rounded-lg border border-slate-200 p-3 space-y-1">
+              <div class="font-bold text-slate-900">macOS (Apple / Intel)</div>
+              <div class="text-[11px] text-slate-500">PKG + launchd daemon</div>
+              <div class="text-[11px] font-mono text-teal-700">osx-arm64 / osx-x64</div>
+            </div>
+          </div>
+          <div class="rounded-lg bg-slate-50 border border-slate-200 p-3 text-[11px] text-slate-600 space-y-1">
+            <div class="font-semibold text-slate-800">Quick Activation Steps:</div>
+            <div>1. Install DHR Attendance Connector on the organisation computer.</div>
+            <div>2. Launch the desktop app and select <strong>Activate Connector</strong>.</div>
+            <div>3. Enter the DHR HTTPS URL and the one-time <code>DHR-ACT-XXXX-XXXX</code> code above.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Recent Activation Codes Table -->
+      <div class="rounded-xl border border-slate-200 bg-white shadow-xs overflow-hidden">
+        <div class="border-b border-slate-200 px-4 py-2.5 bg-slate-50/50">
+          <h3 class="text-xs font-bold text-slate-800 uppercase tracking-wide">Issued Activation Codes</h3>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs">
+            <thead class="bg-slate-50 text-slate-500 uppercase text-[10px]">
+              <tr>
+                <th class="px-4 py-2">Code Prefix</th>
+                <th class="px-4 py-2">Org</th>
+                <th class="px-4 py-2">Site</th>
+                <th class="px-4 py-2">Status</th>
+                <th class="px-4 py-2">Expires (UTC)</th>
+                <th class="px-4 py-2 text-right">Action</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+              @foreach (var actCode in activationCodes.Where(c => selectedFilterOrgId == 0 || c.OrganisationId == selectedFilterOrgId))
+              {
+                var status = actCode.IsRevoked ? "Revoked" : actCode.UsedAtUtc.HasValue ? "Redeemed" : actCode.ExpiresAtUtc <= DateTime.UtcNow ? "Expired" : "Active";
+                <tr>
+                  <td class="px-4 py-2 font-mono font-semibold text-slate-800">@actCode.CodePrefix</td>
+                  <td class="px-4 py-2">#@actCode.OrganisationId</td>
+                  <td class="px-4 py-2">@(actCode.SiteName ?? "-")</td>
+                  <td class="px-4 py-2 font-semibold">@status</td>
+                  <td class="px-4 py-2 text-slate-500">@actCode.ExpiresAtUtc.ToString("yyyy-MM-dd HH:mm")</td>
+                  <td class="px-4 py-2 text-right">
+                    @if (status == "Active")
+                    {
+                      <button type="button" class="text-rose-600 hover:underline font-semibold" @onclick="() => RevokeActivationCodeAsync(actCode.Id)">Revoke</button>
+                    }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+    }
+
+    @if (activeTab == "alerts")
+    {
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <!-- Active Alerts -->
+        <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-xs space-y-3">
+          <h2 class="text-sm font-bold text-slate-900">Active Connector Alerts (@FilteredAlerts.Count)</h2>
+          @if (FilteredAlerts.Count == 0)
+          {
+            <div class="rounded-lg bg-emerald-50 border border-emerald-200 p-3 text-xs text-emerald-800">All active connectors are healthy. No open alerts.</div>
+          }
+          else
+          {
+            <div class="space-y-2">
+              @foreach (var alert in FilteredAlerts)
+              {
+                var isCrit = alert.Severity == "Critical";
+                <div class="rounded-lg border p-3 text-xs @(isCrit ? "border-rose-200 bg-rose-50 text-rose-900" : "border-amber-200 bg-amber-50 text-amber-900")">
+                  <div class="flex items-center justify-between font-bold">
+                    <span>[@alert.Severity] @alert.Title</span>
+                    <span class="text-[10px] font-normal">@alert.DetectedAtUtc.ToString("HH:mm") UTC</span>
+                  </div>
+                  <div class="mt-1 opacity-90">@alert.Message</div>
+                </div>
+              }
+            </div>
+          }
+        </div>
+
+        <!-- Remote Safe Commands -->
+        <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-xs space-y-3">
+          <div>
+            <h2 class="text-sm font-bold text-slate-900">Queue Safe Remote Command</h2>
+            <p class="text-xs text-slate-500">Only explicitly whitelisted connector operations are permitted (SyncNow, RefreshConfig, ExportDiagnostics).</p>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+            <select class="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5" @bind="commandAgentId">
+              <option value="0">Select active connector...</option>
+              @foreach (var a in FilteredAgents.Where(x => x.IsActive))
+              {
+                <option value="@a.Id">@a.AgentIdentifier (Org #@a.OrganisationId)</option>
+              }
+            </select>
+            <select class="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5" @bind="commandType">
+              <option value="SyncNow">SyncNow</option>
+              <option value="RefreshConfig">RefreshConfig</option>
+              <option value="ExportDiagnostics">ExportDiagnostics</option>
+            </select>
+          </div>
+          <button type="button" class="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-800" @onclick="QueueCommandAsync">
+            Queue Command
+          </button>
+
+          <div class="border-t border-slate-200 pt-2 space-y-1">
+            <div class="text-[11px] font-bold text-slate-600 uppercase">Recent Command History</div>
+            @foreach (var cmd in connectorCommands.Take(10))
+            {
+              <div class="flex items-center justify-between text-xs py-1 border-b border-slate-100">
+                <div>
+                  <span class="font-semibold text-slate-800">@cmd.AgentIdentifier</span>
+                  <span class="mx-1 text-slate-400">•</span>
+                  <span class="font-mono text-teal-700">@cmd.CommandType</span>
+                </div>
+                <span class="font-semibold text-slate-600">@cmd.Status</span>
+              </div>
+            }
+          </div>
+        </div>
+      </div>
+    }
   }
 </section>
 
@@ -945,6 +1153,17 @@
   private string? pendingCaBase64;
   private string? pendingFileName;
   private EdgeTrustedIssuerInput issuerInput = new();
+  private List<EdgeActivationCodeDto> activationCodes = [];
+  private List<EdgeConnectorCommandDto> connectorCommands = [];
+  private List<EdgeConnectorAlertDto> connectorAlerts = [];
+  private CreateActivationCodeInput newActivationInput = new() { ExpiresInMinutes = 60 };
+  private CreatedActivationCodeDto? lastCreatedCode;
+  private bool creatingCode;
+  private int commandAgentId;
+  private string commandType = "SyncNow";
+
+  private List<EdgeConnectorAlertDto> FilteredAlerts =>
+    selectedFilterOrgId > 0 ? connectorAlerts.Where(a => a.OrganisationId == selectedFilterOrgId).ToList() : connectorAlerts;
 
   private List<EdgeAgentSummaryDto> FilteredAgents =>
     selectedFilterOrgId > 0 ? agents.Where(a => a.OrganisationId == selectedFilterOrgId).ToList() : agents;
@@ -995,6 +1214,9 @@
       failures = (await Agents.ListFailuresAsync()).ToList();
       trustedIssuers = (await Agents.ListTrustedIssuersAsync()).ToList();
       pendingReceipts = (await Agents.ListPendingReceiptsAsync(new EdgeReconciliationFilterInput())).ToList();
+      try { activationCodes = (await Agents.ListActivationCodesAsync()).ToList(); } catch { activationCodes = []; }
+      try { connectorCommands = (await Agents.ListCommandsAsync()).ToList(); } catch { connectorCommands = []; }
+      try { connectorAlerts = (await Agents.ListAlertsAsync()).ToList(); } catch { connectorAlerts = []; }
       orgLoadError = null;
       try { organisations = (await Agents.ListOrganisationsAsync()).ToList(); }
       catch (Exception ex) { organisations = []; orgLoadError = $"Org fetch failed: {ex.Message}"; }
@@ -1481,5 +1703,58 @@
     }
     editing = null;
     await LoadAsync();
+  }
+
+  private async Task GenerateActivationCodeAsync()
+  {
+    error = null;
+    successMessage = null;
+    if (newActivationInput.OrganisationId <= 0)
+    {
+      error = "Please select an organisation before generating an activation code.";
+      return;
+    }
+    creatingCode = true;
+    try
+    {
+      lastCreatedCode = await Agents.CreateActivationCodeAsync(newActivationInput);
+      successMessage = $"One-time activation code generated (expires {lastCreatedCode.ExpiresAtUtc:HH:mm} UTC).";
+      activationCodes = (await Agents.ListActivationCodesAsync()).ToList();
+    }
+    catch (Exception ex)
+    {
+      error = $"Failed to create activation code: {ex.Message}";
+    }
+    finally
+    {
+      creatingCode = false;
+    }
+  }
+
+  private async Task RevokeActivationCodeAsync(int id)
+  {
+    error = null;
+    var res = await Agents.RevokeActivationCodeAsync(id);
+    if (!res.Success) { error = res.Message; return; }
+    successMessage = res.Message;
+    activationCodes = (await Agents.ListActivationCodesAsync()).ToList();
+  }
+
+  private async Task QueueCommandAsync()
+  {
+    error = null;
+    if (commandAgentId <= 0)
+    {
+      error = "Select an active connector first.";
+      return;
+    }
+    var res = await Agents.QueueCommandAsync(new QueueConnectorCommandInput
+    {
+      EdgeAttendanceAgentId = commandAgentId,
+      CommandType = commandType
+    });
+    if (!res.Success) { error = res.Message; return; }
+    successMessage = res.Message;
+    connectorCommands = (await Agents.ListCommandsAsync()).ToList();
   }
 }

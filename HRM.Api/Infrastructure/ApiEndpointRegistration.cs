@@ -125,9 +125,11 @@ public static class ApiEndpointRegistration
         services.TryAddScoped<global::HRM.Services.LeadershipAdministrationService>();
         services.TryAddScoped<global::HRM.Services.Contracts.LeadershipAdministrationServiceContracts.IOperations>(provider => provider.GetRequiredService<global::HRM.Services.LeadershipAdministrationService>());
         services.TryAddSingleton<global::HRM.Services.EdgeAttendance.IEdgeCertificateTrustValidator, global::HRM.Services.EdgeAttendance.DatabaseCertificateTrustValidator>();
+        services.TryAddSingleton<global::HRM.Services.EdgeAttendance.IConnectorCertificateAuthority, global::HRM.Services.EdgeAttendance.ManagedConnectorCertificateAuthority>();
         services.TryAddScoped<global::HRM.Services.EdgeAttendance.EdgeAgentManagementService>();
         services.TryAddScoped<global::HRM.Services.Contracts.EdgeAgentManagementContracts.IOperations>(p => p.GetRequiredService<global::HRM.Services.EdgeAttendance.EdgeAgentManagementService>());
         services.TryAddScoped<global::HRM.Services.EdgeAttendance.EdgeAttendanceIngestionService>();
+        services.TryAddScoped<global::HRM.Services.EdgeAttendance.AttendanceConnectorGatewayService>();
         services.TryAddScoped<global::HRM.Services.StaffTransferService>();
         services.TryAddScoped<global::HRM.Services.Contracts.StaffTransferServiceContracts.IOperations>(provider => provider.GetRequiredService<global::HRM.Services.StaffTransferService>());
         services.TryAddScoped<global::HRM.Services.StaffSeparationService>();

@@ -65,6 +65,30 @@ public sealed class EdgeAgentManagementController(EdgeAgentManagementContracts.I
     public async Task<ActionResult<IReadOnlyList<EdgeStaffOptionDto>>> SearchStaff(SearchStaffRequest request, CancellationToken ct) =>
         Ok(await service.SearchStaffAsync(request.input, ct));
 
+    [HttpPost("activation-codes")]
+    public async Task<ActionResult<CreatedActivationCodeDto>> CreateActivationCode(CreateActivationCodeRequest request, CancellationToken ct) =>
+        Ok(await service.CreateActivationCodeAsync(request.input, ct));
+
+    [HttpGet("activation-codes")]
+    public async Task<ActionResult<IReadOnlyList<EdgeActivationCodeDto>>> ListActivationCodes(CancellationToken ct) =>
+        Ok(await service.ListActivationCodesAsync(ct));
+
+    [HttpPost("activation-codes/revoke")]
+    public async Task<ActionResult<ServiceResult>> RevokeActivationCode(RevokeActivationCodeRequest request, CancellationToken ct) =>
+        Ok(await service.RevokeActivationCodeAsync(request.activationCodeId, ct));
+
+    [HttpPost("commands")]
+    public async Task<ActionResult<ServiceResult>> QueueCommand(QueueCommandRequest request, CancellationToken ct) =>
+        Ok(await service.QueueCommandAsync(request.input, ct));
+
+    [HttpGet("commands")]
+    public async Task<ActionResult<IReadOnlyList<EdgeConnectorCommandDto>>> ListCommands(CancellationToken ct) =>
+        Ok(await service.ListCommandsAsync(ct));
+
+    [HttpGet("alerts")]
+    public async Task<ActionResult<IReadOnlyList<EdgeConnectorAlertDto>>> ListAlerts(CancellationToken ct) =>
+        Ok(await service.ListAlertsAsync(ct));
+
     public sealed class TrustedIssuerRequest { public EdgeTrustedIssuerInput input { get; set; } = new(); }
     public sealed class RevokeIssuerRequest { public int issuerId { get; set; } }
     public sealed class SaveDeviceRequest { public EdgeAttendanceDeviceConfigurationInput input { get; set; } = new(); }
@@ -74,4 +98,7 @@ public sealed class EdgeAgentManagementController(EdgeAgentManagementContracts.I
     public sealed class ListPendingRequest { public EdgeReconciliationFilterInput input { get; set; } = new(); }
     public sealed class ResolvePendingReceiptRequest { public ResolvePendingReceiptInput input { get; set; } = new(); }
     public sealed class SearchStaffRequest { public EdgeStaffSearchInput input { get; set; } = new(); }
+    public sealed class CreateActivationCodeRequest { public CreateActivationCodeInput input { get; set; } = new(); }
+    public sealed class RevokeActivationCodeRequest { public int activationCodeId { get; set; } }
+    public sealed class QueueCommandRequest { public QueueConnectorCommandInput input { get; set; } = new(); }
 }
