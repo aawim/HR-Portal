@@ -702,23 +702,20 @@
     @if (editing is not null)
     {
       <div class="rounded-xl border border-blue-200 bg-blue-50/40 p-4 shadow-xs space-y-3 text-xs">
-        <h3 class="font-bold text-slate-800">@(editing.AttendanceDeviceId == 0 ? "Add Attendance / Virtual Device" : $"Configure Hardware Device #{editing.AttendanceDeviceId}")</h3>
+        <h3 class="font-bold text-slate-800">@(editing.AttendanceDeviceId == 0 ? "Add Attendance / Virtual Device" : $"Edit Hardware Device #{editing.AttendanceDeviceId}")</h3>
         <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
-          @if (editing.AttendanceDeviceId == 0)
-          {
-            <label class="block space-y-1">
-              <span class="font-medium text-slate-700">IP Address / Host *</span>
-              <input type="text" class="w-full rounded-lg border border-slate-300 p-2 bg-white" placeholder="127.0.0.1" @bind="editing.IpAddress" />
-            </label>
-            <label class="block space-y-1">
-              <span class="font-medium text-slate-700">Port</span>
-              <input type="number" class="w-full rounded-lg border border-slate-300 p-2 bg-white" placeholder="4370" @bind="editing.Port" />
-            </label>
-            <label class="block space-y-1 md:col-span-2">
-              <span class="font-medium text-slate-700">Location / Name</span>
-              <input type="text" class="w-full rounded-lg border border-slate-300 p-2 bg-white" placeholder="Virtual Biometric Device" @bind="editing.Location" />
-            </label>
-          }
+          <label class="block space-y-1">
+            <span class="font-medium text-slate-700">IP Address / Host *</span>
+            <input type="text" class="w-full rounded-lg border border-slate-300 p-2 bg-white" placeholder="127.0.0.1" @bind="editing.IpAddress" />
+          </label>
+          <label class="block space-y-1">
+            <span class="font-medium text-slate-700">Port</span>
+            <input type="number" class="w-full rounded-lg border border-slate-300 p-2 bg-white" placeholder="4370" @bind="editing.Port" />
+          </label>
+          <label class="block space-y-1 md:col-span-2">
+            <span class="font-medium text-slate-700">Location / Name</span>
+            <input type="text" class="w-full rounded-lg border border-slate-300 p-2 bg-white" placeholder="Biometric Device" @bind="editing.Location" />
+          </label>
           <label class="block space-y-1">
             <span class="font-medium text-slate-700">Organisation / Tenant *</span>
             @if (organisations.Count > 0)
@@ -736,7 +733,7 @@
             }
           </label>
           <label class="block space-y-1">
-            <span class="font-medium text-slate-700">Bound Edge Agent</span>
+            <span class="font-medium text-slate-700">Bound Edge Agent / Connector</span>
             <select class="w-full rounded-lg border border-slate-300 p-2 bg-white" @bind="editing.EdgeAttendanceAgentId">
               <option value="">(None - Unbound)</option>
               @foreach (var agent in agents.Where(a => a.IsActive && a.OrganisationId == editing.OrganisationId))
@@ -749,11 +746,17 @@
             <span class="font-medium text-slate-700">Hardware Adapter</span>
             <select class="w-full rounded-lg border border-slate-300 p-2 bg-white" @bind="editing.AdapterType">
               <option value="zkteco">ZKTeco Standalone TCP (Port 4370)</option>
+              <option value="generic-tcp">Generic TCP (JSON Lines)</option>
               <option value="generic-file">Generic File Drop (CSV / TSV / JSON)</option>
-              <option value="placeholder">Placeholder / Test Simulator</option>
+              <option value="simulator">Virtual Device Simulator (Dev Only)</option>
+              <option value="placeholder">Placeholder</option>
             </select>
           </label>
-          <label class="block space-y-1 flex items-center gap-2 pt-6">
+          <label class="block space-y-1">
+            <span class="font-medium text-slate-700">Polling Interval (Seconds)</span>
+            <input type="number" min="5" max="3600" class="w-full rounded-lg border border-slate-300 p-2 bg-white" @bind="editing.PollingIntervalSeconds" />
+          </label>
+          <label class="block space-y-1 flex items-center gap-2 pt-2 md:col-span-4">
             <input type="checkbox" class="rounded border-slate-300" @bind="editing.IsEdgeEnabled" />
             <span class="font-medium text-slate-700">Enable Edge Ingestion</span>
           </label>
@@ -1689,7 +1692,11 @@
     OrganisationId = device.OrganisationId ?? 0,
     EdgeAttendanceAgentId = device.AgentId,
     AdapterType = device.AdapterType ?? "zkteco",
-    IsEdgeEnabled = device.IsEdgeEnabled
+    IsEdgeEnabled = device.IsEdgeEnabled,
+    IpAddress = device.IpAddress,
+    Port = device.Port > 0 ? device.Port : 4370,
+    Location = device.Location,
+    PollingIntervalSeconds = device.PollingIntervalSeconds > 0 ? device.PollingIntervalSeconds : 30
   };
 
   private async Task SaveDeviceAsync()

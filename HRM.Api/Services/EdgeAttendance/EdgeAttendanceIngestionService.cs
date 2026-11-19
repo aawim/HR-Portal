@@ -60,7 +60,8 @@ public sealed class EdgeAttendanceIngestionService(IDbContextFactory<HrmTeContex
                 accepted++;
                 continue;
             }
-            var job = await db.Jobs.AsNoTracking().Where(x => x.IndividualID == enrollments[0] && x.OrganisationID == agent.OrganisationId && x.JobStateId == 4 && x.JoinedDate <= timestamp.Date && (!x.TerminatedDate.HasValue || x.TerminatedDate.Value > timestamp.Date)).OrderByDescending(x => x.JobId).FirstOrDefaultAsync(ct);
+            var localTime = ToMaldivesTime(timestamp);
+            var job = await db.Jobs.AsNoTracking().Where(x => x.IndividualID == enrollments[0] && x.OrganisationID == agent.OrganisationId && x.JobStateId == 4 && x.JoinedDate <= localTime.Date && (!x.TerminatedDate.HasValue || x.TerminatedDate.Value > localTime.Date)).OrderByDescending(x => x.JobId).FirstOrDefaultAsync(ct);
             if (job is null)
             {
                 receipt.ProcessingStatus = "PendingActiveJob";
@@ -68,7 +69,7 @@ public sealed class EdgeAttendanceIngestionService(IDbContextFactory<HrmTeContex
                 accepted++;
                 continue;
             }
-            var log = new AttendanceLog { AttendanceDeviceId = item.DeviceId, IndividualId = enrollments[0], OrganisationId = agent.OrganisationId, OrganisationStructureId = job.OrganisationStructureId, InOutModeId = 3, ActualInOutMode = 3, Date = timestamp, Year = timestamp.Year, Month = timestamp.Month, Day = timestamp.Day, Hour = timestamp.Hour, Minute = timestamp.Minute, Second = timestamp.Second, Uidstamp = hash, AttendanceLogStateId = 1, AttendanceLogModeId = 2 };
+            var log = new AttendanceLog { AttendanceDeviceId = item.DeviceId, IndividualId = enrollments[0], OrganisationId = agent.OrganisationId, OrganisationStructureId = job.OrganisationStructureId, InOutModeId = 3, ActualInOutMode = 3, Date = localTime, Year = localTime.Year, Month = localTime.Month, Day = localTime.Day, Hour = localTime.Hour, Minute = localTime.Minute, Second = localTime.Second, Uidstamp = hash, AttendanceLogStateId = 1, AttendanceLogModeId = 2 };
             db.AttendanceLogs.Add(log);
             receipt.ProcessingStatus = "Recorded";
             logsToProcess.Add((receipt, log));
@@ -142,9 +143,9 @@ public sealed class EdgeAttendanceIngestionService(IDbContextFactory<HrmTeContex
                 continue;
             }
 
-            var timestamp = receipt.DeviceTimestampUtc;
+            var localTime = ToMaldivesTime(receipt.DeviceTimestampUtc);
             var job = await db.Jobs.AsNoTracking()
-                .Where(x => x.IndividualID == enrollments[0] && x.OrganisationID == agent.OrganisationId && x.JobStateId == 4 && x.JoinedDate <= timestamp.Date && (!x.TerminatedDate.HasValue || x.TerminatedDate.Value > timestamp.Date))
+                .Where(x => x.IndividualID == enrollments[0] && x.OrganisationID == agent.OrganisationId && x.JobStateId == 4 && x.JoinedDate <= localTime.Date && (!x.TerminatedDate.HasValue || x.TerminatedDate.Value > localTime.Date))
                 .OrderByDescending(x => x.JobId)
                 .FirstOrDefaultAsync(ct);
 
@@ -162,13 +163,13 @@ public sealed class EdgeAttendanceIngestionService(IDbContextFactory<HrmTeContex
                 OrganisationStructureId = job.OrganisationStructureId,
                 InOutModeId = 3,
                 ActualInOutMode = 3,
-                Date = timestamp,
-                Year = timestamp.Year,
-                Month = timestamp.Month,
-                Day = timestamp.Day,
-                Hour = timestamp.Hour,
-                Minute = timestamp.Minute,
-                Second = timestamp.Second,
+                Date = localTime,
+                Year = localTime.Year,
+                Month = localTime.Month,
+                Day = localTime.Day,
+                Hour = localTime.Hour,
+                Minute = localTime.Minute,
+                Second = localTime.Second,
                 Uidstamp = receipt.EventHash,
                 AttendanceLogStateId = 1,
                 AttendanceLogModeId = 2
@@ -236,6 +237,9 @@ public sealed class EdgeAttendanceIngestionService(IDbContextFactory<HrmTeContex
         timestamp = item.DeviceTimestamp.ToUniversalTime();
         return timestamp >= DateTime.UtcNow.AddDays(-90) && timestamp <= DateTime.UtcNow.AddMinutes(5);
     }
+    private static DateTime ToMaldivesTime(DateTime utcTimestamp) =>
+        DateTime.SpecifyKind(utcTimestamp.Kind == DateTimeKind.Utc ? utcTimestamp : utcTimestamp.ToUniversalTime(), DateTimeKind.Unspecified).AddHours(5);
+
     private static string Hash(int agentId, int deviceId, string user, DateTime timestamp, string eventId) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes($"{agentId}|{deviceId}|{user.Trim()}|{timestamp.Ticks}|{eventId.Trim()}")));
     private static void AddFailure(HrmTeContext db, int agentId, int? deviceId, string code, string detail) => db.EdgeAttendanceIngestionFailures.Add(new EdgeAttendanceIngestionFailure { EdgeAttendanceAgentId = agentId, AttendanceDeviceId = deviceId, FailureCode = code, Detail = detail, OccurredAtUtc = DateTime.UtcNow });
 }

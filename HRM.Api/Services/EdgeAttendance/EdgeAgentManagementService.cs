@@ -83,7 +83,10 @@ public sealed class EdgeAgentManagementService(
             x.AdapterType,
             x.EdgeAttendanceAgentId,
             x.IsEdgeEnabled,
-            30)).ToListAsync(ct);
+            db.EdgeAttendanceAgentDevices
+                .Where(b => b.AttendanceDeviceId == x.AttendanceDeviceId && b.IsActive)
+                .Select(b => (int?)b.PollingIntervalSeconds)
+                .FirstOrDefault() ?? 30)).ToListAsync(ct);
     }
 
     public async Task<IReadOnlyList<EdgeAttendanceIngestionFailureDto>> ListFailuresAsync(CancellationToken ct = default)
@@ -200,10 +203,25 @@ public sealed class EdgeAgentManagementService(
         {
             device = await db.AttendanceDevices.SingleOrDefaultAsync(x => x.AttendanceDeviceId == i.AttendanceDeviceId, ct);
             if (device == null) return ServiceResult.Fail("Attendance device not found.");
+
+            if (!string.IsNullOrWhiteSpace(i.IpAddress))
+                device.Ipaddress = i.IpAddress.Trim();
+            if (i.Port is > 0 and <= 65535)
+                device.Port = i.Port.Value;
+            if (i.Location is not null)
+                device.Location = string.IsNullOrWhiteSpace(i.Location) ? "Biometric Device" : i.Location.Trim();
         }
 
+        var previousAgentId = device.EdgeAttendanceAgentId;
         var bindings = await db.EdgeAttendanceAgentDevices.Where(x => x.AttendanceDeviceId == i.AttendanceDeviceId).ToListAsync(ct);
         foreach (var binding in bindings) binding.IsActive = false;
+
+        if (previousAgentId.HasValue && previousAgentId != i.EdgeAttendanceAgentId)
+        {
+            var prevAgent = await db.EdgeAttendanceAgents.SingleOrDefaultAsync(a => a.EdgeAttendanceAgentId == previousAgentId.Value, ct);
+            if (prevAgent is not null)
+                prevAgent.ConfigurationVersion++;
+        }
 
         if (i.EdgeAttendanceAgentId.HasValue)
         {
@@ -391,8 +409,8 @@ public sealed class EdgeAgentManagementService(
         var agent = await db.EdgeAttendanceAgents.SingleOrDefaultAsync(a => a.EdgeAttendanceAgentId == receipt.EdgeAttendanceAgentId, ct);
         if (agent is null) return ServiceResult.Fail("Edge agent not found.");
 
-        var timestamp = receipt.DeviceTimestampUtc;
-        var job = await db.Jobs.AsNoTracking().Where(x => x.IndividualID == input.IndividualId && x.OrganisationID == agent.OrganisationId && x.JobStateId == 4 && x.JoinedDate <= timestamp.Date && (!x.TerminatedDate.HasValue || x.TerminatedDate.Value > timestamp.Date)).OrderByDescending(x => x.JobId).FirstOrDefaultAsync(ct);
+        var localTime = DateTime.SpecifyKind(receipt.DeviceTimestampUtc, DateTimeKind.Unspecified).AddHours(5);
+        var job = await db.Jobs.AsNoTracking().Where(x => x.IndividualID == input.IndividualId && x.OrganisationID == agent.OrganisationId && x.JobStateId == 4 && x.JoinedDate <= localTime.Date && (!x.TerminatedDate.HasValue || x.TerminatedDate.Value > localTime.Date)).OrderByDescending(x => x.JobId).FirstOrDefaultAsync(ct);
         if (job is null)
             return ServiceResult.Fail("The selected staff member has no active job in this organisation covering the event timestamp.");
 
@@ -423,13 +441,13 @@ public sealed class EdgeAgentManagementService(
             OrganisationStructureId = job.OrganisationStructureId,
             InOutModeId = 3,
             ActualInOutMode = 3,
-            Date = timestamp,
-            Year = timestamp.Year,
-            Month = timestamp.Month,
-            Day = timestamp.Day,
-            Hour = timestamp.Hour,
-            Minute = timestamp.Minute,
-            Second = timestamp.Second,
+            Date = localTime,
+            Year = localTime.Year,
+            Month = localTime.Month,
+            Day = localTime.Day,
+            Hour = localTime.Hour,
+            Minute = localTime.Minute,
+            Second = localTime.Second,
             Uidstamp = receipt.EventHash,
             AttendanceLogStateId = 1,
             AttendanceLogModeId = 2
