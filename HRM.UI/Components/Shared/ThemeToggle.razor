@@ -47,7 +47,6 @@
             _userId = settings.UserId;
             await JS.InvokeVoidAsync("hrmTheme.initialize", settings.ThemeMode, _userId);
             await JS.InvokeVoidAsync("hrmFontSize.initialize", settings.FontSizePercent, _userId);
-            _ready = true;
             _error = null;
         }
         catch (Exception ex) when (_disposed || ex is JSDisconnectedException || ex is TaskCanceledException || ex is ObjectDisposedException)
@@ -56,8 +55,11 @@
         }
         catch (Exception ex)
         {
-            Logger.LogError(ex, "Could not load theme preference");
-            _error = "Your theme setting could not be loaded.";
+            Logger.LogWarning(ex, "Could not load theme preference from server; using local theme.");
+        }
+        finally
+        {
+            if (!_disposed) _ready = true;
         }
     }
 
@@ -70,8 +72,18 @@
         {
             var current = await JS.InvokeAsync<string>("hrmTheme.get");
             var next = current == "dark" ? "light" : "dark";
-            if (_userId.HasValue) await Preferences.SaveThemeAsync(next, _userId.Value);
             await JS.InvokeVoidAsync("hrmTheme.set", next);
+            if (_userId.HasValue)
+            {
+                try
+                {
+                    await Preferences.SaveThemeAsync(next, _userId.Value);
+                }
+                catch (Exception ex) when (!(_disposed || ex is JSDisconnectedException || ex is TaskCanceledException || ex is ObjectDisposedException))
+                {
+                    Logger.LogWarning(ex, "Theme switched locally but could not be persisted to server preferences.");
+                }
+            }
         }
         catch (Exception ex) when (_disposed || ex is JSDisconnectedException || ex is TaskCanceledException || ex is ObjectDisposedException)
         {
@@ -79,8 +91,8 @@
         }
         catch (Exception ex)
         {
-            Logger.LogError(ex, "Could not save theme preference");
-            _error = "Your theme setting could not be saved. Please try again or reload the page.";
+            Logger.LogError(ex, "Could not switch theme preference");
+            _error = "Your theme setting could not be updated. Please try again.";
         }
         finally
         {

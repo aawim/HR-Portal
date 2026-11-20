@@ -7,7 +7,7 @@
 
 @rendermode RenderMode.InteractiveServer
 
-<PageTitle>Settings - HR Portal</PageTitle>
+<PageTitle>HR - HR Portal</PageTitle>
 
 <AuthorizeView>
     <Authorized>
@@ -68,8 +68,8 @@
             new("Performance", "performance", "📈", "Open performance management.", "/admin/performance", "Admin", "Performance.View", "Performance.Manage"),
             new("Payroll", "payroll", "💵", "Manage payroll periods, processing and reports.", "/admin/payroll", "Admin", "Payroll.View", "Payroll.Review"),
             new("Budget", "budget", "📊", "Manage budget allocations, transactions and reports.", "/admin/budget", "Admin", "Budget.View", "Budget.Manage"),
-            new("Duty roster", "duty-roster", "🗓️", "View scheduled duties, transfers and swaps.", "/admin/hr/work-planning/duty-roster", "Admin", "WorkPlanning.Manage", "DutyRoster.View"),
-            new("Work handovers", "work-handovers", "🤝", "Review work handovers and their approvals.", "/admin/hr/work-handovers", "Admin", "Leave.View", "Leave.Approve"),
+            new("Duty Roster", "duty-roster", "🗓️", "View scheduled duties, transfers and swaps.", "/admin/hr/work-planning/duty-roster", "Admin", "WorkPlanning.Manage", "DutyRoster.View"),
+            new("Work Handovers", "work-handovers", "🤝", "Review work handovers and their approvals.", "/admin/hr/work-handovers", "Admin", "Leave.View", "Leave.Approve"),
             new("Staff", "staff", "💼", "Manage employee records, job assignments, and employment history.", "/admin/hr/staff/manage", "Admin", "Employee.View", "Staff.Details"),
             new("Staff Transfers", "staff-transfers", "🔄", "Initiate, confirm, approve and schedule internal staff transfers.", "/admin/hr/staff-transfers", "Admin", "Staff.Transfer", "Employee.View"),
             new("Staff Separation", "separations", "🚪", "Manage employee resignations, clearances, handovers, asset returns, and offboarding.", "/admin/hr/separations", "Admin", "Staff.Separation", "Employee.View"),
@@ -90,7 +90,7 @@
             try
             {
                 var actor = await UserAccess.RequireContextAsync();
-                var allowedUrls = new HashSet<string> { "individuals", "staff", "staff-transfers", "separations", "documents", "slogans", "groups", "staff-groups", "items", "supervisors", "departments", "requests", "attendance", "performance", "payroll", "budget", "duty-roster", "work-handovers" };
+                var allowedUrls = new HashSet<string> { "individuals", "staff", "staff-transfers", "separations", "documents", "slogans", "groups", "staff-groups", "items", "supervisors", "departments", "requests", "attendance", "payroll", "budget", "duty-roster", "work-handovers" };
                 var candidates = mainCategories.Where(c => allowedUrls.Contains(c.Url)).ToList();
 
                 var isAdmin = actor.IsSuperAdministrator || await UserAccess.HasPermissionAsync("Admin");

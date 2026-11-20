@@ -9,22 +9,32 @@
 
 
 @inject NavigationManager Navigation
- 
+@inject IUserAccessService UserAccess
 @inject HRM.Application.Contracts.Pages.ILeaveApplications LeaveService
-
-
 
 @rendermode RenderMode.InteractiveServer
 
-<PageTitle>Settings - HR Portal</PageTitle>
+<PageTitle>Attendance - HR Portal</PageTitle>
 
 <AuthorizeView>
     <Authorized>
+        @if (checkingAccess)
+        {
+            <div class="rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-500">Checking attendance permissions…</div>
+        }
+        else if (!canAccess)
+        {
+            <div class="rounded-xl border border-amber-200 bg-amber-50 p-6 text-sm text-amber-900">
+                You do not have permission to access Attendance Management.
+            </div>
+        }
+        else
+        {
         <div class="min-w-0 w-full mx-auto">
             <!-- Back Button -->
             <a href="/admin/attendance" class="text-slate-400 hover:text-slate-600 text-sm mb-2 flex items-center gap-1 transition-colors w-fit">
                 <AppIcon Name="arrow_back" Class="w-4 h-4 text-base" />
-                Back to Settings Hub
+                Back to Attendance
             </a>
 
             <!-- Main Responsive Layout: Stacks vertically on mobile, side-by-side on md+ screens -->
@@ -108,6 +118,7 @@
                 </div>
             </div>
         </div>
+        }
     </Authorized>
 
     <NotAuthorized>
@@ -122,6 +133,27 @@
 @code {
     [Parameter] public string CategoryName { get; set; } = string.Empty;
     [Parameter] public string? Page { get; set; }
+    private bool checkingAccess = true;
+    private bool canAccess;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var actor = await UserAccess.RequireContextAsync();
+            var isAdmin = actor.IsSuperAdministrator || await UserAccess.HasPermissionAsync("Admin");
+            var isHr = await UserAccess.HasUserGroupAsync("Human Resource: Staff") || await UserAccess.HasUserGroupAsync("Human Resource :Head");
+            canAccess = isAdmin || isHr || await UserAccess.HasPermissionAsync("Attendance.View") || await UserAccess.HasPermissionAsync("Attendance.Manage") || await UserAccess.HasPermissionAsync("Leave.View") || await UserAccess.HasPermissionAsync("Leave.Approve");
+        }
+        catch
+        {
+            canAccess = false;
+        }
+        finally
+        {
+            checkingAccess = false;
+        }
+    }
     protected override void OnParametersSet()
     {
         if (CategoryName.Equals("manage-leaves", StringComparison.OrdinalIgnoreCase) &&

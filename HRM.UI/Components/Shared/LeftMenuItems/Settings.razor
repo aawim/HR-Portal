@@ -78,7 +78,7 @@
             new("Configurations", "config", "bi-gear", "Manage job types, request approval flows and application configuration.", "Admin", "Configuration.View", "WorkTypes.Manage"),
             new("Roles & Permissions", "roles", "bi-shield-lock", "Manage roles (user groups) and grouped permissions.", "Admin", "Roles.View", "UserOrganisation.Groups.View", "Organisation.Groups.View", "Developer"),
             new("Positions", "positions", "bi-briefcase", "Manage job positions and configurations.", "Admin", "Position.Details", "Staff.Positions.Manage", "Positions.Configure"),
-            new("Work Planning", "workplaning", "bi-calendar3", "Manage work templates, schedules.", "Admin", "WorkPlanning.Manage", "Schedules.Manage", "Configuration.View"),
+            new("Work Planning", "work-planning", "bi-calendar3", "Manage work templates, schedules.", "Admin", "WorkPlanning.Manage", "Schedules.Manage", "Configuration.View"),
             new("Projects & Tasks", "projects", "bi-kanban", "Manage organization projects, departments, deliverables, milestones, and task assignments.", "Admin", "Project.Manage", "Project.View", "Configuration.View")
          };
 
@@ -87,7 +87,7 @@
             try
             {
                 var actor = await UserAccess.RequireContextAsync();
-                var allowedUrls = new HashSet<string> { "user", "org", "requests", "leaves", "config", "roles", "positions", "workplaning", "projects" };
+                var allowedUrls = new HashSet<string> { "user", "org", "requests", "leaves", "config", "roles", "positions", "work-planning", "projects" };
                 var candidates = mainCategories.Where(c => allowedUrls.Contains(c.Url)).ToList();
 
                 if (actor.IsSuperAdministrator || await UserAccess.HasPermissionAsync("Admin"))

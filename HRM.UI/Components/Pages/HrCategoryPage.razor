@@ -16,12 +16,25 @@
 
 
 @inject HRM.Application.Contracts.Pages.ILeaveApplications LeaveService
+@inject IUserAccessService UserAccess
 @rendermode RenderMode.InteractiveServer
 
 <PageTitle>@(CategoryName.Equals("requests", StringComparison.OrdinalIgnoreCase) ? "Received Requests - HR Portal" : "HR Portal")</PageTitle>
 
 <AuthorizeView>
     <Authorized>
+        @if (checkingAccess)
+        {
+            <div class="m-4 rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-500">Checking HR permissions…</div>
+        }
+        else if (!canAccessCategory)
+        {
+            <div class="m-4 rounded-xl border border-amber-200 bg-amber-50 p-6 text-sm text-amber-900">
+                You do not have permission to access this HR section.
+            </div>
+        }
+        else
+        {
         <div class="max-w-12xl mx-auto py-0 px-4">
             <!-- Back Button -->
             @if (!CategoryName.Equals("departments", StringComparison.OrdinalIgnoreCase) && !CategoryName.Equals("groups", StringComparison.OrdinalIgnoreCase))
@@ -103,6 +116,7 @@
                 </div>
             </div>
         </div>
+        }
     </Authorized>
 
     <NotAuthorized>
@@ -135,6 +149,27 @@
         {
             var current=new Uri(Navigation.Uri);
             Navigation.NavigateTo("/admin/hr/staff/manage"+current.Query+current.Fragment,replace:true);return;
+        }
+        if(CategoryName.Equals("staff",StringComparison.OrdinalIgnoreCase) && Section is "transfers" or "separations" or "certificates" or "document-centre")
+        {
+            var target = Section switch
+            {
+                "transfers" => "/admin/hr/staff-transfers",
+                "separations" => "/admin/hr/separations",
+                "certificates" => "/admin/hr/certificates",
+                _ => "/admin/hr/documents"
+            };
+            Navigation.NavigateTo(target,replace:true);return;
+        }
+        if(CategoryName.Equals("requests",StringComparison.OrdinalIgnoreCase) && Section is "transfers" or "certificate-requests" or "document-requests")
+        {
+            var target = Section switch
+            {
+                "transfers" => "/admin/hr/staff-transfers",
+                "certificate-requests" => "/admin/hr/certificates",
+                _ => "/admin/hr/documents"
+            };
+            Navigation.NavigateTo(target,replace:true);return;
         }
         if(CategoryName.Equals("groups",StringComparison.OrdinalIgnoreCase) && Section is not ("management" or "group-type"))
         {
@@ -179,26 +214,19 @@
     private List<SubItem> GetSubItems(string cat) => cat.ToLower() switch
     {
         "staff" => new() {
-            new("Search", "🔍", "Find active and past employee records.", typeof(StaffSearchGrid)),
-            new("Staff Transfers", "🔄", "Initiate, confirm, approve and schedule internal staff transfers.", typeof(StaffTransferManagementPage)),
-            new("Staff Separation", "🚪", "Manage employee resignations, clearances, handovers, asset returns, and offboarding.", typeof(HRM.Components.Admin.Hr.Separations.StaffSeparationManagementPage)),
-            new("Certificates", "📜", "Manage employee certificates, review requests and official issuance.", typeof(HRM.Components.Admin.Hr.Certificates.CertificateAdminPanel)),
-            new("Document Centre", "🗂️", "Central enterprise document repository, staff dossiers, templates and records governance.", typeof(HRM.Components.Admin.Hr.Documents.DocumentCentreAdminPanel)),
-            new("Former Staff", "📁", "Read-only staff history and attendance.",typeof(FormerStaff)),
             new("Manage Staff", "👥", "Manage staff records, departments, groups, and profiles.", typeof(HRM.Components.Admin.Hr.Staff.StaffManagementPage)),
+            new("Search", "🔍", "Find active and past employee records.", typeof(StaffSearchGrid)),
+            new("Former Staff", "📁", "Read-only staff history and attendance.",typeof(FormerStaff)),
             new("Staff Enrollment", "🪪", "Manage organisation staff enrollment numbers.", typeof(HRM.Components.Admin.Settings.Users.StaffEnrollmentNumberGrid)),
             new("Employee Bulk Upload", "📤", "Import multiple employee records using a spreadsheet.", typeof(EmployeeBulkUpload))
         },
 
         "departments" => new() {
             new("Departments Management", "🏢", "View approved departments, supervisors and staff.", typeof(HRM.Components.Admin.Hr.Group.DepartmentManagement)),
-            new("Department Metrix", "📊", "Department status, workforce capacity and leave overview.", typeof(HRM.Components.Admin.Hr.Group.DepartmentMatrix)),
+            new("Department Matrix", "📊", "Department status, workforce capacity and leave overview.", typeof(HRM.Components.Admin.Hr.Group.DepartmentMatrix)),
         },
         "requests" => new() {
             new("Received Requests", "📥", "Received requests grouped by Request Type.", typeof(HRM.Components.Admin.Hr.Group.HrRequestsInbox)),
-            new("Staff Transfers", "🔄", "Internal staff transfer requests and approvals.", typeof(StaffTransferManagementPage)),
-            new("Certificate Requests", "📜", "Employee certificate requests, review and official issuance.", typeof(HRM.Components.Admin.Hr.Certificates.CertificateAdminPanel)),
-            new("Document Requests", "🗂️", "Employee official document requests, templates and issuance.", typeof(HRM.Components.Admin.Hr.Documents.DocumentCentreAdminPanel)),
         },
         "supervisors" => new() {
             new("Supervisors Management", "👥", "Assign department and team supervisors.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationTeamSettings)),
@@ -236,9 +264,70 @@
     private Task<AuthenticationState>? AuthState { get; set; }
 
     private List<HRM.DTOs.Leave.JobLeaveTypeDto>? leaveBalances;
+    private bool checkingAccess = true;
+    private bool canAccessCategory;
+    private string? checkedCategory;
+
+    private static string[] GetCategoryPermissions(string category) => category.Trim().ToLowerInvariant() switch
+    {
+        "staff" => ["Admin", "Employee.View", "Staff.Details"],
+        "departments" => ["Admin", "Organisation.View", "Employee.View"],
+        "requests" => ["Admin", "Requests.View", "Employee.View"],
+        "supervisors" => ["Admin", "Organisation.Manage", "Team.Manage"],
+        "groups" => ["Admin", "Groups.Manage", "Employee.View"],
+        "items" => ["Admin", "Items.View", "Items.Manage"],
+        _ => ["Admin", "Employee.View"]
+    };
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var category = (CategoryName ?? string.Empty).Trim().ToLowerInvariant();
+        if (string.Equals(checkedCategory, category, StringComparison.OrdinalIgnoreCase))
+            return;
+
+        checkingAccess = true;
+        canAccessCategory = false;
+        try
+        {
+            var actor = await UserAccess.RequireContextAsync();
+            var isAdmin = actor.IsSuperAdministrator || await UserAccess.HasPermissionAsync("Admin");
+            var isHr = await UserAccess.HasUserGroupAsync("Human Resource: Staff") || await UserAccess.HasUserGroupAsync("Human Resource :Head");
+            if (isAdmin || isHr)
+            {
+                canAccessCategory = true;
+            }
+            else
+            {
+                foreach (var perm in GetCategoryPermissions(category))
+                {
+                    if (await UserAccess.HasPermissionAsync(perm))
+                    {
+                        canAccessCategory = true;
+                        break;
+                    }
+                }
+            }
+            checkedCategory = category;
+        }
+        catch
+        {
+            canAccessCategory = false;
+        }
+        finally
+        {
+            checkingAccess = false;
+        }
+    }
 
     protected override async Task OnInitializedAsync()
     {
-        leaveBalances = await LeaveService.GetMyLeaveBalancesAsync();
+        try
+        {
+            leaveBalances = await LeaveService.GetMyLeaveBalancesAsync();
+        }
+        catch
+        {
+            leaveBalances = new();
+        }
     }
 }

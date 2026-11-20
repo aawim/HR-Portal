@@ -48,7 +48,7 @@
 
 <PageTitle>Admin Workspace - HR Portal</PageTitle>
 
-<section class="my-workspace-page w-full min-w-0 p-2 flex flex-col gap-2 bg-slate-50/50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-all duration-300 @(isFullWidth ? "max-w-none" : "max-w-7xl mx-auto")">
+<section class="my-workspace-page w-full min-w-0 p-2 flex flex-col gap-2 bg-slate-50/50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
     
     <!-- Top Header Area Matching HRM.UI Standard -->
     <div class="my-workspace-header staff-overview-no-print flex flex-col gap-2 p-2">
@@ -154,7 +154,7 @@
             <button type="button"
                     class="rounded-t-xl px-4 py-2 font-bold text-xs md:text-sm transition-all border-t border-l border-r @(activeWorkspaceTab == "Organisation" ? "bg-teal-700 dark:bg-teal-600 text-white border-teal-700 dark:border-teal-600 shadow-sm" : "bg-[#86b0be]/30 text-slate-700 hover:text-slate-900 hover:bg-[#86b0be]/50 dark:bg-slate-800/90 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-700 border-slate-300 dark:border-slate-700")"
                     @onclick="OpenMyOrganisation">
-                MyOrganisation
+                My Organisation
             </button>
             @if (inspectedStaffId.HasValue)
             {
@@ -178,6 +178,7 @@
     <!-- ======================================================== -->
     <!-- TAB: STAFF WORKSPACE (Full Width Dedicated Employee Workspace) -->
     <!-- ======================================================== -->
+    <div class="w-full min-w-0 flex flex-col gap-2 transition-all duration-300 @(isFullWidth ? "max-w-none" : "max-w-7xl mx-auto")">
     @if (activeWorkspaceTab == "Staff" && inspectedStaffId.HasValue)
     {
         <div class="flex flex-col gap-2 p-2">
@@ -422,59 +423,106 @@
             <div class="org-workspace-tabs w-full border-b-2 border-emerald-600 dark:border-emerald-500 overflow-x-auto">
                 <nav class="flex items-end gap-1 min-w-max pb-0" aria-label="Organisation Workspace Tabs">
                     <button type="button"
-                            class="rounded-t-xl px-3.5 py-1.5 font-bold text-xs transition-all border-t border-l border-r @(inspectedOrgTab == WorkspaceTab.Overview ? "bg-emerald-600 dark:bg-emerald-500 text-white border-emerald-600 dark:border-emerald-500 shadow-sm" : "bg-emerald-50/80 hover:bg-emerald-100 text-emerald-950 dark:bg-slate-800 dark:text-slate-300 border-emerald-200/90 dark:border-slate-700")"
+                            class="rounded-t-xl px-3.5 py-1.5 font-bold text-xs transition-all border-t border-l border-r @(inspectedOrgSettingsTab == null && inspectedOrgTab == WorkspaceTab.Overview ? "bg-emerald-600 dark:bg-emerald-500 text-white border-emerald-600 dark:border-emerald-500 shadow-sm" : "bg-emerald-50/80 hover:bg-emerald-100 text-emerald-950 dark:bg-slate-800 dark:text-slate-300 border-emerald-200/90 dark:border-slate-700")"
                             @onclick="() => SetOrgTab(WorkspaceTab.Overview)">
                         Overview
                     </button>
                     <button type="button"
-                            class="rounded-t-xl px-3.5 py-1.5 font-bold text-xs transition-all border-t border-l border-r @(inspectedOrgTab == WorkspaceTab.Staff ? "bg-emerald-600 dark:bg-emerald-500 text-white border-emerald-600 dark:border-emerald-500 shadow-sm" : "bg-emerald-50/80 hover:bg-emerald-100 text-emerald-950 dark:bg-slate-800 dark:text-slate-300 border-emerald-200/90 dark:border-slate-700")"
+                            class="rounded-t-xl px-3.5 py-1.5 font-bold text-xs transition-all border-t border-l border-r @(inspectedOrgSettingsTab == null && inspectedOrgTab == WorkspaceTab.Staff ? "bg-emerald-600 dark:bg-emerald-500 text-white border-emerald-600 dark:border-emerald-500 shadow-sm" : "bg-emerald-50/80 hover:bg-emerald-100 text-emerald-950 dark:bg-slate-800 dark:text-slate-300 border-emerald-200/90 dark:border-slate-700")"
                             @onclick="() => SetOrgTab(WorkspaceTab.Staff)">
                         Staff
                     </button>
                     <button type="button"
-                            class="rounded-t-xl px-3.5 py-1.5 font-bold text-xs transition-all border-t border-l border-r @(inspectedOrgTab == WorkspaceTab.Departments ? "bg-emerald-600 dark:bg-emerald-500 text-white border-emerald-600 dark:border-emerald-500 shadow-sm" : "bg-emerald-50/80 hover:bg-emerald-100 text-emerald-950 dark:bg-slate-800 dark:text-slate-300 border-emerald-200/90 dark:border-slate-700")"
+                            class="rounded-t-xl px-3.5 py-1.5 font-bold text-xs transition-all border-t border-l border-r @(inspectedOrgSettingsTab == null && inspectedOrgTab == WorkspaceTab.Departments ? "bg-emerald-600 dark:bg-emerald-500 text-white border-emerald-600 dark:border-emerald-500 shadow-sm" : "bg-emerald-50/80 hover:bg-emerald-100 text-emerald-950 dark:bg-slate-800 dark:text-slate-300 border-emerald-200/90 dark:border-slate-700")"
                             @onclick="() => SetOrgTab(WorkspaceTab.Departments)">
                         Departments
                     </button>
                     <button type="button"
-                            class="rounded-t-xl px-3.5 py-1.5 font-bold text-xs transition-all border-t border-l border-r @(inspectedOrgTab == WorkspaceTab.Teams ? "bg-emerald-600 dark:bg-emerald-500 text-white border-emerald-600 dark:border-emerald-500 shadow-sm" : "bg-emerald-50/80 hover:bg-emerald-100 text-emerald-950 dark:bg-slate-800 dark:text-slate-300 border-emerald-200/90 dark:border-slate-700")"
+                            class="rounded-t-xl px-3.5 py-1.5 font-bold text-xs transition-all border-t border-l border-r @(inspectedOrgSettingsTab == null && inspectedOrgTab == WorkspaceTab.Teams ? "bg-emerald-600 dark:bg-emerald-500 text-white border-emerald-600 dark:border-emerald-500 shadow-sm" : "bg-emerald-50/80 hover:bg-emerald-100 text-emerald-950 dark:bg-slate-800 dark:text-slate-300 border-emerald-200/90 dark:border-slate-700")"
                             @onclick="() => SetOrgTab(WorkspaceTab.Teams)">
                         Teams
                     </button>
                     @if (currentUserContext?.IsSuperAdministrator == true)
                     {
                         <button type="button"
-                                class="rounded-t-xl px-3.5 py-1.5 font-bold text-xs transition-all border-t border-l border-r @(inspectedOrgTab == WorkspaceTab.AssignedRoles ? "bg-emerald-600 dark:bg-emerald-500 text-white border-emerald-600 dark:border-emerald-500 shadow-sm" : "bg-emerald-50/80 hover:bg-emerald-100 text-emerald-950 dark:bg-slate-800 dark:text-slate-300 border-emerald-200/90 dark:border-slate-700")"
+                                class="rounded-t-xl px-3.5 py-1.5 font-bold text-xs transition-all border-t border-l border-r @(inspectedOrgSettingsTab == null && inspectedOrgTab == WorkspaceTab.AssignedRoles ? "bg-emerald-600 dark:bg-emerald-500 text-white border-emerald-600 dark:border-emerald-500 shadow-sm" : "bg-emerald-50/80 hover:bg-emerald-100 text-emerald-950 dark:bg-slate-800 dark:text-slate-300 border-emerald-200/90 dark:border-slate-700")"
                                 @onclick="() => SetOrgTab(WorkspaceTab.AssignedRoles)">
                             Roles
                         </button>
                         <button type="button"
-                                class="rounded-t-xl px-3.5 py-1.5 font-bold text-xs transition-all border-t border-l border-r @(inspectedOrgTab == WorkspaceTab.Permissions ? "bg-emerald-600 dark:bg-emerald-500 text-white border-emerald-600 dark:border-emerald-500 shadow-sm" : "bg-emerald-50/80 hover:bg-emerald-100 text-emerald-950 dark:bg-slate-800 dark:text-slate-300 border-emerald-200/90 dark:border-slate-700")"
+                                class="rounded-t-xl px-3.5 py-1.5 font-bold text-xs transition-all border-t border-l border-r @(inspectedOrgSettingsTab == null && inspectedOrgTab == WorkspaceTab.Permissions ? "bg-emerald-600 dark:bg-emerald-500 text-white border-emerald-600 dark:border-emerald-500 shadow-sm" : "bg-emerald-50/80 hover:bg-emerald-100 text-emerald-950 dark:bg-slate-800 dark:text-slate-300 border-emerald-200/90 dark:border-slate-700")"
                                 @onclick="() => SetOrgTab(WorkspaceTab.Permissions)">
                             Permissions
                         </button>
                     }
                     <button type="button"
-                            class="rounded-t-xl px-3.5 py-1.5 font-bold text-xs transition-all border-t border-l border-r @(inspectedOrgTab == WorkspaceTab.LeaveType ? "bg-emerald-600 dark:bg-emerald-500 text-white border-emerald-600 dark:border-emerald-500 shadow-sm" : "bg-emerald-50/80 hover:bg-emerald-100 text-emerald-950 dark:bg-slate-800 dark:text-slate-300 border-emerald-200/90 dark:border-slate-700")"
+                            class="rounded-t-xl px-3.5 py-1.5 font-bold text-xs transition-all border-t border-l border-r @(inspectedOrgSettingsTab == null && inspectedOrgTab == WorkspaceTab.LeaveType ? "bg-emerald-600 dark:bg-emerald-500 text-white border-emerald-600 dark:border-emerald-500 shadow-sm" : "bg-emerald-50/80 hover:bg-emerald-100 text-emerald-950 dark:bg-slate-800 dark:text-slate-300 border-emerald-200/90 dark:border-slate-700")"
                             @onclick="() => SetOrgTab(WorkspaceTab.LeaveType)">
                         Leave Types
                     </button>
                     <button type="button"
-                            class="rounded-t-xl px-3.5 py-1.5 font-bold text-xs transition-all border-t border-l border-r @(inspectedOrgTab == WorkspaceTab.Documents ? "bg-emerald-600 dark:bg-emerald-500 text-white border-emerald-600 dark:border-emerald-500 shadow-sm" : "bg-emerald-50/80 hover:bg-emerald-100 text-emerald-950 dark:bg-slate-800 dark:text-slate-300 border-emerald-200/90 dark:border-slate-700")"
+                            class="rounded-t-xl px-3.5 py-1.5 font-bold text-xs transition-all border-t border-l border-r @(inspectedOrgSettingsTab == null && inspectedOrgTab == WorkspaceTab.Documents ? "bg-emerald-600 dark:bg-emerald-500 text-white border-emerald-600 dark:border-emerald-500 shadow-sm" : "bg-emerald-50/80 hover:bg-emerald-100 text-emerald-950 dark:bg-slate-800 dark:text-slate-300 border-emerald-200/90 dark:border-slate-700")"
                             @onclick="() => SetOrgTab(WorkspaceTab.Documents)">
                         Documents
                     </button>
                     <button type="button"
-                            class="rounded-t-xl px-3.5 py-1.5 font-bold text-xs transition-all border-t border-l border-r @(inspectedOrgTab == WorkspaceTab.Attendance ? "bg-emerald-600 dark:bg-emerald-500 text-white border-emerald-600 dark:border-emerald-500 shadow-sm" : "bg-emerald-50/80 hover:bg-emerald-100 text-emerald-950 dark:bg-slate-800 dark:text-slate-300 border-emerald-200/90 dark:border-slate-700")"
+                            class="rounded-t-xl px-3.5 py-1.5 font-bold text-xs transition-all border-t border-l border-r @(inspectedOrgSettingsTab == null && inspectedOrgTab == WorkspaceTab.Attendance ? "bg-emerald-600 dark:bg-emerald-500 text-white border-emerald-600 dark:border-emerald-500 shadow-sm" : "bg-emerald-50/80 hover:bg-emerald-100 text-emerald-950 dark:bg-slate-800 dark:text-slate-300 border-emerald-200/90 dark:border-slate-700")"
                             @onclick="() => SetOrgTab(WorkspaceTab.Attendance)">
                         Org Daily
                     </button>
+                    @if (canManageOrgSettings)
+                    {
+                        @foreach (var settingsTab in OrgSettingsTabs)
+                        {
+                            var isSettingsActive = string.Equals(inspectedOrgSettingsTab, settingsTab.Key, StringComparison.OrdinalIgnoreCase);
+                            <button type="button"
+                                    class="rounded-t-xl px-3.5 py-1.5 font-bold text-xs transition-all border-t border-l border-r @(isSettingsActive ? "bg-emerald-600 dark:bg-emerald-500 text-white border-emerald-600 dark:border-emerald-500 shadow-sm" : "bg-emerald-50/80 hover:bg-emerald-100 text-emerald-950 dark:bg-slate-800 dark:text-slate-300 border-emerald-200/90 dark:border-slate-700")"
+                                    @onclick="() => SetOrgSettingsTab(settingsTab.Key)">
+                                @settingsTab.Label
+                            </button>
+                        }
+                    }
                 </nav>
             </div>
 
             <!-- Organisation Workspace Body -->
             <div class="w-full min-w-0 flex flex-col gap-2">
-                <OrganisationWorkspace OrganisationId="inspectedOrgId.Value" ActiveTab="inspectedOrgTab" IsSuperAdmin="@(currentUserContext?.IsSuperAdministrator == true)" OnStaffSelected="SelectSearchResult" OnLoaded="OnOrgLoaded" />
+                @if (string.IsNullOrEmpty(inspectedOrgSettingsTab) || !canManageOrgSettings)
+                {
+                    <OrganisationWorkspace OrganisationId="inspectedOrgId.Value" ActiveTab="inspectedOrgTab" IsSuperAdmin="@(currentUserContext?.IsSuperAdministrator == true)" HideHeader="true" OnStaffSelected="SelectSearchResult" OnLoaded="OnOrgLoaded" />
+                }
+                else
+                {
+                    <div class="w-full min-w-0 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-2xs">
+                        @switch (inspectedOrgSettingsTab)
+                        {
+                            case "manage":
+                                <HRM.Components.Admin.Settings.Organisations.OrganisationSettingsEditor @key="inspectedOrgId.Value" InitialOrganisationId="inspectedOrgId.Value" HideHeader="true" />
+                                break;
+                            case "document-types":
+                                <HRM.Components.Admin.Hr.Documents.DocumentCentreAdminPanel InitialSection="types" />
+                                break;
+                            case "structure-types":
+                                <HRM.Components.Admin.Settings.Organisations.OrganisationResources @key="inspectedOrgSettingsTab" Kind="HRM.DTOs.Organisation.OrganisationResourceKind.StructureTypes" />
+                                break;
+                            case "calendar":
+                                <HRM.Components.Admin.Settings.Organisations.OrganisationResources @key="inspectedOrgSettingsTab" Kind="HRM.DTOs.Organisation.OrganisationResourceKind.Calendar" />
+                                break;
+                            case "locations":
+                                <HRM.Components.Admin.Settings.Organisations.OrganisationResources @key="inspectedOrgSettingsTab" Kind="HRM.DTOs.Organisation.OrganisationResourceKind.Locations" />
+                                break;
+                            case "location-types":
+                                <HRM.Components.Admin.Settings.Organisations.OrganisationResources @key="inspectedOrgSettingsTab" Kind="HRM.DTOs.Organisation.OrganisationResourceKind.LocationTypes" />
+                                break;
+                            case "organisation-types":
+                                <HRM.Components.Admin.Settings.Organisations.OrganisationResources @key="inspectedOrgSettingsTab" Kind="HRM.DTOs.Organisation.OrganisationResourceKind.OrganisationTypes" />
+                                break;
+                            case "structure-request-types":
+                                <HRM.Components.Admin.Settings.Organisations.OrganisationResources @key="inspectedOrgSettingsTab" Kind="HRM.DTOs.Organisation.OrganisationResourceKind.StructureRequestTypes" />
+                                break;
+                        }
+                    </div>
+                }
             </div>
         </div>
     }
@@ -3266,6 +3314,7 @@
             </div>
         </div>
     }
+    </div>
 </section>
 
 @code {
@@ -3636,8 +3685,13 @@
         try
         {
             currentUserContext = await UserAccess.GetContextAsync();
+            canManageOrgSettings = currentUserContext?.IsSuperAdministrator == true
+                || await UserAccess.HasPermissionAsync("Admin")
+                || await UserAccess.HasPermissionAsync("Organisation.View")
+                || await UserAccess.HasPermissionAsync("Organisation.Manage")
+                || await UserAccess.HasPermissionAsync("Configuration.View");
         }
-        catch { }
+        catch { canManageOrgSettings = false; }
         SyncTabsFromRouteAndQuery();
         await LoadAllDataAsync();
         if (inspectedStaffId.HasValue)
@@ -3812,18 +3866,39 @@
                 {
                     inspectedOrgName = $"Organisation #{id.Value}";
                 }
-                inspectedOrgTab = (ActiveSection?.ToLowerInvariant()) switch
+                var orgSection = ActiveSection?.Trim().ToLowerInvariant();
+                var matchedSettingsTab = orgSection switch
                 {
-                    "staff" => WorkspaceTab.Staff,
-                    "teams" or "team" => WorkspaceTab.Teams,
-                    "departments" or "department" => WorkspaceTab.Departments,
-                    "assigned-roles" or "assignedroles" or "roles" or "role" => WorkspaceTab.AssignedRoles,
-                    "permissions" or "permission" => WorkspaceTab.Permissions,
-                    "leave-type" or "leavetype" or "leave-types" or "leavetypes" => WorkspaceTab.LeaveType,
-                    "documents" or "document" => WorkspaceTab.Documents,
-                    "org-daily" or "daily" or "attendance" => WorkspaceTab.Attendance,
-                    _ => WorkspaceTab.Overview
+                    "manage" or "organisations" => "manage",
+                    "document-types" or "document-centre" or "document-center" => "document-types",
+                    "structure-types" or "types" => "structure-types",
+                    "calendar" => "calendar",
+                    "locations" => "locations",
+                    "location-types" => "location-types",
+                    "organisation-types" => "organisation-types",
+                    "structure-request-types" or "requests" => "structure-request-types",
+                    _ => null
                 };
+                if (matchedSettingsTab != null && canManageOrgSettings)
+                {
+                    inspectedOrgSettingsTab = matchedSettingsTab;
+                }
+                else
+                {
+                    inspectedOrgSettingsTab = null;
+                    inspectedOrgTab = orgSection switch
+                    {
+                        "staff" => WorkspaceTab.Staff,
+                        "teams" or "team" => WorkspaceTab.Teams,
+                        "departments" or "department" => WorkspaceTab.Departments,
+                        "assigned-roles" or "assignedroles" or "roles" or "role" => WorkspaceTab.AssignedRoles,
+                        "permissions" or "permission" => WorkspaceTab.Permissions,
+                        "leave-type" or "leavetype" or "leave-types" or "leavetypes" => WorkspaceTab.LeaveType,
+                        "documents" or "document" => WorkspaceTab.Documents,
+                        "org-daily" or "daily" or "attendance" => WorkspaceTab.Attendance,
+                        _ => WorkspaceTab.Overview
+                    };
+                }
                 activeWorkspaceTab = "Organisation";
                 return;
             }
@@ -3980,7 +4055,9 @@
 
         if (activeWorkspaceTab == "Organisation" && inspectedOrgId.HasValue)
         {
-            var sectionSlug = HRM.Helpers.SectionRoutes.Slug(inspectedOrgTab.ToString());
+            var sectionSlug = !string.IsNullOrEmpty(inspectedOrgSettingsTab)
+                ? inspectedOrgSettingsTab
+                : HRM.Helpers.SectionRoutes.Slug(inspectedOrgTab.ToString());
             var orgUri = $"/admin/my/workspace/organisation/{inspectedOrgId.Value}/{sectionSlug}";
             NavigateIfChanged(orgUri);
             return;
@@ -4436,6 +4513,7 @@
         inspectedOrgId = orgId;
         if (string.IsNullOrWhiteSpace(inspectedOrgName))
             inspectedOrgName = string.IsNullOrWhiteSpace(currentUserContext?.ActiveJob?.OrganisationName) ? $"Organisation #{orgId}" : currentUserContext!.ActiveJob!.OrganisationName!;
+        inspectedOrgSettingsTab = null;
         inspectedOrgTab = WorkspaceTab.Overview;
         activeWorkspaceTab = "Organisation";
         Navigation.NavigateTo($"/admin/my/workspace/organisation/{orgId}/overview", replace: true);
@@ -4498,6 +4576,7 @@
         inspectedStaffId = null;
         inspectedOrgId = orgId;
         inspectedOrgName = !string.IsNullOrWhiteSpace(orgName) ? orgName : $"Organisation #{orgId}";
+        inspectedOrgSettingsTab = null;
         inspectedOrgTab = WorkspaceTab.Overview;
         activeWorkspaceTab = "Organisation";
         UpdateUrl();
@@ -4506,13 +4585,37 @@
     private void CloseOrganisationWorkspace()
     {
         inspectedOrgId = null;
+        inspectedOrgSettingsTab = null;
         activeWorkspaceTab = previousTabBeforeStaff ?? "Home";
         UpdateUrl();
     }
 
+    private static readonly (string Key, string Label)[] OrgSettingsTabs =
+    [
+        ("manage", "Manage"),
+        ("document-types", "Document Types"),
+        ("structure-types", "Structure Types"),
+        ("calendar", "Calendar"),
+        ("locations", "Locations"),
+        ("location-types", "Location Types"),
+        ("organisation-types", "Organisation Types"),
+        ("structure-request-types", "Structure Request Types")
+    ];
+
+    private string? inspectedOrgSettingsTab;
+    private bool canManageOrgSettings;
+
     private void SetOrgTab(WorkspaceTab tab)
     {
+        inspectedOrgSettingsTab = null;
         inspectedOrgTab = tab;
+        UpdateUrl();
+    }
+
+    private void SetOrgSettingsTab(string section)
+    {
+        if (!canManageOrgSettings) return;
+        inspectedOrgSettingsTab = section;
         UpdateUrl();
     }
 

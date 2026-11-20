@@ -2,71 +2,95 @@
 @using Microsoft.AspNetCore.Components.Authorization
 @using HRM.Models
 @using HRM.Services
-
- 
+@using HRM.Services.Interfaces
+@inject IUserAccessService UserAccess
 
 @rendermode RenderMode.InteractiveServer
 
-<PageTitle>Settings - HR Portal</PageTitle>
+<PageTitle>Payroll - HR Portal</PageTitle>
 
 <AuthorizeView>
     <Authorized>
-        
-
-        <div class="max-w-12xl mx-auto py-8 px-">
+        <div class="max-w-12xl mx-auto py-8 px-4">
             <div class="mb-10">
                 <h1 class="text-3xl font-extrabold text-slate-800">Payroll</h1>
-                <p class="text-slate-500 mt-2">Manage your organization's core configuration and operational parameters.</p>
+                <p class="text-slate-500 mt-2">Manage payroll periods, processing, allowances, deductions, and payment files.</p>
             </div>
 
-            <!-- Grid: 4 columns on large screens, 2 on medium -->
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                @foreach (var cat in mainCategories)
-                {
-                    <a href="/admin/payroll/@cat.Url"
-                       class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md hover:border-blue-400 hover:bg-slate-50 transition-all duration-200 group flex items-center gap-6">
+            @if (loading)
+            {
+                <div class="rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-500">Checking payroll permissions…</div>
+            }
+            else if (!canViewPayroll)
+            {
+                <div class="rounded-xl border border-amber-200 bg-amber-50 p-6 text-sm text-amber-900">
+                    You do not have permission to view Payroll modules.
+                </div>
+            }
+            else
+            {
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    @foreach (var cat in mainCategories)
+                    {
+                        <a href="/admin/payroll/@cat.Url"
+                           class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md hover:border-blue-400 hover:bg-slate-50 transition-all duration-200 group flex items-center gap-6">
 
-                        <!-- Left: Icon Container -->
-                        <div class="w-16 h-16 flex items-center justify-center rounded-lg bg-blue-50 text-3xl text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors duration-300 flex-shrink-0">
-                            @cat.Icon
-                        </div>
+                            <div class="w-16 h-16 flex items-center justify-center rounded-lg bg-blue-50 text-3xl text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors duration-300 flex-shrink-0">
+                                @cat.Icon
+                            </div>
 
-                        <!-- Right: Text Content -->
-                        <div class="flex-grow">
-                            <h3 class="font-bold text-slate-800 text-lg mb-1 group-hover:text-blue-700">@cat.Title</h3>
-                            <p class="text-slate-500 text-sm leading-tight">@cat.Description</p>
-                        </div>
+                            <div class="flex-grow">
+                                <h3 class="font-bold text-slate-800 text-lg mb-1 group-hover:text-blue-700">@cat.Title</h3>
+                                <p class="text-slate-500 text-sm leading-tight">@cat.Description</p>
+                            </div>
 
-                        <!-- Right: Arrow (Optional) -->
-                        <div class="text-slate-300 group-hover:text-blue-600 transition-colors">
-                            <AppIcon Name="chevron_right" Class="w-6 h-6 text-2xl" />
-                        </div>
-                    </a>
-                }
-            </div>
+                            <div class="text-slate-300 group-hover:text-blue-600 transition-colors">
+                                <AppIcon Name="chevron_right" Class="w-6 h-6 text-2xl" />
+                            </div>
+                        </a>
+                    }
+                </div>
+            }
         </div>
-
-        @code {
-        private record Category(string Title, string Url, string Icon, string Description);
-        private List<Category> mainCategories = new() {
-        new("Payroll", "payroll", "💳", "Enterprise multi-organisation payroll processing, approval workflows, bank payment files, and audit logs."),
-        new("Allowances and deductions", "finance", "💵", "Manage position allowances, staff requests, deductions and payroll postings."),
-     
-        };
-        }
-      
     </Authorized>
 
     <NotAuthorized>
         <div class="p-6">
             <p class="text-slate-500">
-                Please log in to view the dashboard.
+                Please log in to view payroll management.
             </p>
         </div>
     </NotAuthorized>
 </AuthorizeView>
 
 @code {
-  
+    private record Category(string Title, string Url, string Icon, string Description);
 
+    private bool loading = true;
+    private bool canViewPayroll;
+
+    private readonly List<Category> mainCategories = new()
+    {
+        new("Payroll", "payroll", "💳", "Enterprise multi-organisation payroll processing, approval workflows, bank payment files, and audit logs."),
+        new("Allowances & Deductions", "finance", "💵", "Manage position allowances, staff requests, deductions, and payroll postings.")
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var actor = await UserAccess.RequireContextAsync();
+            var isAdmin = actor.IsSuperAdministrator || await UserAccess.HasPermissionAsync("Admin");
+            var isHr = await UserAccess.HasUserGroupAsync("Human Resource: Staff") || await UserAccess.HasUserGroupAsync("Human Resource :Head");
+            canViewPayroll = isAdmin || isHr || await UserAccess.HasPermissionAsync("Payroll.View") || await UserAccess.HasPermissionAsync("Payroll.Review");
+        }
+        catch
+        {
+            canViewPayroll = false;
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
 }

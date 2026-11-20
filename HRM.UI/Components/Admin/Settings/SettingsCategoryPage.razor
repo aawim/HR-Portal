@@ -26,7 +26,17 @@
 
 <AuthorizeView>
     <Authorized>
-        @if (ResolvedCategoryName == "org")
+        @if (checkingAccess)
+        {
+            <div class="m-4 rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-500">Checking settings permissions…</div>
+        }
+        else if (!canAccessCategory)
+        {
+            <div class="m-4 rounded-xl border border-amber-200 bg-amber-50 p-6 text-sm text-amber-900">
+                You do not have permission to access this Settings category.
+            </div>
+        }
+        else if (ResolvedCategoryName == "org")
         {
             <!-- Admin Workspace Style Layout for /admin/settings/org -->
             <section class="org-workspace-page w-full min-w-0 p-2 flex flex-col gap-2 bg-slate-50/50 text-slate-900 transition-all duration-300">
@@ -56,14 +66,14 @@
                 </div>
 
                 <!-- Solid Folder Navigation Tabs Matching Admin Workspace -->
-                <div class="org-workspace-tabs w-full border-b-2 border-teal-700 overflow-x-auto">
+                <div class="org-workspace-tabs my-workspace-tabs w-full border-b-2 border-teal-700 dark:border-teal-600 overflow-x-auto">
                     <nav class="flex items-end gap-1 min-w-max pb-0" aria-label="Organisation Workspace Sections">
                         @foreach (var item in VisibleItems)
                         {
                             var isActive = activeItem?.Title == item.Title;
                             <button type="button"
                                     aria-current="@(isActive ? "page" : null)"
-                                    class="rounded-t-xl px-4 py-2 font-bold text-xs md:text-sm transition-all border-t border-l border-r flex items-center gap-2 @(isActive ? "bg-teal-700 text-white border-teal-700 shadow-sm" : "bg-[#86b0be]/40 text-slate-800 border-slate-300 hover:bg-[#86b0be]/60")"
+                                    class="rounded-t-xl px-4 py-2 font-bold text-xs md:text-sm transition-all border-t border-l border-r flex items-center gap-2 @(isActive ? "bg-teal-700 dark:bg-teal-600 text-white border-teal-700 dark:border-teal-600 shadow-sm" : "bg-[#86b0be]/30 text-slate-700 hover:text-slate-900 hover:bg-[#86b0be]/50 dark:bg-slate-800/90 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-700 border-slate-300 dark:border-slate-700")"
                                     @onclick="() => SelectItem(item)">
                                 <i class="bi @item.Icon text-base" aria-hidden="true"></i>
                                 <span>@item.Title</span>
@@ -284,7 +294,7 @@
         },
         "org" => new() {
             new("Manage", "bi-building-gear", "Manage organisation details, addresses, contacts, teams and supervisors.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationSettingsEditor)),
-            new("Document Centre", "bi-folder2-open", "Central enterprise document repository, classifications and document requests.", typeof(HRM.Components.Admin.Hr.Documents.DocumentCentreAdminPanel)),
+            new("Document Types", "bi-folder2-open", "Configure organisation document classifications and types.", typeof(HRM.Components.Admin.Hr.Documents.DocumentCentreAdminPanel)),
             new("Manage type", "bi-diagram-3", "Manage Organisation Structure Types, such as departments and divisions.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationResources)),
             new("Calendar", "bi-calendar3", "View and assign organisation calendars.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationResources)),
             new("Locations", "bi-geo-alt", "View organisation locations and manage their addresses.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationResources)),
@@ -316,14 +326,13 @@
         "positions" => new() {
            new("Overview", "bi-card-list", "View active positions across both frameworks and their assigned staff.", typeof(PositionOverview)),
            new("Pay Frameworks", "bi-cash-stack", "Manage shared frameworks, Job Matrices, pay steps, titles and allowances.", typeof(PayFrameworks)),
-           new("Manage Ranks", "bi-award", "Configure attendance clients and devices.", typeof(RankGrid)),
-           new("Manage Classifications", "bi-tags", "Configure attendance clients and devices.", typeof(ClassifficationGrid)),
+           new("Manage Ranks", "bi-award", "Define and manage official job ranks.", typeof(RankGrid)),
+           new("Manage Classifications", "bi-tags", "Define and manage position classifications.", typeof(ClassifficationGrid)),
            new("Manage Positions", "bi-briefcase", "Manage custom positions and government Job Matrix links.", typeof(PositionGrid)),
            new("Position Allowances", "bi-cash-coin", "Configure required position allowances.", typeof(PositionAllowances)),
         },
-        "workplaning" => new() {
+        "workplaning" or "work-planning" => new() {
            new("Working Hours", "bi-clock-history", "Configure weekly hours and temporary official start-time amendments.", typeof(WorkingHoursSettings)),
-           new("Duty roster", "bi-calendar3", "View dated duties, schedule assignments, manual assignments and create rosters.", typeof(HRM.Components.Admin.WorkPlanning.DutyRosterAdmin)),
            new("Templates", "bi-layout-text-window", "Define working hours and required clock events using ordered segments.", typeof(WorkTemplateManagement)),
            new("Plans", "bi-calendar2-check", "Generate assigned schedules or add manual duty to a staff member's daily plan.", typeof(WorkPlanManagement)),
            new("Segments", "bi-segmented-nav", "Manage check-in, work, break and check-out events within templates.", typeof(Segments)),
@@ -364,6 +373,29 @@
 
     private bool isDeveloper;
     private bool canViewCarryForward;
+    private bool checkingAccess = true;
+    private bool canAccessCategory;
+    private string? checkedCategory;
+
+    private static string[] GetCategoryPermissions(string category) => category.Trim().ToLowerInvariant() switch
+    {
+        "user" => ["Admin", "User.View", "User.Manage", "AdminAccess.Manage"],
+        "org" => ["Admin", "Organisation.View", "Organisation.Manage", "Configuration.View"],
+        "documents" => ["Admin", "Configuration.View", "Documents.View", "Documents.Manage"],
+        "requests" => ["Admin", "Configuration.View"],
+        "teams" => ["Admin", "Organisation.View", "Organisation.Manage"],
+        "schedules" => ["Admin", "Configuration.View", "Schedules.Manage"],
+        "leaves" => ["Admin", "Leave.Configure", "Configuration.View"],
+        "payroll" => ["Admin", "Payroll.View", "Payroll.Configure"],
+        "performance" => ["Admin", "Configuration.View"],
+        "config" => ["Admin", "Configuration.View", "WorkTypes.Manage"],
+        "roles" => ["Admin", "Roles.View", "UserOrganisation.Groups.View", "Organisation.Groups.View", "Developer"],
+        "positions" => ["Admin", "Position.Details", "Staff.Positions.Manage", "Positions.Configure"],
+        "workplaning" or "work-planning" => ["Admin", "WorkPlanning.Manage", "Schedules.Manage", "Configuration.View"],
+        "projects" => ["Admin", "Project.Manage", "Project.View", "Configuration.View"],
+        _ => ["Admin", "Configuration.View"]
+    };
+
     protected override void OnParametersSet()
     {
         CategoryName = ResolvedCategoryName;
@@ -371,7 +403,12 @@
         if (CategoryName == "leaves" && Section == "leave-sets") { Navigation.NavigateTo("/admin/settings/leaves/manage-leave-sets", replace: true); return; }
         if (CategoryName == "documents") { Navigation.NavigateTo("/admin/settings/org/document-types", replace: true); return; }
         if (CategoryName.Equals("org", StringComparison.OrdinalIgnoreCase) && Section is "document-centre" or "document-center") Section = "document-types";
-        if ((CategoryName == "workplaning" && Section == "work-types") ||
+        if (CategoryName is "workplaning" or "work-planning" && Section == "duty-roster")
+        {
+            Navigation.NavigateTo("/admin/hr/work-planning/duty-roster", replace: true);
+            return;
+        }
+        if ((CategoryName is "workplaning" or "work-planning" && Section == "work-types") ||
             ((CategoryName is "job" or "jobs") && (string.IsNullOrWhiteSpace(Section) || Section == "work-types")))
         {
             Navigation.NavigateTo("/admin/settings/config/work-types", replace: true);
@@ -411,6 +448,44 @@
     }
 
     private int currentOrgId = 3;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var category = ResolvedCategoryName;
+        if (string.Equals(checkedCategory, category, StringComparison.OrdinalIgnoreCase))
+            return;
+
+        checkingAccess = true;
+        canAccessCategory = false;
+        try
+        {
+            var actor = await UserAccess.RequireContextAsync();
+            if (actor.IsSuperAdministrator || await UserAccess.HasPermissionAsync("Admin"))
+            {
+                canAccessCategory = true;
+            }
+            else
+            {
+                foreach (var perm in GetCategoryPermissions(category))
+                {
+                    if (await UserAccess.HasPermissionAsync(perm))
+                    {
+                        canAccessCategory = true;
+                        break;
+                    }
+                }
+            }
+            checkedCategory = category;
+        }
+        catch
+        {
+            canAccessCategory = false;
+        }
+        finally
+        {
+            checkingAccess = false;
+        }
+    }
 
     protected override async Task OnInitializedAsync()
     {

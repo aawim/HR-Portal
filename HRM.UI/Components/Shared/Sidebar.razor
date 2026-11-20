@@ -1,11 +1,13 @@
 @using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Components.Routing
 @using HRM.Services
 @using HRM.Components.Shared
 @using HRM.Services.Interfaces
-
+@implements IDisposable
 
 @inject NavigationManager Navigation
 @inject IUserAccessService UserAccess
+@inject HRM.Services.Contracts.LeadershipAuthorityServiceContracts.IOperations LeadershipAccess
 
 
 
@@ -38,81 +40,187 @@
                         @if (IsDeveloperPortal && (CanAccessDeveloperPortal || isDeveloper))
                         {
                             <!-- Developer Menu -->
-                            <NavItem Compact="collapsed" Href="/developer" Icon="code" Text="Workspace" IsActive="true" />
-                            <NavItem Compact="collapsed" Href="/developer/overview" Icon="home" Text="Overview" />
-                            <NavItem Compact="collapsed" Href="/developer/error-logs" Icon="exclamation" Text="Error Logs" />
-                            <NavItem Compact="collapsed" Href="/developer/request-types" Icon="document" Text="Request Types" />
-                            <NavItem Compact="collapsed" Href="/developer/transitions" Icon="trending-up" Text="Transitions" />
-                            <NavItem Compact="collapsed" Href="/developer/workflows" Icon="briefcase" Text="Workflows" />
-                            <NavItem Compact="collapsed" Href="/developer/health" Icon="trending-up" Text="Health" />
-                            <NavItem Compact="collapsed" Href="/developer/diagnostics" Icon="cog" Text="Diagnostics" />
-                            <hr class="my-2 border-white/15" />
-                            <NavItem Compact="collapsed" Href="/online" Icon="users" Text="Employee Portal" />
-                            @if (CanAccessAdminPortal)
-                            {
-                                <NavItem Compact="collapsed" Href="/admin" Icon="briefcase" Text="Admin Portal" />
-                            }
+                            @SectionGroup("dev-monitoring", "Monitoring", @<text>
+                                <NavItem Compact="collapsed" Href="/developer/overview" Icon="home" Text="Overview" />
+                                <NavItem Compact="collapsed" Href="/developer/error-logs" Icon="exclamation" Text="Error Logs" />
+                                <NavItem Compact="collapsed" Href="/developer/health" Icon="bi-heart-pulse" Text="Application Health" />
+                            </text>, isFirst: true)
+
+                            @SectionGroup("dev-workflows", "Workflows", @<text>
+                                <NavItem Compact="collapsed" Href="/developer/request-types" Icon="bi-ui-checks" Text="Request Types" />
+                                <NavItem Compact="collapsed" Href="/developer/transitions" Icon="bi-arrow-repeat" Text="Transition States" />
+                                <NavItem Compact="collapsed" Href="/developer/notification-resolution" Icon="bi-bell" Text="Notification Resolution" />
+                                <NavItem Compact="collapsed" Href="/developer/workflows" Icon="bi-diagram-3" Text="Approval Workflows" />
+                            </text>)
+
+                            @SectionGroup("dev-infra", "Infrastructure", @<text>
+                                <NavItem Compact="collapsed" Href="/developer/edge-agents" Icon="bi-pc-display" Text="Client Agents" />
+                                <NavItem Compact="collapsed" Href="/developer/diagnostics" Icon="cog" Text="System & Diagnostics" />
+                            </text>)
                         }
                         else if (IsAdminPortal && CanAccessAdminPortal)
                         {
-                            <!-- Admin Menu-->
+                            <!-- Admin Menu -->
+                            @SectionGroup("admin-workspace", "Workspace", @<text>
+                                <NavItem Compact="collapsed" Href="/admin/my/workspace" Match="NavLinkMatch.All" Icon="briefcase" Text="My Workspace" />
+                                <NavItem Compact="collapsed" Href="/admin" Match="NavLinkMatch.All" Icon="home" Text="Dashboard" />
+                                @if (canViewRequests)
+                                {
+                                    <NavItem Compact="collapsed" Href="/admin/hr/requests" Icon="bi-inbox" Text="Requests Inbox" />
+                                }
+                            </text>, isFirst: true)
 
-                            <NavItem Compact="collapsed" Href="/admin/my/workspace" Icon="briefcase" Text="Home" IsActive="true" />
-                            <NavItem Compact="collapsed" Href="/admin" Icon="home" Text="Dashboard" />
-                            @if (canViewHr)
+                            @if (canViewStaff || canViewRecruitment || canViewTransfers || canViewSeparations || canManageLeadership)
                             {
-                                <NavItem Compact="collapsed" Href="admin/hr" Icon="users" Text="HR" />
+                                @SectionGroup("admin-people", "People & HR", @<text>
+                                    @if (canViewStaff)
+                                    {
+                                        <NavItem Compact="collapsed" Href="/admin/hr/staff/manage" Icon="users" Text="Staff" />
+                                    }
+                                    @if (canViewRecruitment)
+                                    {
+                                        <NavItem Compact="collapsed" Href="/admin/hr/recruitment" Icon="user-plus" Text="Recruitment" />
+                                    }
+                                    @if (canViewTransfers)
+                                    {
+                                        <NavItem Compact="collapsed" Href="/admin/hr/staff-transfers" Icon="bi-arrow-left-right" Text="Transfers" />
+                                    }
+                                    @if (canViewSeparations)
+                                    {
+                                        <NavItem Compact="collapsed" Href="/admin/hr/separations" Icon="bi-box-arrow-right" Text="Separations" />
+                                    }
+                                    @if (canViewStaff)
+                                    {
+                                        <NavItem Compact="collapsed" Href="/admin/hr/staff-groups" Icon="bi-collection" Text="Staff Groups" />
+                                    }
+                                    @if (canManageLeadership)
+                                    {
+                                        <NavItem Compact="collapsed" Href="/admin/settings/leadership/management" Icon="workspace_premium" Text="Leadership" />
+                                    }
+                                </text>)
                             }
+
+                            @if (canViewAttendance || canViewLeaves || canViewDutyRoster)
+                            {
+                                @SectionGroup("admin-time", "Time & Attendance", @<text>
+                                    @if (canViewAttendance)
+                                    {
+                                        <NavItem Compact="collapsed" Href="/admin/attendance/manage-attendance" Icon="clock" Text="Attendance" />
+                                    }
+                                    @if (canViewLeaves)
+                                    {
+                                        <NavItem Compact="collapsed" Href="/admin/my/workspace/leave" Icon="calendar" Text="Leave Management" />
+                                    }
+                                    @if (canViewAttendance)
+                                    {
+                                        <NavItem Compact="collapsed" Href="/admin/attendance/manage-overtimes" Icon="trending-up" Text="Overtime" />
+                                    }
+                                    @if (canViewDutyRoster)
+                                    {
+                                        <NavItem Compact="collapsed" Href="/admin/hr/work-planning/duty-roster" Icon="bi-calendar2-week" Text="Duty Roster" />
+                                    }
+                                    @if (canViewLeaves)
+                                    {
+                                        <NavItem Compact="collapsed" Href="/admin/hr/work-handovers" Icon="bi-people-fill" Text="Work Handovers" />
+                                    }
+                                </text>)
+                            }
+
+                            @if (canViewPayroll || canViewBudget || canViewGoodsLoans)
+                            {
+                                @SectionGroup("admin-finance", "Finance & Payroll", @<text>
+                                    @if (canViewPayroll)
+                                    {
+                                        <NavItem Compact="collapsed" Href="/admin/payroll/payroll" Icon="payments" Text="Payroll" />
+                                        <NavItem Compact="collapsed" Href="/admin/payroll/finance" Icon="currency-dollar" Text="Allowances & Deductions" />
+                                    }
+                                    @if (canViewBudget)
+                                    {
+                                        <NavItem Compact="collapsed" Href="/admin/budget" Icon="bi-pie-chart" Text="Budget" />
+                                    }
+                                    @if (canViewGoodsLoans)
+                                    {
+                                        <NavItem Compact="collapsed" Href="/admin/goods-loans" Icon="bi-bag-check" Text="Goods Loans" />
+                                    }
+                                </text>)
+                            }
+
+                            @if (canViewItems || canViewDocuments)
+                            {
+                                @SectionGroup("admin-assets", "Assets & Records", @<text>
+                                    @if (canViewItems)
+                                    {
+                                        <NavItem Compact="collapsed" Href="/admin/hr/items" Icon="bi-box-seam" Text="Items & Assets" />
+                                    }
+                                    @if (canViewDocuments)
+                                    {
+                                        <NavItem Compact="collapsed" Href="/admin/hr/certificates" Icon="bi-patch-check" Text="Certificates" />
+                                        <NavItem Compact="collapsed" Href="/admin/hr/documents" Icon="bi-folder2-open" Text="Document Centre" />
+                                    }
+                                </text>)
+                            }
+
+                            @SectionGroup("admin-org", "Organisation", @<text>
+                                @if (canViewDepartments)
+                                {
+                                    <NavItem Compact="collapsed" Href="/admin/my/workspace/organisation" Icon="corporate_fare" Text="Departments" />
+                                }
+                                @if (canViewSupervisors)
+                                {
+                                    <NavItem Compact="collapsed" Href="/admin/hr/supervisors" Icon="bi-person-badge" Text="Supervisors" />
+                                }
+                                @if (canViewDepartments)
+                                {
+                                    <NavItem Compact="collapsed" Href="/admin/hr/events" Icon="bi-calendar-event" Text="Events" />
+                                }
+                                <NavItem Compact="collapsed" Href="/admin/chat" Icon="chat" Text="Chat" />
+                            </text>)
+
                             @if (canViewSettings)
                             {
-                                <NavItem Compact="collapsed" Href="admin/settings" Icon="cog" Text="Settings" />
-                            }
-                            @if (canManageLeadership)
-                            {
-                                <NavItem Compact="collapsed" Href="/admin/settings/leadership/management" Icon="document" Text="Leadership records & audit" />
-                            }
-                            @if (canViewGoodsLoans)
-                            {
-                                <NavItem Compact="collapsed" Href="/admin/goods-loans" Icon="currency-dollar" Text="Goods Loans" />
-                            }
-                            <NavItem Compact="collapsed" Href="/admin/intranet" Icon="document" Text="Intranet" />
-                            @if (canViewRecruitment)
-                            {
-                                <hr class="my-2 border-white/15" />
-                                <NavItem Compact="collapsed" Href="admin/hr/recruitment" Icon="user-plus" Text="Recruitment" />
-                            }
-                            @if (isDeveloper)
-                            {
-                                <NavItem Compact="collapsed" Href="/developer" Icon="code" Text="Developer" />
+                                @SectionGroup("admin-settings", "Administration", @<text>
+                                    <NavItem Compact="collapsed" Href="/admin/settings" Icon="cog" Text="Settings" />
+                                </text>)
                             }
                         }
                         else
                         {
-                            <!-- User Menu-->
-                            <NavItem Compact="collapsed" Href="/online" Icon="home" Text="Home" IsActive="true" />
+                            <!-- Employee (Self) Menu -->
+                            @SectionGroup("emp-overview", "Overview", @<text>
+                                <NavItem Compact="collapsed" Href="/online" Match="NavLinkMatch.All" Icon="home" Text="Home" />
+                                <NavItem Compact="collapsed" Href="/online/chat" Icon="chat" Text="Chat" />
+                            </text>, isFirst: true)
 
-                            <NavItem Compact="collapsed" Href="/online/attendance" Icon="clock" Text="Attendance" />
-                            <NavItem Compact="collapsed" Href="/online/duty-roster" Icon="calendar" Text="Duty roster" />
+                            @SectionGroup("emp-time", "Time & Leave", @<text>
+                                <NavItem Compact="collapsed" Href="/online/attendance" Icon="clock" Text="Attendance" />
+                                <NavItem Compact="collapsed" Href="/online/duty-roster" Icon="bi-calendar2-week" Text="Duty Roster" />
+                                <NavItem Compact="collapsed" Href="/online/leaves" Icon="calendar" Text="Leave" />
+                                <NavItem Compact="collapsed" Href="/online/leave-handovers" Icon="bi-people-fill" Text="Work Handovers" />
+                                <NavItem Compact="collapsed" Href="/online/ot" Icon="trending-up" Text="Overtime" />
+                            </text>)
 
-                            <NavItem Compact="collapsed" Href="/online/break-time-request" Icon="currency-dollar" Text="Break Time Request" />
+                            @SectionGroup("emp-pay", "Pay & Benefits", @<text>
+                                <NavItem Compact="collapsed" Href="/online/payslips" Icon="bi-receipt" Text="My Payslips" />
+                                <NavItem Compact="collapsed" Href="/online/allowances-deductions" Icon="payments" Text="Allowances & Deductions" />
+                                <NavItem Compact="collapsed" Href="/online/goods-loans" Icon="currency-dollar" Text="Goods Loans" />
+                            </text>)
 
-                            <NavItem Compact="collapsed" Href="/online/ot" Icon="trending-up" Text="Overtime" />
-                            <NavItem Compact="collapsed" Href="/online/item-requests" Icon="briefcase" Text="Item requests" />
-                            <NavItem Compact="collapsed" Href="/online/goods-loans" Icon="currency-dollar" Text="Goods Loans" />
-                            <NavItem Compact="collapsed" Href="/online/my-assets" Icon="briefcase" Text="My assets" />
-                            <NavItem Compact="collapsed" Href="/online/staff-transfers" Icon="briefcase" Text="Staff transfers" />
-                            <NavItem Compact="collapsed" Href="/online/certificates" Icon="document" Text="Certificates" />
-                            <NavItem Compact="collapsed" Href="/online/documents" Icon="document" Text="Documents" />
-                            <NavItem Compact="collapsed" Href="/online/dhr-connect" Icon="home" Text="Intranet" />
+                            @SectionGroup("emp-services", "Services & Assets", @<text>
+                                <NavItem Compact="collapsed" Href="/online/item-requests" Icon="bi-box-seam" Text="Item Requests" />
+                                <NavItem Compact="collapsed" Href="/online/my-assets" Icon="briefcase" Text="My Assets" />
+                                <NavItem Compact="collapsed" Href="/online/certificates" Icon="bi-patch-check" Text="Certificates" />
+                                <NavItem Compact="collapsed" Href="/online/documents" Icon="bi-folder2-open" Text="My Documents" />
+                            </text>)
 
-                            <NavItem Compact="collapsed" Href="/online/leaves" Icon="calendar" Text="Leaves" />
-                            <NavItem Compact="collapsed" Href="/online/leave-handovers" Icon="briefcase" Text="Work handovers" />
-                            <NavItem Compact="collapsed" Href="/online/chat" Icon="chat" Text="Chat" />
-                            @if (isDeveloper && !CanAccessAdminPortal)
-                            {
-                                <hr class="my-2 border-white/15" />
-                                <NavItem Compact="collapsed" Href="/developer" Icon="code" Text="Developer Portal" />
-                            }
+                            @SectionGroup("emp-career", "Career & HR", @<text>
+                                <NavItem Compact="collapsed" Href="/online/staff-transfers" Icon="bi-arrow-left-right" Text="Transfers" />
+                                <NavItem Compact="collapsed" Href="/online/staff-separation" Icon="bi-box-arrow-right" Text="Separation" />
+                                <NavItem Compact="collapsed" Href="/online/recruitment" Icon="user-plus" Text="Internal Vacancies" />
+                                @if (hasLeadershipAuthority)
+                                {
+                                    <NavItem Compact="collapsed" Href="/online/leadership" Icon="workspace_premium" Text="Leadership" />
+                                }
+                            </text>)
                         }
                     </ul>
                 </nav>
@@ -131,7 +239,7 @@
                     <AppIcon Name="logout" Class="w-5 h-5 text-xl" />
                     @if (!collapsed)
                     {
-                        <span>Logout</span>
+                        <span>Log Out</span>
                     }
                 </LogoutButton>
             </div>
@@ -163,45 +271,287 @@
     [Parameter] public EventCallback OnMobileClose { get; set; }
     private bool collapsed;
     private bool isDeveloper;
+    private bool hasLeadershipAuthority;
     private bool canManageLeadership;
-    private bool canViewHr;
-    private bool canViewSettings;
+    private bool canViewRequests;
+    private bool canViewStaff;
     private bool canViewRecruitment;
+    private bool canViewTransfers;
+    private bool canViewSeparations;
+    private bool canViewAttendance;
+    private bool canViewLeaves;
+    private bool canViewDutyRoster;
+    private bool canViewPayroll;
+    private bool canViewBudget;
     private bool canViewGoodsLoans;
+    private bool canViewItems;
+    private bool canViewDocuments;
+    private bool canViewDepartments;
+    private bool canViewSupervisors;
+    private bool canViewSettings;
+
+    private async Task<bool> HasAnyPermissionAsync(params string[] permissions)
+    {
+        foreach (var permission in permissions)
+        {
+            if (await UserAccess.HasPermissionAsync(permission))
+                return true;
+        }
+        return false;
+    }
+
+    private void ResetPermissions()
+    {
+        hasLeadershipAuthority = false;
+        canManageLeadership = false;
+        canViewRequests = false;
+        canViewStaff = false;
+        canViewRecruitment = false;
+        canViewTransfers = false;
+        canViewSeparations = false;
+        canViewAttendance = false;
+        canViewLeaves = false;
+        canViewDutyRoster = false;
+        canViewPayroll = false;
+        canViewBudget = false;
+        canViewGoodsLoans = false;
+        canViewItems = false;
+        canViewDocuments = false;
+        canViewDepartments = false;
+        canViewSupervisors = false;
+        canViewSettings = false;
+    }
+
+    private (bool HasAccess, bool CanAdmin, bool CanDev, string Portal)? loadedPermissionScope;
+
+    private string CurrentPortalKey => IsDeveloperPortal ? "dev" : IsAdminPortal ? "admin" : "emp";
 
     protected override async Task OnParametersSetAsync()
     {
         if (MobileOpen) collapsed = false;
+        EnsurePortalGroupsInitialized();
+
+        var scope = (HasSystemAccess, CanAccessAdminPortal, CanAccessDeveloperPortal, CurrentPortalKey);
+        if (loadedPermissionScope == scope)
+            return;
+
+        if (!HasSystemAccess)
+        {
+            ResetPermissions();
+            isDeveloper = CanAccessDeveloperPortal;
+            loadedPermissionScope = scope;
+            return;
+        }
+
         try
         {
-            canManageLeadership = false;
-            canViewHr = false;
-            canViewSettings = false;
-            canViewRecruitment = false;
-            canViewGoodsLoans = false;
-            if (HasSystemAccess)
+            var actor = await UserAccess.RequireContextAsync();
+            var isAdmin = actor.IsSuperAdministrator || await UserAccess.HasPermissionAsync("Admin");
+            var isHrGroup = await UserAccess.HasUserGroupAsync("Human Resource: Staff") || await UserAccess.HasUserGroupAsync("Human Resource :Head");
+            var isAdminOrHr = isAdmin || isHrGroup;
+
+            var nextManageLeadership = actor.IsSuperAdministrator || await UserAccess.HasPermissionAsync("Leadership.Appointment.Manage");
+            var nextRequests = isAdminOrHr || await HasAnyPermissionAsync("Requests.View", "Employee.View");
+            var nextStaff = isAdminOrHr || await HasAnyPermissionAsync("Employee.View", "Staff.Details");
+            var nextRecruitment = isAdmin || await HasAnyPermissionAsync("Recruitment.View", "Recruitment.Manage");
+            var nextTransfers = isAdminOrHr || await HasAnyPermissionAsync("Staff.Transfer", "Employee.View");
+            var nextSeparations = isAdminOrHr || await HasAnyPermissionAsync("Staff.Separation", "Employee.View");
+            var nextAttendance = isAdminOrHr || await HasAnyPermissionAsync("Attendance.View", "Attendance.Manage");
+            var nextLeaves = isAdminOrHr || await HasAnyPermissionAsync("Leave.View", "Leave.Approve");
+            var nextDutyRoster = isAdminOrHr || await HasAnyPermissionAsync("WorkPlanning.Manage", "DutyRoster.View");
+            var nextPayroll = isAdminOrHr || await HasAnyPermissionAsync("Payroll.View", "Payroll.Review");
+            var nextBudget = isAdminOrHr || await HasAnyPermissionAsync("Budget.View", "Budget.Manage");
+            var nextGoodsLoans = isAdminOrHr || await HasAnyPermissionAsync("GoodsLoans.View", "GoodsLoans.Manage", "GoodsLoan.Manage", "Payroll.View");
+            var nextItems = isAdminOrHr || await HasAnyPermissionAsync("Items.View", "Items.Manage");
+            var nextDocuments = isAdminOrHr || await HasAnyPermissionAsync("Documents.View", "Documents.Manage", "Employee.View");
+            var nextDepartments = isAdminOrHr || await HasAnyPermissionAsync("Organisation.View", "Employee.View");
+            var nextSupervisors = isAdminOrHr || await HasAnyPermissionAsync("Organisation.Manage", "Team.Manage");
+            var nextSettings = isAdmin || await HasAnyPermissionAsync(
+                "Configuration.View", "Roles.View", "UserOrganisation.Groups.View", "Organisation.Groups.View",
+                "Organisation.View", "Organisation.Manage", "User.View", "User.Manage", "AdminAccess.Manage",
+                "WorkTypes.Manage", "WorkPlanning.Manage", "Schedules.Manage",
+                "Leave.Configure", "Payroll.View", "Payroll.Configure",
+                "Position.Details", "Staff.Positions.Manage", "Positions.Configure",
+                "Project.View", "Project.Manage");
+
+            var nextLeadershipAuthority = hasLeadershipAuthority;
+            if (!IsAdminPortal && !IsDeveloperPortal)
             {
-                var actor = await UserAccess.RequireContextAsync();
-                var isAdmin = actor.IsSuperAdministrator || await UserAccess.HasPermissionAsync("Admin");
-                var isHrGroup = await UserAccess.HasUserGroupAsync("Human Resource: Staff") || await UserAccess.HasUserGroupAsync("Human Resource :Head");
-                canManageLeadership = actor.IsSuperAdministrator || await UserAccess.HasPermissionAsync("Leadership.Appointment.Manage");
-                canViewRecruitment = isAdmin || await UserAccess.HasPermissionAsync("Recruitment.View") || await UserAccess.HasPermissionAsync("Recruitment.Manage");
-                canViewHr = isAdmin || isHrGroup || await UserAccess.HasPermissionAsync("Employee.View") || await UserAccess.HasPermissionAsync("Staff.Details") || await UserAccess.HasPermissionAsync("Attendance.View") || await UserAccess.HasPermissionAsync("Payroll.View");
-                canViewSettings = isAdmin || await UserAccess.HasPermissionAsync("Configuration.View") || await UserAccess.HasPermissionAsync("Roles.View") || await UserAccess.HasPermissionAsync("UserOrganisation.Groups.View") || await UserAccess.HasPermissionAsync("Organisation.View") || await UserAccess.HasPermissionAsync("User.View") || await UserAccess.HasPermissionAsync("WorkTypes.Manage") || await UserAccess.HasPermissionAsync("WorkPlanning.Manage");
-                canViewGoodsLoans = isAdmin || isHrGroup || await UserAccess.HasPermissionAsync("GoodsLoans.View") || await UserAccess.HasPermissionAsync("GoodsLoans.Manage") || await UserAccess.HasPermissionAsync("Payroll.View");
+                try
+                {
+                    var leadershipOrgs = await LeadershipAccess.GetCurrentOrganisationAccessAsync();
+                    nextLeadershipAuthority = leadershipOrgs.Any();
+                }
+                catch
+                {
+                    nextLeadershipAuthority = false;
+                }
             }
-            isDeveloper = CanAccessDeveloperPortal || (HasSystemAccess && (await UserAccess.HasUserGroupAsync("Developer") || await UserAccess.HasPermissionAsync("Developer")));
+
+            var nextIsDeveloper = CanAccessDeveloperPortal || await UserAccess.HasUserGroupAsync("Developer") || await UserAccess.HasPermissionAsync("Developer");
+
+            // Assign atomically after all awaits complete to prevent intermediate blank-menu flashes.
+            canManageLeadership = nextManageLeadership;
+            canViewRequests = nextRequests;
+            canViewStaff = nextStaff;
+            canViewRecruitment = nextRecruitment;
+            canViewTransfers = nextTransfers;
+            canViewSeparations = nextSeparations;
+            canViewAttendance = nextAttendance;
+            canViewLeaves = nextLeaves;
+            canViewDutyRoster = nextDutyRoster;
+            canViewPayroll = nextPayroll;
+            canViewBudget = nextBudget;
+            canViewGoodsLoans = nextGoodsLoans;
+            canViewItems = nextItems;
+            canViewDocuments = nextDocuments;
+            canViewDepartments = nextDepartments;
+            canViewSupervisors = nextSupervisors;
+            canViewSettings = nextSettings;
+            hasLeadershipAuthority = nextLeadershipAuthority;
+            isDeveloper = nextIsDeveloper;
+            loadedPermissionScope = scope;
         }
         catch
         {
-            canManageLeadership = false;
-            canViewHr = false;
-            canViewSettings = false;
-            canViewRecruitment = false;
-            canViewGoodsLoans = false;
+            ResetPermissions();
             isDeveloper = CanAccessDeveloperPortal;
         }
     }
+
+    private static readonly string[] AllGroupKeys =
+    [
+        "dev-monitoring", "dev-workflows", "dev-infra",
+        "admin-workspace", "admin-people", "admin-time", "admin-finance", "admin-assets", "admin-org", "admin-settings",
+        "emp-overview", "emp-time", "emp-pay", "emp-services", "emp-career"
+    ];
+
+    private readonly HashSet<string> collapsedGroups = new(StringComparer.OrdinalIgnoreCase);
+    private string? initializedPortal;
+
+    protected override void OnInitialized()
+    {
+        Navigation.LocationChanged += OnLocationChanged;
+        EnsurePortalGroupsInitialized();
+    }
+
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        EnsurePortalGroupsInitialized();
+        var active = GetActiveGroupKey();
+        if (!string.IsNullOrEmpty(active))
+            collapsedGroups.Remove(active);
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void EnsurePortalGroupsInitialized()
+    {
+        var portal = IsDeveloperPortal ? "dev" : IsAdminPortal ? "admin" : "emp";
+        if (string.Equals(initializedPortal, portal, StringComparison.Ordinal))
+            return;
+
+        initializedPortal = portal;
+        collapsedGroups.Clear();
+        foreach (var key in AllGroupKeys)
+        {
+            if (key.StartsWith(portal + "-", StringComparison.Ordinal))
+                collapsedGroups.Add(key);
+        }
+
+        var defaultGroup = portal switch
+        {
+            "dev" => "dev-monitoring",
+            "admin" => "admin-workspace",
+            _ => "emp-overview"
+        };
+        collapsedGroups.Remove(defaultGroup);
+
+        var active = GetActiveGroupKey();
+        if (!string.IsNullOrEmpty(active))
+            collapsedGroups.Remove(active);
+    }
+
+    private string? GetActiveGroupKey()
+    {
+        var path = new Uri(Navigation.Uri).AbsolutePath.TrimEnd('/').ToLowerInvariant();
+        if (string.IsNullOrEmpty(path)) path = "/";
+
+        if (IsDeveloperPortal)
+        {
+            if (path.Contains("/request-types") || path.Contains("/transitions") || path.Contains("/notification-resolution") || path.Contains("/workflows"))
+                return "dev-workflows";
+            if (path.Contains("/edge-agents") || path.Contains("/diagnostics"))
+                return "dev-infra";
+            return "dev-monitoring";
+        }
+
+        if (IsAdminPortal)
+        {
+            if (path == "/admin" || path == "/admin/my/workspace" || path.StartsWith("/admin/hr/requests"))
+                return "admin-workspace";
+            if (path.StartsWith("/admin/hr/staff") || path.StartsWith("/admin/hr/recruitment") || path.StartsWith("/admin/hr/separations") || path.StartsWith("/admin/settings/leadership"))
+                return "admin-people";
+            if (path.StartsWith("/admin/attendance") || path.StartsWith("/admin/my/workspace/leave") || path.StartsWith("/admin/hr/work-planning") || path.StartsWith("/admin/hr/work-handovers"))
+                return "admin-time";
+            if (path.StartsWith("/admin/payroll") || path.StartsWith("/admin/budget") || path.StartsWith("/admin/goods-loans") || path.StartsWith("/admin/hr/goods-loans"))
+                return "admin-finance";
+            if (path.StartsWith("/admin/hr/items") || path.StartsWith("/admin/hr/certificates") || path.StartsWith("/admin/hr/documents") || path.StartsWith("/admin/hr/slogans"))
+                return "admin-assets";
+            if (path.StartsWith("/admin/my/workspace/organisation") || path.StartsWith("/admin/hr/supervisors") || path.StartsWith("/admin/hr/events") || path.StartsWith("/admin/chat"))
+                return "admin-org";
+            if (path.StartsWith("/admin/settings"))
+                return "admin-settings";
+            return "admin-workspace";
+        }
+
+        if (path == "/" || path == "/online" || path.StartsWith("/online/chat"))
+            return "emp-overview";
+        if (path.StartsWith("/online/attendance") || path.StartsWith("/online/duty-roster") || path.StartsWith("/online/leaves") || path.StartsWith("/online/leave-handovers") || path.StartsWith("/online/ot") || path.StartsWith("/online/overtime"))
+            return "emp-time";
+        if (path.StartsWith("/online/payslips") || path.StartsWith("/online/my-payslips") || path.StartsWith("/online/allowances-deductions") || path.StartsWith("/online/goods-loans"))
+            return "emp-pay";
+        if (path.StartsWith("/online/item-requests") || path.StartsWith("/online/my-assets") || path.StartsWith("/online/certificates") || path.StartsWith("/online/documents"))
+            return "emp-services";
+        if (path.StartsWith("/online/staff-transfers") || path.StartsWith("/online/staff-separation") || path.StartsWith("/online/recruitment") || path.StartsWith("/online/leadership"))
+            return "emp-career";
+        return "emp-overview";
+    }
+
+    private bool IsGroupCollapsed(string key) => !collapsed && collapsedGroups.Contains(key);
+
+    private void ToggleGroup(string key)
+    {
+        if (!collapsedGroups.Add(key))
+            collapsedGroups.Remove(key);
+    }
+
+    private RenderFragment SectionGroup(string key, string title, RenderFragment items, bool isFirst = false) => @<text>
+        @if (collapsed)
+        {
+            @if (!isFirst)
+            {
+                <li aria-hidden="true"><hr class="sidebar-group-divider" /></li>
+            }
+            @items
+        }
+        else
+        {
+            var isCollapsed = IsGroupCollapsed(key);
+            <li class="@(isFirst ? null : "pt-1.5 mt-1 border-t border-white/15")">
+                <button type="button"
+                        class="sidebar-group-toggle"
+                        aria-expanded="@((!isCollapsed).ToString().ToLowerInvariant())"
+                        @onclick="() => ToggleGroup(key)">
+                    <span class="truncate">@title</span>
+                    <AppIcon Name="chevron_down" Class="@($"sidebar-group-chevron {(isCollapsed ? "is-collapsed" : null)}")" />
+                </button>
+            </li>
+            @if (!isCollapsed)
+            {
+                @items
+            }
+        }
+    </text>;
 
     private void ToggleCollapsed() => collapsed = !collapsed;
     private Task CloseMobileAsync() => OnMobileClose.InvokeAsync();
@@ -214,11 +564,11 @@
         <ul class="space-y-1 px-3">
             <NavItem Compact="collapsed" Href="" Disabled="true" Icon="home" Text="Home" />
             <NavItem Compact="collapsed" Href="" Disabled="true" Icon="clock" Text="Attendance" />
-            <NavItem Compact="collapsed" Href="" Disabled="true" Icon="calendar" Text="Duty roster" />
-            <NavItem Compact="collapsed" Href="" Disabled="true" Icon="currency-dollar" Text="Break Time Request" />
+            <NavItem Compact="collapsed" Href="" Disabled="true" Icon="bi-calendar2-week" Text="Duty Roster" />
+            <NavItem Compact="collapsed" Href="" Disabled="true" Icon="calendar" Text="Leave" />
+            <NavItem Compact="collapsed" Href="" Disabled="true" Icon="bi-people-fill" Text="Work Handovers" />
             <NavItem Compact="collapsed" Href="" Disabled="true" Icon="trending-up" Text="Overtime" />
-            <NavItem Compact="collapsed" Href="" Disabled="true" Icon="calendar" Text="Leaves" />
-            <NavItem Compact="collapsed" Href="" Disabled="true" Icon="briefcase" Text="Work handovers" />
+            <NavItem Compact="collapsed" Href="" Disabled="true" Icon="bi-receipt" Text="My Payslips" />
         </ul>
     </nav>;
 
@@ -233,5 +583,10 @@
     private bool IsAdminPortal =>
         !IsDeveloperPortal && new Uri(Navigation.Uri).AbsolutePath
             .Split('/', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.Equals("admin", StringComparison.OrdinalIgnoreCase) == true;
+
+    public void Dispose()
+    {
+        Navigation.LocationChanged -= OnLocationChanged;
+    }
 
 }

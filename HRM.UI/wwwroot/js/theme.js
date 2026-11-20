@@ -2,11 +2,15 @@
 (() => {
     const key = "hrm.colour-theme";
     const valid = value => value === "light" || value === "dark";
-    let theme = "dark";
+    let theme = "light";
     let userKey = null;
     try {
         const saved = localStorage.getItem(key);
-        if (valid(saved)) theme = saved;
+        if (valid(saved)) {
+            theme = saved;
+        } else if (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) {
+            theme = "dark";
+        }
     } catch { /* Private browsing may disable storage; toggling still works. */ }
 
     function updateButtons() {
@@ -19,7 +23,7 @@
     }
 
     function apply(value) {
-        theme = valid(value) ? value : "dark";
+        theme = valid(value) ? value : "light";
         document.documentElement.dataset.theme = theme;
         document.documentElement.setAttribute("data-bs-theme", theme);
         document.documentElement.classList.toggle("dark", theme === "dark");
@@ -28,13 +32,17 @@
 
     apply(theme);
     // Authenticated settings come from UserPreferences. Browser storage is only
-    // a first-paint hint and a guest preference; it never overrides the database.
+    // a first-paint hint and a guest preference; it never overrides a valid database value.
     window.hrmTheme = {
         initialize(serverTheme, userId) {
             userKey = userId == null ? null : `${key}.user.${userId}`;
-            if (userKey) {
-                apply(serverTheme);
-                try { localStorage.setItem(key, theme); } catch { }
+            const normalized = typeof serverTheme === "string" ? serverTheme.trim().toLowerCase() : null;
+            if (userKey && valid(normalized)) {
+                apply(normalized);
+                try {
+                    localStorage.setItem(key, theme);
+                    localStorage.setItem(userKey, theme);
+                } catch { }
             }
             updateButtons();
         },

@@ -11,18 +11,31 @@
 
 
 @inject HRM.Application.Contracts.Pages.ILeaveApplications LeaveService
+@inject IUserAccessService UserAccess
 
 @rendermode RenderMode.InteractiveServer
 
-<PageTitle>Settings - HR Portal</PageTitle>
+<PageTitle>Payroll - HR Portal</PageTitle>
 
 <AuthorizeView>
     <Authorized>
+        @if (checkingAccess)
+        {
+            <div class="rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-500">Checking payroll permissions…</div>
+        }
+        else if (!canAccess)
+        {
+            <div class="rounded-xl border border-amber-200 bg-amber-50 p-6 text-sm text-amber-900">
+                You do not have permission to access Payroll Management.
+            </div>
+        }
+        else
+        {
         <div class="max-w-12xl mx-auto py-0 px-4">
             <!-- Back Button -->
-            <a href="/payroll" class="text-slate-400 hover:text-slate-600 text-sm mb-2 flex items-center gap-1 transition-colors w-fit">
+            <a href="/admin/payroll" class="text-slate-400 hover:text-slate-600 text-sm mb-2 flex items-center gap-1 transition-colors w-fit">
                 <AppIcon Name="arrow_back" Class="w-4 h-4 text-base" />
-                Back to Settings Hub
+                Back to Payroll
             </a>
 
             <!-- Main Responsive Layout: Stacks vertically on mobile, side-by-side on md+ screens -->
@@ -110,6 +123,7 @@
                 </div>
             </div>
         </div>
+        }
     </Authorized>
 
     <NotAuthorized>
@@ -146,7 +160,7 @@
     private List<SubItem> GetSubItems(string cat) => cat.ToLower() switch
     {
         "payroll" => new() {
-            new("Payroll Period", "🔍", "Find existing individual profiles in the system.", typeof(PayrollPeriodGrid)),
+            new("Payroll Period", "📅", "Manage payroll periods, pay cycles, and payroll processing schedules.", typeof(PayrollPeriodGrid)),
     },
            _ => new() {
         new("General Configuration", "🔧", "System-level management and core settings.", null)
@@ -160,12 +174,29 @@
 
     // Variables for Dashboard Data
     private List<HRM.DTOs.Leave.JobLeaveTypeDto>? leaveBalances;
-
+    private bool checkingAccess = true;
+    private bool canAccess;
 
     protected override async Task OnInitializedAsync()
     {
-       
-        leaveBalances = await LeaveService.GetMyLeaveBalancesAsync();
-             
+        try
+        {
+            var actor = await UserAccess.RequireContextAsync();
+            var isAdmin = actor.IsSuperAdministrator || await UserAccess.HasPermissionAsync("Admin");
+            var isHr = await UserAccess.HasUserGroupAsync("Human Resource: Staff") || await UserAccess.HasUserGroupAsync("Human Resource :Head");
+            canAccess = isAdmin || isHr || await UserAccess.HasPermissionAsync("Payroll.View") || await UserAccess.HasPermissionAsync("Payroll.Review");
+            if (canAccess)
+            {
+                leaveBalances = await LeaveService.GetMyLeaveBalancesAsync();
+            }
+        }
+        catch
+        {
+            canAccess = false;
+        }
+        finally
+        {
+            checkingAccess = false;
+        }
     }
 }
