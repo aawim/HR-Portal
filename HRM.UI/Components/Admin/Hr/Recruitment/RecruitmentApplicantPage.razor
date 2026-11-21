@@ -2,27 +2,210 @@
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
 @rendermode RenderMode.InteractiveServer
 @inject HRM.UI.Services.Recruitment.IRecruitmentApiClient Api
-<PageTitle>My recruitment applications</PageTitle>
-<section class="p-2 w-full min-w-0 space-y-4">
-    <header class="sticky top-0 z-30 flex flex-wrap justify-between gap-2 border-b border-slate-200 bg-white/95 px-3 py-3 shadow-xs"><div><h1 class="text-lg font-bold text-slate-900">My applications and offers</h1><p class="mt-0.5 text-xs text-slate-500">Track your recruitment applications and respond to your offers.</p></div><button class="app-button app-button-secondary app-button-sm" disabled="@busy" @onclick="Load">Refresh</button></header>
-    @if(message is not null){<p role="status" class="p-3 rounded-xl border border-slate-200 text-sm">@message</p>}
-    @if(workspace is not null){
-        <RecruitmentApplyPanel Registered="workspace.ApplicantId.HasValue" Changed="Load" />
-        <div class="p-4 rounded-2xl border border-slate-200 app-surface space-y-3"><h2 class="p-1 font-bold">Applications</h2>
-            @if(workspace.Applications.Count==0){<p class="p-3 text-xs text-slate-500">No applications are linked to your signed-in eFaas identity.</p>}
-            @foreach(var a in workspace.Applications){<div class="p-3 rounded-xl border border-slate-200 text-xs">@a.Reference · @a.VacancyReference · @a.Status</div>}
+@inject Microsoft.JSInterop.IJSRuntime JS
+
+<PageTitle>My Recruitment Applications</PageTitle>
+
+<section class="w-full min-w-0 p-2 space-y-4">
+    <!-- Full-Width Sticky Header -->
+    <header class="sticky top-0 z-30 m-0 border-b border-slate-200 bg-white/95 backdrop-blur-xs px-3 py-3 shadow-xs rounded-2xl flex flex-wrap items-center justify-between gap-3">
+        <div class="min-w-0">
+            <div class="flex items-center gap-2 flex-wrap">
+                <span class="rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-semibold text-blue-800">Careers &amp; Recruitment</span>
+                <span class="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-800">eFaas Verified Identity</span>
+            </div>
+            <h1 class="text-lg font-bold text-slate-900 truncate mt-0.5">My Applications &amp; Offers</h1>
+            <p class="text-xs text-slate-500 mt-0.5">Browse open vacancies, submit applications, track progress, and respond to job offers.</p>
         </div>
-        <div class="p-4 rounded-2xl border border-slate-200 app-surface space-y-3"><h2 class="p-1 font-bold">Offers</h2>
-            @if(workspace.Offers.Count==0){<p class="p-3 text-xs text-slate-500">You have no offers.</p>}
-            @foreach(var o in workspace.Offers){<div class="p-3 rounded-xl border border-slate-200 text-xs space-y-2"><p>@o.VacancyReference · @o.Status</p><p class="whitespace-pre-wrap">@Terms(o.TermsSnapshotJson)</p>@if(o.Status=="Offered"){<button class="app-button app-button-secondary app-button-sm" disabled="@busy" @onclick="()=>confirmation=o.Id">Review acceptance</button>@if(confirmation==o.Id){<p>Confirm that you have reviewed and accept these offer terms.</p><button class="app-button app-button-primary app-button-sm" disabled="@busy" @onclick="()=>Accept(o.Id)">Confirm acceptance</button><button class="app-button app-button-secondary app-button-sm" disabled="@busy" @onclick="()=>confirmation=0">Cancel</button>}}</div>}
+        <div class="flex flex-wrap items-center gap-2">
+            <button type="button"
+                    class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition-colors"
+                    @onclick="ToggleWidthAsync">
+                <span>@(isFullWidth ? "Shrink View" : "Full Width")</span>
+            </button>
+            <button type="button"
+                    class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                    disabled="@busy"
+                    @onclick="Load">
+                <span>Refresh</span>
+            </button>
+        </div>
+    </header>
+
+    @if (message is not null)
+    {
+        <div role="status" class="flex items-center justify-between rounded-xl border border-slate-200 bg-white p-3 text-xs text-slate-800 shadow-2xs @(isFullWidth ? "max-w-none" : "mx-auto max-w-7xl")">
+            <span>@message</span>
+            <button type="button" class="font-bold text-slate-500 hover:text-slate-800" @onclick="() => message = null">✕</button>
+        </div>
+    }
+
+    @if (workspace is not null)
+    {
+        <div class="grid items-start gap-4 lg:grid-cols-12 @(isFullWidth ? "max-w-none" : "mx-auto max-w-7xl")">
+            <!-- Left: Apply & Applicant Profile -->
+            <div class="lg:col-span-7">
+                <RecruitmentApplyPanel Registered="workspace.ApplicantId.HasValue" Changed="Load" />
+            </div>
+
+            <!-- Right: Applications & Offers -->
+            <aside class="lg:col-span-5 space-y-4">
+                <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs space-y-3">
+                    <div class="flex items-center justify-between">
+                        <h2 class="text-sm font-bold text-slate-900">My Applications</h2>
+                        <span class="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-700">@workspace.Applications.Count</span>
+                    </div>
+
+                    @if (workspace.Applications.Count == 0)
+                    {
+                        <div class="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-xs text-slate-500">
+                            No applications are linked to your signed-in eFaas identity yet.
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="space-y-2">
+                            @foreach (var a in workspace.Applications)
+                            {
+                                <div class="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-slate-50/70 p-3 text-xs">
+                                    <div>
+                                        <p class="font-mono font-semibold text-blue-700">@a.Reference</p>
+                                        <p class="text-[11px] text-slate-500">Vacancy: @a.VacancyReference</p>
+                                    </div>
+                                    <span class="rounded-full bg-blue-100 px-2.5 py-0.5 text-[11px] font-semibold text-blue-800">@a.Status</span>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+
+                <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs space-y-3">
+                    <div class="flex items-center justify-between">
+                        <h2 class="text-sm font-bold text-slate-900">My Offers</h2>
+                        <span class="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-700">@workspace.Offers.Count</span>
+                    </div>
+
+                    @if (workspace.Offers.Count == 0)
+                    {
+                        <div class="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-xs text-slate-500">
+                            You have no job offers at this time.
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="space-y-3">
+                            @foreach (var o in workspace.Offers)
+                            {
+                                <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-3 text-xs space-y-2">
+                                    <div class="flex items-center justify-between">
+                                        <span class="font-mono font-semibold text-slate-900">@o.VacancyReference</span>
+                                        <span class="rounded-full px-2.5 py-0.5 text-[11px] font-semibold @(o.Status == "Accepted" ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800")">@o.Status</span>
+                                    </div>
+                                    <p class="whitespace-pre-wrap rounded-lg border border-slate-200 bg-white p-2.5 text-slate-700">@Terms(o.TermsSnapshotJson)</p>
+                                    @if (o.Status == "Offered")
+                                    {
+                                        @if (confirmation == o.Id)
+                                        {
+                                            <div class="rounded-lg border border-blue-200 bg-blue-50 p-2.5 space-y-2">
+                                                <p class="font-medium text-blue-900">Confirm that you have reviewed and accept these offer terms.</p>
+                                                <div class="flex gap-2">
+                                                    <button type="button" class="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50" disabled="@busy" @onclick="() => Accept(o.Id)">Confirm Acceptance</button>
+                                                    <button type="button" class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50" disabled="@busy" @onclick="() => confirmation = 0">Cancel</button>
+                                                </div>
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <button type="button" class="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50" disabled="@busy" @onclick="() => confirmation = o.Id">Review Acceptance</button>
+                                        }
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            </aside>
         </div>
     }
 </section>
-@code{
+
+@code {
     private HRM.Application.Contracts.Recruitment.MyRecruitmentWorkspace? workspace;
-    private bool busy;private string? message;private int confirmation;
-    protected override Task OnInitializedAsync()=>Load();
-    private async Task Load(){busy=true;try{workspace=await Api.GetMyWorkspaceAsync();}catch(HttpRequestException ex){workspace=null;message=ex.StatusCode is System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.Forbidden?"Sign in through eFaas to view your applications and offers.":"Your applications could not be loaded. Try again shortly.";}finally{busy=false;}}
-    private async Task Accept(int id){if(busy)return;busy=true;try{var result=await Api.AcceptMyOfferAsync(id);message=result.Message;if(result.Success){confirmation=0;await Load();}}catch(HttpRequestException){message="Offer acceptance failed. Refresh and check the offer status.";}finally{busy=false;}}
-    private static string Terms(string json){try{using var d=System.Text.Json.JsonDocument.Parse(json);return d.RootElement.TryGetProperty("Terms",out var t)?t.GetString()??"":"Contact the recruitment office for your offer terms.";}catch(System.Text.Json.JsonException){return "Contact the recruitment office for your offer terms.";}}
+    private bool busy, isFullWidth;
+    private string? message;
+    private int confirmation;
+
+    protected override Task OnInitializedAsync() => Load();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            isFullWidth = await JS.InvokeAsync<string?>("localStorage.getItem", "hrm.my-recruitment.full-width") == "true";
+            StateHasChanged();
+        }
+    }
+
+    private async Task ToggleWidthAsync()
+    {
+        isFullWidth = !isFullWidth;
+        await JS.InvokeVoidAsync("localStorage.setItem", "hrm.my-recruitment.full-width", isFullWidth ? "true" : "false");
+    }
+
+    private async Task Load()
+    {
+        busy = true;
+        try
+        {
+            workspace = await Api.GetMyWorkspaceAsync();
+        }
+        catch (HttpRequestException ex)
+        {
+            workspace = null;
+            message = ex.StatusCode is System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.Forbidden
+                ? "Sign in through eFaas to view your applications and offers."
+                : "Your applications could not be loaded. Try again shortly.";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task Accept(int id)
+    {
+        if (busy) return;
+        busy = true;
+        try
+        {
+            var result = await Api.AcceptMyOfferAsync(id);
+            message = result.Message;
+            if (result.Success)
+            {
+                confirmation = 0;
+                await Load();
+            }
+        }
+        catch (HttpRequestException)
+        {
+            message = "Offer acceptance failed. Refresh and check the offer status.";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private static string Terms(string json)
+    {
+        try
+        {
+            using var d = System.Text.Json.JsonDocument.Parse(json);
+            return d.RootElement.TryGetProperty("Terms", out var t) ? t.GetString() ?? "" : "Contact the recruitment office for your offer terms.";
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return "Contact the recruitment office for your offer terms.";
+        }
+    }
 }

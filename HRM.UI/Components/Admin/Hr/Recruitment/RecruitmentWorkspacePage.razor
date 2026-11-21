@@ -4,48 +4,253 @@
 @inject HRM.UI.Services.Recruitment.IRecruitmentApiClient RecruitmentApi
 @inject ILogger<RecruitmentWorkspacePage> Logger
 @inject HRM.Services.Interfaces.IUserAccessService Access
+@inject Microsoft.JSInterop.IJSRuntime JS
+
 <PageTitle>Recruitment Workspace - HR Portal</PageTitle>
-@if (canManage && !accessDenied)
-{
-    <RecruitmentRequisitionActions Rows="rows" Changed="LoadAsync" />
-    <RecruitmentVacancyActions Rows="rows" />
-    <RecruitmentScreeningPanel />
-    <RecruitmentAssessmentPanel />
-    <RecruitmentResultsPanel />
-    <RecruitmentOffersPanel />
-    <RecruitmentOfficialTemplatesPanel />
-}
-@if (canAdministerAccess)
-{
-    <div class="p-2 flex flex-wrap items-center gap-2">
-        <a class="app-button app-button-secondary app-button-sm" href="/admin/settings/admin-access">Manage recruitment access</a>
-        <span class="text-xs text-slate-500">Select the account and request Recruitment.View or Recruitment.Manage for approval.</span>
+
+<section class="w-full min-w-0 p-2 space-y-4">
+    <!-- Full-Width Sticky Header -->
+    <header class="sticky top-0 z-30 m-0 border-b border-slate-200 bg-white/95 backdrop-blur-xs px-3 py-3 shadow-xs rounded-2xl flex flex-wrap items-center justify-between gap-3">
+        <div class="min-w-0">
+            <div class="flex items-center gap-2 flex-wrap">
+                <span class="rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-semibold text-blue-800">CSC Recruitment</span>
+                <span class="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-800">@(canManage ? "Manage Access" : "View Access")</span>
+            </div>
+            <h1 class="text-lg font-bold text-slate-900 truncate mt-0.5">Recruitment Workspace</h1>
+            <p class="text-xs text-slate-500 mt-0.5">Manage requisitions, published vacancies, screening, panel assessments, merit results, offers, and official templates.</p>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2">
+            <button type="button"
+                    class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition-colors"
+                    @onclick="ToggleWidthAsync">
+                <span>@(isFullWidth ? "Shrink View" : "Full Width")</span>
+            </button>
+
+            @if (canAdministerAccess)
+            {
+                <a class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition-colors"
+                   href="/admin/settings/admin-access">
+                    <span>Manage Access</span>
+                </a>
+            }
+
+            <button type="button"
+                    class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 transition-colors"
+                    @onclick="LoadAsync">
+                <span>Refresh</span>
+            </button>
+        </div>
+    </header>
+
+    @if (accessDenied)
+    {
+        <div role="alert" class="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+            Ask your account administrator to assign <strong>Recruitment.View</strong> for this organisation. <strong>Recruitment.Manage</strong> is required for recruitment processing. After approval, sign out and sign in again, then refresh this page.
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(error))
+    {
+        <div role="alert" class="flex items-center justify-between rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">
+            <span>@error</span>
+            <button type="button" class="font-bold text-rose-600 hover:text-rose-900" @onclick="() => error = null">✕</button>
+        </div>
+    }
+
+    <!-- KPI Summary Strip -->
+    <div class="grid grid-cols-1 gap-3 sm:grid-cols-3 @(isFullWidth ? "max-w-none" : "mx-auto max-w-7xl")">
+        <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
+            <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Total Requisitions</p>
+            <p class="mt-1 text-2xl font-bold text-slate-900">@rows.Count</p>
+        </div>
+        <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
+            <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Draft Requisitions</p>
+            <p class="mt-1 text-2xl font-bold text-amber-600">@rows.Count(r => r.Status == "Draft")</p>
+        </div>
+        <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
+            <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Approved Requisitions</p>
+            <p class="mt-1 text-2xl font-bold text-emerald-600">@rows.Count(r => r.Status == "Approved")</p>
+        </div>
     </div>
-}
-@if (accessDenied)
-{
-    <div role="alert" class="p-2 rounded-xl border border-amber-200 bg-amber-50 text-xs text-amber-900">
-        Ask your account administrator to assign Recruitment.View for this organisation. Recruitment.Manage is required for recruitment processing. After approval, sign out and sign in again, then refresh this page.
-    </div>
-}
-<section class="w-full min-w-0 p-2 space-y-4"><header class="sticky top-0 z-30 m-0 flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-white/95 px-3 py-3 shadow-xs"><div><h1 class="text-lg font-bold text-slate-900">Recruitment Workspace</h1><p class="mt-0.5 text-xs text-slate-500">CSC-controlled requisitions and vacancies.</p></div><button class="app-button app-button-secondary app-button-sm" @onclick="LoadAsync">Refresh</button></header>@if(!string.IsNullOrEmpty(error)){<div class="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">@error</div>}<div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs"><h2 class="font-bold text-slate-800 p-1">Requisitions</h2><div class="overflow-x-auto rounded-xl border border-slate-200"><table class="w-full text-left text-xs"><thead class="bg-slate-50 text-slate-700 font-semibold border-b border-slate-200"><tr><th class="p-2.5">Reference</th><th class="p-2.5">Policy</th><th class="p-2.5">Slots</th><th class="p-2.5">Status</th></tr></thead><tbody class="divide-y divide-slate-100">@foreach(var row in rows){<tr class="hover:bg-slate-50/50"><td class="p-2.5 font-mono text-[11px] text-blue-700">@row.Reference</td><td class="p-2.5">@row.PolicyVersion</td><td class="p-2.5">@row.RequestedSlots</td><td class="p-2.5"><span class="bg-amber-100 text-amber-800 rounded-full px-2.5 py-0.5 font-semibold text-[11px]">@row.Status</span></td></tr>}</tbody></table></div></div></section>
+
+    <!-- Segmented Navigation Bar -->
+    @if (!accessDenied)
+    {
+        <div class="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-xs @(isFullWidth ? "max-w-none" : "mx-auto max-w-7xl")">
+            <div class="flex flex-wrap rounded-lg border border-slate-300 p-0.5 bg-slate-50 gap-0.5">
+                @foreach (var tab in Tabs)
+                {
+                    if (tab.RequiresManage && !canManage) continue;
+                    <button type="button"
+                            class="px-3 py-1.5 rounded-md text-xs font-semibold transition @(activeTab == tab.Key ? "bg-white text-blue-700 shadow-xs" : "text-slate-600 hover:text-slate-900")"
+                            @onclick="() => activeTab = tab.Key">
+                        @tab.Label
+                    </button>
+                }
+            </div>
+        </div>
+
+        <div class="@(isFullWidth ? "max-w-none" : "mx-auto max-w-7xl") space-y-4">
+            @if (activeTab == "requisitions")
+            {
+                <div class="grid items-start gap-4 lg:grid-cols-12">
+                    @if (canManage)
+                    {
+                        <div class="lg:col-span-5">
+                            <RecruitmentRequisitionActions Rows="rows" Changed="LoadAsync" />
+                        </div>
+                    }
+                    <div class="@(canManage ? "lg:col-span-7" : "lg:col-span-12") rounded-2xl border border-slate-200 bg-white p-4 shadow-xs space-y-3">
+                        <div class="flex items-center justify-between gap-2">
+                            <div>
+                                <h2 class="text-sm font-bold text-slate-900">Requisitions Register</h2>
+                                <p class="text-xs text-slate-500">All recruitment requisitions for your current organisation.</p>
+                            </div>
+                            <span class="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-700">@rows.Count records</span>
+                        </div>
+                        <div class="overflow-x-auto rounded-xl border border-slate-200">
+                            <table class="w-full text-left text-xs">
+                                <thead class="border-b border-slate-200 bg-slate-50 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+                                    <tr>
+                                        <th class="p-2.5">Reference</th>
+                                        <th class="p-2.5">Policy Version</th>
+                                        <th class="p-2.5">Slots</th>
+                                        <th class="p-2.5">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-100">
+                                    @if (rows.Count == 0)
+                                    {
+                                        <tr>
+                                            <td colspan="4" class="p-6 text-center text-slate-500">No requisitions recorded yet.</td>
+                                        </tr>
+                                    }
+                                    else
+                                    {
+                                        @foreach (var row in rows)
+                                        {
+                                            <tr class="hover:bg-slate-50/70 transition-colors">
+                                                <td class="p-2.5 font-mono text-[11px] font-semibold text-blue-700">@row.Reference</td>
+                                                <td class="p-2.5 text-slate-700">@row.PolicyVersion</td>
+                                                <td class="p-2.5 font-semibold text-slate-800">@row.RequestedSlots</td>
+                                                <td class="p-2.5">
+                                                    <span class="@StatusBadge(row.Status)">@row.Status</span>
+                                                </td>
+                                            </tr>
+                                        }
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            }
+            else if (activeTab == "vacancies" && canManage)
+            {
+                <RecruitmentVacancyActions Rows="rows" />
+            }
+            else if (activeTab == "screening" && canManage)
+            {
+                <RecruitmentScreeningPanel />
+            }
+            else if (activeTab == "assessments" && canManage)
+            {
+                <RecruitmentAssessmentPanel />
+            }
+            else if (activeTab == "results" && canManage)
+            {
+                <RecruitmentResultsPanel />
+            }
+            else if (activeTab == "offers" && canManage)
+            {
+                <RecruitmentOffersPanel />
+            }
+            else if (activeTab == "templates" && canManage)
+            {
+                <RecruitmentOfficialTemplatesPanel />
+            }
+        </div>
+    }
+</section>
+
 @code {
-    private List<HRM.Application.Contracts.Recruitment.RecruitmentRequisitionRow> rows=[];
+    private sealed record TabItem(string Key, string Label, bool RequiresManage);
+    private static readonly TabItem[] Tabs =
+    [
+        new("requisitions", "Requisitions", false),
+        new("vacancies", "Vacancies", true),
+        new("screening", "Screening", true),
+        new("assessments", "Assessments", true),
+        new("results", "Results & Objections", true),
+        new("offers", "Offers & Onboarding", true),
+        new("templates", "Official Templates", true)
+    ];
+
+    private List<HRM.Application.Contracts.Recruitment.RecruitmentRequisitionRow> rows = [];
+    private string activeTab = "requisitions";
     private string? error;
     private bool accessDenied;
     private bool canAdministerAccess;
     private bool canManage;
+    private bool isFullWidth;
+
     protected override async Task OnInitializedAsync()
     {
         canAdministerAccess = await Access.HasPermissionAsync("Users.Roles.Edit") || await Access.HasPermissionAsync("Admin");
         canManage = await Access.HasPermissionAsync("Recruitment.Manage");
         await LoadAsync();
     }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            isFullWidth = await JS.InvokeAsync<string?>("localStorage.getItem", "hrm.recruitment.full-width") == "true";
+            StateHasChanged();
+        }
+    }
+
+    private async Task ToggleWidthAsync()
+    {
+        isFullWidth = !isFullWidth;
+        await JS.InvokeVoidAsync("localStorage.setItem", "hrm.recruitment.full-width", isFullWidth ? "true" : "false");
+    }
+
     private async Task LoadAsync()
     {
-        try { error=null; accessDenied=false; rows=(await RecruitmentApi.GetRequisitionsAsync()).ToList(); }
-        catch (UnauthorizedAccessException ex) { accessDenied=true; rows.Clear(); error=ex.Message; Logger.LogWarning(ex,"Recruitment workspace access failed"); }
-        catch (HttpRequestException ex) { error=ex.StatusCode.HasValue ? $"Recruitment API returned HTTP {(int)ex.StatusCode.Value}. Contact your administrator." : "The recruitment API could not be reached. Try again shortly."; Logger.LogError(ex,"Recruitment workspace request failed"); }
-        catch (Exception ex) { error="Recruitment data could not be loaded. Contact your administrator."; Logger.LogError(ex,"Recruitment workspace load failed"); }
+        try
+        {
+            error = null;
+            accessDenied = false;
+            rows = (await RecruitmentApi.GetRequisitionsAsync()).ToList();
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            accessDenied = true;
+            rows.Clear();
+            error = ex.Message;
+            Logger.LogWarning(ex, "Recruitment workspace access failed");
+        }
+        catch (HttpRequestException ex)
+        {
+            error = ex.StatusCode.HasValue
+                ? $"Recruitment API returned HTTP {(int)ex.StatusCode.Value}. Contact your administrator."
+                : "The recruitment API could not be reached. Try again shortly.";
+            Logger.LogError(ex, "Recruitment workspace request failed");
+        }
+        catch (Exception ex)
+        {
+            error = "Recruitment data could not be loaded. Contact your administrator.";
+            Logger.LogError(ex, "Recruitment workspace load failed");
+        }
     }
+
+    private static string StatusBadge(string status) => status switch
+    {
+        "Approved" or "Published" or "Active" => "rounded-full bg-emerald-100 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-800",
+        "Draft" or "Pending" => "rounded-full bg-amber-100 px-2.5 py-0.5 text-[11px] font-semibold text-amber-800",
+        "Rejected" or "Cancelled" => "rounded-full bg-rose-100 px-2.5 py-0.5 text-[11px] font-semibold text-rose-800",
+        _ => "rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-semibold text-slate-700"
+    };
 }

@@ -1,11 +1,15 @@
 @using HRM.Application.Contracts.Recruitment
 @inject HRM.UI.Services.Recruitment.IRecruitmentApiClient Api
 
-<section class="p-2 rounded-2xl border border-slate-200 app-surface space-y-3">
-    <h2 class="p-1 font-bold">Create requisition</h2>
-    <p class="p-1 text-xs text-slate-500">An active position matrix and a verified policy assigned to your organisation are required.</p>
+<section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs space-y-4">
+    <div>
+        <h2 class="text-sm font-bold text-slate-900">Create Requisition</h2>
+        <p class="mt-0.5 text-xs text-slate-500">An active position matrix and a verified policy assigned to your organisation are required.</p>
+    </div>
+
     <div class="grid gap-3 sm:grid-cols-2">
-        <label class="block p-1 text-xs font-medium">Available position
+        <label class="block text-xs font-medium text-slate-700 sm:col-span-2">
+            Available Position
             <select @bind="matrixId" class="@InputClass">
                 <option value="0">-- Select available position --</option>
                 @foreach (var pos in availablePositions)
@@ -14,20 +18,68 @@
                 }
             </select>
         </label>
-        <label class="block p-1 text-xs font-medium">Number of vacancies<input type="number" min="1" @bind="slots" class="@InputClass" /></label>
-        <label class="block p-1 text-xs font-medium">Employment type<select @bind="employment" class="@InputClass"><option>Permanent</option><option>Contract</option><option>Temporary</option></select></label>
-        <label class="block p-1 text-xs font-medium">Reason<textarea maxlength="2000" @bind="reason" class="@InputClass"></textarea></label>
+        <label class="block text-xs font-medium text-slate-700">
+            Number of Vacancies
+            <input type="number" min="1" @bind="slots" class="@InputClass" />
+        </label>
+        <label class="block text-xs font-medium text-slate-700">
+            Employment Type
+            <select @bind="employment" class="@InputClass">
+                <option>Permanent</option>
+                <option>Contract</option>
+                <option>Temporary</option>
+            </select>
+        </label>
+        <label class="block text-xs font-medium text-slate-700 sm:col-span-2">
+            Justification / Reason
+            <textarea rows="3" maxlength="2000" @bind="reason" class="@InputClass" placeholder="Enter business justification for this requisition..."></textarea>
+        </label>
     </div>
-    <button class="app-button app-button-primary app-button-sm" disabled="@(busy || matrixId <= 0 || slots <= 0 || string.IsNullOrWhiteSpace(reason))" @onclick="CreateAsync">Create requisition</button>
-    <h2 class="p-1 font-bold">Draft requisitions</h2>
-    @foreach (var row in Rows.Where(x => x.Status == "Draft"))
+
+    <div class="flex justify-end">
+        <button type="button"
+                class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                disabled="@(busy || matrixId <= 0 || slots <= 0 || string.IsNullOrWhiteSpace(reason))"
+                @onclick="CreateAsync">
+            Create Requisition
+        </button>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(message))
     {
-        <div class="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 p-3 text-xs">
-            <span>@row.Reference · @row.RequestedSlots vacancies · @row.PolicyVersion</span>
-            <button class="app-button app-button-secondary app-button-sm" disabled="@busy" @onclick="() => ApproveAsync(row.Id)">Approve requisition</button>
+        <div role="status" class="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-800">
+            <span>@message</span>
+            <button type="button" class="font-bold text-slate-500 hover:text-slate-800" @onclick="() => message = null">✕</button>
         </div>
     }
-    @if (!string.IsNullOrWhiteSpace(message)) { <p role="status" class="p-2 text-sm">@message</p> }
+
+    @{
+        var drafts = Rows.Where(x => x.Status == "Draft").ToList();
+    }
+    @if (drafts.Count > 0)
+    {
+        <div class="border-t border-slate-200 pt-3 space-y-2">
+            <h3 class="text-xs font-bold uppercase tracking-wide text-slate-600">Draft Requisitions Pending Approval</h3>
+            @foreach (var row in drafts)
+            {
+                <div class="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-slate-50/70 p-3 text-xs">
+                    <div class="min-w-0">
+                        <span class="font-mono font-semibold text-blue-700">@row.Reference</span>
+                        <span class="mx-1.5 text-slate-300">•</span>
+                        <span class="text-slate-700">@row.RequestedSlots vacancies</span>
+                        <span class="mx-1.5 text-slate-300">•</span>
+                        <span class="text-slate-500">@row.PolicyVersion</span>
+                    </div>
+                    <button type="button"
+                            class="inline-flex items-center justify-center rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-800 hover:bg-emerald-100 disabled:opacity-50 transition-colors"
+                            disabled="@busy"
+                            @onclick="() => ApproveAsync(row.Id)">
+                        Approve
+                    </button>
+                </div>
+            }
+        </div>
+    }
 </section>
 
 @code {
@@ -38,21 +90,42 @@
     private string? message;
     private bool busy;
     private IReadOnlyList<AvailablePositionMatrixOption> availablePositions = [];
-    private const string InputClass = "mt-1 w-full rounded-lg border border-slate-300 bg-white p-1 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100";
+    private const string InputClass = "mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500";
+
     protected override async Task OnInitializedAsync() => await LoadPositionsAsync();
+
     private async Task LoadPositionsAsync()
     {
         try { availablePositions = await Api.GetAvailablePositionsAsync(); }
         catch { availablePositions = []; }
     }
+
     private Task CreateAsync() => ExecuteAsync(() => Api.CreateRequisitionAsync(new(matrixId, slots, employment, "CivilService", reason)));
     private Task ApproveAsync(int id) => ExecuteAsync(() => Api.ApproveRequisitionAsync(id));
+
     private async Task ExecuteAsync(Func<Task<HRM.DTOs.ServiceResult>> action)
     {
         if (busy) return;
         busy = true;
-        try { var result = await action(); message = result.Message; if (result.Success) { await LoadPositionsAsync(); await Changed.InvokeAsync(); } }
-        catch (HttpRequestException ex) { message = ex.StatusCode == System.Net.HttpStatusCode.Conflict ? "The policy, capacity or requisition state prevents this action. Ask your recruitment administrator to check the configuration." : "The action failed. Refresh and try again."; }
-        finally { busy = false; }
+        try
+        {
+            var result = await action();
+            message = result.Message;
+            if (result.Success)
+            {
+                await LoadPositionsAsync();
+                await Changed.InvokeAsync();
+            }
+        }
+        catch (HttpRequestException ex)
+        {
+            message = ex.StatusCode == System.Net.HttpStatusCode.Conflict
+                ? "The policy, capacity or requisition state prevents this action. Ask your recruitment administrator to check the configuration."
+                : "The action failed. Refresh and try again.";
+        }
+        finally
+        {
+            busy = false;
+        }
     }
 }

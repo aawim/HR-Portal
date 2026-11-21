@@ -8,42 +8,418 @@
 @using Microsoft.JSInterop
 @inject IJSRuntime JS
 @rendermode InteractiveServer
+
 @if (!Embedded)
 {
     <PageTitle>Leadership Administration</PageTitle>
 }
-<section class="mx-auto w-full min-w-0 @(Embedded ? "pt-2" : "p-2") space-y-2">
- @if (!Embedded)
- {
-     <header class="sticky top-0 z-30 border-b border-slate-200 bg-white/95 p-2 shadow-xs"><div><h1 class="text-lg font-bold text-slate-900">Leadership administration</h1><p class="mt-0.5 text-xs text-slate-500">MDS-managed appointments, organisation responsibilities, and explicit authority grants.</p></div><div class="mt-2 flex flex-wrap gap-2"><button class="app-button app-button-secondary app-button-sm" @onclick="ToggleWidthAsync">@(isFullWidth ? "Shrink View" : "Full Width")</button><a href="/admin/settings/leadership/management" class="app-button app-button-secondary app-button-sm">View records and audit</a></div></header>
- }
- else
- {
-     <div class="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 shadow-2xs">
-         <div>
-             <h2 class="text-sm font-bold text-slate-900 dark:text-slate-100">Leadership administration</h2>
-             <p class="text-xs text-slate-500 dark:text-slate-400">MDS-managed appointments, organisation responsibilities, and explicit authority grants.</p>
-         </div>
-         <a href="/admin/settings/leadership/management" class="app-button app-button-secondary app-button-sm">View records and audit</a>
-     </div>
- }
- <div class="rounded-xl border border-blue-200 bg-blue-50/40 p-2 text-xs leading-relaxed text-slate-700"><strong>How to complete this form</strong><p class="mt-1">Work through sections 1–4 in order. Save each section before continuing. Reference IDs are the numeric record IDs shown in the records screen; they are not national identity numbers. Delegation and attendance policy are additional settings.</p></div>
- @if(error is not null){<div class="rounded-xl border border-rose-200 bg-rose-50 p-2 text-xs text-rose-800">@error</div>}
- @if(message is not null){<div class="rounded-xl border border-emerald-200 bg-emerald-50 p-2 text-xs text-emerald-800">@message</div>}
- <div class="grid items-start gap-2 @(isFullWidth ? "max-w-none" : "mx-auto max-w-7xl") lg:grid-cols-2"><div class="page-panel-left min-w-0 rounded-2xl border border-slate-200 bg-white p-2 shadow-xs space-y-2">
-  <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-2"><h2 class="font-bold text-slate-800 p-1">Appointment type</h2><p class="mb-2 px-1 text-xs leading-relaxed text-slate-500">1. Define the appointment category, such as State Minister or Board Chair. Create each category once.</p><div class="grid gap-2 md:grid-cols-2"><label class="block text-xs font-medium text-slate-700 p-1">Name<input class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100" @bind="type.Name" /></label><label class="block text-xs font-medium text-slate-700 p-1">Description<input class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100" @bind="type.Description" /></label></div><button class="app-button app-button-primary app-button-sm mt-2" @onclick="SaveTypeAsync">Save type</button></div>
-  <div class="rounded-xl border border-blue-200 bg-blue-50/40 p-2"><h2 class="font-bold text-slate-800 p-1">Appointment</h2><p class="mb-2 px-1 text-xs leading-relaxed text-slate-500">2. Record the person and the official appointment letter. The appointing organisation is the authority issuing the appointment; the administrative organisation handles the officer’s own HR record.</p><div class="grid gap-2 md:grid-cols-3"><label class="block text-xs font-medium text-slate-700 p-1">Appointed person<select class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100" @bind="appointment.IndividualId"><option value="0">Select appointed person</option>@if(configuration is not null){@foreach(var option in configuration.People){<option value="@option.Id">@option.Name</option>}}</select></label><label class="block text-xs font-medium text-slate-700 p-1">Appointment type<select class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100" @bind="appointment.LeadershipAppointmentTypeId"><option value="0">Select appointment type</option>@if(configuration is not null){@foreach(var option in configuration.AppointmentTypes){<option value="@option.Id">@option.Name</option>}}</select></label><label class="block text-xs font-medium text-slate-700 p-1">Appointing authority<select class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100" @bind="appointment.AppointingOrganisationId"><option value="0">Select appointing authority</option>@if(configuration is not null){@foreach(var option in configuration.Organisations){<option value="@option.Id">@option.Name</option>}}</select></label><label class="block text-xs font-medium text-slate-700 p-1">Position title<input class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100" @bind="appointment.PositionTitle" /></label><label class="block text-xs font-medium text-slate-700 p-1">Effective from<input class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100" type="date" @bind="appointment.EffectiveFrom" /></label><label class="block text-xs font-medium text-slate-700 p-1">Administrative / employing organisation<select class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100" @bind="appointment.AdministrativeOrganisationId"><option value="">Select administrative / employing organisation</option>@if(configuration is not null){@foreach(var option in configuration.Organisations){<option value="@option.Id">@option.Name</option>}}</select></label><label class="block text-xs font-medium text-slate-700 p-1">Appointment letter reference (optional)<input class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100" type="text" @bind="appointment.AppointmentReference" placeholder="Number printed on the official letter, e.g. PO/2026/123" /></label><label class="block text-xs font-medium text-slate-700 p-1">Appointment ends (optional)<input class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100" type="date" @bind="appointment.EffectiveTo" /></label></div><button class="app-button app-button-primary app-button-sm mt-2" @onclick="SaveAppointmentAsync">Save appointment</button></div>
- </div><aside class="page-panel-right min-w-0 rounded-2xl border border-slate-200 bg-white p-2 shadow-xs space-y-2">
-  <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-2"><h2 class="font-bold text-slate-800 p-1">Organisation responsibility</h2><p class="mb-2 px-1 text-xs leading-relaxed text-slate-500">3. Link an existing appointment to the organisation the officer oversees. For example, a PO officer may be responsible for City Council without becoming City Council staff.</p><div class="grid gap-2"><label class="block text-xs font-medium text-slate-700 p-1">Appointment<select class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100" @bind="responsibility.LeadershipAppointmentId"><option value="0">Select appointment</option>@if(configuration is not null){@foreach(var option in configuration.Appointments){<option value="@option.Id">@option.Name</option>}}</select></label><label class="block text-xs font-medium text-slate-700 p-1">Responsible organisation<select class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100" @bind="responsibility.OrganisationId"><option value="0">Select responsible organisation</option>@if(configuration is not null){@foreach(var option in configuration.Organisations){<option value="@option.Id">@option.Name</option>}}</select></label><label class="block text-xs font-medium text-slate-700 p-1">Responsibility starts<input class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100" type="date" @bind="responsibility.EffectiveFrom" /></label><label class="block text-xs font-medium text-slate-700 p-1">Responsibility ends (optional)<input class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100" type="date" @bind="responsibility.EffectiveTo" /></label></div><button class="app-button app-button-primary app-button-sm mt-2" @onclick="SaveResponsibilityAsync">Add responsibility</button></div>
-  <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-2"><h2 class="font-bold text-slate-800 p-1">Authority grant</h2><p class="mb-2 px-1 text-xs leading-relaxed text-slate-500">4. Give one specific permission for that responsibility. Use an approved permission code; organisation responsibility alone does not grant approval access.</p><div class="grid gap-2"><label class="block text-xs font-medium text-slate-700 p-1">Organisation responsibility<select class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100" @bind="grant.LeadershipAppointmentOrganisationId"><option value="0">Select organisation responsibility</option>@if(configuration is not null){@foreach(var option in configuration.Responsibilities){<option value="@option.Id">@option.Name</option>}}</select></label><label class="block text-xs font-medium text-slate-700 p-1">Permission<select class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100" @bind="grant.PermissionCode"><option value="">Select permission</option>@if(configuration is not null){@foreach(var option in configuration.Permissions){<option value="@option.Code">@option.Name</option>}}</select></label><label class="block text-xs font-medium text-slate-700 p-1">Permission valid from<input class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100" type="date" @bind="grant.ValidFrom" /></label><label class="block text-xs font-medium text-slate-700 p-1">Permission valid until (optional)<input class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100" type="date" @bind="grant.ValidTo" /></label></div><button class="app-button app-button-primary app-button-sm mt-2" @onclick="SaveGrantAsync">Add authority grant</button></div><p class="rounded-xl border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900">Authority does not change the officer’s employer, payroll, or default HR organisation. Every grant is scoped and date-checked by the API.</p>
-  <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-2"><h2 class="font-bold text-slate-800 p-1">Delegation</h2><p class="mb-2 px-1 text-xs leading-relaxed text-slate-500">Optional: temporarily assign one existing permission to another registered user in the same organisation. Set an end date for temporary cover.</p><div class="grid gap-2"><label class="block text-xs font-medium text-slate-700 p-1">Originating appointment<select class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100" @bind="delegation.FromLeadershipAppointmentId"><option value="0">Select originating appointment</option>@if(configuration is not null){@foreach(var option in configuration.Appointments){<option value="@option.Id">@option.Name</option>}}</select></label><label class="block text-xs font-medium text-slate-700 p-1">Delegate user<select class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100" @bind="delegation.ToUserId"><option value="0">Select delegate user</option>@if(configuration is not null){@foreach(var option in configuration.Users){<option value="@option.Id">@option.Name</option>}}</select></label><label class="block text-xs font-medium text-slate-700 p-1">Organisation<select class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100" @bind="delegation.OrganisationId"><option value="0">Select organisation</option>@if(configuration is not null){@foreach(var option in configuration.Organisations){<option value="@option.Id">@option.Name</option>}}</select></label><label class="block text-xs font-medium text-slate-700 p-1">Delegated permission<select class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100" @bind="delegation.PermissionScope"><option value="">Select delegated permission</option>@if(configuration is not null){@foreach(var option in configuration.Permissions){<option value="@option.Code">@option.Name</option>}}</select></label><label class="block text-xs font-medium text-slate-700 p-1">Delegation starts<input class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100" type="date" @bind="delegation.ValidFrom" /></label><label class="block text-xs font-medium text-slate-700 p-1">Delegation ends (optional)<input class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100" type="date" @bind="delegation.ValidTo" /></label></div><button class="app-button app-button-primary app-button-sm mt-2" @onclick="SaveDelegationAsync">Add delegation</button></div>
-  <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-2"><h2 class="font-bold text-slate-800 p-1">Attendance policy</h2><p class="mb-2 px-1 text-xs leading-relaxed text-slate-500">Set which organisation manages the officer’s attendance. For a minister employed by PO, this will normally be PO, even when the officer oversees another organisation.</p><div class="grid gap-2"><label class="block text-xs font-medium text-slate-700 p-1">Appointment<select class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100" @bind="policy.LeadershipAppointmentId"><option value="0">Select appointment</option>@if(configuration is not null){@foreach(var option in configuration.Appointments){<option value="@option.Id">@option.Name</option>}}</select></label><label class="block text-xs font-medium text-slate-700 p-1">Attendance managing organisation<select class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100" @bind="policy.ManagingOrganisationId"><option value="0">Select attendance managing organisation</option>@if(configuration is not null){@foreach(var option in configuration.Organisations){<option value="@option.Id">@option.Name</option>}}</select></label><label class="block text-xs font-medium text-slate-700 p-1">Verification mode<select class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs" @bind="policy.VerificationMode"><option value="Standard">Standard</option></select></label><label class="flex items-center gap-2 p-2 text-xs"><input type="checkbox" @bind="policy.AttendanceRequired" /> Attendance required</label><label class="block text-xs font-medium text-slate-700 p-1">Policy starts<input class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100" type="date" @bind="policy.EffectiveFrom" /></label><label class="block text-xs font-medium text-slate-700 p-1">Policy ends (optional)<input class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100" type="date" @bind="policy.EffectiveTo" /></label></div><button class="app-button app-button-primary app-button-sm mt-2" @onclick="SavePolicyAsync">Save attendance policy</button></div><p class="rounded-xl border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900">Authority does not change the officer’s employer, payroll, or default HR organisation. Every grant is scoped and date-checked by the API.</p>
- </aside></div>
+
+<section class="mx-auto w-full min-w-0 @(Embedded ? "pt-2" : "p-2") space-y-4">
+    @if (!Embedded)
+    {
+        <header class="sticky top-0 z-30 m-0 border-b border-slate-200 bg-white/95 backdrop-blur-xs px-3 py-3 shadow-xs rounded-2xl flex flex-wrap items-center justify-between gap-3">
+            <div class="min-w-0">
+                <div class="flex items-center gap-2 flex-wrap">
+                    <span class="rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-semibold text-blue-800">MDS Governance</span>
+                    <span class="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-800">Scoped Authority</span>
+                </div>
+                <h1 class="text-lg font-bold text-slate-900 truncate mt-0.5">Leadership Administration</h1>
+                <p class="mt-0.5 text-xs text-slate-500">MDS-managed appointments, organisation responsibilities, and explicit authority grants.</p>
+            </div>
+            <div class="flex flex-wrap items-center gap-2">
+                <button type="button"
+                        class="inline-flex items-center justify-center rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition-colors"
+                        @onclick="ToggleWidthAsync">
+                    @(isFullWidth ? "Shrink View" : "Full Width")
+                </button>
+                <a href="/admin/settings/leadership/management"
+                   class="inline-flex items-center justify-center rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 transition-colors">
+                    View Records &amp; Audit
+                </a>
+            </div>
+        </header>
+    }
+    else
+    {
+        <div class="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
+            <div>
+                <div class="flex items-center gap-2">
+                    <span class="rounded-full bg-blue-100 px-2.5 py-0.5 text-[11px] font-semibold text-blue-800">MDS Governance</span>
+                </div>
+                <h2 class="mt-1 text-sm font-bold text-slate-900">Leadership Administration</h2>
+                <p class="text-xs text-slate-500">MDS-managed appointments, organisation responsibilities, and explicit authority grants.</p>
+            </div>
+            <a href="/admin/settings/leadership/management"
+               class="inline-flex items-center justify-center rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition-colors">
+                View Records &amp; Audit
+            </a>
+        </div>
+    }
+
+    <div class="rounded-xl border border-blue-200 bg-blue-50/50 p-3 text-xs leading-relaxed text-slate-700 @(isFullWidth ? "max-w-none" : "mx-auto max-w-7xl")">
+        <strong class="text-slate-900">How to complete this form:</strong>
+        Work through sections 1–4 in order and save each section before continuing. Delegation and attendance policy are optional additional settings.
+    </div>
+
+    @if (error is not null)
+    {
+        <div role="alert" class="flex items-center justify-between rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800 @(isFullWidth ? "max-w-none" : "mx-auto max-w-7xl")">
+            <span>@error</span>
+            <button type="button" class="font-bold text-rose-600 hover:text-rose-900" @onclick="() => error = null">✕</button>
+        </div>
+    }
+    @if (message is not null)
+    {
+        <div role="status" class="flex items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800 @(isFullWidth ? "max-w-none" : "mx-auto max-w-7xl")">
+            <span>@message</span>
+            <button type="button" class="font-bold text-emerald-700 hover:text-emerald-900" @onclick="() => message = null">✕</button>
+        </div>
+    }
+
+    <div class="grid items-start gap-4 @(isFullWidth ? "max-w-none" : "mx-auto max-w-7xl") lg:grid-cols-2">
+        <!-- Left Column: Types & Appointments -->
+        <div class="min-w-0 space-y-4">
+            <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs space-y-3">
+                <div>
+                    <h2 class="text-sm font-bold text-slate-900">1. Appointment Type</h2>
+                    <p class="mt-0.5 text-xs text-slate-500">Define the appointment category, such as State Minister or Board Chair. Create each category once.</p>
+                </div>
+                <div class="grid gap-3 md:grid-cols-2">
+                    <label class="block text-xs font-medium text-slate-700">
+                        Name
+                        <input class="@InputClass" @bind="type.Name" />
+                    </label>
+                    <label class="block text-xs font-medium text-slate-700">
+                        Description
+                        <input class="@InputClass" @bind="type.Description" />
+                    </label>
+                </div>
+                <div class="flex justify-end">
+                    <button type="button" class="rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 transition-colors" @onclick="SaveTypeAsync">Save Type</button>
+                </div>
+            </div>
+
+            <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs space-y-3">
+                <div>
+                    <h2 class="text-sm font-bold text-slate-900">2. Appointment</h2>
+                    <p class="mt-0.5 text-xs text-slate-500">Record the person and official appointment letter. The appointing organisation issues the appointment; the administrative organisation handles the officer’s own HR record.</p>
+                </div>
+                <div class="grid gap-3 md:grid-cols-2">
+                    <label class="block text-xs font-medium text-slate-700">
+                        Appointed Person
+                        <select class="@InputClass" @bind="appointment.IndividualId">
+                            <option value="0">-- Select appointed person --</option>
+                            @if (configuration is not null)
+                            {
+                                @foreach (var option in configuration.People)
+                                {
+                                    <option value="@option.Id">@option.Name</option>
+                                }
+                            }
+                        </select>
+                    </label>
+                    <label class="block text-xs font-medium text-slate-700">
+                        Appointment Type
+                        <select class="@InputClass" @bind="appointment.LeadershipAppointmentTypeId">
+                            <option value="0">-- Select appointment type --</option>
+                            @if (configuration is not null)
+                            {
+                                @foreach (var option in configuration.AppointmentTypes)
+                                {
+                                    <option value="@option.Id">@option.Name</option>
+                                }
+                            }
+                        </select>
+                    </label>
+                    <label class="block text-xs font-medium text-slate-700">
+                        Appointing Authority
+                        <select class="@InputClass" @bind="appointment.AppointingOrganisationId">
+                            <option value="0">-- Select appointing authority --</option>
+                            @if (configuration is not null)
+                            {
+                                @foreach (var option in configuration.Organisations)
+                                {
+                                    <option value="@option.Id">@option.Name</option>
+                                }
+                            }
+                        </select>
+                    </label>
+                    <label class="block text-xs font-medium text-slate-700">
+                        Administrative / Employing Organisation
+                        <select class="@InputClass" @bind="appointment.AdministrativeOrganisationId">
+                            <option value="">-- Select organisation --</option>
+                            @if (configuration is not null)
+                            {
+                                @foreach (var option in configuration.Organisations)
+                                {
+                                    <option value="@option.Id">@option.Name</option>
+                                }
+                            }
+                        </select>
+                    </label>
+                    <label class="block text-xs font-medium text-slate-700">
+                        Position Title
+                        <input class="@InputClass" @bind="appointment.PositionTitle" />
+                    </label>
+                    <label class="block text-xs font-medium text-slate-700">
+                        Appointment Letter Reference (optional)
+                        <input class="@InputClass" type="text" @bind="appointment.AppointmentReference" placeholder="e.g. PO/2026/123" />
+                    </label>
+                    <label class="block text-xs font-medium text-slate-700">
+                        Effective From
+                        <input class="@InputClass" type="date" @bind="appointment.EffectiveFrom" />
+                    </label>
+                    <label class="block text-xs font-medium text-slate-700">
+                        Appointment Ends (optional)
+                        <input class="@InputClass" type="date" @bind="appointment.EffectiveTo" />
+                    </label>
+                </div>
+                <div class="flex justify-end">
+                    <button type="button" class="rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 transition-colors" @onclick="SaveAppointmentAsync">Save Appointment</button>
+                </div>
+            </div>
+
+            <div class="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+                Authority does not change the officer’s employer, payroll, or default HR organisation. Every grant is scoped and date-checked by the API.
+            </div>
+        </div>
+
+        <!-- Right Column: Responsibilities, Grants, Delegations, Attendance Policy -->
+        <aside class="min-w-0 space-y-4">
+            <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs space-y-3">
+                <div>
+                    <h2 class="text-sm font-bold text-slate-900">3. Organisation Responsibility</h2>
+                    <p class="mt-0.5 text-xs text-slate-500">Link an existing appointment to the organisation the officer oversees.</p>
+                </div>
+                <div class="grid gap-3 md:grid-cols-2">
+                    <label class="block text-xs font-medium text-slate-700 md:col-span-2">
+                        Appointment
+                        <select class="@InputClass" @bind="responsibility.LeadershipAppointmentId">
+                            <option value="0">-- Select appointment --</option>
+                            @if (configuration is not null)
+                            {
+                                @foreach (var option in configuration.Appointments)
+                                {
+                                    <option value="@option.Id">@option.Name</option>
+                                }
+                            }
+                        </select>
+                    </label>
+                    <label class="block text-xs font-medium text-slate-700 md:col-span-2">
+                        Responsible Organisation
+                        <select class="@InputClass" @bind="responsibility.OrganisationId">
+                            <option value="0">-- Select organisation --</option>
+                            @if (configuration is not null)
+                            {
+                                @foreach (var option in configuration.Organisations)
+                                {
+                                    <option value="@option.Id">@option.Name</option>
+                                }
+                            }
+                        </select>
+                    </label>
+                    <label class="block text-xs font-medium text-slate-700">
+                        Starts
+                        <input class="@InputClass" type="date" @bind="responsibility.EffectiveFrom" />
+                    </label>
+                    <label class="block text-xs font-medium text-slate-700">
+                        Ends (optional)
+                        <input class="@InputClass" type="date" @bind="responsibility.EffectiveTo" />
+                    </label>
+                </div>
+                <div class="flex justify-end">
+                    <button type="button" class="rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 transition-colors" @onclick="SaveResponsibilityAsync">Add Responsibility</button>
+                </div>
+            </div>
+
+            <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs space-y-3">
+                <div>
+                    <h2 class="text-sm font-bold text-slate-900">4. Authority Grant</h2>
+                    <p class="mt-0.5 text-xs text-slate-500">Assign one specific permission for that responsibility; responsibility alone does not grant approval access.</p>
+                </div>
+                <div class="grid gap-3 md:grid-cols-2">
+                    <label class="block text-xs font-medium text-slate-700 md:col-span-2">
+                        Organisation Responsibility
+                        <select class="@InputClass" @bind="grant.LeadershipAppointmentOrganisationId">
+                            <option value="0">-- Select responsibility --</option>
+                            @if (configuration is not null)
+                            {
+                                @foreach (var option in configuration.Responsibilities)
+                                {
+                                    <option value="@option.Id">@option.Name</option>
+                                }
+                            }
+                        </select>
+                    </label>
+                    <label class="block text-xs font-medium text-slate-700 md:col-span-2">
+                        Permission
+                        <select class="@InputClass" @bind="grant.PermissionCode">
+                            <option value="">-- Select permission --</option>
+                            @if (configuration is not null)
+                            {
+                                @foreach (var option in configuration.Permissions)
+                                {
+                                    <option value="@option.Code">@option.Name</option>
+                                }
+                            }
+                        </select>
+                    </label>
+                    <label class="block text-xs font-medium text-slate-700">
+                        Valid From
+                        <input class="@InputClass" type="date" @bind="grant.ValidFrom" />
+                    </label>
+                    <label class="block text-xs font-medium text-slate-700">
+                        Valid Until (optional)
+                        <input class="@InputClass" type="date" @bind="grant.ValidTo" />
+                    </label>
+                </div>
+                <div class="flex justify-end">
+                    <button type="button" class="rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 transition-colors" @onclick="SaveGrantAsync">Add Authority Grant</button>
+                </div>
+            </div>
+
+            <details class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
+                <summary class="cursor-pointer text-sm font-bold text-slate-900">Optional: Temporary Delegation</summary>
+                <p class="mt-1 text-xs text-slate-500">Temporarily assign one existing permission to another registered user in the same organisation.</p>
+                <div class="mt-3 grid gap-3 md:grid-cols-2">
+                    <label class="block text-xs font-medium text-slate-700 md:col-span-2">
+                        Originating Appointment
+                        <select class="@InputClass" @bind="delegation.FromLeadershipAppointmentId">
+                            <option value="0">-- Select appointment --</option>
+                            @if (configuration is not null)
+                            {
+                                @foreach (var option in configuration.Appointments)
+                                {
+                                    <option value="@option.Id">@option.Name</option>
+                                }
+                            }
+                        </select>
+                    </label>
+                    <label class="block text-xs font-medium text-slate-700">
+                        Delegate User
+                        <select class="@InputClass" @bind="delegation.ToUserId">
+                            <option value="0">-- Select user --</option>
+                            @if (configuration is not null)
+                            {
+                                @foreach (var option in configuration.Users)
+                                {
+                                    <option value="@option.Id">@option.Name</option>
+                                }
+                            }
+                        </select>
+                    </label>
+                    <label class="block text-xs font-medium text-slate-700">
+                        Organisation
+                        <select class="@InputClass" @bind="delegation.OrganisationId">
+                            <option value="0">-- Select organisation --</option>
+                            @if (configuration is not null)
+                            {
+                                @foreach (var option in configuration.Organisations)
+                                {
+                                    <option value="@option.Id">@option.Name</option>
+                                }
+                            }
+                        </select>
+                    </label>
+                    <label class="block text-xs font-medium text-slate-700 md:col-span-2">
+                        Delegated Permission
+                        <select class="@InputClass" @bind="delegation.PermissionScope">
+                            <option value="">-- Select permission --</option>
+                            @if (configuration is not null)
+                            {
+                                @foreach (var option in configuration.Permissions)
+                                {
+                                    <option value="@option.Code">@option.Name</option>
+                                }
+                            }
+                        </select>
+                    </label>
+                    <label class="block text-xs font-medium text-slate-700">
+                        Starts
+                        <input class="@InputClass" type="date" @bind="delegation.ValidFrom" />
+                    </label>
+                    <label class="block text-xs font-medium text-slate-700">
+                        Ends (optional)
+                        <input class="@InputClass" type="date" @bind="delegation.ValidTo" />
+                    </label>
+                </div>
+                <div class="mt-3 flex justify-end">
+                    <button type="button" class="rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 transition-colors" @onclick="SaveDelegationAsync">Add Delegation</button>
+                </div>
+            </details>
+
+            <details class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
+                <summary class="cursor-pointer text-sm font-bold text-slate-900">Optional: Attendance Policy</summary>
+                <p class="mt-1 text-xs text-slate-500">Set which organisation manages the officer’s attendance (normally the administrative organisation).</p>
+                <div class="mt-3 grid gap-3 md:grid-cols-2">
+                    <label class="block text-xs font-medium text-slate-700 md:col-span-2">
+                        Appointment
+                        <select class="@InputClass" @bind="policy.LeadershipAppointmentId">
+                            <option value="0">-- Select appointment --</option>
+                            @if (configuration is not null)
+                            {
+                                @foreach (var option in configuration.Appointments)
+                                {
+                                    <option value="@option.Id">@option.Name</option>
+                                }
+                            }
+                        </select>
+                    </label>
+                    <label class="block text-xs font-medium text-slate-700">
+                        Attendance Managing Organisation
+                        <select class="@InputClass" @bind="policy.ManagingOrganisationId">
+                            <option value="0">-- Select organisation --</option>
+                            @if (configuration is not null)
+                            {
+                                @foreach (var option in configuration.Organisations)
+                                {
+                                    <option value="@option.Id">@option.Name</option>
+                                }
+                            }
+                        </select>
+                    </label>
+                    <label class="block text-xs font-medium text-slate-700">
+                        Verification Mode
+                        <select class="@InputClass" @bind="policy.VerificationMode">
+                            <option value="Standard">Standard</option>
+                        </select>
+                    </label>
+                    <label class="inline-flex items-center gap-2 text-xs font-medium text-slate-700 md:col-span-2">
+                        <input type="checkbox" @bind="policy.AttendanceRequired" />
+                        Attendance required
+                    </label>
+                    <label class="block text-xs font-medium text-slate-700">
+                        Policy Starts
+                        <input class="@InputClass" type="date" @bind="policy.EffectiveFrom" />
+                    </label>
+                    <label class="block text-xs font-medium text-slate-700">
+                        Policy Ends (optional)
+                        <input class="@InputClass" type="date" @bind="policy.EffectiveTo" />
+                    </label>
+                </div>
+                <div class="mt-3 flex justify-end">
+                    <button type="button" class="rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 transition-colors" @onclick="SavePolicyAsync">Save Attendance Policy</button>
+                </div>
+            </details>
+        </aside>
+    </div>
 </section>
+
 @code {
+    private const string InputClass = "mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500";
     [Parameter] public bool Embedded { get; set; }
     [Parameter] public int? InitialOrganisationId { get; set; }
     private LeadershipConfigurationDto? configuration;
+    private bool isFullWidth;
+    private string? error;
+    private string? message;
+    private LeadershipAppointmentTypeInput type = new();
+    private LeadershipAppointmentInput appointment = new() { EffectiveFrom = DateOnly.FromDateTime(DateTime.UtcNow) };
+    private LeadershipResponsibilityInput responsibility = new() { EffectiveFrom = DateOnly.FromDateTime(DateTime.UtcNow) };
+    private LeadershipAuthorityGrantInput grant = new() { ValidFrom = DateOnly.FromDateTime(DateTime.UtcNow) };
+    private LeadershipDelegationInput delegation = new() { ValidFrom = DateOnly.FromDateTime(DateTime.UtcNow) };
+    private LeadershipAttendancePolicyInput policy = new() { EffectiveFrom = DateOnly.FromDateTime(DateTime.UtcNow) };
+
     protected override async Task OnInitializedAsync()
     {
         if (!Embedded)
@@ -60,4 +436,47 @@
         }
         try { configuration = await Administration.GetConfigurationAsync(); }
         catch { error = "Configuration could not be loaded. Check the API and Leadership database setup."; }
-    }  private bool isFullWidth; protected override async Task OnAfterRenderAsync(bool firstRender){if(firstRender){isFullWidth=await JS.InvokeAsync<string?>("localStorage.getItem","hrm.leadership.full-width")=="true";StateHasChanged();}} private async Task ToggleWidthAsync(){isFullWidth=!isFullWidth;await JS.InvokeVoidAsync("localStorage.setItem","hrm.leadership.full-width",isFullWidth?"true":"false");} private string? error; private string? message; private LeadershipAppointmentTypeInput type=new(); private LeadershipAppointmentInput appointment=new(){EffectiveFrom=DateOnly.FromDateTime(DateTime.UtcNow)}; private LeadershipResponsibilityInput responsibility=new(){EffectiveFrom=DateOnly.FromDateTime(DateTime.UtcNow)}; private LeadershipAuthorityGrantInput grant=new(){ValidFrom=DateOnly.FromDateTime(DateTime.UtcNow)}; private LeadershipDelegationInput delegation=new(){ValidFrom=DateOnly.FromDateTime(DateTime.UtcNow)}; private LeadershipAttendancePolicyInput policy=new(){EffectiveFrom=DateOnly.FromDateTime(DateTime.UtcNow)}; private async Task Run(Func<Task<HRM.DTOs.ServiceResult>> action){error=null;message=null;try{var result=await action();if(result.Success){message=result.Message;configuration=await Administration.GetConfigurationAsync();}else error=result.Message;}catch{error="The section could not be saved. Check the required fields, reference IDs, and administration access.";}} private Task SaveTypeAsync()=>Run(()=>Administration.SaveAppointmentTypeAsync(type)); private Task SaveAppointmentAsync()=>Run(()=>Administration.SaveAppointmentAsync(appointment)); private Task SaveResponsibilityAsync()=>Run(()=>Administration.AddResponsibilityAsync(responsibility)); private Task SaveGrantAsync()=>Run(()=>Administration.AddAuthorityGrantAsync(grant)); private Task SaveDelegationAsync()=>Run(()=>Administration.AddDelegationAsync(delegation)); private Task SavePolicyAsync()=>Run(()=>Administration.SaveAttendancePolicyAsync(policy)); }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            isFullWidth = await JS.InvokeAsync<string?>("localStorage.getItem", "hrm.leadership.full-width") == "true";
+            StateHasChanged();
+        }
+    }
+
+    private async Task ToggleWidthAsync()
+    {
+        isFullWidth = !isFullWidth;
+        await JS.InvokeVoidAsync("localStorage.setItem", "hrm.leadership.full-width", isFullWidth ? "true" : "false");
+    }
+
+    private async Task Run(Func<Task<HRM.DTOs.ServiceResult>> action)
+    {
+        error = null;
+        message = null;
+        try
+        {
+            var result = await action();
+            if (result.Success)
+            {
+                message = result.Message;
+                configuration = await Administration.GetConfigurationAsync();
+            }
+            else error = result.Message;
+        }
+        catch
+        {
+            error = "The section could not be saved. Check the required fields, reference IDs, and administration access.";
+        }
+    }
+
+    private Task SaveTypeAsync() => Run(() => Administration.SaveAppointmentTypeAsync(type));
+    private Task SaveAppointmentAsync() => Run(() => Administration.SaveAppointmentAsync(appointment));
+    private Task SaveResponsibilityAsync() => Run(() => Administration.AddResponsibilityAsync(responsibility));
+    private Task SaveGrantAsync() => Run(() => Administration.AddAuthorityGrantAsync(grant));
+    private Task SaveDelegationAsync() => Run(() => Administration.AddDelegationAsync(delegation));
+    private Task SavePolicyAsync() => Run(() => Administration.SaveAttendancePolicyAsync(policy));
+}

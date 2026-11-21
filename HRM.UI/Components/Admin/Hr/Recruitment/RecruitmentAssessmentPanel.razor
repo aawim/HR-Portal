@@ -1,35 +1,215 @@
 @using HRM.Application.Contracts.Recruitment
 @inject HRM.UI.Services.Recruitment.IRecruitmentApiClient Api
-<section class="p-2 rounded-2xl border border-slate-200 app-surface space-y-3">
-    <h2 class="p-1 font-bold">Assessments and scorecards</h2>
-    <label class="block p-1 text-xs">Vacancy<select class="@InputClass" @bind="vacancy" @bind:after="Load"><option value="0">Select vacancy</option>@foreach(var v in vacancies){<option value="@v.Id">@v.Reference</option>}</select></label>
-    @if(workspace is not null){
-        <label class="block p-1 text-xs">Assessment type<select class="@InputClass" @bind="type"><option>Interview</option><option>Assessment</option><option>Presentation</option></select></label>
-        <label class="block p-1 text-xs">Verified template<select class="@InputClass" @bind="template"><option value="">Select template</option>@foreach(var t in workspace.Templates){<option value="@t.Code">@t.Name</option>}</select></label>
-        @if(workspace.Templates.Count==0){<p class="p-2 text-xs text-amber-800">No verified scoring template is available for this vacancy's policy. Register and verify its official template before assessment.</p>}
-        <label class="block p-1 text-xs">Scheduled time (Maldives)<input type="datetime-local" class="@InputClass" @bind="scheduled" /></label>
-        <button class="app-button app-button-primary app-button-sm" disabled="@(busy||string.IsNullOrEmpty(template))" @onclick="Create">Schedule assessment</button>
-        <label class="block p-1 text-xs">Assessment<select class="@InputClass" @bind="assessment" @bind:after="SelectAssessment"><option value="0">Select assessment</option>@foreach(var a in workspace.Assessments){<option value="@a.Id">@a.Type · @a.ScheduledAtUtc.AddHours(5).ToString("dd MMM HH:mm") MVT</option>}</select></label>
-        <label class="block p-1 text-xs">Shortlisted applicant<select class="@InputClass" @bind="application"><option value="0">Select applicant</option>@foreach(var a in applicants.Where(x=>x.Status=="Shortlisted")){<option value="@a.Id">@a.ApplicantName · @a.Reference</option>}</select></label>
-        @foreach(var criterion in criteria){<label class="block p-1 text-xs">@criterion.Name (maximum @criterion.Maximum)<input type="number" min="0" max="@criterion.Maximum" step="0.01" class="@InputClass" @bind="criterion.Score" /></label>}
-        <p class="p-1 text-xs">Total: @criteria.Sum(x=>x.Score). Submitted scorecards are locked. Record your conflict declaration in Screening first.</p>
-        <button class="app-button app-button-primary app-button-sm" disabled="@(busy||assessment<=0||application<=0||criteria.Count==0)" @onclick="Submit">Submit and lock scorecard</button>
+
+<section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs space-y-4">
+    <div>
+        <h2 class="text-sm font-bold text-slate-900">Assessments &amp; Panel Scorecards</h2>
+        <p class="mt-0.5 text-xs text-slate-500">Schedule assessments using verified templates and record locked panel scorecards for shortlisted applicants.</p>
+    </div>
+
+    <label class="block text-xs font-medium text-slate-700 max-w-md">
+        Vacancy
+        <select class="@InputClass" @bind="vacancy" @bind:after="Load">
+            <option value="0">-- Select vacancy --</option>
+            @foreach (var v in vacancies)
+            {
+                <option value="@v.Id">@v.Reference</option>
+            }
+        </select>
+    </label>
+
+    @if (workspace is not null)
+    {
+        <div class="grid items-start gap-4 lg:grid-cols-2">
+            <!-- Left: Schedule Assessment -->
+            <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-4 space-y-3">
+                <h3 class="text-xs font-bold uppercase tracking-wide text-slate-700">1. Schedule Assessment</h3>
+
+                @if (workspace.Templates.Count == 0)
+                {
+                    <div class="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+                        No verified scoring template is available for this vacancy's policy. Register and verify its official template first.
+                    </div>
+                }
+
+                <label class="block text-xs font-medium text-slate-700">
+                    Assessment Type
+                    <select class="@InputClass" @bind="type">
+                        <option>Interview</option>
+                        <option>Assessment</option>
+                        <option>Presentation</option>
+                    </select>
+                </label>
+
+                <label class="block text-xs font-medium text-slate-700">
+                    Verified Template
+                    <select class="@InputClass" @bind="template">
+                        <option value="">-- Select template --</option>
+                        @foreach (var t in workspace.Templates)
+                        {
+                            <option value="@t.Code">@t.Name</option>
+                        }
+                    </select>
+                </label>
+
+                <label class="block text-xs font-medium text-slate-700">
+                    Scheduled Time (Maldives)
+                    <input type="datetime-local" class="@InputClass" @bind="scheduled" />
+                </label>
+
+                <div class="flex justify-end">
+                    <button type="button"
+                            class="inline-flex items-center justify-center rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                            disabled="@(busy || string.IsNullOrEmpty(template))"
+                            @onclick="Create">
+                        Schedule Assessment
+                    </button>
+                </div>
+            </div>
+
+            <!-- Right: Submit Scorecard -->
+            <div class="rounded-xl border border-blue-200 bg-blue-50/30 p-4 space-y-3">
+                <h3 class="text-xs font-bold uppercase tracking-wide text-slate-700">2. Submit Panel Scorecard</h3>
+
+                <label class="block text-xs font-medium text-slate-700">
+                    Scheduled Assessment
+                    <select class="@InputClass" @bind="assessment" @bind:after="SelectAssessment">
+                        <option value="0">-- Select assessment --</option>
+                        @foreach (var a in workspace.Assessments)
+                        {
+                            <option value="@a.Id">@a.Type · @a.ScheduledAtUtc.AddHours(5).ToString("dd MMM HH:mm") MVT</option>
+                        }
+                    </select>
+                </label>
+
+                <label class="block text-xs font-medium text-slate-700">
+                    Shortlisted Applicant
+                    <select class="@InputClass" @bind="application">
+                        <option value="0">-- Select applicant --</option>
+                        @foreach (var a in applicants.Where(x => x.Status == "Shortlisted"))
+                        {
+                            <option value="@a.Id">@a.ApplicantName · @a.Reference</option>
+                        }
+                    </select>
+                </label>
+
+                @if (criteria.Count > 0)
+                {
+                    <div class="space-y-2 rounded-xl border border-slate-200 bg-white p-3">
+                        @foreach (var criterion in criteria)
+                        {
+                            <label class="block text-xs font-medium text-slate-700">
+                                @criterion.Name <span class="text-slate-400">(max @criterion.Maximum)</span>
+                                <input type="number" min="0" max="@criterion.Maximum" step="0.01" class="@InputClass" @bind="criterion.Score" />
+                            </label>
+                        }
+                        <div class="flex items-center justify-between border-t border-slate-100 pt-2 text-xs font-bold text-slate-900">
+                            <span>Total Score</span>
+                            <span class="rounded-full bg-blue-100 px-2.5 py-0.5 text-blue-800">@criteria.Sum(x => x.Score)</span>
+                        </div>
+                    </div>
+                }
+
+                <p class="text-[11px] text-slate-500">Submitted scorecards are locked. Record your conflict declaration in Screening first.</p>
+
+                <div class="flex justify-end">
+                    <button type="button"
+                            class="inline-flex items-center justify-center rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                            disabled="@(busy || assessment <= 0 || application <= 0 || criteria.Count == 0)"
+                            @onclick="Submit">
+                        Submit &amp; Lock Scorecard
+                    </button>
+                </div>
+            </div>
+        </div>
     }
-    @if(message is not null){<p role="status" class="p-2 text-sm">@message</p>}
+
+    @if (message is not null)
+    {
+        <div role="status" class="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-800">
+            <span>@message</span>
+            <button type="button" class="font-bold text-slate-500 hover:text-slate-800" @onclick="() => message = null">✕</button>
+        </div>
+    }
 </section>
-@code{
-    private IReadOnlyList<RecruitmentVacancyRow> vacancies=[];
-    private IReadOnlyList<RecruitmentScreeningApplicationRow> applicants=[];
+
+@code {
+    private IReadOnlyList<RecruitmentVacancyRow> vacancies = [];
+    private IReadOnlyList<RecruitmentScreeningApplicationRow> applicants = [];
     private RecruitmentAssessmentWorkspace? workspace;
-    private int vacancy,assessment,application;private string template="",type="Interview";private string? message;private bool busy;
-    private DateTime scheduled=DateTime.UtcNow.AddHours(5).AddDays(3);
-    private List<Criterion> criteria=[];
-    private sealed class Criterion{public string Name{get;set;}="";public decimal Maximum{get;set;}public decimal Score{get;set;}}
-    private const string InputClass="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100";
-    protected override async Task OnInitializedAsync(){try{vacancies=await Api.GetVacanciesAsync();}catch(HttpRequestException){message="Vacancies could not be loaded.";}}
-    private async Task Load(){criteria=[];assessment=application=0;workspace=null;try{if(vacancy>0){workspace=await Api.GetAssessmentWorkspaceAsync(vacancy);applicants=await Api.GetScreeningApplicationsAsync(vacancy);}}catch(HttpRequestException){message="Assessment workspace could not be loaded.";}}
-    private void SelectAssessment(){criteria=[];var code=workspace?.Assessments.FirstOrDefault(x=>x.Id==assessment)?.TemplateCode;var t=workspace?.Templates.FirstOrDefault(x=>x.Code==code);if(t is null)return;try{using var json=System.Text.Json.JsonDocument.Parse(t.DefinitionJson);foreach(var c in json.RootElement.GetProperty("components").EnumerateArray())criteria.Add(new(){Name=c[0].GetString()!,Maximum=c[1].GetDecimal()});}catch(Exception ex) when(ex is System.Text.Json.JsonException or InvalidOperationException or KeyNotFoundException){criteria=[];message="The verified template definition is invalid. Contact the policy administrator.";}}
-    private Task Create()=>Run(()=>Api.CreateAssessmentAsync(new(vacancy,type,template,DateTime.SpecifyKind(scheduled.AddHours(-5),DateTimeKind.Utc))));
-    private Task Submit()=>Run(()=>Api.SubmitScorecardAsync(new(assessment,application,criteria.Sum(x=>x.Score),System.Text.Json.JsonSerializer.Serialize(criteria.ToDictionary(x=>x.Name,x=>x.Score)))));
-    private async Task Run(Func<Task<HRM.DTOs.ServiceResult>> action){if(busy)return;busy=true;try{var result=await action();message=result.Message;if(result.Success)await Load();}catch(HttpRequestException){message="The assessment action failed. Check the template, declaration and application status.";}finally{busy=false;}}
+    private int vacancy, assessment, application;
+    private string template = "", type = "Interview";
+    private string? message;
+    private bool busy;
+    private DateTime scheduled = DateTime.UtcNow.AddHours(5).AddDays(3);
+    private List<Criterion> criteria = [];
+    private sealed class Criterion { public string Name { get; set; } = ""; public decimal Maximum { get; set; } public decimal Score { get; set; } }
+    private const string InputClass = "mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try { vacancies = await Api.GetVacanciesAsync(); }
+        catch (HttpRequestException) { message = "Vacancies could not be loaded."; }
+    }
+
+    private async Task Load()
+    {
+        criteria = [];
+        assessment = application = 0;
+        workspace = null;
+        try
+        {
+            if (vacancy > 0)
+            {
+                workspace = await Api.GetAssessmentWorkspaceAsync(vacancy);
+                applicants = await Api.GetScreeningApplicationsAsync(vacancy);
+            }
+        }
+        catch (HttpRequestException)
+        {
+            message = "Assessment workspace could not be loaded.";
+        }
+    }
+
+    private void SelectAssessment()
+    {
+        criteria = [];
+        var code = workspace?.Assessments.FirstOrDefault(x => x.Id == assessment)?.TemplateCode;
+        var t = workspace?.Templates.FirstOrDefault(x => x.Code == code);
+        if (t is null) return;
+        try
+        {
+            using var json = System.Text.Json.JsonDocument.Parse(t.DefinitionJson);
+            foreach (var c in json.RootElement.GetProperty("components").EnumerateArray())
+                criteria.Add(new() { Name = c[0].GetString()!, Maximum = c[1].GetDecimal() });
+        }
+        catch (Exception ex) when (ex is System.Text.Json.JsonException or InvalidOperationException or KeyNotFoundException)
+        {
+            criteria = [];
+            message = "The verified template definition is invalid. Contact the policy administrator.";
+        }
+    }
+
+    private Task Create() => Run(() => Api.CreateAssessmentAsync(new(vacancy, type, template, DateTime.SpecifyKind(scheduled.AddHours(-5), DateTimeKind.Utc))));
+    private Task Submit() => Run(() => Api.SubmitScorecardAsync(new(assessment, application, criteria.Sum(x => x.Score), System.Text.Json.JsonSerializer.Serialize(criteria.ToDictionary(x => x.Name, x => x.Score)))));
+
+    private async Task Run(Func<Task<HRM.DTOs.ServiceResult>> action)
+    {
+        if (busy) return;
+        busy = true;
+        try
+        {
+            var result = await action();
+            message = result.Message;
+            if (result.Success) await Load();
+        }
+        catch (HttpRequestException)
+        {
+            message = "The assessment action failed. Check the template, declaration and application status.";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
 }

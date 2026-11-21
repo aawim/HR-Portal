@@ -1,43 +1,273 @@
 @using HRM.Application.Contracts.Recruitment
 @inject HRM.UI.Services.Recruitment.IRecruitmentApiClient Api
-<section class="p-2 rounded-2xl border border-slate-200 app-surface space-y-3">
-    @if(!Registered){
-        <h2 class="p-1 font-bold">Register applicant profile</h2>
-        <label class="block p-1 text-xs">Full name<input class="@InputClass" maxlength="250" @bind="name" /></label>
-        <label class="block p-1 text-xs">Email<input type="email" class="@InputClass" maxlength="320" @bind="email" /></label>
-        <label class="block p-1 text-xs">Mobile<input type="tel" class="@InputClass" maxlength="40" @bind="mobile" /></label>
-        <button class="app-button app-button-primary app-button-sm" disabled="@(busy||string.IsNullOrWhiteSpace(name)||string.IsNullOrWhiteSpace(email))" @onclick="Register">Register profile</button>
-    }
-    <h2 class="p-1 font-bold">Open vacancies</h2>
-    <label class="block p-1 text-xs">Vacancy<select class="@InputClass" @bind="vacancy" @bind:after="Resume"><option value="0">Select vacancy</option>@foreach(var v in vacancies){<option value="@v.Id">@v.Reference · @v.VacancySlots slots · closes @v.ClosingAtUtc.AddHours(5).ToString("dd MMM yyyy HH:mm") MVT</option>}</select></label>
-    @if(vacancies.Count==0){<p class="p-2 text-xs text-slate-500">No open vacancies are currently available.</p>}
-    @if(Registered&&vacancy>0){
-        <label class="block p-1 text-xs">Qualifications<textarea maxlength="4000" class="@InputClass" @bind="qualifications"></textarea></label>
-        <label class="block p-1 text-xs">Relevant experience<textarea maxlength="4000" class="@InputClass" @bind="experience"></textarea></label>
-        <label class="block p-1 text-xs">Supporting statement<textarea maxlength="4000" class="@InputClass" @bind="statement"></textarea></label>
-        <button class="app-button app-button-secondary app-button-sm" disabled="@busy" @onclick="Save">Save draft / correction</button>
-        @if(draft is not null){<p class="p-2 text-xs">@draft.Reference · @draft.Status</p><label class="block p-1 text-xs">Document category<select class="@InputClass" @bind="category"><option>Identity</option><option>Qualification</option><option>Experience</option></select></label><InputFile OnChange="Upload" accept=".pdf,.png,.jpg,.jpeg" disabled="@(busy||draft.Status!="Draft")" />@foreach(var doc in draft.Documents){<p class="p-1 text-xs">@doc.Category · @doc.FileName</p>}<button class="app-button app-button-secondary app-button-sm" disabled="@busy" @onclick="()=>review=true">Review saved application</button>@if(review){<div class="p-3 border rounded-xl text-xs whitespace-pre-wrap"><p>@draft.SnapshotJson</p><p>Check the saved content and attached documents above before confirming submission.</p></div>}@foreach(var n in draft.Notifications){<p class="p-2 text-xs">@n.CreatedAtUtc.AddHours(5).ToString("dd MMM HH:mm") MVT · @n.Message</p>}}
-        <label class="block p-1 text-xs"><input type="checkbox" @bind="confirmed" /> I have reviewed the vacancy requirements and confirm these details are accurate.</label>
-        <button class="app-button app-button-primary app-button-sm" disabled="@(busy||!review||draft is null||draft.Status!="Draft"||!confirmed||string.IsNullOrWhiteSpace(qualifications)||string.IsNullOrWhiteSpace(experience)||string.IsNullOrWhiteSpace(statement))" @onclick="Apply">Submit application</button>
-        @if(draft is not null&&draft.Status is "Draft" or "Submitted"){<button class="app-button app-button-danger app-button-sm" disabled="@(busy||!confirmed)" @onclick="Withdraw">Withdraw application (confirm above)</button>}
-    }
-    @if(message is not null){<p role="status" class="p-2 text-sm">@message</p>}
-</section>
-@code{
-    [Parameter]public bool Registered{get;set;}
-    [Parameter]public EventCallback Changed{get;set;}
-    private IReadOnlyList<PublishedRecruitmentVacancyRow> vacancies=[];private int vacancy;
-    private string name="",email="",mobile="",qualifications="",experience="",statement="";private bool busy,confirmed;private string? message;
-    private const string InputClass="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100";
-    protected override async Task OnInitializedAsync(){try{vacancies=await Api.BrowseVacanciesAsync();}catch(HttpRequestException){message="Vacancies could not be loaded. Try again shortly.";}}
-    private Task Register()=>Run(()=>Api.RegisterApplicantAsync(new(name,email,mobile)));
-    private RecruitmentDraftDetail? draft;private bool review;private string category="Identity";
-    private async Task Resume(){draft=null;review=false;confirmed=false;qualifications=experience=statement="";if(vacancy<=0)return;try{draft=await Api.GetDraftAsync(vacancy);if(draft is not null){using var d=System.Text.Json.JsonDocument.Parse(draft.SnapshotJson);qualifications=Value(d,"Qualifications");experience=Value(d,"Experience");statement=Value(d,"SupportingStatement");}}catch(HttpRequestException){message="Draft could not be loaded.";}}
-    private static string Value(System.Text.Json.JsonDocument d,string name)=>d.RootElement.TryGetProperty(name,out var v)?v.GetString()??"":"";
-    private Task Save()=>Run(()=>Api.SaveDraftAsync(new(vacancy,draft?.Version??0,qualifications,experience,statement)));
-    private Task Apply()=>Run(()=>Api.SubmitDraftAsync(draft!.Id,new(draft.Version,confirmed)));
-    private Task Withdraw()=>Run(()=>Api.WithdrawAsync(draft!.Id,new(draft.Version,confirmed)));
-    private async Task Upload(Microsoft.AspNetCore.Components.Forms.InputFileChangeEventArgs e){if(draft is null||busy)return;try{using var stream=e.File.OpenReadStream(5*1024*1024);using var data=new MemoryStream();await stream.CopyToAsync(data);await Run(()=>Api.UploadAsync(draft.Id,category,e.File.Name,data.ToArray()));}catch(IOException){message="Maximum upload size is 5 MB.";}}
 
-    private async Task Run(Func<Task<HRM.DTOs.ServiceResult>> action){if(busy)return;busy=true;try{var result=await action();message=result.Message;if(result.Success){confirmed=false;await Resume();await Changed.InvokeAsync();}}catch(HttpRequestException){message="The action failed. Check your session and whether this vacancy is still open.";}finally{busy=false;}}
+<section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs space-y-4">
+    @if (!Registered)
+    {
+        <div class="rounded-xl border border-blue-200 bg-blue-50/40 p-4 space-y-3">
+            <div>
+                <h2 class="text-sm font-bold text-slate-900">Register Applicant Profile</h2>
+                <p class="mt-0.5 text-xs text-slate-500">Complete your applicant contact details once before applying to open vacancies.</p>
+            </div>
+            <div class="grid gap-3 sm:grid-cols-3">
+                <label class="block text-xs font-medium text-slate-700">
+                    Full Name
+                    <input class="@InputClass" maxlength="250" @bind="name" />
+                </label>
+                <label class="block text-xs font-medium text-slate-700">
+                    Email
+                    <input type="email" class="@InputClass" maxlength="320" @bind="email" />
+                </label>
+                <label class="block text-xs font-medium text-slate-700">
+                    Mobile
+                    <input type="tel" class="@InputClass" maxlength="40" @bind="mobile" />
+                </label>
+            </div>
+            <div class="flex justify-end">
+                <button type="button"
+                        class="inline-flex items-center justify-center rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                        disabled="@(busy || string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(email))"
+                        @onclick="Register">
+                    Register Profile
+                </button>
+            </div>
+        </div>
+    }
+
+    <div class="space-y-3">
+        <div>
+            <h2 class="text-sm font-bold text-slate-900">Open Vacancies</h2>
+            <p class="mt-0.5 text-xs text-slate-500">Select an open vacancy to start or continue a draft application.</p>
+        </div>
+
+        <label class="block text-xs font-medium text-slate-700">
+            Vacancy
+            <select class="@InputClass" @bind="vacancy" @bind:after="Resume">
+                <option value="0">-- Select vacancy --</option>
+                @foreach (var v in vacancies)
+                {
+                    <option value="@v.Id">@v.Reference · @v.VacancySlots slots · closes @v.ClosingAtUtc.AddHours(5).ToString("dd MMM yyyy HH:mm") MVT</option>
+                }
+            </select>
+        </label>
+
+        @if (vacancies.Count == 0)
+        {
+            <div class="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-xs text-slate-500">
+                No open vacancies are currently available.
+            </div>
+        }
+    </div>
+
+    @if (Registered && vacancy > 0)
+    {
+        <div class="space-y-3 border-t border-slate-200 pt-4">
+            <label class="block text-xs font-medium text-slate-700">
+                Qualifications
+                <textarea rows="3" maxlength="4000" class="@InputClass" @bind="qualifications"></textarea>
+            </label>
+            <label class="block text-xs font-medium text-slate-700">
+                Relevant Experience
+                <textarea rows="3" maxlength="4000" class="@InputClass" @bind="experience"></textarea>
+            </label>
+            <label class="block text-xs font-medium text-slate-700">
+                Supporting Statement
+                <textarea rows="3" maxlength="4000" class="@InputClass" @bind="statement"></textarea>
+            </label>
+
+            <div class="flex flex-wrap items-center justify-between gap-2">
+                <button type="button"
+                        class="inline-flex items-center justify-center rounded-lg border border-slate-300 bg-white px-3.5 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 disabled:opacity-50"
+                        disabled="@busy"
+                        @onclick="Save">
+                    Save Draft / Correction
+                </button>
+                @if (draft is not null)
+                {
+                    <span class="rounded-full bg-blue-100 px-2.5 py-0.5 font-mono text-[11px] font-semibold text-blue-800">@draft.Reference · @draft.Status</span>
+                }
+            </div>
+
+            @if (draft is not null)
+            {
+                <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-3 space-y-3">
+                    <h3 class="text-xs font-bold uppercase tracking-wide text-slate-700">Supporting Documents</h3>
+                    <div class="grid gap-3 sm:grid-cols-2 items-end">
+                        <label class="block text-xs font-medium text-slate-700">
+                            Document Category
+                            <select class="@InputClass" @bind="category">
+                                <option>Identity</option>
+                                <option>Qualification</option>
+                                <option>Experience</option>
+                            </select>
+                        </label>
+                        <div>
+                            <InputFile OnChange="Upload" accept=".pdf,.png,.jpg,.jpeg" disabled="@(busy || draft.Status != "Draft")" class="block w-full text-xs text-slate-600" />
+                            <p class="mt-1 text-[11px] text-slate-400">PDF, PNG, JPG up to 5 MB.</p>
+                        </div>
+                    </div>
+
+                    @if (draft.Documents.Count > 0)
+                    {
+                        <div class="space-y-1">
+                            @foreach (var doc in draft.Documents)
+                            {
+                                <div class="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs">
+                                    <span class="font-medium text-slate-800">@doc.FileName</span>
+                                    <span class="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">@doc.Category</span>
+                                </div>
+                            }
+                        </div>
+                    }
+
+                    <button type="button"
+                            class="inline-flex items-center justify-center rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                            disabled="@busy"
+                            @onclick="() => review = true">
+                        Review Saved Application
+                    </button>
+
+                    @if (review)
+                    {
+                        <div class="rounded-xl border border-blue-200 bg-white p-3 text-xs whitespace-pre-wrap space-y-1">
+                            <p class="font-mono text-[11px] text-slate-700">@draft.SnapshotJson</p>
+                            <p class="font-medium text-blue-800">Check the saved content and attached documents above before confirming submission.</p>
+                        </div>
+                    }
+
+                    @if (draft.Notifications.Count > 0)
+                    {
+                        <div class="space-y-1 border-t border-slate-200 pt-2">
+                            @foreach (var n in draft.Notifications)
+                            {
+                                <p class="text-[11px] text-slate-600"><strong>@n.CreatedAtUtc.AddHours(5).ToString("dd MMM HH:mm") MVT</strong> · @n.Message</p>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+
+            <label class="flex items-center gap-2 text-xs font-medium text-slate-700">
+                <input type="checkbox" @bind="confirmed" />
+                I have reviewed the vacancy requirements and confirm these details are accurate.
+            </label>
+
+            <div class="flex flex-wrap items-center justify-end gap-2">
+                @if (draft is not null && draft.Status is "Draft" or "Submitted")
+                {
+                    <button type="button"
+                            class="inline-flex items-center justify-center rounded-lg border border-rose-300 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-50"
+                            disabled="@(busy || !confirmed)"
+                            @onclick="Withdraw">
+                        Withdraw Application
+                    </button>
+                }
+                <button type="button"
+                        class="inline-flex items-center justify-center rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                        disabled="@(busy || !review || draft is null || draft.Status != "Draft" || !confirmed || string.IsNullOrWhiteSpace(qualifications) || string.IsNullOrWhiteSpace(experience) || string.IsNullOrWhiteSpace(statement))"
+                        @onclick="Apply">
+                    Submit Application
+                </button>
+            </div>
+        </div>
+    }
+
+    @if (message is not null)
+    {
+        <div role="status" class="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-800">
+            <span>@message</span>
+            <button type="button" class="font-bold text-slate-500 hover:text-slate-800" @onclick="() => message = null">✕</button>
+        </div>
+    }
+</section>
+
+@code {
+    [Parameter] public bool Registered { get; set; }
+    [Parameter] public EventCallback Changed { get; set; }
+    private IReadOnlyList<PublishedRecruitmentVacancyRow> vacancies = [];
+    private int vacancy;
+    private string name = "", email = "", mobile = "", qualifications = "", experience = "", statement = "";
+    private bool busy, confirmed, review;
+    private string? message;
+    private RecruitmentDraftDetail? draft;
+    private string category = "Identity";
+    private const string InputClass = "mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try { vacancies = await Api.BrowseVacanciesAsync(); }
+        catch (HttpRequestException) { message = "Vacancies could not be loaded. Try again shortly."; }
+    }
+
+    private Task Register() => Run(() => Api.RegisterApplicantAsync(new(name, email, mobile)));
+
+    private async Task Resume()
+    {
+        draft = null;
+        review = false;
+        confirmed = false;
+        qualifications = experience = statement = "";
+        if (vacancy <= 0) return;
+        try
+        {
+            draft = await Api.GetDraftAsync(vacancy);
+            if (draft is not null)
+            {
+                using var d = System.Text.Json.JsonDocument.Parse(draft.SnapshotJson);
+                qualifications = Value(d, "Qualifications");
+                experience = Value(d, "Experience");
+                statement = Value(d, "SupportingStatement");
+            }
+        }
+        catch (HttpRequestException)
+        {
+            message = "Draft could not be loaded.";
+        }
+    }
+
+    private static string Value(System.Text.Json.JsonDocument d, string name) => d.RootElement.TryGetProperty(name, out var v) ? v.GetString() ?? "" : "";
+    private Task Save() => Run(() => Api.SaveDraftAsync(new(vacancy, draft?.Version ?? 0, qualifications, experience, statement)));
+    private Task Apply() => Run(() => Api.SubmitDraftAsync(draft!.Id, new(draft.Version, confirmed)));
+    private Task Withdraw() => Run(() => Api.WithdrawAsync(draft!.Id, new(draft.Version, confirmed)));
+
+    private async Task Upload(Microsoft.AspNetCore.Components.Forms.InputFileChangeEventArgs e)
+    {
+        if (draft is null || busy) return;
+        try
+        {
+            using var stream = e.File.OpenReadStream(5 * 1024 * 1024);
+            using var data = new MemoryStream();
+            await stream.CopyToAsync(data);
+            await Run(() => Api.UploadAsync(draft.Id, category, e.File.Name, data.ToArray()));
+        }
+        catch (IOException)
+        {
+            message = "Maximum upload size is 5 MB.";
+        }
+    }
+
+    private async Task Run(Func<Task<HRM.DTOs.ServiceResult>> action)
+    {
+        if (busy) return;
+        busy = true;
+        try
+        {
+            var result = await action();
+            message = result.Message;
+            if (result.Success)
+            {
+                confirmed = false;
+                await Resume();
+                await Changed.InvokeAsync();
+            }
+        }
+        catch (HttpRequestException)
+        {
+            message = "The action failed. Check your session and whether this vacancy is still open.";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
 }
