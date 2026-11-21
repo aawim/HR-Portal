@@ -219,6 +219,10 @@ public static class BackendServiceRegistration
         services.AddScoped<HRM.Services.Leave.LeaveHandoverService>();
         services.AddScoped<HRM.Services.Leave.LeaveCalendarService>();
         services.AddScoped<HRM.Services.Calendar.OrganisationEventService>();
+        services.AddScoped<HRM.Services.Communications.CommunicationHubService>();
+        services.AddHttpClient<HRM.Communications.Infrastructure.TelegramCommunicationProvider>(client => client.BaseAddress = new Uri("https://api.telegram.org/")).RemoveAllLoggers();
+        services.AddScoped<HRM.Communications.Contracts.ICommunicationConnectionValidator>(provider => provider.GetRequiredService<HRM.Communications.Infrastructure.TelegramCommunicationProvider>());
+        services.AddScoped<HRM.Services.Contracts.CommunicationHubContracts.IOperations>(provider => provider.GetRequiredService<HRM.Services.Communications.CommunicationHubService>());
         services.AddScoped<HRM.Services.Calendar.Contracts.IOrganisationCalendarResolver, HRM.Services.Calendar.OrganisationCalendarResolver>();
         services.AddScoped<HRM.Services.Calendar.OrganisationCalendarService>();
         services.AddScoped<HRM.Services.Calendar.SupervisorCalendarService>();

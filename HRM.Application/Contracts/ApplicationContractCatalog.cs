@@ -104,6 +104,7 @@ public static class ApplicationContractCatalog
         typeof(global::HRM.Services.Contracts.StaffBankServiceContracts.IOperations),
         typeof(global::HRM.Services.Contracts.StaffEmergencyContactServiceContracts.IOperations),
         typeof(global::HRM.Services.Contracts.StaffIdentityDocumentServiceContracts.IOperations)
+        ,typeof(global::HRM.Services.Contracts.CommunicationHubContracts.IOperations)
     ]);
 
     /// <summary>Reviewed DTO-only contracts served by dedicated HTTP clients instead of the generated v1 transport.</summary>

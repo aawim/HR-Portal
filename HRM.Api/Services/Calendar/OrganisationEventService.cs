@@ -3,6 +3,9 @@ using HRM.DTOs.Calendar;
 using HRM.Models;
 using HRM.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
+using HRM.Communications.Contracts;
+using HRM.Services.Communications;
 
 namespace HRM.Services.Calendar;
 
@@ -63,6 +66,19 @@ public sealed class OrganisationEventService(IDbContextFactory<HrmTeContext> fac
             OrganisationBusinessEntityId = e.OrganisationBusinessEntityId, OrganisationEventId = e.OrganisationEventId,
             Action = action, ActorIndividualId = actor, PreviousValue = previous, NewValue = now, Reason = reason, CreatedAtUtc = DateTime.UtcNow
         });
+
+    private static void QueueCommunication(HrmTeContext db, OrganisationEvent e, string eventCode)
+    {
+        var now = DateTime.UtcNow;
+        db.CommunicationOutbox.Add(new CommunicationOutbox
+        {
+            EventId = Guid.NewGuid(), OrganisationBusinessEntityId = e.OrganisationBusinessEntityId,
+            EventCode = eventCode, AggregateType = "OrganisationEvent", AggregateId = e.OrganisationEventId.ToString(),
+            PayloadJson = JsonSerializer.Serialize(new { e.OrganisationEventId, e.Title, e.Description, e.Category, e.StartDateTime, e.EndDateTime, e.TimeZoneId,
+                OrganisationWideAudience = e.Audiences.Count > 0 && e.Audiences.All(a => a.IsIncluded && a.AudienceType == "Organisation") }),
+            OccurredAtUtc = now, AvailableAtUtc = now
+        });
+    }
 
     private static void Validate(OrganisationEventDto d)
     {
@@ -216,6 +232,7 @@ public sealed class OrganisationEventService(IDbContextFactory<HrmTeContext> fac
         var (org, actor, canPublish) = await RequireManagerAsync();
         if (!canPublish) throw new UnauthorizedAccessException("You are not allowed to publish organisation events.");
         await using var db = await factory.CreateDbContextAsync();
+        await CommunicationSchemaBootstrapper.EnsureSchemaAsync(db);
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
         var e = await LoadAsync(db, org, id, true);
         if (e.Status is not ("Draft" or "PendingApproval")) throw new InvalidOperationException("Only draft or pending events can be published.");
@@ -240,6 +257,7 @@ public sealed class OrganisationEventService(IDbContextFactory<HrmTeContext> fac
         }
         e.Status = "Published"; e.PublishDate = DateTime.UtcNow; e.PublishedBy = actor; e.ApprovedBy = actor; e.ApprovedDate = DateTime.UtcNow;
         Audit(db, e, actor, "Published", "Draft", "Published", e.CalendarImpactType == "None" ? null : $"Calendar impact: {e.CalendarImpactType}");
+        QueueCommunication(db, e, CommunicationEventCodes.OrganisationEventPublished);
         await db.SaveChangesAsync();
         await tx.CommitAsync();
     }
@@ -250,6 +268,7 @@ public sealed class OrganisationEventService(IDbContextFactory<HrmTeContext> fac
         if (!canPublish) throw new UnauthorizedAccessException("You are not allowed to cancel organisation events.");
         if (string.IsNullOrWhiteSpace(reason) || reason.Length > 400) throw new InvalidOperationException("Enter a cancellation reason of up to 400 characters.");
         await using var db = await factory.CreateDbContextAsync();
+        await CommunicationSchemaBootstrapper.EnsureSchemaAsync(db);
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
         var e = await LoadAsync(db, org, id, true);
         if (e.Status is "Cancelled" or "Completed") throw new InvalidOperationException("The event is already closed.");
@@ -258,6 +277,7 @@ public sealed class OrganisationEventService(IDbContextFactory<HrmTeContext> fac
         foreach (var ex in await db.OrganisationCalendarExceptions.Where(x => x.OrganisationEventId == id && x.IsActive).ToListAsync()) ex.IsActive = false;
         e.Status = "Cancelled"; e.UpdatedBy = actor; e.UpdatedDate = DateTime.UtcNow;
         Audit(db, e, actor, "Cancelled", previous, "Cancelled", reason.Trim());
+        if (previous == "Published") QueueCommunication(db, e, CommunicationEventCodes.OrganisationEventCancelled);
         await db.SaveChangesAsync();
         await tx.CommitAsync();
     }
