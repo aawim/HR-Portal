@@ -101,13 +101,22 @@ public sealed class ErrorLogBackgroundProcessor : BackgroundService
     {
         if (_store == null || batch.Count == 0) return;
 
-        try
+        for (var attempt = 1; attempt <= 2; attempt++)
         {
-            await _store.PersistBatchAsync(batch, cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            _logger?.LogError(ex, "Failed to persist batch of {Count} error logs to storage.", batch.Count);
+            try
+            {
+                await _store.PersistBatchAsync(batch, cancellationToken);
+                return;
+            }
+            catch (Exception ex) when (attempt == 1 && !cancellationToken.IsCancellationRequested)
+            {
+                _logger?.LogWarning(ex, "Transient failure persisting batch of {Count} error logs (attempt 1); retrying.", batch.Count);
+                try { await Task.Delay(500, cancellationToken); } catch (OperationCanceledException) { return; }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Failed to persist batch of {Count} error logs to storage.", batch.Count);
+            }
         }
     }
 }

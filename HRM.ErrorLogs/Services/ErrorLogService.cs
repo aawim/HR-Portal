@@ -29,8 +29,6 @@ public sealed class ErrorLogService : IErrorLogService
         _queue = queue;
         _logger = logger;
         _defaultApplicationSource = defaultApplicationSource;
-
-        SeedSampleIfEmpty();
     }
 
     public async Task<ErrorLogEntry> CaptureExceptionAsync(
@@ -140,9 +138,11 @@ public sealed class ErrorLogService : IErrorLogService
                     _entries.TryAdd(item.Id, item);
                 }
 
+                var inFlightCutoffUtc = DateTime.UtcNow.AddSeconds(-15);
                 foreach (var item in _entries.Values)
                 {
-                    map.TryAdd(item.Id, item);
+                    if (item.TimestampUtc >= inFlightCutoffUtc)
+                        map.TryAdd(item.Id, item);
                 }
 
                 combined = map.Values;

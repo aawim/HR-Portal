@@ -64,6 +64,7 @@ public sealed class SqlErrorLogStore : IErrorLogStore
             await conn.OpenAsync(cancellationToken);
 
             const string sql = @"
+IF NOT EXISTS (SELECT 1 FROM [dbo].[ERR_ErrorLogs] WHERE [Id] = @Id)
 INSERT INTO [dbo].[ERR_ErrorLogs] (
     [Id], [TimestampUtc], [TimestampLocal], [CriticalityLevel], [ApplicationSource],
     [Environment], [MachineName], [ProcessId], [ThreadId], [TraceId],
@@ -93,44 +94,44 @@ INSERT INTO [dbo].[ERR_ErrorLogs] (
             cmd.Parameters.AddWithValue("@TimestampUtc", entry.TimestampUtc);
             cmd.Parameters.AddWithValue("@TimestampLocal", entry.TimestampLocal);
             cmd.Parameters.AddWithValue("@CriticalityLevel", (int)entry.CriticalityLevel);
-            cmd.Parameters.AddWithValue("@ApplicationSource", entry.ApplicationSource ?? "HRM.Api");
-            cmd.Parameters.AddWithValue("@Environment", entry.Environment ?? "Development");
-            cmd.Parameters.AddWithValue("@MachineName", entry.MachineName ?? System.Environment.MachineName);
+            cmd.Parameters.AddWithValue("@ApplicationSource", Truncate(entry.ApplicationSource ?? "HRM.Api", 100)!);
+            cmd.Parameters.AddWithValue("@Environment", Truncate(entry.Environment ?? "Development", 50)!);
+            cmd.Parameters.AddWithValue("@MachineName", Truncate(entry.MachineName ?? System.Environment.MachineName, 100)!);
             cmd.Parameters.AddWithValue("@ProcessId", entry.ProcessId);
             cmd.Parameters.AddWithValue("@ThreadId", entry.ThreadId);
-            cmd.Parameters.AddWithValue("@TraceId", (object?)entry.TraceId ?? DBNull.Value);
-            cmd.Parameters.AddWithValue("@Username", (object?)entry.Username ?? DBNull.Value);
-            cmd.Parameters.AddWithValue("@UserId", (object?)entry.UserId ?? DBNull.Value);
-            cmd.Parameters.AddWithValue("@RemoteIp", (object?)entry.RemoteIp ?? DBNull.Value);
-            cmd.Parameters.AddWithValue("@PageLocation", (object?)entry.PageLocation ?? DBNull.Value);
-            cmd.Parameters.AddWithValue("@HttpMethod", (object?)entry.HttpMethod ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@TraceId", (object?)Truncate(entry.TraceId, 150) ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@Username", (object?)Truncate(entry.Username, 250) ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@UserId", (object?)Truncate(entry.UserId, 150) ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@RemoteIp", (object?)Truncate(entry.RemoteIp, 100) ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@PageLocation", (object?)Truncate(entry.PageLocation, 1000) ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@HttpMethod", (object?)Truncate(entry.HttpMethod, 20) ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@StatusCode", (object?)entry.StatusCode ?? DBNull.Value);
-            cmd.Parameters.AddWithValue("@UserAgent", (object?)entry.UserAgent ?? DBNull.Value);
-            cmd.Parameters.AddWithValue("@ExceptionType", entry.ExceptionType ?? string.Empty);
+            cmd.Parameters.AddWithValue("@UserAgent", (object?)Truncate(entry.UserAgent, 1000) ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@ExceptionType", Truncate(entry.ExceptionType ?? string.Empty, 300)!);
             cmd.Parameters.AddWithValue("@ErrorMessage", entry.ErrorMessage ?? string.Empty);
             cmd.Parameters.AddWithValue("@StackTrace", (object?)entry.StackTrace ?? DBNull.Value);
-            cmd.Parameters.AddWithValue("@InnerExceptionType", (object?)entry.InnerExceptionType ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@InnerExceptionType", (object?)Truncate(entry.InnerExceptionType, 300) ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@InnerErrorMessage", (object?)entry.InnerErrorMessage ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@InnerStackTrace", (object?)entry.InnerStackTrace ?? DBNull.Value);
-            cmd.Parameters.AddWithValue("@FileName", (object?)entry.Location?.FileName ?? DBNull.Value);
-            cmd.Parameters.AddWithValue("@FilePath", (object?)entry.Location?.FilePath ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@FileName", (object?)Truncate(entry.Location?.FileName, 500) ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@FilePath", (object?)Truncate(entry.Location?.FilePath, 1000) ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@LineNumber", entry.Location?.LineNumber ?? 0);
             cmd.Parameters.AddWithValue("@ColumnNumber", entry.Location?.ColumnNumber ?? 0);
-            cmd.Parameters.AddWithValue("@ClassName", (object?)entry.Location?.ClassName ?? DBNull.Value);
-            cmd.Parameters.AddWithValue("@MethodName", (object?)entry.Location?.MethodName ?? DBNull.Value);
-            cmd.Parameters.AddWithValue("@Namespace", (object?)entry.Location?.Namespace ?? DBNull.Value);
-            cmd.Parameters.AddWithValue("@AssemblyName", (object?)entry.Location?.AssemblyName ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@ClassName", (object?)Truncate(entry.Location?.ClassName, 300) ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@MethodName", (object?)Truncate(entry.Location?.MethodName, 300) ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@Namespace", (object?)Truncate(entry.Location?.Namespace, 300) ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@AssemblyName", (object?)Truncate(entry.Location?.AssemblyName, 300) ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@RootCauseSummary", (object?)entry.Fix?.RootCauseSummary ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@RecommendedAction", (object?)entry.Fix?.RecommendedAction ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@DiagnosticStepsJson", entry.Fix?.DiagnosticSteps != null ? JsonSerializer.Serialize(entry.Fix.DiagnosticSteps) : (object)DBNull.Value);
             cmd.Parameters.AddWithValue("@SuggestedCodePattern", (object?)entry.Fix?.SuggestedCodePattern ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@CustomDataJson", (object?)entry.CustomDataJson ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@IsResolved", entry.IsResolved);
-            cmd.Parameters.AddWithValue("@ResolvedBy", (object?)entry.ResolvedBy ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@ResolvedBy", (object?)Truncate(entry.ResolvedBy, 250) ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@ResolvedAt", (object?)entry.ResolvedAt ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@ResolutionNotes", (object?)entry.ResolutionNotes ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@IsDeleted", entry.IsDeleted);
-            cmd.Parameters.AddWithValue("@DeletedBy", (object?)entry.DeletedBy ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@DeletedBy", (object?)Truncate(entry.DeletedBy, 250) ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@DeletedAt", (object?)entry.DeletedAt ?? DBNull.Value);
 
             await cmd.ExecuteNonQueryAsync(cancellationToken);
@@ -145,16 +146,24 @@ INSERT INTO [dbo].[ERR_ErrorLogs] (
     {
         if (entries == null || entries.Count == 0) return;
 
-        if (entries.Count == 1)
+        var distinctEntries = entries
+            .Where(e => e != null)
+            .GroupBy(e => e.Id)
+            .Select(g => g.Last())
+            .ToList();
+
+        if (distinctEntries.Count == 0) return;
+
+        if (distinctEntries.Count == 1)
         {
-            await PersistAsync(entries[0], cancellationToken);
+            await PersistAsync(distinctEntries[0], cancellationToken);
             return;
         }
 
         try
         {
             var table = BuildErrorLogsDataTable();
-            foreach (var entry in entries)
+            foreach (var entry in distinctEntries)
             {
                 var row = table.NewRow();
                 PopulateRow(row, entry);
@@ -167,7 +176,7 @@ INSERT INTO [dbo].[ERR_ErrorLogs] (
             using var bulkCopy = new SqlBulkCopy(conn, SqlBulkCopyOptions.CheckConstraints, null)
             {
                 DestinationTableName = "[dbo].[ERR_ErrorLogs]",
-                BatchSize = entries.Count,
+                BatchSize = distinctEntries.Count,
                 BulkCopyTimeout = 30
             };
 
@@ -180,7 +189,11 @@ INSERT INTO [dbo].[ERR_ErrorLogs] (
         }
         catch (Exception ex)
         {
-            _logger?.LogWarning(ex, "SqlErrorLogStore: Unable to write batch of {Count} errors to HrmErrorLogs database.", entries.Count);
+            _logger?.LogWarning(ex, "SqlErrorLogStore: Bulk insert of {Count} errors failed; falling back to per-row persistence.", distinctEntries.Count);
+            foreach (var entry in distinctEntries)
+            {
+                await PersistAsync(entry, cancellationToken);
+            }
         }
     }
 
@@ -239,46 +252,49 @@ INSERT INTO [dbo].[ERR_ErrorLogs] (
         row["TimestampUtc"] = entry.TimestampUtc;
         row["TimestampLocal"] = entry.TimestampLocal;
         row["CriticalityLevel"] = (int)entry.CriticalityLevel;
-        row["ApplicationSource"] = entry.ApplicationSource ?? "HRM.Api";
-        row["Environment"] = entry.Environment ?? "Development";
-        row["MachineName"] = entry.MachineName ?? System.Environment.MachineName;
+        row["ApplicationSource"] = Truncate(entry.ApplicationSource ?? "HRM.Api", 100)!;
+        row["Environment"] = Truncate(entry.Environment ?? "Development", 50)!;
+        row["MachineName"] = Truncate(entry.MachineName ?? System.Environment.MachineName, 100)!;
         row["ProcessId"] = entry.ProcessId;
         row["ThreadId"] = entry.ThreadId;
-        row["TraceId"] = (object?)entry.TraceId ?? DBNull.Value;
-        row["Username"] = (object?)entry.Username ?? DBNull.Value;
-        row["UserId"] = (object?)entry.UserId ?? DBNull.Value;
-        row["RemoteIp"] = (object?)entry.RemoteIp ?? DBNull.Value;
-        row["PageLocation"] = (object?)entry.PageLocation ?? DBNull.Value;
-        row["HttpMethod"] = (object?)entry.HttpMethod ?? DBNull.Value;
+        row["TraceId"] = (object?)Truncate(entry.TraceId, 150) ?? DBNull.Value;
+        row["Username"] = (object?)Truncate(entry.Username, 250) ?? DBNull.Value;
+        row["UserId"] = (object?)Truncate(entry.UserId, 150) ?? DBNull.Value;
+        row["RemoteIp"] = (object?)Truncate(entry.RemoteIp, 100) ?? DBNull.Value;
+        row["PageLocation"] = (object?)Truncate(entry.PageLocation, 1000) ?? DBNull.Value;
+        row["HttpMethod"] = (object?)Truncate(entry.HttpMethod, 20) ?? DBNull.Value;
         row["StatusCode"] = (object?)entry.StatusCode ?? DBNull.Value;
-        row["UserAgent"] = (object?)entry.UserAgent ?? DBNull.Value;
-        row["ExceptionType"] = entry.ExceptionType;
-        row["ErrorMessage"] = entry.ErrorMessage;
+        row["UserAgent"] = (object?)Truncate(entry.UserAgent, 1000) ?? DBNull.Value;
+        row["ExceptionType"] = Truncate(entry.ExceptionType ?? string.Empty, 300)!;
+        row["ErrorMessage"] = entry.ErrorMessage ?? string.Empty;
         row["StackTrace"] = (object?)entry.StackTrace ?? DBNull.Value;
-        row["InnerExceptionType"] = (object?)entry.InnerExceptionType ?? DBNull.Value;
+        row["InnerExceptionType"] = (object?)Truncate(entry.InnerExceptionType, 300) ?? DBNull.Value;
         row["InnerErrorMessage"] = (object?)entry.InnerErrorMessage ?? DBNull.Value;
         row["InnerStackTrace"] = (object?)entry.InnerStackTrace ?? DBNull.Value;
-        row["FileName"] = (object?)entry.Location?.FileName ?? DBNull.Value;
-        row["FilePath"] = (object?)entry.Location?.FilePath ?? DBNull.Value;
-        row["LineNumber"] = (object?)entry.Location?.LineNumber ?? DBNull.Value;
-        row["ColumnNumber"] = (object?)entry.Location?.ColumnNumber ?? DBNull.Value;
-        row["ClassName"] = (object?)entry.Location?.ClassName ?? DBNull.Value;
-        row["MethodName"] = (object?)entry.Location?.MethodName ?? DBNull.Value;
-        row["Namespace"] = (object?)entry.Location?.Namespace ?? DBNull.Value;
-        row["AssemblyName"] = (object?)entry.Location?.AssemblyName ?? DBNull.Value;
+        row["FileName"] = (object?)Truncate(entry.Location?.FileName, 500) ?? DBNull.Value;
+        row["FilePath"] = (object?)Truncate(entry.Location?.FilePath, 1000) ?? DBNull.Value;
+        row["LineNumber"] = entry.Location?.LineNumber ?? 0;
+        row["ColumnNumber"] = entry.Location?.ColumnNumber ?? 0;
+        row["ClassName"] = (object?)Truncate(entry.Location?.ClassName, 300) ?? DBNull.Value;
+        row["MethodName"] = (object?)Truncate(entry.Location?.MethodName, 300) ?? DBNull.Value;
+        row["Namespace"] = (object?)Truncate(entry.Location?.Namespace, 300) ?? DBNull.Value;
+        row["AssemblyName"] = (object?)Truncate(entry.Location?.AssemblyName, 300) ?? DBNull.Value;
         row["RootCauseSummary"] = (object?)entry.Fix?.RootCauseSummary ?? DBNull.Value;
         row["RecommendedAction"] = (object?)entry.Fix?.RecommendedAction ?? DBNull.Value;
         row["DiagnosticStepsJson"] = entry.Fix?.DiagnosticSteps != null ? JsonSerializer.Serialize(entry.Fix.DiagnosticSteps) : DBNull.Value;
         row["SuggestedCodePattern"] = (object?)entry.Fix?.SuggestedCodePattern ?? DBNull.Value;
         row["CustomDataJson"] = (object?)entry.CustomDataJson ?? DBNull.Value;
         row["IsResolved"] = entry.IsResolved;
-        row["ResolvedBy"] = (object?)entry.ResolvedBy ?? DBNull.Value;
+        row["ResolvedBy"] = (object?)Truncate(entry.ResolvedBy, 250) ?? DBNull.Value;
         row["ResolvedAt"] = (object?)entry.ResolvedAt ?? DBNull.Value;
         row["ResolutionNotes"] = (object?)entry.ResolutionNotes ?? DBNull.Value;
         row["IsDeleted"] = entry.IsDeleted;
-        row["DeletedBy"] = (object?)entry.DeletedBy ?? DBNull.Value;
+        row["DeletedBy"] = (object?)Truncate(entry.DeletedBy, 250) ?? DBNull.Value;
         row["DeletedAt"] = (object?)entry.DeletedAt ?? DBNull.Value;
     }
+
+    private static string? Truncate(string? value, int maxLength)
+        => string.IsNullOrEmpty(value) || value.Length <= maxLength ? value : value[..maxLength];
 
     public async Task<IReadOnlyList<ErrorLogEntry>> LoadRecentAsync(
         int count,

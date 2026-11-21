@@ -42,7 +42,7 @@ public sealed class ErrorLogApiClient : IErrorLogApiClient
         }
         catch (Exception ex)
         {
-            _logger?.LogDebug(ex, "ErrorLogApiClient: Failed to fetch errors from API endpoint, trying local service.");
+            _logger?.LogWarning(ex, "ErrorLogApiClient: Failed to fetch errors from API endpoint; falling back to local UI memory buffer.");
         }
 
         if (_localService != null)
@@ -82,7 +82,7 @@ public sealed class ErrorLogApiClient : IErrorLogApiClient
         }
         catch (Exception ex)
         {
-            _logger?.LogDebug(ex, "ErrorLogApiClient: Failed to fetch error statistics from API, trying local service.");
+            _logger?.LogWarning(ex, "ErrorLogApiClient: Failed to fetch error statistics from API; falling back to local UI memory buffer.");
         }
 
         if (_localService != null)
