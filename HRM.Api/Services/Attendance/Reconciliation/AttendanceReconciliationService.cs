@@ -18,17 +18,20 @@ public sealed class AttendanceReconciliationService : IAttendanceReconciliationS
     private readonly IWorkPlanGenerator? _workPlanGenerator;
     private readonly IUserAccessService? _access;
     private readonly IOperationLogService? _operationLogs;
+    private readonly HRM.AuditLogs.Abstractions.IAuditLogService? _auditLogs;
 
     public AttendanceReconciliationService(
         IDbContextFactory<HrmTeContext> dbFactory,
         IWorkPlanGenerator? workPlanGenerator = null,
         IUserAccessService? access = null,
-        IOperationLogService? operationLogs = null)
+        IOperationLogService? operationLogs = null,
+        HRM.AuditLogs.Abstractions.IAuditLogService? auditLogs = null)
     {
         _dbFactory = dbFactory ?? throw new ArgumentNullException(nameof(dbFactory));
         _workPlanGenerator = workPlanGenerator;
         _access = access;
         _operationLogs = operationLogs;
+        _auditLogs = auditLogs;
     }
 
     public async Task<AttendanceReconciliationResult> ReconcileAsync(
@@ -369,6 +372,24 @@ public sealed class AttendanceReconciliationService : IAttendanceReconciliationS
             prev.SupersededByOverrideId = newOverride.AttendanceManualOverrideId;
         if (existingOverrides.Count > 0)
             await db.SaveChangesAsync(cancellationToken);
+
+        if (_auditLogs is not null)
+        {
+            await _auditLogs.RecordAttendanceCorrectionAsync(
+                entityType: "AttendanceManualOverride",
+                entityId: newOverride.AttendanceManualOverrideId.ToString(),
+                description: $"Manual attendance override ({newOverride.OverrideAction}) for Individual {request.IndividualId} on {request.WorkDate:yyyy-MM-dd}.",
+                changes:
+                [
+                    new("AttendanceLogId", null, request.AttendanceLogId),
+                    new("TargetSchedulePurpose", null, newOverride.TargetSchedulePurpose),
+                    new("TargetClockTypeId", null, newOverride.TargetClockTypeId),
+                    new("AllowFinalizedPlanOverride", null, request.AllowFinalizedPlanOverride)
+                ],
+                reason: request.Reason,
+                organisationId: newOverride.OrganisationId,
+                cancellationToken: cancellationToken);
+        }
 
         return await ReconcileInternalAsync(
             db,

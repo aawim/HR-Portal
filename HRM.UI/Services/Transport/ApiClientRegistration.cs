@@ -66,6 +66,19 @@ public static class ApiClientRegistration
                 provider.GetService<HRM.ErrorLogs.Services.IErrorLogService>(),
                 provider.GetService<ILogger<HRM.UI.Services.Diagnostics.ErrorLogApiClient>>());
         });
+        services.AddScoped<HRM.UI.Services.Audit.IAuditLogApiClient>(provider =>
+        {
+            var origins = provider.GetRequiredService<BackendOrigins>();
+            var handler = new CircuitBackendHandler(
+                provider.GetRequiredService<Microsoft.AspNetCore.Components.Authorization.AuthenticationStateProvider>(),
+                provider.GetRequiredService<BackendSessionStore>(),
+                provider.GetRequiredService<IHttpClientFactory>(),
+                origins,
+                provider.GetRequiredService<Microsoft.AspNetCore.DataProtection.IDataProtectionProvider>(),
+                provider.GetRequiredService<ILogger<BackendSession>>());
+            var client = new HttpClient(handler) { BaseAddress = origins.Api };
+            return new HRM.UI.Services.Audit.AuditLogApiClient(client);
+        });
         services.AddScoped<HRM.UI.Services.Budget.BudgetApiClient>(provider =>
         {
             var origins = provider.GetRequiredService<BackendOrigins>();

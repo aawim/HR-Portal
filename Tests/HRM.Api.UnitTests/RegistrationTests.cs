@@ -59,6 +59,7 @@ public sealed class RegistrationTests
         var approvedHandWrittenControllers = new HashSet<Type>
         {
             typeof(HRM.Api.Controllers.V1.AttendanceDeductionController),
+            typeof(HRM.Api.Controllers.V1.AuditLogsController),
             typeof(HRM.Api.Controllers.V1.ErrorLogsController),
             typeof(HRM.Api.Controllers.V1.RecruitmentApplicantWorkspaceController),
             typeof(HRM.Api.Controllers.V1.RecruitmentApplicationsController),

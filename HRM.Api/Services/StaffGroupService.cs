@@ -9,7 +9,8 @@ namespace HRM.Services;
 public sealed class StaffGroupService(
     IDbContextFactory<HrmTeContext> factory,
     IUserAccessService access,
-    IOperationLogService logs) : IOperations
+    IOperationLogService logs,
+    HRM.AuditLogs.Abstractions.IAuditLogService? auditLogs = null) : IOperations
 {
     private async Task<(int OrgId, int UserId)> RequireHrWriteAsync()
     {
@@ -491,6 +492,16 @@ public sealed class StaffGroupService(
         await ApplyGroupAdminAccessChangeAsync(db, group, enabled);
         await db.SaveChangesAsync();
         await tx.CommitAsync();
+
+        if (auditLogs is not null)
+        {
+            await auditLogs.RecordPermissionChangeAsync(
+                action: enabled ? "GRANT_ACCESS" : "REVOKE_ACCESS",
+                entityType: nameof(StaffGroup),
+                entityId: group.StaffGroupId.ToString(),
+                description: $"{(enabled ? "Enabled" : "Revoked")} Admin Portal access for Staff Group '{group.Name}'.",
+                organisationId: orgId);
+        }
     }
 
     public async Task DissolveGroupAsync(int staffGroupId, string? reason)
@@ -549,6 +560,20 @@ public sealed class StaffGroupService(
 
         await db.SaveChangesAsync();
         await tx.CommitAsync();
+
+        if (auditLogs is not null)
+        {
+            await auditLogs.RecordAsync(new HRM.AuditLogs.Models.AuditLogRequest
+            {
+                Action = "DISSOLVE",
+                Module = "StaffGroups",
+                EntityType = nameof(StaffGroup),
+                EntityId = group.StaffGroupId.ToString(),
+                OrganisationId = orgId,
+                Description = $"Dissolved Staff Group '{group.Name}' ({activeMembers.Count} active member(s) removed).",
+                Reason = group.DissolveReason
+            });
+        }
     }
 
     private static async Task InvalidateUnusedGeneratedPlansAsync(HrmTeContext db, int orgId, List<int> jobIds, DateTime fromDate)

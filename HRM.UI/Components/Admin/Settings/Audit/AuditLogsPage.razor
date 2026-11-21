@@ -1,0 +1,416 @@
+@page "/admin/settings/audit-logs"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using HRM.AuditLogs.Models
+@using HRM.UI.Services.Audit
+@inject IAuditLogApiClient AuditApi
+@inject IJSRuntime JS
+
+<div class="space-y-4 p-4">
+    <!-- Header -->
+    <div class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
+        <div>
+            <h1 class="text-lg font-bold text-slate-900">Audit Logs</h1>
+            <p class="mt-0.5 text-xs text-slate-500">
+                Immutable, tenant-scoped compliance trail of data changes, approvals, overrides, and security events.
+            </p>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+            <button type="button"
+                    class="inline-flex items-center justify-center gap-1.5 rounded-md border border-slate-300 bg-slate-100 px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-200 disabled:opacity-50 transition-colors"
+                    disabled="@loading"
+                    @onclick="LoadAsync">
+                Refresh
+            </button>
+            <button type="button"
+                    class="inline-flex items-center justify-center gap-1.5 rounded-md bg-blue-600 px-3.5 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                    disabled="@(loading || exporting || isUnauthorized)"
+                    @onclick="ExportCsvAsync">
+                @(exporting ? "Exporting..." : "Export CSV")
+            </button>
+        </div>
+    </div>
+
+    <!-- Filters Panel -->
+    <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs space-y-3">
+        <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <label class="block text-xs font-semibold text-slate-700">
+                Search
+                <input type="search" @bind="filter.SearchText" placeholder="Description, entity, reason, correlation..."
+                       class="mt-1 block w-full rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-800 focus:border-blue-500 focus:outline-none" />
+            </label>
+            <label class="block text-xs font-semibold text-slate-700">
+                Module
+                <select @bind="filter.Module" class="mt-1 block w-full rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-800">
+                    <option value="">All modules</option>
+                    <option value="Employees">Employees</option>
+                    <option value="Compensation">Compensation</option>
+                    <option value="Positions">Positions</option>
+                    <option value="Attendance">Attendance</option>
+                    <option value="Payroll">Payroll</option>
+                    <option value="AccessManagement">Access Management</option>
+                    <option value="Transfers">Transfers</option>
+                    <option value="Recruitment">Recruitment</option>
+                    <option value="StaffGroups">Staff Groups</option>
+                    <option value="WorkPlanning">Work Planning</option>
+                    <option value="GoodsLoans">Goods Loans</option>
+                    <option value="Configuration">Configuration</option>
+                    <option value="AuditLogs">Audit Logs</option>
+                </select>
+            </label>
+            <label class="block text-xs font-semibold text-slate-700">
+                Action
+                <select @bind="filter.Action" class="mt-1 block w-full rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-800">
+                    <option value="">All actions</option>
+                    <option value="INSERT">INSERT</option>
+                    <option value="UPDATE">UPDATE</option>
+                    <option value="DELETE">DELETE</option>
+                    <option value="APPROVE">APPROVE</option>
+                    <option value="REJECT">REJECT</option>
+                    <option value="OVERRIDE">OVERRIDE</option>
+                    <option value="ADJUST">ADJUST</option>
+                    <option value="GRANT_ACCESS">GRANT_ACCESS</option>
+                    <option value="REVOKE_ACCESS">REVOKE_ACCESS</option>
+                    <option value="DISSOLVE">DISSOLVE</option>
+                    <option value="AUDIT_EXPORT">AUDIT_EXPORT</option>
+                    <option value="CROSS_ORG_AUDIT_VIEW">CROSS_ORG_AUDIT_VIEW</option>
+                    <option value="AUDIT_ACCESS_DENIED">AUDIT_ACCESS_DENIED</option>
+                </select>
+            </label>
+            <label class="block text-xs font-semibold text-slate-700">
+                Outcome
+                <select @bind="filter.Outcome" class="mt-1 block w-full rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-800">
+                    <option value="">All outcomes</option>
+                    <option value="Committed">Committed</option>
+                    <option value="Denied">Denied</option>
+                    <option value="Failed">Failed</option>
+                </select>
+            </label>
+            <label class="block text-xs font-semibold text-slate-700">
+                From (UTC)
+                <input type="date" @bind="fromDate" class="mt-1 block w-full rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-800" />
+            </label>
+            <label class="block text-xs font-semibold text-slate-700">
+                To (UTC)
+                <input type="date" @bind="toDate" class="mt-1 block w-full rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-800" />
+            </label>
+            <label class="block text-xs font-semibold text-slate-700">
+                User ID
+                <input type="number" min="1" @bind="filter.UserId" placeholder="Optional"
+                       class="mt-1 block w-full rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-800" />
+            </label>
+            <label class="block text-xs font-semibold text-slate-700">
+                Correlation ID
+                <input type="text" @bind="filter.CorrelationId" placeholder="Trace / correlation ID"
+                       class="mt-1 block w-full rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-800" />
+            </label>
+        </div>
+
+        <div class="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3">
+            <div class="flex flex-wrap items-center gap-2">
+                <button type="button"
+                        class="inline-flex items-center justify-center rounded-md bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                        disabled="@loading"
+                        @onclick="ApplyFiltersAsync">
+                    Apply Filters
+                </button>
+                <button type="button"
+                        class="inline-flex items-center justify-center rounded-md border border-slate-300 bg-slate-100 px-3.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-200 disabled:opacity-50 transition-colors"
+                        disabled="@loading"
+                        @onclick="ResetFiltersAsync">
+                    Reset
+                </button>
+            </div>
+            <span class="text-xs text-slate-500">
+                Showing @((result?.TotalCount ?? 0)) total record(s)
+            </span>
+        </div>
+    </section>
+
+    <!-- Status States -->
+    @if (isUnauthorized)
+    {
+        <div role="alert" class="rounded-2xl border border-rose-200 bg-rose-50 p-6 text-center">
+            <h2 class="text-sm font-bold text-rose-800">Access Restricted</h2>
+            <p class="mt-1 text-xs text-rose-700">@(errorMessage ?? "You do not have permission to view Audit Logs for this organisation.")</p>
+        </div>
+    }
+    else if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <p role="alert" class="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs font-medium text-amber-800">@errorMessage</p>
+    }
+
+    <!-- Audit Table -->
+    @if (!isUnauthorized)
+    {
+        <section class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xs">
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-slate-200 text-left text-xs">
+                    <thead class="bg-slate-50 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                        <tr>
+                            <th class="px-3 py-2.5">Timestamp (UTC)</th>
+                            <th class="px-3 py-2.5">Module / Entity</th>
+                            <th class="px-3 py-2.5">Action / Outcome</th>
+                            <th class="px-3 py-2.5">Actor / Scope</th>
+                            <th class="px-3 py-2.5">Description</th>
+                            <th class="px-3 py-2.5">Correlation</th>
+                            <th class="px-3 py-2.5 text-right">Details</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100 bg-white">
+                        @if (loading)
+                        {
+                            <tr>
+                                <td colspan="7" class="px-4 py-10 text-center text-slate-500">Loading audit records...</td>
+                            </tr>
+                        }
+                        else if (result == null || result.Items.Count == 0)
+                        {
+                            <tr>
+                                <td colspan="7" class="px-4 py-10 text-center text-slate-500">No audit log entries match the current filters.</td>
+                            </tr>
+                        }
+                        else
+                        {
+                            @foreach (var row in result.Items)
+                            {
+                                var isExpanded = expandedId == row.AuditLogId;
+                                <tr class="hover:bg-slate-50/70 transition-colors">
+                                    <td class="whitespace-nowrap px-3 py-2.5 font-mono text-[11px] text-slate-700">
+                                        @row.OccurredAtUtc.ToString("yyyy-MM-dd HH:mm:ss")
+                                    </td>
+                                    <td class="px-3 py-2.5">
+                                        <div class="font-semibold text-slate-800">@row.Module</div>
+                                        <div class="text-[11px] text-slate-500">@row.EntityType #@row.EntityId</div>
+                                    </td>
+                                    <td class="whitespace-nowrap px-3 py-2.5">
+                                        <span class="inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold @ActionBadgeClass(row.Action)">@row.Action</span>
+                                        <span class="ml-1 inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold @OutcomeBadgeClass(row.Outcome)">@row.Outcome</span>
+                                    </td>
+                                    <td class="px-3 py-2.5">
+                                        <div class="font-medium text-slate-700">@row.ActorType @(row.UserId.HasValue ? $"#{row.UserId}" : "")</div>
+                                        <div class="text-[11px] text-slate-500">Org @(row.OrganisationId?.ToString() ?? "Global")@(row.DivisionId.HasValue ? $" · Div {row.DivisionId}" : "")</div>
+                                    </td>
+                                    <td class="max-w-xs truncate px-3 py-2.5 text-slate-700" title="@row.Description">
+                                        @row.Description
+                                    </td>
+                                    <td class="max-w-[8rem] truncate px-3 py-2.5 font-mono text-[11px] text-slate-500" title="@row.CorrelationId">
+                                        @(row.CorrelationId ?? "—")
+                                    </td>
+                                    <td class="whitespace-nowrap px-3 py-2.5 text-right">
+                                        <button type="button"
+                                                class="inline-flex items-center rounded-md border border-slate-300 bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-200 transition-colors"
+                                                @onclick="() => ToggleExpandAsync(row.AuditLogId)">
+                                            @(isExpanded ? "Hide" : $"View ({row.DetailCount})")
+                                        </button>
+                                    </td>
+                                </tr>
+                                @if (isExpanded)
+                                {
+                                    <tr class="bg-slate-50/70">
+                                        <td colspan="7" class="px-4 py-3">
+                                            @if (loadingDetail)
+                                            {
+                                                <p class="text-xs text-slate-500">Loading field-level changes...</p>
+                                            }
+                                            else if (expandedRecord != null)
+                                            {
+                                                <div class="space-y-3">
+                                                    <div class="grid gap-2 text-[11px] sm:grid-cols-3 text-slate-600">
+                                                        <div><strong class="text-slate-800">Event ID:</strong> <span class="font-mono">@expandedRecord.EventId</span></div>
+                                                        <div><strong class="text-slate-800">Source:</strong> @expandedRecord.Source</div>
+                                                        <div><strong class="text-slate-800">Reason:</strong> @(expandedRecord.Reason ?? "—")</div>
+                                                    </div>
+                                                    @if (expandedRecord.Details.Count == 0)
+                                                    {
+                                                        <p class="text-xs text-slate-500">No field-level property changes recorded for this event.</p>
+                                                    }
+                                                    else
+                                                    {
+                                                        <div class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+                                                            <table class="min-w-full divide-y divide-slate-200 text-xs">
+                                                                <thead class="bg-slate-100/80 text-[11px] font-semibold text-slate-600">
+                                                                    <tr>
+                                                                        <th class="px-3 py-2 text-left">Property</th>
+                                                                        <th class="px-3 py-2 text-left">Old Value</th>
+                                                                        <th class="px-3 py-2 text-left">New Value</th>
+                                                                        <th class="px-3 py-2 text-left">Type</th>
+                                                                    </tr>
+                                                                </thead>
+                                                                <tbody class="divide-y divide-slate-100">
+                                                                    @foreach (var d in expandedRecord.Details)
+                                                                    {
+                                                                        <tr>
+                                                                            <td class="px-3 py-1.5 font-semibold text-slate-800">@d.PropertyName</td>
+                                                                            <td class="px-3 py-1.5 font-mono text-[11px] @(d.IsRedacted ? "text-amber-700" : "text-rose-700")">@(d.OldValue ?? "(null)")</td>
+                                                                            <td class="px-3 py-1.5 font-mono text-[11px] @(d.IsRedacted ? "text-amber-700" : "text-emerald-700")">@(d.NewValue ?? "(null)")</td>
+                                                                            <td class="px-3 py-1.5 text-[11px] text-slate-500">@d.ValueType @(d.IsRedacted ? "· Protected" : "")</td>
+                                                                        </tr>
+                                                                    }
+                                                                </tbody>
+                                                            </table>
+                                                        </div>
+                                                    }
+                                                </div>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Pagination Footer -->
+            @if (result != null && result.TotalCount > 0)
+            {
+                <div class="flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 bg-slate-50/70 px-4 py-2.5 text-xs text-slate-600">
+                    <span>Page @result.Page of @result.TotalPages · @result.TotalCount record(s)</span>
+                    <div class="flex items-center gap-2">
+                        <button type="button" class="rounded-md border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+                                disabled="@(loading || filter.Page <= 1)" @onclick="PrevPageAsync">Previous</button>
+                        <button type="button" class="rounded-md border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+                                disabled="@(loading || filter.Page >= result.TotalPages)" @onclick="NextPageAsync">Next</button>
+                    </div>
+                </div>
+            }
+        </section>
+    }
+</div>
+
+@code {
+    private AuditLogFilter filter = new() { Page = 1, PageSize = 25, SortBy = "OccurredAtUtc", SortDescending = true };
+    private DateTime? fromDate;
+    private DateTime? toDate;
+    private AuditLogPageResult? result;
+    private bool loading;
+    private bool exporting;
+    private bool isUnauthorized;
+    private string? errorMessage;
+
+    private long? expandedId;
+    private bool loadingDetail;
+    private AuditLogRecordDto? expandedRecord;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task ApplyFiltersAsync()
+    {
+        filter.Page = 1;
+        await LoadAsync();
+    }
+
+    private async Task ResetFiltersAsync()
+    {
+        filter = new AuditLogFilter { Page = 1, PageSize = 25, SortBy = "OccurredAtUtc", SortDescending = true };
+        fromDate = null;
+        toDate = null;
+        expandedId = null;
+        expandedRecord = null;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        loading = true;
+        errorMessage = null;
+        isUnauthorized = false;
+        expandedId = null;
+        expandedRecord = null;
+
+        filter.FromUtc = fromDate?.Date;
+        filter.ToUtc = toDate.HasValue ? toDate.Value.Date.AddDays(1).AddTicks(-1) : null;
+
+        try
+        {
+            var (data, unauth, err) = await AuditApi.SearchAsync(filter);
+            isUnauthorized = unauth;
+            errorMessage = err;
+            result = data;
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private async Task ToggleExpandAsync(long id)
+    {
+        if (expandedId == id)
+        {
+            expandedId = null;
+            expandedRecord = null;
+            return;
+        }
+
+        expandedId = id;
+        expandedRecord = null;
+        loadingDetail = true;
+        try
+        {
+            var (rec, _, err) = await AuditApi.GetByIdAsync(id);
+            expandedRecord = rec;
+            if (!string.IsNullOrWhiteSpace(err)) errorMessage = err;
+        }
+        finally
+        {
+            loadingDetail = false;
+        }
+    }
+
+    private async Task PrevPageAsync()
+    {
+        if (filter.Page <= 1) return;
+        filter.Page--;
+        await LoadAsync();
+    }
+
+    private async Task NextPageAsync()
+    {
+        if (result == null || filter.Page >= result.TotalPages) return;
+        filter.Page++;
+        await LoadAsync();
+    }
+
+    private async Task ExportCsvAsync()
+    {
+        exporting = true;
+        errorMessage = null;
+        try
+        {
+            filter.FromUtc = fromDate?.Date;
+            filter.ToUtc = toDate.HasValue ? toDate.Value.Date.AddDays(1).AddTicks(-1) : null;
+            var (bytes, fileName, unauth, err) = await AuditApi.ExportCsvAsync(filter);
+            if (unauth || !string.IsNullOrWhiteSpace(err) || bytes == null)
+            {
+                errorMessage = err ?? "Export failed.";
+                return;
+            }
+
+            var base64 = Convert.ToBase64String(bytes);
+            await JS.InvokeVoidAsync("eval",
+                $"(function(){{const a=document.createElement('a');a.href='data:text/csv;base64,{base64}';a.download='{fileName}';document.body.appendChild(a);a.click();a.remove();}})();");
+        }
+        finally
+        {
+            exporting = false;
+        }
+    }
+
+    private static string ActionBadgeClass(string action) => action.ToUpperInvariant() switch
+    {
+        "INSERT" => "bg-emerald-50 text-emerald-700 border border-emerald-200",
+        "UPDATE" or "ADJUST" => "bg-blue-50 text-blue-700 border border-blue-200",
+        "DELETE" or "DISSOLVE" or "REVOKE_ACCESS" => "bg-rose-50 text-rose-700 border border-rose-200",
+        "APPROVE" or "GRANT_ACCESS" => "bg-teal-50 text-teal-700 border border-teal-200",
+        "REJECT" or "OVERRIDE" => "bg-amber-50 text-amber-800 border border-amber-200",
+        _ => "bg-slate-100 text-slate-700 border border-slate-200"
+    };
+
+    private static string OutcomeBadgeClass(string outcome) => outcome switch
+    {
+        "Denied" => "bg-rose-100 text-rose-800",
+        "Failed" => "bg-amber-100 text-amber-800",
+        _ => "bg-slate-100 text-slate-600"
+    };
+}

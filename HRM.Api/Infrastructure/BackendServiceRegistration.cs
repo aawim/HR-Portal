@@ -296,9 +296,26 @@ public static class BackendServiceRegistration
         services.AddSingleton<HRM.Application.Features.GoodsLoans.IGoodsLoanScheduleCalculator, HRM.Application.Features.GoodsLoans.GoodsLoanScheduleCalculator>();
         services.AddScoped<HRM.Application.Contracts.Pages.IGoodsLoanService, HRM.Services.GoodsLoans.GoodsLoanService>();
 
+        // Enterprise Audit Logging (HRM.AuditLogs) — TryAdd allows Program.cs AddAuditLogs(...) to take precedence
+        services.AddOptions<HRM.AuditLogs.Options.AuditLogOptions>();
+        Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddSingleton<HRM.AuditLogs.Abstractions.IAuditClock, HRM.AuditLogs.Abstractions.SystemAuditClock>(services);
+        Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddSingleton<HRM.AuditLogs.Abstractions.IAuditContextAccessor, HrmAuditContextAccessor>(services);
+        Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddSingleton<HRM.AuditLogs.Abstractions.IAuditLogService, HRM.AuditLogs.Services.AuditLogService>(services);
+        Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddSingleton<HRM.AuditLogs.Abstractions.IAuditLogQueryService, HRM.AuditLogs.Services.AuditLogQueryService>(services);
+        Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddSingleton<HRM.AuditLogs.Interceptors.AuditSaveChangesInterceptor>(services);
+        Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddSingleton<IDbContextFactory<HRM.AuditLogs.Persistence.AuditDbContext>>(
+            services,
+            _ => new FallbackAuditDbContextFactory());
+
         services.AddHrmApiEndpoints();
         services.AddAuthorization();
 
         return services;
+    }
+
+    private sealed class FallbackAuditDbContextFactory : IDbContextFactory<HRM.AuditLogs.Persistence.AuditDbContext>
+    {
+        public HRM.AuditLogs.Persistence.AuditDbContext CreateDbContext()
+            => throw new InvalidOperationException("AuditDbContext connection string is not configured. Call services.AddAuditLogs(configuration).");
     }
 }
