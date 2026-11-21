@@ -138,6 +138,20 @@
         {
             @if (data.CanManageFrameworks)
             {
+                <div class="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-xs">
+                    <div>
+                        <h3 class="text-sm font-bold text-slate-900">Job Matrix Editor</h3>
+                        <p class="text-xs text-slate-500">Create a new government Job Matrix or select an existing matrix below to edit or copy.</p>
+                    </div>
+                    <button type="button"
+                            class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 transition-colors"
+                            @onclick="() => { showMatrixForm = !showMatrixForm; if (showMatrixForm && matrixId == 0) ClearMatrix(); }">
+                        <span>@(showMatrixForm ? "Hide Form" : "+ New Job Matrix")</span>
+                    </button>
+                </div>
+            }
+            @if (data.CanManageFrameworks && showMatrixForm)
+            {
                 <fieldset disabled="@busy" class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs space-y-4">
                     <div class="border-b border-slate-100 pb-3 flex items-center justify-between">
                         <div>
@@ -519,7 +533,7 @@
 
 @code {
     private PayFrameworkData? data;
-    private bool busy;
+    private bool busy, showMatrixForm;
     private string? error;
     private string tab = "frameworks";
     private int frameworkId;
@@ -594,6 +608,7 @@
     private void ClearMatrix() { presetBefore = null; presetAfter = null; profile = new(); matrixId = 0; matrixFramework = 0; currency = 0; matrixCode = ""; matrixName = ""; basicSalary = 0; from = DateTime.UtcNow.AddHours(5).Date; to = null; matrixActive = true; titles = [new()]; steps = [new()]; benefits = []; }
     private void EditMatrix(JobMatrixRow m)
     {
+        showMatrixForm = true;
         presetBefore = null; presetAfter = null;
         profile = m.Profile with
         {

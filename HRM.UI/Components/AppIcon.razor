@@ -1,0 +1,91 @@
+@* Shared icon adapter. All application icons render through the locally hosted Bootstrap Icons font. *@
+<i class="bi @ResolvedIcon @Class"
+   aria-hidden="@(string.IsNullOrWhiteSpace(Title) ? "true" : null)"
+   role="@(!string.IsNullOrWhiteSpace(Title) ? "img" : null)"
+   title="@Title"></i>
+
+@code {
+    [Parameter, EditorRequired]
+    public string Name { get; set; } = "info";
+
+    [Parameter]
+    public string? Class { get; set; }
+
+    [Parameter]
+    public string? Title { get; set; }
+
+    private string ResolvedIcon => Resolve(Name);
+
+    public static string Resolve(string? name)
+    {
+        var key = name?.Trim().ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(key)) return "bi-circle";
+        if (key.StartsWith("bi-", StringComparison.Ordinal)) return key;
+
+        return key switch
+        {
+            "add" or "add_circle" => "bi-plus-circle",
+            "admin_panel_settings" => "bi-shield-lock",
+            "arrow_back" => "bi-arrow-left",
+            "autorenew" or "progress_activity" => "bi-arrow-repeat",
+            "badge" or "id_card" => "bi-person-vcard",
+            "block" => "bi-slash-circle",
+            "calendar" or "calendar_month" => "bi-calendar3",
+            "check_circle" => "bi-check-circle",
+            "chat" => "bi-chat-dots",
+            "chevron_down" => "bi-chevron-down",
+            "chevron_right" => "bi-chevron-right",
+            "close" => "bi-x-lg",
+            "contact_page" => "bi-person-lines-fill",
+            "contact_phone" => "bi-telephone",
+            "corporate_fare" => "bi-buildings",
+            "code" => "bi-code-slash",
+            "cog" => "bi-gear",
+            "currency-dollar" => "bi-currency-dollar",
+            "description" => "bi-file-earmark-text",
+            "download" => "bi-download",
+            "document" => "bi-file-earmark-text",
+            "edit" or "edit_note" => "bi-pencil-square",
+            "error" => "bi-exclamation-circle",
+            "exclamation" => "bi-exclamation-triangle",
+            "event_busy" => "bi-calendar-x",
+            "group_work" => "bi-diagram-3",
+            "groups" or "supervisor_account" => "bi-people",
+            "history" or "history_toggle_off" or "work_history" => "bi-clock-history",
+            "home" => "bi-house",
+            "info" => "bi-info-circle",
+            "key" => "bi-key",
+            "layers" => "bi-layers",
+            "label" or "tag" => "bi-tag",
+            "location_off" => "bi-geo-alt-fill",
+            "location_on" => "bi-geo-alt",
+            "map-pin" => "bi-geo-alt",
+            "lock" => "bi-lock",
+            "logout" => "bi-box-arrow-right",
+            "more_horiz" => "bi-three-dots",
+            "fullscreen" => "bi-arrows-fullscreen",
+            "fullscreen_exit" => "bi-fullscreen-exit",
+            "menu" => "bi-list",
+            "payments" => "bi-cash-stack",
+            "person" or "shield_person" => "bi-person",
+            "policy" => "bi-journal-check",
+            "print" => "bi-printer",
+            "refresh" => "bi-arrow-clockwise",
+            "save" => "bi-floppy",
+            "clock" or "schedule" => "bi-clock",
+            "search" => "bi-search",
+            "search_off" => "bi-search-heart",
+            "shield" => "bi-shield-check",
+            "tune" => "bi-sliders",
+            "trending-up" => "bi-graph-up-arrow",
+            "user-plus" => "bi-person-plus",
+            "users" => "bi-people",
+            "visibility" => "bi-eye",
+            "warning" => "bi-exclamation-triangle",
+            "briefcase" or "work" => "bi-briefcase",
+            "work_off" => "bi-briefcase-fill",
+            "workspace_premium" => "bi-award",
+            _ => "bi-circle"
+        };
+    }
+}

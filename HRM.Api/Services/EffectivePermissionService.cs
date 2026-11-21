@@ -164,7 +164,8 @@ namespace HRM.Services
                 .SelectMany(x =>
                     x.UserGroup.UserGroupRoles
                     .Where(r =>
-                        r.IsActive && db.UserOrganisationRoles.Any(o => o.UserOrganisationID == x.User.UserOrganisationId && o.RoleID == r.RoleId && o.IsActive) &&
+                        r.IsActive && r.Role.RoleKey != "Super.Admin.Manage" &&
+                        db.UserOrganisationRoles.Any(o => o.UserOrganisationID == x.User.UserOrganisationId && o.RoleID == r.RoleId && o.IsActive) &&
                         (r.Role.ContextId != 1 || (x.User.AdminPortalAccessEnabled && x.User.AdminPortalAccessOrganisationId == x.User.UserOrganisationId)))
                     .Select(r => new UserPermissionDto
                     {

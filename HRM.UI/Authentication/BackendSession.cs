@@ -61,7 +61,10 @@ public sealed class BackendSession(HttpClient upstream, Uri origin, ILogger<Back
     private async Task<HttpResponseMessage> SendCoreAsync(HttpRequestMessage request, CancellationToken ct)
     {
         var uri = request.RequestUri?.IsAbsoluteUri == true ? request.RequestUri : new Uri(origin, request.RequestUri!);
-        if (uri.Scheme != origin.Scheme || uri.Authority != origin.Authority || !uri.AbsolutePath.StartsWith("/api/v1/", StringComparison.Ordinal))
+        // BudgetController exposes explicit routes outside the versioned operation API.
+        var permittedPath = uri.AbsolutePath.StartsWith("/api/v1/", StringComparison.Ordinal) ||
+            uri.AbsolutePath.StartsWith("/api/budget/", StringComparison.Ordinal);
+        if (uri.Scheme != origin.Scheme || uri.Authority != origin.Authority || !permittedPath)
             throw new InvalidOperationException("The backend destination is not permitted.");
         using var outbound = await CloneForBackendAsync(request, uri, ct);
         outbound.Headers.Remove("Cookie");
@@ -70,7 +73,27 @@ public sealed class BackendSession(HttpClient upstream, Uri origin, ILogger<Back
         if (header.Length > 0) outbound.Headers.TryAddWithoutValidation("Cookie", header);
         var started = System.Diagnostics.Stopwatch.StartNew();
         HttpResponseMessage response;
-        try { response = await upstream.SendAsync(outbound, HttpCompletionOption.ResponseHeadersRead, ct); }
+        try
+        {
+            var isReadOnly = request.Method == HttpMethod.Get || request.Method == HttpMethod.Head;
+            var maxAttempts = isReadOnly ? 10 : 1;
+            HttpResponseMessage? attemptResponse = null;
+            for (var attempt = 1; attempt <= maxAttempts; attempt++)
+            {
+                using var attemptMessage = attempt == 1 ? outbound : await CloneForBackendAsync(outbound, uri, ct);
+                try
+                {
+                    attemptResponse = await upstream.SendAsync(attemptMessage, HttpCompletionOption.ResponseHeadersRead, ct);
+                    break;
+                }
+                catch (HttpRequestException ex) when (attempt < maxAttempts &&
+                    ex.InnerException is System.Net.Sockets.SocketException { SocketErrorCode: System.Net.Sockets.SocketError.ConnectionRefused })
+                {
+                    await Task.Delay(500, ct);
+                }
+            }
+            response = attemptResponse!;
+        }
         catch (OperationCanceledException) when (revoked)
         {
             throw new UnauthorizedAccessException("Your session has ended. Please sign in again.");

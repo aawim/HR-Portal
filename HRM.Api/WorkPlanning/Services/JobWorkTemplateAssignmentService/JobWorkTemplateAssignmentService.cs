@@ -202,9 +202,19 @@ namespace HRM.WorkPlanning.Services.JobWorkTemplateAssignmentService
             if (dto.SchedulePurpose is not ("Official" or "Duty")) return ServiceResult.Failed("Choose official hours or duty.");
             if (dto.ScheduleMode is not ("Standard" or "Weekly" or "Rotation") || dto.WorkingDaysMask < 1 || dto.WorkingDaysMask > 127)
                 return ServiceResult.Failed("Choose a valid schedule pattern and at least one working day.");
+            var rotationSlots = dto.ScheduleMode == "Rotation"
+                ? (!string.IsNullOrWhiteSpace(dto.RotationPatternJson)
+                    ? HRM.Helpers.SchedulePattern.ParseSlots(dto.RotationPatternJson)
+                    : dto.RotationTemplateIds.Select(x => new HRM.Helpers.RotationSlot(x)).ToList())
+                : [];
             if (dto.ScheduleMode == "Rotation" && (!dto.RotationAnchorDate.HasValue ||
-                dto.RotationTemplateIds.Count is < 1 or > 90 || dto.RotationTemplateIds.Any(x => x < 0) || !dto.RotationTemplateIds.Any(x => x > 0)))
+                rotationSlots.Count is < 1 or > 90 || rotationSlots.Any(x => x.TemplateId < 0) || !rotationSlots.Any(x => x.TemplateId > 0)))
                 return ServiceResult.Failed("Add 1–90 cycle days with at least one shift and choose the date for cycle day 1. Use 0 for rest days.");
+            if (dto.ScheduleMode == "Rotation" && rotationSlots.Any(x => x.TemplateId > 0 && x.StartTime.HasValue && x.EndTime.HasValue && x.StartTime == x.EndTime))
+                return ServiceResult.Failed("Custom shift start and end times cannot be identical.");
+            var serializedRotation = dto.ScheduleMode == "Rotation" ? HRM.Helpers.SchedulePattern.SerializeSlots(rotationSlots) : null;
+            if (serializedRotation != null && serializedRotation.Length > 2000)
+                return ServiceResult.Failed("The rotating shift pattern is too large. Shorten shift labels or cycle length.");
             await _access.RequireContextAsync();
             if (!await _access.HasPermissionAsync("Schedule.Attach") || dto.OrganisationBusinessEntityId != await _access.GetCurrentOrganisationIdAsync() ||
                 !await _access.HasOrganisationAccessAsync(dto.OrganisationBusinessEntityId))
@@ -220,7 +230,7 @@ namespace HRM.WorkPlanning.Services.JobWorkTemplateAssignmentService
                 var to = dto.EffectiveTo?.Date;
                 if (dto.ScheduleMode == "Rotation")
                 {
-                    var ids = dto.RotationTemplateIds.Where(x => x > 0).Distinct().ToList();
+                    var ids = rotationSlots.Where(x => x.TemplateId > 0).Select(x => x.TemplateId).Distinct().ToList();
                     var available = await db.WorkTemplates.Where(x => ids.Contains(x.WorkTemplateId) && x.IsActive &&
                         x.DefaultStartTime.HasValue && x.DefaultEndTime.HasValue && x.WorkTemplateSegments.Any(s => s.IsActive) &&
                         (x.IsGlobal || x.OrganisationBusinessEntityId == dto.OrganisationBusinessEntityId) &&
@@ -244,14 +254,14 @@ namespace HRM.WorkPlanning.Services.JobWorkTemplateAssignmentService
                 var overlaps = await db.JobWorkTemplateAssignments.Where(x => x.JobID == dto.JobId && x.SchedulePurpose == dto.SchedulePurpose && x.IsActive &&
                     (dto.SchedulePurpose == "Official" || x.WorkTemplateID == dto.WorkTemplateId) &&
                     (!to.HasValue || x.EffectiveFrom <= to.Value) && (x.EffectiveTo == null || x.EffectiveTo >= from)).ToListAsync(ct);
-                var rotationJson = dto.ScheduleMode == "Rotation" ? System.Text.Json.JsonSerializer.Serialize(dto.RotationTemplateIds) : null;
+                var rotationJson = serializedRotation;
                 var mask = dto.ScheduleMode == "Standard" ? 31 : dto.WorkingDaysMask;
                 if (overlaps.Count == 1 && overlaps[0].WorkTemplateID == dto.WorkTemplateId && overlaps[0].EffectiveFrom.Date == from &&
                     overlaps[0].EffectiveTo?.Date == to && overlaps[0].ScheduleMode == dto.ScheduleMode && overlaps[0].WorkingDaysMask == mask &&
                     overlaps[0].RotationTemplateIds == rotationJson && overlaps[0].RotationAnchorDate?.Date == (dto.ScheduleMode == "Rotation" ? dto.RotationAnchorDate?.Date : null))
                     return ServiceResult.Ok("This template is already assigned with these dates and working pattern.");
                 await _logs.CreateAsync(db, SharedConfig.OperationLogActionTypes.WORK_ASSIGNMENT_CREATE,
-                        $"Schedule assignment: tenant {dto.OrganisationBusinessEntityId}, job {dto.JobId}, {dto.SchedulePurpose}, mode {dto.ScheduleMode}, template {dto.WorkTemplateId}, from {from:yyyy-MM-dd} to {to:yyyy-MM-dd}; weekdays {dto.WorkingDaysMask}, cycle anchor {dto.RotationAnchorDate:yyyy-MM-dd}, cycle {System.Text.Json.JsonSerializer.Serialize(dto.RotationTemplateIds)}.");
+                        $"Schedule assignment: tenant {dto.OrganisationBusinessEntityId}, job {dto.JobId}, {dto.SchedulePurpose}, mode {dto.ScheduleMode}, template {dto.WorkTemplateId}, from {from:yyyy-MM-dd} to {to:yyyy-MM-dd}; weekdays {dto.WorkingDaysMask}, cycle anchor {dto.RotationAnchorDate:yyyy-MM-dd}, cycle {rotationJson ?? "[]"}.");
                 foreach (var old in overlaps)
                 {
                     var previousEnd = old.EffectiveTo;
@@ -267,7 +277,7 @@ namespace HRM.WorkPlanning.Services.JobWorkTemplateAssignmentService
                 db.JobWorkTemplateAssignments.Add(new JobWorkTemplateAssignment { JobID = dto.JobId, WorkTemplateID = dto.WorkTemplateId,
                     ScheduleMode = dto.ScheduleMode, WorkingDaysMask = dto.ScheduleMode == "Standard" ? 31 : dto.WorkingDaysMask,
                     RotationAnchorDate = dto.ScheduleMode == "Rotation" ? dto.RotationAnchorDate?.Date : null,
-                    RotationTemplateIds = dto.ScheduleMode == "Rotation" ? System.Text.Json.JsonSerializer.Serialize(dto.RotationTemplateIds) : null,
+                    RotationTemplateIds = rotationJson,
                     SchedulePurpose = dto.SchedulePurpose, EffectiveFrom = from, EffectiveTo = to, IsActive = true, CreatedDate = DateTime.UtcNow });
                 await InvalidateUnusedPlansAsync(db, dto.JobId, from, to, ct);
                 await db.SaveChangesAsync(ct); await tx.CommitAsync(ct);
@@ -327,7 +337,11 @@ namespace HRM.WorkPlanning.Services.JobWorkTemplateAssignmentService
 
             if (assignment.SchedulePurpose == "Official")
             {
-                var job = await db.Jobs.AsNoTracking().SingleAsync(x => x.JobId == dto.JobId && x.OrganisationID == org, cancellationToken); var duties = (await HRM.Helpers.EffectiveStaffSchedules.LoadAsync(db, job, removalDate, DateTime.MaxValue.Date, cancellationToken)).Where(c => c.Assignment.SchedulePurpose == "Duty").Select(c => c.Assignment).ToList(); foreach (var duty in duties)
+                var job = await db.Jobs.AsNoTracking().SingleAsync(x => x.JobId == dto.JobId && x.OrganisationID == org, cancellationToken);
+                if (job.TerminatedDate == null)
+                    return ServiceResult.Failed("Default working hours must remain in place while the staff member has an active job. Change or replace the schedule instead.");
+
+                var duties = (await HRM.Helpers.EffectiveStaffSchedules.LoadAsync(db, job, removalDate, DateTime.MaxValue.Date, cancellationToken)).Where(c => c.Assignment.SchedulePurpose == "Duty").Select(c => c.Assignment).ToList(); foreach (var duty in duties)
                 // Check effective duty schedules across direct and scoped attachments.
                 // Check effective duty schedules across direct and scoped attachments.
                     if (!await HRM.Helpers.OfficialSchedulePrerequisite.CoversAsync(db, dto.JobId, org,

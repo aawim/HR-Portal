@@ -507,11 +507,22 @@ namespace HRM.Services
                 .OrderBy(j => j.Individual.FirstNameEnglish).Select(j => new WorkTypeStaffOption(j.JobId,
                     (j.Individual.FirstNameEnglish + " " + (j.Individual.MiddleNameEnglish ?? "") + " " + (j.Individual.LastNameEnglish ?? "")).Trim(), j.OrganisationStructure.Name)).ToListAsync();
         }
-        public static Task<bool> HasClockAssignmentAsync(HrmTeContext db, int individualId, int jobId, int organisationId, DateOnly today) =>
-            db.AssignedWorkTypes.AnyAsync(a => a.JobId == jobId && a.OrganisationId == organisationId && a.IsValid && a.WorkType.IsValid &&
+        public static async Task<bool> HasClockAssignmentAsync(HrmTeContext db, int individualId, int jobId, int organisationId, DateOnly today)
+        {
+            if (db.Model.FindEntityType(typeof(StaffGroupMember)) != null)
+            {
+                var day = today.ToDateTime(TimeOnly.MinValue);
+                var hasGroupWorkType = await db.StaffGroupMembers.AsNoTracking().AnyAsync(m =>
+                    m.OrganisationId == organisationId && m.IndividualId == individualId && m.IsActive &&
+                    m.StaffGroup.IsActive && !m.StaffGroup.IsDissolved && m.StaffGroup.WorkTypeId.HasValue &&
+                    m.StaffGroup.EffectiveFrom <= day && (!m.StaffGroup.EffectiveTo.HasValue || m.StaffGroup.EffectiveTo >= day));
+                if (hasGroupWorkType) return true;
+            }
+            return await db.AssignedWorkTypes.AnyAsync(a => a.JobId == jobId && a.OrganisationId == organisationId && a.IsValid && a.WorkType.IsValid &&
                 a.FromDate <= today && (a.ToDate == null || a.ToDate >= today) &&
                 a.Job.IndividualID == individualId && a.Job.OrganisationID == organisationId && a.Job.JobStateId == 4 &&
                 a.Job.JoinedDate < today.AddDays(1).ToDateTime(TimeOnly.MinValue) &&
                 (a.Job.TerminatedDate == null || a.Job.TerminatedDate > today.ToDateTime(TimeOnly.MinValue)));
+        }
     }
 }

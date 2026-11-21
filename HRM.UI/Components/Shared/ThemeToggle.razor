@@ -1,9 +1,10 @@
 @inject HRM.Services.Contracts.UserPreferenceServiceContracts.IOperations Preferences
 @inject IJSRuntime JS
 @inject ILogger<ThemeToggle> Logger
+@implements IAsyncDisposable
 
 <div class="relative">
-    <button type="button" data-theme-toggle class="theme-toggle" disabled="@(!_ready || _saving)"
+    <button type="button" data-theme-toggle class="app-button app-button-icon app-button-neutral theme-toggle" disabled="@(!_ready || _saving)"
             @onclick="ToggleAsync" aria-label="Switch colour theme" title="Switch colour theme" aria-describedby="@(_error == null ? null : "theme-error")">
         <svg class="theme-icon-light" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
             <circle cx="12" cy="12" r="4" /><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5" />
@@ -24,11 +25,18 @@
 @code {
     private int? _userId;
     private bool _ready, _saving;
+    private bool _disposed;
     private string? _error;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (firstRender) { await LoadAsync(); StateHasChanged(); }
+        if (!firstRender) return;
+
+        await LoadAsync();
+        if (!_disposed)
+        {
+            await InvokeAsync(StateHasChanged);
+        }
     }
 
     private async Task LoadAsync()
@@ -39,33 +47,62 @@
             _userId = settings.UserId;
             await JS.InvokeVoidAsync("hrmTheme.initialize", settings.ThemeMode, _userId);
             await JS.InvokeVoidAsync("hrmFontSize.initialize", settings.FontSizePercent, _userId);
-            _ready = true;
             _error = null;
+        }
+        catch (Exception ex) when (_disposed || ex is JSDisconnectedException || ex is TaskCanceledException || ex is ObjectDisposedException)
+        {
+            // Navigation can dispose a server-side circuit while preferences are loading.
         }
         catch (Exception ex)
         {
-            Logger.LogError(ex, "Could not load theme preference");
-            _error = "Your theme setting could not be loaded.";
+            Logger.LogWarning(ex, "Could not load theme preference from server; using local theme.");
+        }
+        finally
+        {
+            if (!_disposed) _ready = true;
         }
     }
 
     private async Task ToggleAsync()
     {
-        if (!_ready || _saving) return;
+        if (_disposed || !_ready || _saving) return;
         _saving = true;
         _error = null;
         try
         {
             var current = await JS.InvokeAsync<string>("hrmTheme.get");
             var next = current == "dark" ? "light" : "dark";
-            if (_userId.HasValue) await Preferences.SaveThemeAsync(next, _userId.Value);
             await JS.InvokeVoidAsync("hrmTheme.set", next);
+            if (_userId.HasValue)
+            {
+                try
+                {
+                    await Preferences.SaveThemeAsync(next, _userId.Value);
+                }
+                catch (Exception ex) when (!(_disposed || ex is JSDisconnectedException || ex is TaskCanceledException || ex is ObjectDisposedException))
+                {
+                    Logger.LogWarning(ex, "Theme switched locally but could not be persisted to server preferences.");
+                }
+            }
+        }
+        catch (Exception ex) when (_disposed || ex is JSDisconnectedException || ex is TaskCanceledException || ex is ObjectDisposedException)
+        {
+            // The page is closing; there is no UI left to update.
         }
         catch (Exception ex)
         {
-            Logger.LogError(ex, "Could not save theme preference");
-            _error = "Your theme setting could not be saved. Please try again or reload the page.";
+            Logger.LogError(ex, "Could not switch theme preference");
+            _error = "Your theme setting could not be updated. Please try again.";
         }
-        finally { _saving = false; }
+        finally
+        {
+            if (!_disposed) _saving = false;
+        }
+    }
+
+    public ValueTask DisposeAsync()
+    {
+        _disposed = true;
+        return ValueTask.CompletedTask;
     }
 }

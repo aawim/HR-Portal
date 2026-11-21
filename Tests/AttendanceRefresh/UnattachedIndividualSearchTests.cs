@@ -38,7 +38,7 @@ static class UnattachedIndividualSearchTests
             await renderer.Dispatcher.InvokeAsync(async()=>{renderer.Attach(component);await renderer.Render();});
             await renderer.Dispatcher.InvokeAsync(()=>renderer.RootClick("Search"));renderer.CheckErrors();
             List<HRM.DTOs.Registry.RegistryIndividualDto> Results()=>(List<HRM.DTOs.Registry.RegistryIndividualDto>)typeof(Search).GetField("searchResults",flags)!.GetValue(component)!;
-            Check(Results().Select(r=>r.BusinessEntityId).Order().SequenceEqual([1,5]),"Registry listed employed/previously attached people or hid an unattached identity");
+            Check(Results().Select(r=>r.BusinessEntityId).Order().SequenceEqual([1,4,5]),"Registry listed actively employed people or hid an eligible unattached/former identity");
             input.SearchType="ID";input.SearchTerm="STAFF-ID";
             await renderer.Dispatcher.InvokeAsync(()=>renderer.RootClick("Search"));Check(Results().Count==0,"National ID search bypassed the unattached-only filter");
             input.SearchTerm="FREE-ID";await renderer.Dispatcher.InvokeAsync(()=>renderer.RootClick("Search"));Check(Results().Single().BusinessEntityId==1,"Unattached national ID search failed");renderer.CheckErrors();

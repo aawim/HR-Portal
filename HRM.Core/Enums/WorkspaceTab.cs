@@ -29,6 +29,8 @@ namespace HRM.Enum
 
         Teams,
 
+        Departments,
+
         Reports,
 
         Analytics,
@@ -56,6 +58,12 @@ namespace HRM.Enum
         [Display(Name = "Staff Transfer")]
         StaffTransfer,
         Onboarding,
-        Certificates
+        Certificates,
+        [Display(Name = "Goods Loans")]
+        GoodsLoans,
+        [Display(Name = "Bank Details")]
+        Bank,
+        [Display(Name = "Emergency Contacts")]
+        EmergencyContact
     }
 }

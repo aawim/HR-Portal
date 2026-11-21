@@ -1,0 +1,201 @@
+@page "/admin/settings/communications"
+@attribute [Authorize]
+@using HRM.DTOs.Communications
+@inject HRM.Services.Contracts.CommunicationHubContracts.IOperations Hub
+@inject IJSRuntime JS
+@rendermode InteractiveServer
+
+<PageTitle>Communication Hub</PageTitle>
+<section class="w-full min-w-0 p-2 space-y-4">
+  <header class="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur-xs px-3 py-3 shadow-xs rounded-xl flex flex-wrap items-center justify-between gap-3">
+    <div><h1 class="text-lg font-bold text-slate-900">Communication Hub</h1><p class="mt-0.5 text-xs text-slate-500">Configure optional Telegram announcements. Connections remain inactive until explicitly enabled.</p></div>
+    <div class="flex flex-wrap items-center gap-2"><button class="app-button app-button-secondary app-button-sm" @onclick="ToggleWidth">@(full ? "Shrink View" : "Full Width")</button><button class="app-button app-button-secondary app-button-sm" @onclick="LoadAsync">Refresh</button></div>
+  </header>
+  <div class="mx-auto w-full min-w-0 space-y-4 @(full ? "max-w-none" : "max-w-7xl")">
+    @if (error is not null) { <div class="flex items-center justify-between rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800"><span>@error</span><button class="app-button app-button-ghost app-button-sm" @onclick="() => error=null">Dismiss</button></div> }
+    @if (loading) { <div class="rounded-xl border border-slate-200 bg-white p-6 text-xs text-slate-500">Loading communication configuration…</div> }
+    else {
+      <div class="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <div class="rounded-xl border border-slate-200 bg-white p-3 shadow-xs"><div class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Enabled connections</div><div class="mt-1 text-xl font-bold text-slate-900">@data.TelegramConnections.Count(x => x.IsEnabled)</div></div>
+        <div class="rounded-xl border border-slate-200 bg-white p-3 shadow-xs"><div class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Active destinations</div><div class="mt-1 text-xl font-bold text-blue-700">@data.TelegramDestinations.Count(x => x.IsActive)</div></div>
+        <div class="rounded-xl border border-slate-200 bg-white p-3 shadow-xs"><div class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Sent recently</div><div class="mt-1 text-xl font-bold text-emerald-700">@data.RecentDeliveries.Count(x => x.Status == "Sent")</div></div>
+        <div class="rounded-xl border border-slate-200 bg-white p-3 shadow-xs"><div class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Failed recently</div><div class="mt-1 text-xl font-bold text-rose-700">@data.RecentDeliveries.Count(x => x.Status == "Failed")</div></div>
+      </div>
+      <section class="app-surface rounded-2xl border border-slate-200 p-4 shadow-xs space-y-3">
+        <label class="block text-xs font-medium text-slate-700 p-1" for="communication-platform">Platform</label>
+        <select id="communication-platform" class="w-full rounded-lg border border-slate-300 bg-white p-1 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100" @bind="selectedPlatform">
+          @foreach (var platform in data.Platforms)
+          {
+            <option value="@platform.Code">@platform.Name — @(platform.CanConfigure ? "Setup available" : "Coming later")</option>
+          }
+        </select>
+        @if (data.Platforms.FirstOrDefault(x => x.Code == selectedPlatform) is { } selected)
+        {
+          <p class="text-xs text-slate-500">@selected.Purpose</p>
+          @if (!selected.CanConfigure)
+          {
+            <p role="status" class="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">@selected.Name integration is not implemented yet. Connection setup will appear here when it becomes available.</p>
+          }
+        }
+      </section>
+      @if (selectedPlatform == "TELEGRAM")
+      {
+      <section class="app-surface rounded-2xl border border-slate-200 p-4 shadow-xs space-y-3">
+        <h2 class="p-1 font-bold text-slate-800">Saved Telegram settings</h2>
+        <p class="text-xs text-slate-500">Select Edit to load a saved setting into its form. Clear its enabled or active checkbox and save to disable it.</p>
+        <div class="grid gap-4 lg:grid-cols-3">
+          <div class="space-y-2">
+            <h3 class="p-1 text-xs font-semibold">Connections</h3>
+            @foreach (var item in data.TelegramConnections)
+            {
+              <div class="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 p-2.5 text-xs"><span>@item.Name — @(item.IsEnabled ? "Enabled" : "Disabled")</span><button type="button" class="app-button app-button-secondary app-button-sm" @onclick="() => EditConnection(item)">Edit</button><button type="button" disabled="@validating" class="app-button app-button-secondary app-button-sm" @onclick="() => ValidateConnectionAsync(item)">Verify bot</button></div>
+            }
+          </div>
+          <div class="space-y-2">
+            <h3 class="p-1 text-xs font-semibold">Destinations</h3>
+            @foreach (var item in data.TelegramDestinations)
+            {
+              <div class="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 p-2.5 text-xs"><span>@item.DisplayName — @(item.IsActive ? "Active" : "Inactive")</span><button type="button" class="app-button app-button-secondary app-button-sm" @onclick="() => EditDestination(item)">Edit</button><button type="button" class="app-button app-button-secondary app-button-sm" disabled="@validating" @onclick="() => ValidateDestinationAsync(item)">Verify access</button><button type="button" class="app-button app-button-secondary app-button-sm" disabled="@queuingTest" @onclick="() => pendingTest = item">Send test</button></div>
+            }
+          </div>
+          <div class="space-y-2">
+            <h3 class="p-1 text-xs font-semibold">Rules</h3>
+            @foreach (var item in data.Rules)
+            {
+              <div class="flex items-center justify-between gap-2 rounded-xl border border-slate-200 p-2.5 text-xs"><span>@item.Name — @(item.IsEnabled ? "Enabled" : "Disabled")</span><button type="button" class="app-button app-button-secondary app-button-sm" @onclick="() => EditRule(item)">Edit</button></div>
+            }
+          </div>
+        </div>
+        <button type="button" class="app-button app-button-neutral app-button-sm" @onclick="ResetEditors">Clear forms / create new</button>
+        @if (pendingTest is not null)
+        {
+          <div class="rounded-xl border border-amber-200 bg-amber-50 p-3 space-y-2 text-xs text-amber-900" role="alert">
+            <p>This will queue a real Telegram test message to <strong>@pendingTest.DisplayName</strong>. Delivery requires the worker and outbound sending to be enabled. The request expires after ten minutes.</p>
+            <div class="flex gap-2"><button type="button" class="app-button app-button-primary app-button-sm" disabled="@queuingTest" @onclick="QueueTestAsync">Confirm test message</button><button type="button" class="app-button app-button-neutral app-button-sm" disabled="@queuingTest" @onclick="() => pendingTest = null">Cancel</button></div>
+          </div>
+        }
+        <p role="status" class="text-xs text-slate-500">@editingStatus</p>
+      </section>
+      <div class="grid gap-4 lg:grid-cols-2">
+        <form class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs space-y-3" @onsubmit="SaveConnectionAsync" @onsubmit:preventDefault="true">
+          <div><h2 class="font-bold text-slate-800 p-1">Telegram connection</h2><p class="text-xs text-slate-500">Use a server-side credential reference; never paste a bot token here.</p></div>
+          <label class="block text-xs font-medium text-slate-700 p-1">Name<input class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1 text-xs" @bind="connection.Name" /></label>
+          <label class="block text-xs font-medium text-slate-700 p-1">Credential reference<input class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1 text-xs" @bind="connection.CredentialReference" placeholder="telegram-ncit-prod" /></label>
+          <label class="flex items-center gap-2 text-xs text-slate-700"><input type="checkbox" @bind="connection.IsEnabled" /> Enable this connection</label>
+          <button class="app-button app-button-primary app-button-sm" type="submit">Save connection</button>
+        </form>
+        <form class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs space-y-3" @onsubmit="SaveDestinationAsync" @onsubmit:preventDefault="true">
+          <div><h2 class="font-bold text-slate-800 p-1">Telegram destination</h2><p class="text-xs text-slate-500">The bot must already be an authorised member of the channel or group.</p></div>
+          <label class="block text-xs font-medium text-slate-700 p-1">Connection<select class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1 text-xs" @bind="destination.ConnectionId"><option value="0">Select connection</option>@foreach(var item in data.TelegramConnections){<option value="@item.Id">@item.Name</option>}</select></label>
+          <label class="block text-xs font-medium text-slate-700 p-1">Display name<input class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1 text-xs" @bind="destination.DisplayName" /></label>
+          <label class="block text-xs font-medium text-slate-700 p-1">Chat ID<input class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1 text-xs" @bind="destination.ChatId" /></label>
+          <label class="flex items-center gap-2 text-xs text-slate-700"><input type="checkbox" @bind="destination.IsActive" /> Activate destination</label><button class="app-button app-button-primary app-button-sm" type="submit">Save destination</button>
+        </form>
+      </div>
+      <form class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs space-y-3" @onsubmit="SaveRuleAsync" @onsubmit:preventDefault="true">
+        <div><h2 class="font-bold text-slate-800 p-1">Organisation-event automation</h2><p class="text-xs text-slate-500">Templates may use <code>{{Title}}</code>, <code>{{Description}}</code>, <code>{{StartDateTime}}</code>, and <code>{{EndDateTime}}</code>.</p></div>
+        <div class="grid gap-3 md:grid-cols-2"><label class="block text-xs font-medium text-slate-700 p-1">Rule name<input class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1 text-xs" @bind="rule.Name" /></label><label class="block text-xs font-medium text-slate-700 p-1">Trigger<select class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1 text-xs" @bind="rule.EventCode"><option value="organisation-event.published.v1">Organisation event published</option><option value="organisation-event.cancelled.v1">Organisation event cancelled</option></select></label></div>
+        <label class="block text-xs font-medium text-slate-700 p-1">Announcement destination
+          <select class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100" @bind="rule.DestinationId">
+            <option value="">Select destination</option>
+            @foreach (var target in data.TelegramDestinations) { <option value="@target.Id">@target.DisplayName</option> }
+          </select>
+        </label>
+        <label class="block text-xs font-medium text-slate-700 p-1">Telegram message<textarea class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1 text-xs" rows="4" @bind="rule.TemplateBody"></textarea></label>
+        <div class="flex flex-wrap items-center gap-4"><label class="flex items-center gap-2 text-xs text-slate-700"><input type="checkbox" @bind="rule.RequiresApproval" /> Requires Communication Hub approval</label><label class="flex items-center gap-2 text-xs text-slate-700"><input type="checkbox" @bind="rule.IsEnabled" /> Enable rule</label><button class="app-button app-button-primary app-button-sm" type="submit">Save rule</button></div>
+      </form>
+      }
+      <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs space-y-3">
+        <div><h2 class="font-bold text-slate-800 p-1">Messages awaiting approval</h2><p class="text-xs text-slate-500">Submit the saved announcement to the configured Communication Announcement approval flow. Final approval queues the saved message to its saved destination.</p><a class="app-button app-button-secondary app-button-sm" href="/online/communication-approvals">Review announcement approvals</a></div>
+        @foreach (var held in data.PendingApprovals)
+        {
+          <article class="app-surface rounded-xl border border-amber-200 p-3 space-y-2 text-xs">
+            <h3 class="font-semibold">#@held.Id — @held.Subject</h3>
+            <p class="whitespace-pre-wrap break-words">@held.Body</p>
+            @if (held.RequestId.HasValue)
+            {
+              <span class="rounded-full bg-amber-100 px-2.5 py-0.5 font-semibold text-amber-800">Workflow request #@held.RequestId</span>
+            }
+            else
+            {
+              <button type="button" class="app-button app-button-primary app-button-sm" disabled="@submittingAnnouncement" @onclick="() => SubmitAnnouncementAsync(held.Id)">Submit for approval</button>
+            }
+          </article>
+        }
+        @if (data.PendingApprovals.Count == 0) { <p class="text-xs text-slate-500">No messages are awaiting approval.</p> }
+        <div><h2 class="font-bold text-slate-800 p-1">Recent delivery history</h2><p class="text-xs text-slate-500">The latest 50 Telegram delivery attempts for this organisation. Credential values are never displayed.</p></div>
+        <div class="flex flex-wrap gap-2">
+          @foreach (var retryable in data.RecentDeliveries.Where(x => x.CanRetry))
+          {
+            <button type="button" class="app-button app-button-secondary app-button-sm" disabled="@retrying" @onclick="() => RetryAsync(retryable.Id)">Retry #@retryable.Id — @retryable.Destination</button>
+          }
+        </div>
+        @if (data.RecentDeliveries.Count == 0) { <div class="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center text-xs text-slate-500">No external communications have been delivered yet.</div> }
+        else { <div class="overflow-x-auto rounded-xl border border-slate-200"><table class="w-full text-left text-xs"><thead class="border-b border-slate-200 bg-slate-50 font-semibold text-slate-700"><tr><th class="p-2.5">Provider</th><th class="p-2.5">Destination</th><th class="p-2.5">Status</th><th class="p-2.5">Attempts</th><th class="p-2.5">Date</th><th class="p-2.5">Error</th></tr></thead><tbody class="divide-y divide-slate-100">@foreach(var item in data.RecentDeliveries){<tr class="hover:bg-slate-50/50"><td class="p-2.5">@item.Provider</td><td class="p-2.5">@item.Destination</td><td class="p-2.5"><span class="@(item.Status == "Sent" ? "bg-emerald-100 text-emerald-800" : item.Status == "Failed" ? "bg-rose-100 text-rose-800" : "bg-amber-100 text-amber-800") rounded-full px-2.5 py-0.5 font-semibold text-[11px]">@item.Status</span></td><td class="p-2.5">@item.Attempts</td><td class="p-2.5">@((item.SentAtUtc ?? item.CreatedAtUtc).ToLocalTime().ToString("dd MMM yyyy HH:mm"))</td><td class="p-2.5 text-rose-700">@item.ErrorCode</td></tr>}</tbody></table></div> }
+      </section>
+    }
+  </div>
+</section>
+
+@code {
+  private bool submittingAnnouncement;
+  private async Task SubmitAnnouncementAsync(long id)
+  {
+    if (submittingAnnouncement) return;
+    submittingAnnouncement = true;
+    try { await Hub.SubmitAnnouncementAsync(id); await LoadAsync(); }
+    catch (Exception ex) { error = ex is InvalidOperationException or UnauthorizedAccessException ? ex.Message : "Announcement could not be submitted. Check the request type, approval flow and your active employment."; }
+    finally { submittingAnnouncement = false; }
+  }
+  private TelegramDestinationDto? pendingTest;
+  private bool queuingTest;
+  private async Task QueueTestAsync()
+  {
+    if (queuingTest || pendingTest is null) return;
+    queuingTest = true;
+    try { await Hub.QueueTelegramTestAsync(pendingTest.Id); pendingTest = null; editingStatus = "Test queued. Refresh delivery history after the worker processes it."; }
+    catch { error = "Test could not be queued. Check that the connection and destination are enabled and wait one minute between requests."; }
+    finally { queuingTest = false; }
+  }
+  private bool retrying;
+  private async Task RetryAsync(long id)
+  {
+    if (retrying) return;
+    retrying = true;
+    try { await Hub.RetryDeliveryAsync(id); await LoadAsync(); }
+    catch { error = "Delivery could not be requeued safely. Refresh the history and check its status."; }
+    finally { retrying = false; }
+  }
+  private bool validating;
+  private async Task ValidateDestinationAsync(TelegramDestinationDto item)
+  {
+    if (validating) return;
+    validating = true;
+    try { var result = await Hub.ValidateTelegramDestinationAsync(item.Id); editingStatus = result.Succeeded ? $"{item.DisplayName}: posting access verified. No message was sent." : $"{item.DisplayName}: verification failed ({result.ErrorCode})."; }
+    catch { error = "Destination verification could not be completed."; }
+    finally { validating = false; }
+  }
+  private async Task ValidateConnectionAsync(TelegramConnectionDto item)
+  {
+    if (validating) return;
+    validating = true;
+    try { var result = await Hub.ValidateTelegramConnectionAsync(item.Id); editingStatus = result.Succeeded ? $"{item.Name}: bot credentials verified. Channel permissions and worker configuration still require verification." : $"{item.Name}: verification failed ({result.ErrorCode})."; }
+    catch { error = "Connection verification could not be completed."; }
+    finally { validating = false; }
+  }
+  private string selectedPlatform = "TELEGRAM";
+  private string editingStatus = "Creating new settings.";
+  private void EditConnection(TelegramConnectionDto item) { connection = new() { Id = item.Id, Name = item.Name, CredentialReference = item.CredentialReference, IsEnabled = item.IsEnabled }; editingStatus = $"Editing connection: {item.Name}"; }
+  private void EditDestination(TelegramDestinationDto item) { destination = new() { Id = item.Id, ConnectionId = item.ConnectionId, DisplayName = item.DisplayName, ChatId = item.ChatId, IsActive = item.IsActive }; editingStatus = $"Editing destination: {item.DisplayName}"; }
+  private void EditRule(CommunicationRuleDto item) { rule = new() { Id = item.Id, DestinationId = item.DestinationId, Name = item.Name, EventCode = item.EventCode, TemplateBody = item.TemplateBody, RequiresApproval = item.RequiresApproval, IsEnabled = item.IsEnabled }; editingStatus = $"Editing rule: {item.Name}"; }
+  private void ResetEditors() { connection = new(); destination = new(); rule = new(); editingStatus = "Creating new settings."; }
+  private CommunicationHubConfigurationDto data = new(); private TelegramConnectionDto connection = new(); private TelegramDestinationDto destination = new(); private CommunicationRuleDto rule = new(); private bool loading = true, full; private string? error;
+  protected override async Task OnInitializedAsync() => await LoadAsync();
+  protected override async Task OnAfterRenderAsync(bool firstRender) { if (!firstRender) return; full = bool.TryParse(await JS.InvokeAsync<string?>("localStorage.getItem", "hrm.communication-hub.full-width"), out var saved) && saved; StateHasChanged(); }
+  private async Task ToggleWidth(){ full=!full; await JS.InvokeVoidAsync("localStorage.setItem","hrm.communication-hub.full-width",full); }
+  private async Task LoadAsync(){ loading=true; error=null; try { data=await Hub.LoadAsync(); } catch(Exception ex){ error=ex.Message; } finally { loading=false; } }
+  private async Task SaveConnectionAsync(){ await Save(async()=>{await Hub.SaveTelegramConnectionAsync(connection); connection=new();},"connection"); }
+  private async Task SaveDestinationAsync(){ await Save(async()=>{await Hub.SaveTelegramDestinationAsync(destination); destination=new();},"destination"); }
+  private async Task SaveRuleAsync(){ await Save(async()=>{await Hub.SaveRuleAsync(rule); rule=new();},"rule"); }
+  private async Task Save(Func<Task> action,string name){ try { error=null; await action(); await LoadAsync(); } catch(Exception ex){ error=$"Could not save {name}: {ex.Message}"; } }
+}

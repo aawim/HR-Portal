@@ -17,7 +17,7 @@ public static class ApiEndpointCatalog
     {
         if (!ApplicationContractCatalog.All.Contains(contract) ||
             !Index.TryGetValue((contract.FullName!, ApiOperationKeys.Method(operation)), out var endpoint))
-            throw new ArgumentException("This operation has no registered API endpoint.");
+            throw new ArgumentException($"No registered API endpoint for {contract.FullName}.{ApiOperationKeys.Method(operation)}.");
         return endpoint;
     }
 

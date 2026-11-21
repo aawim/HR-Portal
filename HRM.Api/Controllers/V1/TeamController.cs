@@ -12,6 +12,12 @@ public sealed class TeamController(global::HRM.Services.Interfaces.ITeam service
         return Ok(await service.GetMyTeamsAsync());
     }
 
+    [HttpGet("get-my-organisation-structure")]
+    public async Task<ActionResult<global::HRM.DTOs.MyOrganisationStructureDto?>> GetMyOrganisationStructure()
+    {
+        return Ok(await service.GetMyOrganisationStructureAsync());
+    }
+
     [HttpPost("create")]
     public async Task<ActionResult<global::System.Int32>> Create([FromBody] TeamCreateRequest request)
     {
@@ -59,7 +65,7 @@ public sealed class TeamController(global::HRM.Services.Interfaces.ITeam service
     }
 
     [HttpGet("search-teams")]
-    public async Task<ActionResult<global::System.Collections.Generic.List<global::HRM.DTOs.TeamSearchItemDto>>> SearchTeams([FromQuery] global::System.String query)
+    public async Task<ActionResult<global::System.Collections.Generic.List<global::HRM.DTOs.TeamSearchItemDto>>> SearchTeams([FromQuery] global::System.String? query)
     {
         return Ok(await service.SearchTeamsAsync(query, HttpContext.RequestAborted));
     }
@@ -141,7 +147,7 @@ public sealed class TeamController(global::HRM.Services.Interfaces.ITeam service
     }
 
     [HttpGet("search-assignable-projects")]
-    public async Task<ActionResult<global::System.Collections.Generic.List<global::HRM.DTOs.ProjectLookupDto>>> SearchAssignableProjects([FromQuery] global::System.String query)
+    public async Task<ActionResult<global::System.Collections.Generic.List<global::HRM.DTOs.ProjectLookupDto>>> SearchAssignableProjects([FromQuery] global::System.String? query)
     {
         return Ok(await service.SearchAssignableProjectsAsync(query, HttpContext.RequestAborted));
     }
@@ -191,10 +197,156 @@ public sealed class TeamController(global::HRM.Services.Interfaces.ITeam service
         public global::HRM.DTOs.AssignTaskRequestDto request { get; set; } = default!;
     }
 
+    [HttpPost("create-project")]
+    public async Task<ActionResult<global::System.Int32>> CreateProject([FromBody] TeamCreateProjectRequest request)
+    {
+        return Ok(await service.CreateProjectAsync(request.input, HttpContext.RequestAborted));
+    }
+
+    public sealed class TeamCreateProjectRequest
+    {
+        public global::HRM.DTOs.CreateProjectInputDto input { get; set; } = default!;
+    }
+
+    [HttpPost("update-project")]
+    public async Task<ActionResult<global::System.Boolean>> UpdateProject([FromBody] TeamUpdateProjectRequest request)
+    {
+        return Ok(await service.UpdateProjectAsync(request.input, HttpContext.RequestAborted));
+    }
+
+    public sealed class TeamUpdateProjectRequest
+    {
+        public global::HRM.DTOs.UpdateProjectInputDto input { get; set; } = default!;
+    }
+
+    [HttpPost("delete-project")]
+    public async Task<ActionResult<global::System.Boolean>> DeleteProject([FromBody] TeamDeleteProjectRequest request)
+    {
+        return Ok(await service.DeleteProjectAsync(request.projectId, HttpContext.RequestAborted));
+    }
+
+    public sealed class TeamDeleteProjectRequest
+    {
+        public global::System.Int32 projectId { get; set; }
+    }
+
+    [HttpGet("get-all-projects")]
+    public async Task<ActionResult<global::System.Collections.Generic.List<global::HRM.DTOs.TeamProjectDto>>> GetAllProjects([FromQuery] global::System.Int32? organisationId = null, [FromQuery] global::System.Int32? organisationStructureId = null, [FromQuery] global::System.Int32? teamId = null)
+    {
+        return Ok(await service.GetAllProjectsAsync(organisationId, organisationStructureId, teamId, HttpContext.RequestAborted));
+    }
+
+    [HttpGet("get-department-projects")]
+    public async Task<ActionResult<global::System.Collections.Generic.List<global::HRM.DTOs.TeamProjectDto>>> GetDepartmentProjects([FromQuery] global::System.Int32 organisationStructureId)
+    {
+        return Ok(await service.GetDepartmentProjectsAsync(organisationStructureId, HttpContext.RequestAborted));
+    }
+
+    [HttpGet("get-organisation-structures")]
+    public async Task<ActionResult<global::System.Collections.Generic.List<global::HRM.DTOs.OrganisationStructureDropdownDto>>> GetOrganisationStructures([FromQuery] global::System.Int32? organisationId = null)
+    {
+        return Ok(await service.GetOrganisationStructuresAsync(organisationId, HttpContext.RequestAborted));
+    }
+
+    [HttpPost("create-task")]
+    public async Task<ActionResult<global::System.Int32>> CreateTask([FromBody] TeamCreateTaskRequest request)
+    {
+        return Ok(await service.CreateTaskAsync(request.input, HttpContext.RequestAborted));
+    }
+
+    public sealed class TeamCreateTaskRequest
+    {
+        public global::HRM.DTOs.CreateTaskInputDto input { get; set; } = default!;
+    }
+
+    [HttpPost("update-task")]
+    public async Task<ActionResult<global::System.Boolean>> UpdateTask([FromBody] TeamUpdateTaskRequest request)
+    {
+        return Ok(await service.UpdateTaskAsync(request.input, HttpContext.RequestAborted));
+    }
+
+    public sealed class TeamUpdateTaskRequest
+    {
+        public global::HRM.DTOs.UpdateTaskInputDto input { get; set; } = default!;
+    }
+
+    [HttpPost("delete-task")]
+    public async Task<ActionResult<global::System.Boolean>> DeleteTask([FromBody] TeamDeleteTaskRequest request)
+    {
+        return Ok(await service.DeleteTaskAsync(request.taskId, HttpContext.RequestAborted));
+    }
+
+    public sealed class TeamDeleteTaskRequest
+    {
+        public global::System.Int32 taskId { get; set; }
+    }
+
     [HttpGet("get-assignment-history")]
     public async Task<ActionResult<global::System.Collections.Generic.List<global::HRM.DTOs.AssignmentHistoryDto>>> GetAssignmentHistory([FromQuery] global::System.Int32 projectId, [FromQuery] global::System.Int32? staffId)
     {
         return Ok(await service.GetAssignmentHistoryAsync(projectId, staffId, HttpContext.RequestAborted));
+    }
+
+    [HttpGet("load-sub-teams")]
+    public async Task<ActionResult<global::HRM.DTOs.SubTeamWorkspaceDto>> LoadSubTeams([FromQuery] global::System.Int32 parentTeamId)
+    {
+        return Ok(await service.LoadSubTeamsAsync(parentTeamId, HttpContext.RequestAborted));
+    }
+
+    [HttpPost("save-sub-team")]
+    public async Task<ActionResult<global::System.Int32>> SaveSubTeam([FromBody] TeamSaveSubTeamRequest request)
+    {
+        return Ok(await service.SaveSubTeamAsync(request.model, HttpContext.RequestAborted));
+    }
+
+    public sealed class TeamSaveSubTeamRequest
+    {
+        public global::HRM.DTOs.SaveSubTeamDto model { get; set; } = default!;
+    }
+
+    [HttpPost("delete-sub-team")]
+    public async Task<ActionResult<global::System.Boolean>> DeleteSubTeam([FromBody] TeamDeleteSubTeamRequest request)
+    {
+        return Ok(await service.DeleteSubTeamAsync(request.teamId, HttpContext.RequestAborted));
+    }
+
+    public sealed class TeamDeleteSubTeamRequest
+    {
+        public global::System.Int32 teamId { get; set; }
+    }
+
+    [HttpPost("save-sub-team-member")]
+    public async Task<ActionResult<global::System.Int32>> SaveSubTeamMember([FromBody] TeamSaveSubTeamMemberRequest request)
+    {
+        return Ok(await service.SaveSubTeamMemberAsync(request.model, HttpContext.RequestAborted));
+    }
+
+    public sealed class TeamSaveSubTeamMemberRequest
+    {
+        public global::HRM.DTOs.SaveSubTeamMemberDto model { get; set; } = default!;
+    }
+
+    [HttpPost("remove-sub-team-member")]
+    public async Task<ActionResult<global::System.Boolean>> RemoveSubTeamMember([FromBody] TeamRemoveSubTeamMemberRequest request)
+    {
+        return Ok(await service.RemoveSubTeamMemberAsync(request.teamId, request.staffId, HttpContext.RequestAborted));
+    }
+
+    public sealed class TeamRemoveSubTeamMemberRequest
+    {
+        public global::System.Int32 teamId { get; set; }
+        public global::System.Int32 staffId { get; set; }
+    }
+
+    [HttpPost("save-team-schedule-adjustment")]
+    public async Task<ActionResult<global::System.Int32>> SaveTeamScheduleAdjustment([FromBody] TeamSaveTeamScheduleAdjustmentRequest request)
+    {
+        return Ok(await service.SaveTeamScheduleAdjustmentAsync(request.model, HttpContext.RequestAborted));
+    }
+
+    public sealed class TeamSaveTeamScheduleAdjustmentRequest
+    {
+        public global::HRM.DTOs.TeamScheduleAdjustmentDto model { get; set; } = default!;
     }
 
 }

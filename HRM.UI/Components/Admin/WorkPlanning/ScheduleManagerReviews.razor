@@ -1,0 +1,129 @@
+@using HRM.WorkPlanning.Abstractions
+@inject HRM.UI.Services.WorkPlanning.IWorkforceScheduleApiClient ScheduleApi
+@inject HRM.Services.Interfaces.IUserAccessService Access
+
+<div class="w-full min-w-0 space-y-4 rounded-2xl border border-slate-200 bg-white p-2 shadow-xs dark:border-slate-700 dark:bg-slate-900">
+    <div class="flex flex-wrap items-center justify-between gap-2">
+        <div>
+            <h2 class="text-sm font-bold text-slate-900">Session &amp; Ledger Review</h2>
+            <p class="mt-0.5 text-xs text-slate-500">Review evaluated attendance sessions and payroll-finalization ledger entries.</p>
+        </div>
+        <button type="button" disabled="@busy" class="app-button app-button-secondary app-button-sm" @onclick="LoadAsync">
+            Refresh
+        </button>
+    </div>
+
+    @if (error is not null) { <p role="alert" class="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">@error</p> }
+    <div class="flex flex-wrap items-end gap-2">
+      <label class="block p-1 text-xs font-medium text-slate-700">From<input type="date" @bind="from" class="block rounded-lg border border-slate-300 bg-white p-1 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100" /></label>
+      <label class="block p-1 text-xs font-medium text-slate-700">To<input type="date" @bind="to" class="block rounded-lg border border-slate-300 bg-white p-1 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100" /></label>
+      <button type="button" class="app-button app-button-primary app-button-sm" disabled="@busy" @onclick="ApplyAsync">Apply filters</button>
+    </div>
+    @if (canSessions) {
+    <div class="space-y-2">
+        <h3 class="text-xs font-bold uppercase tracking-wide text-slate-600">Evaluated Sessions (@sessionTotal)</h3>
+        <div class="overflow-x-auto rounded-xl border border-slate-200">
+            <table class="w-full text-left text-xs">
+                <thead class="border-b border-slate-200 bg-slate-50 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+                    <tr>
+                        <th class="p-2.5">Session</th>
+                        <th class="p-2.5">Status</th>
+                        <th class="p-2.5">Credited Minutes</th>
+                        <th class="p-2.5">Evaluated</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    @if (sessions.Count == 0)
+                    {
+                        <tr>
+                            <td colspan="4" class="p-6 text-center text-slate-500">No evaluated sessions found.</td>
+                        </tr>
+                    }
+                    else
+                    {
+                        @foreach (var row in sessions)
+                        {
+                            <tr class="hover:bg-slate-50/70">
+                                <td class="p-2.5 font-mono text-[11px] font-semibold text-blue-700">#@row.Id / segment @row.WorkPlanSegmentId</td>
+                                <td class="p-2.5"><span class="rounded-full bg-blue-100 px-2.5 py-0.5 text-[11px] font-semibold text-blue-800">@row.Status</span></td>
+                                <td class="p-2.5 font-semibold text-slate-800">@row.CreditedMinutes</td>
+                                <td class="p-2.5 text-slate-600">@row.EvaluatedAtUtc.ToLocalTime().ToString("dd MMM yyyy HH:mm")</td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="flex items-center gap-2 text-xs"><button class="app-button app-button-secondary app-button-sm" disabled="@(busy || sessionPage == 1)" @onclick="() => MoveAsync(true, -1)">Previous</button><span>Page @sessionPage</span><button class="app-button app-button-secondary app-button-sm" disabled="@(busy || sessionPage * 50 >= sessionTotal)" @onclick="() => MoveAsync(true, 1)">Next</button></div>
+    }
+    @if (canLedger) {
+    <div class="space-y-2">
+        <h3 class="text-xs font-bold uppercase tracking-wide text-slate-600">Payroll Ledger (@ledgerTotal)</h3>
+        <div class="overflow-x-auto rounded-xl border border-slate-200">
+            <table class="w-full text-left text-xs">
+                <thead class="border-b border-slate-200 bg-slate-50 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+                    <tr>
+                        <th class="p-2.5">Ledger</th>
+                        <th class="p-2.5">Staff / Job</th>
+                        <th class="p-2.5">Category</th>
+                        <th class="p-2.5">Status</th>
+                        <th class="p-2.5">Export Reference</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    @if (ledger.Count == 0)
+                    {
+                        <tr>
+                            <td colspan="5" class="p-6 text-center text-slate-500">No ledger entries found.</td>
+                        </tr>
+                    }
+                    else
+                    {
+                        @foreach (var row in ledger)
+                        {
+                            <tr class="hover:bg-slate-50/70">
+                                <td class="p-2.5 font-mono text-[11px] font-semibold text-blue-700">#@row.Id</td>
+                                <td class="p-2.5 text-slate-700">@row.IndividualId / @row.JobId</td>
+                                <td class="p-2.5 font-medium text-slate-800">@row.TimeCategory (@row.CreditedMinutes min)</td>
+                                <td class="p-2.5"><span class="rounded-full bg-emerald-100 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-800">@row.Status</span></td>
+                                <td class="p-2.5 text-slate-600">@(row.PayrollExportReference ?? "Not exported")</td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <div class="flex items-center gap-2 text-xs"><button class="app-button app-button-secondary app-button-sm" disabled="@(busy || ledgerPage == 1)" @onclick="() => MoveAsync(false, -1)">Previous</button><span>Page @ledgerPage</span><button class="app-button app-button-secondary app-button-sm" disabled="@(busy || ledgerPage * 50 >= ledgerTotal)" @onclick="() => MoveAsync(false, 1)">Next</button></div>
+    }
+    @if (!busy && !canSessions && !canLedger) { <p class="p-3 text-xs text-slate-500">Attendance.View or Payroll.View permission is required to review these records.</p> }
+</div>
+
+@code {
+    IReadOnlyList<WorkforceSessionReviewRow> sessions = [];
+    IReadOnlyList<WorkforceLedgerReviewRow> ledger = [];
+    DateTime from = DateTime.UtcNow.Date.AddDays(-30), to = DateTime.UtcNow.Date;
+    int sessionPage = 1, ledgerPage = 1, sessionTotal, ledgerTotal;
+    bool busy, canSessions, canLedger;
+    string? error;
+    protected override Task OnInitializedAsync() => LoadAsync();
+    async Task ApplyAsync() { sessionPage = ledgerPage = 1; await LoadAsync(); }
+    async Task MoveAsync(bool session, int delta) { if (session) sessionPage += delta; else ledgerPage += delta; await LoadAsync(); }
+    async Task LoadAsync()
+    {
+        if (busy) return;
+        busy = true; error = null; sessions = []; ledger = []; sessionTotal = ledgerTotal = 0;
+        try
+        {
+            var actor = await Access.RequireContextAsync();
+            canSessions = actor.IsSuperAdministrator || await Access.HasPermissionAsync("Attendance.View");
+            canLedger = actor.IsSuperAdministrator || await Access.HasPermissionAsync("Payroll.View");
+            if (canSessions) { var page = await ScheduleApi.GetSessionsPageAsync(new(from, to, sessionPage)); sessions = page.Items; sessionTotal = page.TotalCount; }
+            if (canLedger) { var page = await ScheduleApi.GetLedgerPageAsync(new(from, to, ledgerPage)); ledger = page.Items; ledgerTotal = page.TotalCount; }
+        }
+        catch { error = "Review records could not be loaded. Check your permissions and select a date range of no more than 366 days."; }
+        finally { busy = false; }
+    }
+}

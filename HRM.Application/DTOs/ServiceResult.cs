@@ -2,6 +2,13 @@ namespace HRM.DTOs
 {
     public class ServiceResult
     {
+        public ServiceResult() { }
+
+        public ServiceResult(bool success, string message)
+        {
+            Success = success;
+            Message = message;
+        }
 
         public bool Success { get; set; }
 

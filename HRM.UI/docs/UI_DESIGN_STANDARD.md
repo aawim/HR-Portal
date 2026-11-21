@@ -118,16 +118,15 @@ The standard multi-panel layout uses CSS Grid with explicit minimum sizing to av
 ## 5. Design Tokens & Component Patterns
 
 ### Buttons
-- **Primary Action**:
-  - `inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 disabled:opacity-50 transition-colors`
-- **Secondary / Outline**:
-  - `inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 disabled:opacity-50 transition-colors`
-- **Subtle / Ghost**:
-  - `inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100 transition`
-- **Success / Positive**:
-  - `inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 shadow-xs transition`
-- **Danger / Destructive**:
-  - `inline-flex items-center gap-1.5 rounded-lg border border-rose-300 bg-white px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-50 transition`
+- Use the shared `app-button` classes so controls retain the same size, focus state and colour meaning in both themes.
+- **Primary Action**: `app-button app-button-primary app-button-sm`
+- **Secondary Action**: `app-button app-button-secondary app-button-sm`
+- **Neutral Action**: `app-button app-button-neutral app-button-sm`
+- **Subtle / Ghost**: `app-button app-button-ghost app-button-sm`
+- **Success / Positive**: `app-button app-button-success app-button-sm`
+- **Danger / Destructive**: `app-button app-button-danger app-button-sm`
+- **Icon-only Action**: add `app-button-icon` and always provide `aria-label` and `title`.
+- Do not use layout-wide CSS to add spacing or wrapping to arbitrary buttons. Action containers own their `gap-*` and wrapping classes.
 - **Segmented / Pill Tab Buttons**:
   - Container: `flex rounded-lg border border-slate-300 p-0.5 bg-slate-50`
   - Active: `bg-white text-blue-700 shadow-xs`
@@ -139,6 +138,7 @@ The standard multi-panel layout uses CSS Grid with explicit minimum sizing to av
   - Sub-card Headings: `font-bold text-slate-800 p-1`
 - **Input / Select / Textarea**:
   - Base: `mt-1 w-full rounded-lg border border-slate-300 bg-white p-1 text-xs text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500`
+  - Add explicit dark variants when editing a component: `dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100`.
 - **Validation & Error Banners**:
   - Alert: `flex items-center justify-between rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800`
 - **Sub-cards / Fieldsets within Forms**:
@@ -147,6 +147,7 @@ The standard multi-panel layout uses CSS Grid with explicit minimum sizing to av
 
 ### Cards & Panels
 - **Container Panel**: `rounded-2xl border border-slate-200 bg-white p-4 shadow-xs`
+- New shared surfaces should also use `app-surface` or explicit `dark:` variants; do not add more global colour overrides.
 - **Selectable History Item Cards**:
   - Base: `rounded-xl border p-2.5 text-xs transition cursor-pointer hover:shadow-xs flex flex-col gap-1.5 border-slate-200 bg-white hover:border-slate-300`
   - Active / Selected: `border-blue-500 bg-blue-50/70 shadow-xs ring-1 ring-blue-500`
@@ -168,6 +169,11 @@ Consistent badge classes based on status semantic:
 - **Neutral / Informational**: `bg-slate-100 text-slate-700 rounded-full px-2 py-0.5 text-[11px] font-medium` or `bg-blue-50 text-blue-700`
 - **Monospace Code / Reference Badges**:
   - `font-mono text-[11px] font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md`
+
+### Icons
+- Use `<AppIcon Name="..." />`, backed by the locally hosted Bootstrap Icons font.
+- Do not add emoji, text glyphs, Material Symbols, Font Awesome classes, copied inline SVGs, or new CDN icon dependencies.
+- Decorative icons remain hidden from assistive technology. Icon-only controls require an accessible label on the control.
 
 ---
 

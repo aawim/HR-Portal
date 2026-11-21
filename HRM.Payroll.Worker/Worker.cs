@@ -6,6 +6,8 @@ using HRM.Models.Payroll;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using HRM.ErrorLogs.Models;
+using HRM.ErrorLogs.Services;
 
 namespace HRM.Payroll.Worker;
 
@@ -13,13 +15,15 @@ public sealed class Worker : BackgroundService
 {
     private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<Worker> _logger;
+    private readonly IErrorLogService? _errorLogService;
     private readonly string _workerInstanceId = $"Worker-{Environment.MachineName}-{Guid.NewGuid():N}";
     private readonly TimeSpan _leaseDuration = TimeSpan.FromMinutes(2);
 
-    public Worker(IServiceProvider serviceProvider, ILogger<Worker> logger)
+    public Worker(IServiceProvider serviceProvider, ILogger<Worker> logger, IErrorLogService? errorLogService = null)
     {
         _serviceProvider = serviceProvider;
         _logger = logger;
+        _errorLogService = errorLogService;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -143,6 +147,20 @@ public sealed class Worker : BackgroundService
             try { await heartbeatTask; } catch (OperationCanceledException) { }
 
             _logger.LogError(ex, "Execution failed for job {JobId}", job.JobId);
+            if (_errorLogService != null)
+            {
+                try
+                {
+                    await _errorLogService.CaptureExceptionAsync(ex, ErrorCriticalityLevel.Critical, new ErrorContext
+                    {
+                        ApplicationSource = "HRM.Payroll.Worker",
+                        PageLocation = $"PayrollBackgroundJob:{job.JobType}",
+                        HttpMethod = "BACKGROUND_WORKER",
+                        CustomDataJson = $"{{\"JobId\": {job.JobId}, \"JobType\": \"{job.JobType}\", \"PayrollRunId\": {job.PayrollRunId}, \"OrgId\": {job.OrganisationId}}}"
+                    });
+                }
+                catch { }
+            }
             await queueService.FailJobAsync(job.JobId, _workerInstanceId, job.FencingToken, ex.Message, allowRetry: true);
         }
     }

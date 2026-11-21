@@ -1,0 +1,46 @@
+@using HRM.Services.Contracts
+@using static HRM.Services.Contracts.SloganServiceContracts
+@inject SloganServiceContracts.IOperations SloganService
+
+@if (slogan != null && string.Equals(slogan.Placement, Position, StringComparison.OrdinalIgnoreCase))
+{
+    <div class="w-full py-1.5 flex @AlignmentClass">
+        @if (slogan.SloganType == "Image" && !string.IsNullOrWhiteSpace(slogan.ImageBase64))
+        {
+            <img src="@slogan.ImageBase64" alt="@slogan.Name" class="max-h-12 object-contain" />
+        }
+        else if (!string.IsNullOrWhiteSpace(slogan.TextContent))
+        {
+            <div class="text-xs font-semibold leading-snug" style="@InlineStyle">
+                @slogan.TextContent
+            </div>
+        }
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public string DocumentType { get; set; } = string.Empty;
+    [Parameter] public string Position { get; set; } = "Footer";
+
+    private SloganDto? slogan;
+    private string? loadedDocType;
+
+    private string AlignmentClass => slogan?.Alignment switch
+    {
+        "Left" => "justify-start",
+        "Right" => "justify-end",
+        _ => "justify-center"
+    };
+
+    private string InlineStyle => slogan?.BoxStyle == "RoundedRectangle"
+        ? $"border-radius: 0.75rem; padding: 0.4rem 0.85rem; border: 1px solid {slogan.BorderColor ?? "#93c5fd"}; background-color: {slogan.BackgroundColor ?? "#eff6ff"}; color: {slogan.TextColor ?? "#1e3a8a"};"
+        : $"color: {slogan?.TextColor ?? "#1e3a8a"}; padding: 0.15rem 0;";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (string.IsNullOrWhiteSpace(DocumentType) || loadedDocType == DocumentType) return;
+        loadedDocType = DocumentType;
+        try { slogan = await SloganService.ResolveForDocumentAsync(DocumentType); }
+        catch { slogan = null; }
+    }
+}

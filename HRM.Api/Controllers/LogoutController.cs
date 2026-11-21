@@ -8,6 +8,7 @@ namespace HRM.Controllers
 {
    
         [Route("Online/Auth")]
+        [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting(HRM.Api.Infrastructure.HrmRateLimitPolicies.Auth)]
         public class LogoutController : Controller
         {
             // Interactive components obtain the token over HTTP so the browser
@@ -24,8 +25,16 @@ namespace HRM.Controllers
             [HttpPost("Logout")]
             [AllowAnonymous]
             [ValidateAntiForgeryToken]
-            public IActionResult Logout()
+            public async Task<IActionResult> Logout([FromServices] HRM.ActivityLogs.Abstractions.IActivityLogService? activityLogs = null)
             {
+                if (activityLogs is not null && User?.Identity?.IsAuthenticated == true)
+                {
+                    await activityLogs.RecordAuthenticationAsync(
+                        HRM.ActivityLogs.Models.ActivityTypes.UserSignedOut,
+                        "User signed out of Digital HR.",
+                        cancellationToken: HttpContext.RequestAborted);
+                }
+
                 // The URL the user should be sent to after the Identity Provider successfully logs them out.
                 var callbackUrl = Url.Content("~/Online/Auth/login");
 

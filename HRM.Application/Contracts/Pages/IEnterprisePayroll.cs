@@ -166,13 +166,32 @@ public sealed record PayslipRow(
     List<PayrollLineItemRow> EmployerItems
 );
 
+public sealed record PayrollTaxBracketDto(
+    decimal MinAmount,
+    decimal? MaxAmount,
+    decimal RatePercentage
+);
+
 public sealed record PayrollConfigurationDto(
     decimal EmployeePensionPercentage,
     decimal EmployerPensionPercentage,
     decimal OvertimeMultiplier,
     int DefaultPaymentDay,
     int AttendanceCutoffDay,
-    int AdjustmentCutoffDay
+    int AdjustmentCutoffDay,
+    decimal HolidayOvertimeMultiplier = 1.50m,
+    decimal OvertimeHourlyDivisor = 180m,
+    bool AllowancesArePensionable = false,
+    bool PensionMaldiviansOnly = true,
+    int PensionMinAge = 16,
+    int PensionMaxAge = 65,
+    decimal MinimumWageMonthly = 7000m,
+    decimal MaxDeductionPercentage = 40m,
+    decimal RamadanAllowanceAmount = 3000m,
+    string UnpaidLeaveDivisorMode = "CalendarDays",
+    bool RequireBankAccountForPayment = true,
+    string DefaultCurrencyCode = "MVR",
+    List<PayrollTaxBracketDto>? TaxBrackets = null
 );
 
 public sealed record UpdatePayrollConfigurationInput(
@@ -181,7 +200,20 @@ public sealed record UpdatePayrollConfigurationInput(
     decimal OvertimeMultiplier,
     int DefaultPaymentDay,
     int AttendanceCutoffDay,
-    int AdjustmentCutoffDay
+    int AdjustmentCutoffDay,
+    decimal HolidayOvertimeMultiplier = 1.50m,
+    decimal OvertimeHourlyDivisor = 180m,
+    bool AllowancesArePensionable = false,
+    bool PensionMaldiviansOnly = true,
+    int PensionMinAge = 16,
+    int PensionMaxAge = 65,
+    decimal MinimumWageMonthly = 7000m,
+    decimal MaxDeductionPercentage = 40m,
+    decimal RamadanAllowanceAmount = 3000m,
+    string UnpaidLeaveDivisorMode = "CalendarDays",
+    bool RequireBankAccountForPayment = true,
+    string DefaultCurrencyCode = "MVR",
+    List<PayrollTaxBracketDto>? TaxBrackets = null
 );
 
 public sealed record UpdatePayrollPeriodInput(
@@ -191,6 +223,15 @@ public sealed record UpdatePayrollPeriodInput(
     DateOnly AttendanceCutoffDate,
     DateOnly AdjustmentCutoffDate,
     DateOnly PaymentDate
+);
+
+public sealed record PayrollAdjustmentInput(
+    int PayrollRunId,
+    int JobId,
+    string ComponentCode,
+    string Description,
+    decimal Amount,
+    bool IsAddition
 );
 
 public interface IEnterprisePayroll
@@ -218,4 +259,7 @@ public interface IEnterprisePayroll
     Task<ServiceResult> ReconcilePaymentBatchAsync(int paymentBatchId, string reference);
     Task<List<PayslipRow>> GetMyPayslipsAsync();
     Task<PayslipRow> GetPayslipDetailAsync(int payrollEmployeeId);
+    Task<string> ExportStatutoryReportAsync(int runId, string reportType);
+    Task<ServiceResult> GenerateRamadanAllowanceAsync(int runId);
+    Task<ServiceResult> AddAdjustmentAsync(PayrollAdjustmentInput input);
 }

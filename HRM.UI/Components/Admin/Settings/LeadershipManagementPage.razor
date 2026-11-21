@@ -1,0 +1,383 @@
+@page "/admin/settings/leadership/management"
+@attribute [Authorize]
+@using HRM.DTOs.Leadership
+@inject HRM.Services.Contracts.LeadershipAdministrationServiceContracts.IOperations Administration
+@inject Microsoft.JSInterop.IJSRuntime JS
+@rendermode InteractiveServer
+
+<PageTitle>Leadership Records &amp; Audit</PageTitle>
+
+<section class="w-full min-w-0 p-2 space-y-4">
+    <!-- Full-Width Sticky Header -->
+    <header class="sticky top-0 z-30 m-0 border-b border-slate-200 bg-white/95 backdrop-blur-xs px-3 py-3 shadow-xs rounded-2xl flex flex-wrap items-center justify-between gap-3">
+        <div class="min-w-0">
+            <div class="flex items-center gap-2 flex-wrap">
+                <span class="rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-semibold text-blue-800">MDS Governance</span>
+                <span class="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-800">Audited Authority</span>
+            </div>
+            <h1 class="text-lg font-bold text-slate-900 truncate mt-0.5">Leadership Records &amp; Audit</h1>
+            <p class="text-xs text-slate-500 mt-0.5">Review, edit, or revoke leadership appointments, organisation responsibilities, authority grants, delegations, and attendance policies.</p>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2">
+            <button type="button"
+                    class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition-colors"
+                    @onclick="ToggleWidthAsync">
+                <span>@(isFullWidth ? "Shrink View" : "Full Width")</span>
+            </button>
+            <a class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition-colors"
+               href="/admin/settings/leadership">
+                <span>Appointment Administration</span>
+            </a>
+            <button type="button"
+                    class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 transition-colors"
+                    @onclick="LoadAsync">
+                <span>Refresh</span>
+            </button>
+        </div>
+    </header>
+
+    @if (error is not null)
+    {
+        <div role="alert" class="flex items-center justify-between rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800 @(isFullWidth ? "max-w-none" : "mx-auto max-w-7xl")">
+            <span>@error</span>
+            <button type="button" class="font-bold text-rose-600 hover:text-rose-900" @onclick="() => error = null">✕</button>
+        </div>
+    }
+
+    <!-- KPI Summary Strip -->
+    <div class="grid grid-cols-2 gap-3 sm:grid-cols-4 @(isFullWidth ? "max-w-none" : "mx-auto max-w-7xl")">
+        <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
+            <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Total Records</p>
+            <p class="mt-1 text-2xl font-bold text-slate-900">@records.Count</p>
+        </div>
+        <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
+            <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Active</p>
+            <p class="mt-1 text-2xl font-bold text-emerald-600">@records.Count(r => r.Status == "Active")</p>
+        </div>
+        <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
+            <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Scheduled</p>
+            <p class="mt-1 text-2xl font-bold text-amber-600">@records.Count(r => r.Status == "Scheduled")</p>
+        </div>
+        <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
+            <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Audit Events</p>
+            <p class="mt-1 text-2xl font-bold text-blue-600">@audit.Count</p>
+        </div>
+    </div>
+
+    <!-- Segmented Navigation Bar -->
+    <div class="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-xs @(isFullWidth ? "max-w-none" : "mx-auto max-w-7xl")">
+        <div class="flex flex-wrap rounded-lg border border-slate-300 p-0.5 bg-slate-50 gap-0.5">
+            <button type="button"
+                    class="px-3 py-1.5 rounded-md text-xs font-semibold transition @(activeTab == "records" ? "bg-white text-blue-700 shadow-xs" : "text-slate-600 hover:text-slate-900")"
+                    @onclick='() => activeTab = "records"'>
+                Appointments &amp; Authority (@records.Count)
+            </button>
+            <button type="button"
+                    class="px-3 py-1.5 rounded-md text-xs font-semibold transition @(activeTab == "audit" ? "bg-white text-blue-700 shadow-xs" : "text-slate-600 hover:text-slate-900")"
+                    @onclick='() => activeTab = "audit"'>
+                Recent Audit History (@audit.Count)
+            </button>
+        </div>
+        @if (activeTab == "records")
+        {
+            <input class="w-full sm:w-64 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-800 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                   placeholder="Filter by kind, status, or details..."
+                   @bind="search"
+                   @bind:event="oninput" />
+        }
+    </div>
+
+    <div class="@(isFullWidth ? "max-w-none" : "mx-auto max-w-7xl") space-y-4">
+        @if (editing is not null)
+        {
+            <div class="rounded-2xl border border-blue-200 bg-blue-50/40 p-4 shadow-xs space-y-3">
+                <div class="flex items-center justify-between">
+                    <h2 class="text-sm font-bold text-slate-900">Edit @editing.Kind #@editing.Id</h2>
+                    <button type="button" class="text-xs font-semibold text-slate-500 hover:text-slate-800" @onclick="() => editing = null">Close</button>
+                </div>
+                <div class="grid gap-3 md:grid-cols-2">
+                    @if (editing.Kind is "Appointment" or "Responsibility")
+                    {
+                        <label class="block text-xs font-medium text-slate-700">
+                            Description
+                            <input class="@InputClass" @bind="editing.Description" />
+                        </label>
+                    }
+                    @if (editing.Kind is "Grant" or "Delegation")
+                    {
+                        <label class="block text-xs font-medium text-slate-700">
+                            Permission
+                            <select class="@InputClass" @bind="editing.PermissionCode">
+                                @if (configuration is not null)
+                                {
+                                    @foreach (var option in configuration.Permissions)
+                                    {
+                                        <option value="@option.Code">@option.Name</option>
+                                    }
+                                }
+                            </select>
+                        </label>
+                    }
+                    @if (editing.Kind == "Delegation")
+                    {
+                        <label class="block text-xs font-medium text-slate-700">
+                            Delegate User
+                            <select class="@InputClass" @bind="editing.DelegateUserId">
+                                @if (configuration is not null)
+                                {
+                                    @foreach (var option in configuration.Users)
+                                    {
+                                        <option value="@option.Id">@option.Name</option>
+                                    }
+                                }
+                            </select>
+                        </label>
+                    }
+                    @if (editing.Kind == "AttendancePolicy")
+                    {
+                        <div class="flex flex-col justify-center gap-1">
+                            <label class="inline-flex items-center gap-2 text-xs font-medium text-slate-700">
+                                <input type="checkbox" @bind="editing.AttendanceRequired" />
+                                Attendance required
+                            </label>
+                            <p class="text-[11px] text-slate-500">Verification mode: Standard</p>
+                        </div>
+                    }
+                    <label class="block text-xs font-medium text-slate-700">
+                        Effective From
+                        <input class="@InputClass" type="date" @bind="editing.From" />
+                    </label>
+                    <label class="block text-xs font-medium text-slate-700">
+                        Effective To (optional)
+                        <input class="@InputClass" type="date" @bind="editing.To" />
+                    </label>
+                </div>
+                <div class="flex justify-end gap-2">
+                    <button type="button" class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50" @onclick="() => editing = null">Cancel</button>
+                    <button type="button" disabled="@busy" class="rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50" @onclick="SaveEditAsync">Save Changes</button>
+                </div>
+            </div>
+        }
+
+        @if (activeTab == "records")
+        {
+            <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs space-y-3">
+                <div class="flex items-center justify-between">
+                    <h2 class="text-sm font-bold text-slate-900">Appointments &amp; Authority Register</h2>
+                    <span class="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-700">@FilteredRecords.Count() shown</span>
+                </div>
+                <div class="overflow-x-auto rounded-xl border border-slate-200">
+                    <table class="w-full text-left text-xs">
+                        <thead class="border-b border-slate-200 bg-slate-50 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+                            <tr>
+                                <th class="p-2.5">Record</th>
+                                <th class="p-2.5">Appointment / Org</th>
+                                <th class="p-2.5">Details</th>
+                                <th class="p-2.5">Status</th>
+                                <th class="p-2.5 text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            @if (!FilteredRecords.Any())
+                            {
+                                <tr>
+                                    <td colspan="5" class="p-6 text-center text-slate-500">No leadership records match your filter.</td>
+                                </tr>
+                            }
+                            else
+                            {
+                                @foreach (var row in FilteredRecords)
+                                {
+                                    <tr class="hover:bg-slate-50/70 transition-colors">
+                                        <td class="p-2.5 font-mono text-[11px] font-semibold text-blue-700">@row.Kind #@row.Id</td>
+                                        <td class="p-2.5 text-slate-600">#@row.AppointmentId / #@row.OrganisationId</td>
+                                        <td class="p-2.5 text-slate-800">@row.Description</td>
+                                        <td class="p-2.5">
+                                            <span class="@StatusBadge(row.Status)">@row.Status</span>
+                                        </td>
+                                        <td class="p-2.5 text-right">
+                                            <div class="inline-flex items-center gap-1.5">
+                                                <button type="button"
+                                                        class="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                                                        disabled="@busy"
+                                                        @onclick="() => EditAsync(row)">
+                                                    Edit
+                                                </button>
+                                                <button type="button"
+                                                        class="rounded-lg border border-rose-300 bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-50"
+                                                        disabled="@(busy || row.Status is "Revoked" or "Expired")"
+                                                        @onclick="() => RevokeAsync(row)">
+                                                    Revoke
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs space-y-3">
+                <div class="flex items-center justify-between">
+                    <h2 class="text-sm font-bold text-slate-900">Recent Audit History</h2>
+                    <span class="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-700">@audit.Count events</span>
+                </div>
+                <div class="overflow-x-auto rounded-xl border border-slate-200">
+                    <table class="w-full text-left text-xs">
+                        <thead class="border-b border-slate-200 bg-slate-50 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+                            <tr>
+                                <th class="p-2.5">UTC Time</th>
+                                <th class="p-2.5">Appointment</th>
+                                <th class="p-2.5">Administrator</th>
+                                <th class="p-2.5">Action</th>
+                                <th class="p-2.5">Details</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            @if (audit.Count == 0)
+                            {
+                                <tr>
+                                    <td colspan="5" class="p-6 text-center text-slate-500">No audit history recorded yet.</td>
+                                </tr>
+                            }
+                            else
+                            {
+                                @foreach (var row in audit)
+                                {
+                                    <tr class="hover:bg-slate-50/70">
+                                        <td class="p-2.5 font-mono text-[11px] text-slate-600">@row.TimestampUtc.ToString("u")</td>
+                                        <td class="p-2.5 font-semibold text-slate-800">#@row.AppointmentId</td>
+                                        <td class="p-2.5 text-slate-600">#@row.UserId</td>
+                                        <td class="p-2.5">
+                                            <span class="rounded-full bg-blue-100 px-2.5 py-0.5 text-[11px] font-semibold text-blue-800">@row.Action</span>
+                                        </td>
+                                        <td class="p-2.5 text-slate-700">@row.Detail</td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+    </div>
+</section>
+
+@code {
+    private const string InputClass = "mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500";
+    private LeadershipRecordEditInput? editing;
+    private LeadershipConfigurationDto? configuration;
+    private IReadOnlyList<LeadershipManagementRecord> records = [];
+    private IReadOnlyList<LeadershipAuditDto> audit = [];
+    private string? error;
+    private string activeTab = "records";
+    private string search = "";
+    private bool busy, isFullWidth;
+
+    private IEnumerable<LeadershipManagementRecord> FilteredRecords => string.IsNullOrWhiteSpace(search)
+        ? records
+        : records.Where(r => r.Kind.Contains(search, StringComparison.OrdinalIgnoreCase)
+            || r.Status.Contains(search, StringComparison.OrdinalIgnoreCase)
+            || (r.Description?.Contains(search, StringComparison.OrdinalIgnoreCase) ?? false));
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            isFullWidth = await JS.InvokeAsync<string?>("localStorage.getItem", "hrm.leadership-mgmt.full-width") == "true";
+            StateHasChanged();
+        }
+    }
+
+    private async Task ToggleWidthAsync()
+    {
+        isFullWidth = !isFullWidth;
+        await JS.InvokeVoidAsync("localStorage.setItem", "hrm.leadership-mgmt.full-width", isFullWidth ? "true" : "false");
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            error = null;
+            records = await Administration.ListRecordsAsync();
+            audit = await Administration.ListAuditAsync();
+        }
+        catch
+        {
+            error = "Leadership records could not be loaded. Check your administration access.";
+        }
+    }
+
+    private async Task EditAsync(LeadershipManagementRecord row)
+    {
+        try
+        {
+            configuration = await Administration.GetConfigurationAsync();
+            editing = await Administration.GetRecordAsync(row.Kind, row.Id);
+        }
+        catch
+        {
+            error = "The record could not be opened.";
+        }
+    }
+
+    private async Task SaveEditAsync()
+    {
+        if (editing is null || busy) return;
+        busy = true;
+        try
+        {
+            var result = await Administration.UpdateRecordAsync(editing);
+            if (result.Success)
+            {
+                editing = null;
+                await LoadAsync();
+            }
+            else error = result.Message;
+        }
+        catch
+        {
+            error = "The record could not be saved.";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task RevokeAsync(LeadershipManagementRecord row)
+    {
+        if (busy) return;
+        busy = true;
+        try
+        {
+            var result = await Administration.RevokeRecordAsync(row.Kind, row.Id);
+            if (result.Success) await LoadAsync();
+            else error = result.Message;
+        }
+        catch
+        {
+            error = "The record could not be revoked.";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private static string StatusBadge(string status) => status switch
+    {
+        "Active" => "rounded-full bg-emerald-100 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-800",
+        "Scheduled" => "rounded-full bg-amber-100 px-2.5 py-0.5 text-[11px] font-semibold text-amber-800",
+        "Revoked" or "Expired" => "rounded-full bg-rose-100 px-2.5 py-0.5 text-[11px] font-semibold text-rose-800",
+        _ => "rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-semibold text-slate-700"
+    };
+}

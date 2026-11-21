@@ -4,14 +4,18 @@
 @using HRM.Services
 
 @inject HRM.Services.Contracts.AttendanceLogServiceContracts.IOperations AttendanceLogService
+@inject ILogger<TeamAttendanceCard> Logger
  
 
-<BaseCard Title="Team Attendance">
-    <HRM.Components.Shared.AttendanceExportButtons CreateReport="BuildExport" />
+<section class="w-full space-y-2 p-2">
+    <header class="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-xs dark:border-slate-800 dark:bg-slate-900">
+        <div><h3 class="text-base font-bold text-slate-900 dark:text-slate-100">Organisation attendance</h3><p class="text-xs text-slate-500">Today’s attendance across the current organisation.</p></div>
+        <div class="flex flex-wrap items-center gap-2"><button type="button" class="app-button app-button-neutral app-button-sm" disabled="@loading" @onclick="LoadAttendanceAsync"><AppIcon Name="refresh" Class="@(loading ? "animate-spin text-sm" : "text-sm")" /> Fetch</button><HRM.Components.Shared.AttendanceExportButtons CreateReport="BuildExport" /></div>
+    </header>
 
     <!-- Summary -->
     <!-- Summary Tabs -->
-    <div class="grid grid-cols-6 divide-x divide-slate-100 border-b border-slate-100">
+    <div class="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
 
         <button class="@TabClass(AttendanceFilter.Present)"
                 @onclick="() => SelectedFilter = AttendanceFilter.Present">
@@ -98,10 +102,11 @@
 
     </div>
 
+    @if (!string.IsNullOrWhiteSpace(loadError)) { <p class="rounded-xl border border-rose-200 bg-rose-50 p-2 text-xs text-rose-800">@loadError</p> }
     <!-- Staff List -->
     @if (Attendance.Any(x => x.StatusMessage != null))
     {
-        <details class="border-b px-4 py-3 text-sm">
+        <details class="border-b p-2 text-sm">
             <summary class="cursor-pointer">Staff awaiting an active schedule or position approval (@Attendance.Count(x => x.StatusMessage != null))</summary>
             <ul class="mt-2 space-y-2">@foreach (var staff in Attendance.Where(x => x.StatusMessage != null)) { <li><span class="font-medium">@staff.Name</span> · @staff.StatusMessage</li> }</ul>
         </details>
@@ -110,7 +115,7 @@
 
         @if (!FilteredAttendance.Any())
         {
-            <div class="px-4 py-6 text-center text-sm text-slate-500">
+            <div class="p-2 text-center text-sm text-slate-500">
                 No records found.
             </div>
         }
@@ -162,11 +167,11 @@
 
     </div>
 
-</BaseCard>
+</section>
 
 @code {
-    private AttendanceExportReport BuildExport() => new("Team attendance", $"{DateTime.UtcNow.AddHours(5):dd MMM yyyy} · Filter: {SelectedFilter}",
-        [new("Team attendance", ["Employee", "Status", "Check in", "Check out"], FilteredAttendance.Select(s => new object?[] { s.Name, s.StatusMessage ?? s.Status.ToString(), s.CheckIn?.ToString("HH:mm"), s.CheckOut?.ToString("HH:mm") }).ToList())]);
+    private AttendanceExportReport BuildExport() => new("Organisation attendance", $"{DateTime.UtcNow.AddHours(5):dd MMM yyyy} · Current organisation · Filter: {SelectedFilter}",
+        [new("Attendance", ["Employee", "Team / Group", "Status", "Check in", "Check out"], FilteredAttendance.Select(s => new object?[] { s.Name, s.TeamName, s.StatusMessage ?? s.Status.ToString(), s.CheckIn?.ToString("HH:mm"), s.CheckOut?.ToString("HH:mm") }).ToList())]);
 
     private List<TeamAttendanceDto> Attendance = new();
 
@@ -205,6 +210,9 @@
 
 
     private AttendanceFilter SelectedFilter = AttendanceFilter.Present;
+    private const bool includeAllStaff = true;
+    private bool loading;
+    private string? loadError;
 
 
     private IEnumerable<TeamAttendanceDto> FilteredAttendance =>
@@ -235,17 +243,23 @@
     private string TabClass(AttendanceFilter tab)
     {
         return SelectedFilter == tab
-            ? "bg-slate-50"
-            : "hover:bg-slate-50";
+            ? "bg-slate-50 p-2 text-center"
+            : "hover:bg-slate-50 p-2 text-center";
     }
 
 
 
 
-    protected override async Task OnInitializedAsync()
+    protected override Task OnInitializedAsync() => LoadAttendanceAsync();
+
+    private async Task LoadAttendanceAsync()
     {
- 
-        Attendance = await AttendanceLogService.GetMyTeamAttendanceTodayAsync();
+        loading = true;
+        loadError = null;
+        try { Attendance = await AttendanceLogService.GetMyTeamAttendanceTodayAsync(includeAllStaff); }
+        catch (UnauthorizedAccessException) { Attendance = []; loadError = "You do not have access to organisation attendance. Ask an administrator for Attendance.View access."; }
+        catch (Exception ex) { Logger.LogError(ex, "Unable to load today's organisation attendance."); Attendance = []; loadError = "Attendance could not be loaded. Please try again."; }
+        finally { loading = false; }
     }
 
     private string GetStatusColor(AttendanceStatus status)

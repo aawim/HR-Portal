@@ -1,0 +1,190 @@
+@using HRM.WorkPlanning.Abstractions
+@inject HRM.UI.Services.WorkPlanning.IWorkforceScheduleApiClient ScheduleApi
+@inject HRM.Services.PortalContext Portal
+
+<div class="grid items-start gap-4 lg:grid-cols-12">
+    <section class="lg:col-span-7 rounded-2xl border border-slate-200 bg-white p-4 shadow-xs space-y-4">
+        <div>
+            <h2 class="text-sm font-bold text-slate-900">Roster Draft Planner</h2>
+            <p class="mt-0.5 text-xs text-slate-500">Create a draft roster, add duty occurrences, assign staff, then validate before publishing.</p>
+        </div>
+
+        <div class="grid gap-3 sm:grid-cols-2">
+            <label class="block text-xs font-medium text-slate-700">
+                Roster Name
+                <input class="@InputClass" @bind="name" placeholder="e.g. November Shift Roster" />
+            </label>
+            <div class="block text-xs font-medium text-slate-700">
+                Active Organisation
+                <div class="mt-1 flex h-9 items-center rounded-lg border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-600">
+                    Org #@organisationId
+                </div>
+            </div>
+            <label class="block text-xs font-medium text-slate-700">
+                Starts
+                <input type="date" class="@InputClass" @bind="start" />
+            </label>
+            <label class="block text-xs font-medium text-slate-700">
+                Ends
+                <input type="date" class="@InputClass" @bind="end" />
+            </label>
+        </div>
+
+        <div class="flex justify-end">
+            <button type="button" class="rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 transition-colors" @onclick="CreateDraftAsync">
+                Create Draft
+            </button>
+        </div>
+
+        @if (versionId > 0)
+        {
+            <div class="rounded-xl border border-blue-200 bg-blue-50/40 p-4 space-y-3">
+                <h3 class="text-xs font-bold uppercase tracking-wide text-slate-700">Add Duty Occurrence</h3>
+                <div class="grid gap-3 sm:grid-cols-2">
+                    <label class="block text-xs font-medium text-slate-700">
+                        Duty Type ID
+                        <input placeholder="Duty type ID" type="number" class="@InputClass" @bind="dutyTypeId" />
+                    </label>
+                    <label class="block text-xs font-medium text-slate-700">
+                        Required Staff
+                        <input placeholder="Required staff" type="number" class="@InputClass" @bind="requiredStaff" />
+                    </label>
+                    <label class="block text-xs font-medium text-slate-700">
+                        Duty Start
+                        <input type="datetime-local" class="@InputClass" @bind="dutyStart" />
+                    </label>
+                    <label class="block text-xs font-medium text-slate-700">
+                        Duty End
+                        <input type="datetime-local" class="@InputClass" @bind="dutyEnd" />
+                    </label>
+                </div>
+                <div class="flex justify-end">
+                    <button type="button" class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50" @onclick="AddOccurrenceAsync">
+                        Add Duty
+                    </button>
+                </div>
+            </div>
+
+            <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-4 space-y-3">
+                <h3 class="text-xs font-bold uppercase tracking-wide text-slate-700">Assign Staff</h3>
+                <div class="grid gap-3 sm:grid-cols-3">
+                    <label class="block text-xs font-medium text-slate-700">
+                        Duty Occurrence ID
+                        <input placeholder="Occurrence ID" type="number" class="@InputClass" @bind="occurrenceId" />
+                    </label>
+                    <label class="block text-xs font-medium text-slate-700">
+                        Job ID
+                        <input placeholder="Job ID" type="number" class="@InputClass" @bind="jobId" />
+                    </label>
+                    <label class="block text-xs font-medium text-slate-700">
+                        Individual ID
+                        <input placeholder="Individual ID" type="number" class="@InputClass" @bind="individualId" />
+                    </label>
+                </div>
+                <div class="flex justify-end">
+                    <button type="button" class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50" @onclick="AssignAsync">
+                        Assign Staff
+                    </button>
+                </div>
+            </div>
+
+            <div class="flex flex-wrap justify-end gap-2">
+                <button type="button" class="rounded-lg bg-emerald-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-emerald-700 transition-colors" @onclick="ValidateAsync">
+                    Validate Roster
+                </button>
+                @if (validation?.IsValid == true)
+                {
+                    <button type="button" class="rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 transition-colors" @onclick="PublishAsync">
+                        Publish Validated Roster
+                    </button>
+                }
+            </div>
+        }
+
+        @if (!string.IsNullOrWhiteSpace(message))
+        {
+            <div role="status" class="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-800">
+                <span>@message</span>
+                <button type="button" class="font-bold text-slate-500 hover:text-slate-800" @onclick="() => message = null">✕</button>
+            </div>
+        }
+    </section>
+
+    <aside class="lg:col-span-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-xs space-y-3">
+        <div class="flex items-center justify-between">
+            <h2 class="text-sm font-bold text-slate-900">Validation Results</h2>
+            @if (validation is not null)
+            {
+                <span class="rounded-full px-2.5 py-0.5 text-[11px] font-semibold @(validation.IsValid ? "bg-emerald-100 text-emerald-800" : "bg-rose-100 text-rose-800")">
+                    @(validation.IsValid ? "Ready to Publish" : "Action Required")
+                </span>
+            }
+        </div>
+        @if (validation is null)
+        {
+            <div class="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-xs text-slate-500">
+                Validate a draft to inspect coverage, overlap, and leave conflict results.
+            </div>
+        }
+        else
+        {
+            @if (validation.Errors.Count > 0)
+            {
+                <ul class="space-y-2 text-xs text-rose-800">
+                    @foreach (var issue in validation.Errors)
+                    {
+                        <li class="rounded-xl border border-rose-200 bg-rose-50 p-3">@issue</li>
+                    }
+                </ul>
+            }
+            @if ((validation.Warnings?.Count ?? 0) > 0)
+            {
+                <ul class="space-y-2 text-xs text-amber-900">
+                    @foreach (var warning in validation.Warnings!)
+                    {
+                        <li class="rounded-xl border border-amber-200 bg-amber-50 p-3">@warning</li>
+                    }
+                </ul>
+            }
+        }
+    </aside>
+</div>
+
+@code {
+    private const string InputClass = "mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500";
+    int organisationId;
+    string name = "";
+    DateTime start = DateTime.Today, end = DateTime.Today.AddDays(7), dutyStart = DateTime.Today.AddHours(8), dutyEnd = DateTime.Today.AddHours(16);
+    int versionId, dutyTypeId, requiredStaff = 1, occurrenceId, jobId, individualId;
+    string? message;
+    WorkforceRosterValidation? validation;
+
+    protected override void OnInitialized() => organisationId = Portal.CurrentOrganisationId ?? 0;
+
+    async Task CreateDraftAsync()
+    {
+        var r = await ScheduleApi.CreateDraftAsync(new(organisationId, name, DateOnly.FromDateTime(start), DateOnly.FromDateTime(end), 0, 0));
+        versionId = r.RosterVersionId;
+        message = $"Draft {r.RosterId} created.";
+    }
+
+    async Task AddOccurrenceAsync()
+    {
+        occurrenceId = (int)await ScheduleApi.AddOccurrenceAsync(new(versionId, organisationId, dutyTypeId, dutyStart, dutyEnd, requiredStaff, "Indian/Maldives", null, null, 0));
+        message = $"Duty {occurrenceId} added.";
+    }
+
+    async Task AssignAsync()
+    {
+        await ScheduleApi.AssignAsync(new(occurrenceId, organisationId, jobId, individualId, 0, null, 0));
+        message = "Staff assigned.";
+    }
+
+    async Task ValidateAsync() => validation = await ScheduleApi.ValidateAsync(versionId);
+
+    async Task PublishAsync()
+    {
+        await ScheduleApi.PublishAsync(versionId, 0);
+        message = "Roster published and work plans will be generated.";
+    }
+}

@@ -20,5 +20,7 @@ Task SaveRequirementAsync(global::HRM.DTOs.Contracts.OrganisationWorkingHourRequ
 ;
 Task SaveAmendmentAsync(global::HRM.DTOs.Contracts.OrganisationScheduleAmendmentDto model)
 ;
+Task SaveAmendmentRangeAsync(global::HRM.DTOs.Contracts.OrganisationScheduleAmendmentRangeDto model)
+;
 }
 }

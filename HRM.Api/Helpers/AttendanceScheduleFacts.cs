@@ -33,6 +33,9 @@ public static class AttendanceScheduleFacts
             .ToListAsync(ct);
 
         var amendments = await OfficialScheduleAmendments.LoadAsync(db, org, from, to, ct);
+        var teamAdjustments = new Dictionary<DateTime, TeamScheduleAdjustment?>();
+        foreach (var day in assignments.Select(x => x.WorkPlan.WorkDate.Date).Distinct())
+            teamAdjustments[day] = await TeamScheduleAdjustments.FindAsync(db, person, org ?? assignments.First().WorkPlan.OrganisationBusinessEntityId, day, ct);
         var adjustments = await TemporaryWorkingHours.AdjustmentsAsync(db, assignments, ct);
 
         return assignments.Select(a =>
@@ -58,10 +61,18 @@ public static class AttendanceScheduleFacts
             var start = a.WorkAssignmentSegments.Where(s => s.IsValid && (s.ExpectedInOutModeId == 1 || s.WorkSegmentType.Code == "CHECK_IN" || s.WorkSegmentType.Code == "DUTY_CHECK_IN"))
                 .Select(s => s.StartDateTime).DefaultIfEmpty(a.StartDateTime).Min();
             start = OfficialScheduleAmendments.Start(amendments, a.WorkPlan.OrganisationBusinessEntityId, a.SchedulePurpose, start);
+            var teamAdjustment = teamAdjustments.GetValueOrDefault(a.WorkPlan.WorkDate.Date);
+            if (a.SchedulePurpose == "Official" && teamAdjustment?.RevisedCheckIn.HasValue == true)
+                start = start.Date.Add(teamAdjustment.RevisedCheckIn.Value);
 
             var finish = a.WorkAssignmentSegments.Where(s => s.IsValid && (s.ExpectedInOutModeId == 2 || s.WorkSegmentType.Code == "CHECK_OUT" || s.WorkSegmentType.Code == "DUTY_CHECK_OUT"))
                 .Select(s => s.StartDateTime).DefaultIfEmpty(a.EndDateTime).Max();
             if (adjustments.TryGetValue(a.WorkAssignmentId, out var adjustment) && !adjustment.HasEarlyCheckout) finish = finish.AddMinutes(adjustment.DeltaMinutes);
+            if (a.SchedulePurpose == "Official" && teamAdjustment?.RevisedCheckOut.HasValue == true)
+            {
+                finish = finish.Date.Add(teamAdjustment.RevisedCheckOut.Value);
+                if (finish <= start) finish = finish.AddDays(1);
+            }
 
             var type = (a.WorkTemplateType?.Name ?? "") + " " + (a.WorkTemplateType?.Code ?? "");
             var shift = a.SchedulePurpose.Equals("Duty", StringComparison.OrdinalIgnoreCase) ||

@@ -66,10 +66,10 @@ public sealed class StaffOnboardingService(IDbContextFactory<HrmTeContext> facto
 
     private static async Task ValidatePersonAsync(HrmTeContext db, int person, int org, bool super)
     {
-        if (!await db.Individuals.AnyAsync(x => x.BusinessEntityId == person) ||
-            (!super && await db.Jobs.AnyAsync(x => x.IndividualID == person) &&
-             !await db.Jobs.AnyAsync(x => x.IndividualID == person && x.OrganisationID == org)))
+        if (!await db.Individuals.AnyAsync(x => x.BusinessEntityId == person))
             throw new UnauthorizedAccessException("This individual is not available in the current organisation’s registry.");
+        if (await FormerStaffPolicy.CurrentJobs(db).AnyAsync(x => x.IndividualID == person))
+            throw new InvalidOperationException("This individual already has an active job and cannot be onboarded.");
         if (await db.StaffOnboardingRequests.AnyAsync(x => x.IndividualId == person && x.IsOpen))
             throw new InvalidOperationException("An onboarding request is already processing for this individual.");
     }

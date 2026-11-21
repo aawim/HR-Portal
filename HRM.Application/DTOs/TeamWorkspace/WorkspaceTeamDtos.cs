@@ -24,6 +24,8 @@ namespace HRM.DTOs
         public string Description { get; set; } = string.Empty;
         public int? TeamId { get; set; }
         public string TeamName { get; set; } = string.Empty;
+        public int? OrganisationStructureId { get; set; }
+        public string OrganisationStructureName { get; set; } = string.Empty;
         public int? ProjectManagerStaffId { get; set; }
         public string ProjectManagerName { get; set; } = string.Empty;
         public DateTime StartDate { get; set; }
@@ -243,5 +245,68 @@ namespace HRM.DTOs
         public string Details { get; set; } = string.Empty;
         public string PerformedByName { get; set; } = string.Empty;
         public DateTime PerformedAt { get; set; }
+    }
+
+    public class CreateProjectInputDto
+    {
+        public int? TeamId { get; set; }
+        public int? OrganisationStructureId { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public string? Reference { get; set; }
+        public string? Description { get; set; }
+        public int? ProjectManagerStaffId { get; set; }
+        public string? ProjectManagerName { get; set; }
+        public DateTime StartDate { get; set; } = DateTime.Today;
+        public DateTime? PlannedEndDate { get; set; }
+        public string Status { get; set; } = "Active";
+    }
+
+    public class UpdateProjectInputDto
+    {
+        public int ProjectId { get; set; }
+        public int? TeamId { get; set; }
+        public int? OrganisationStructureId { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public string? Reference { get; set; }
+        public string? Description { get; set; }
+        public int? ProjectManagerStaffId { get; set; }
+        public string? ProjectManagerName { get; set; }
+        public DateTime StartDate { get; set; }
+        public DateTime? PlannedEndDate { get; set; }
+        public DateTime? ActualEndDate { get; set; }
+        public string Status { get; set; } = "Active";
+        public int ProgressPercentage { get; set; }
+    }
+
+    public class CreateTaskInputDto
+    {
+        public int ProjectId { get; set; }
+        public string? TaskReference { get; set; }
+        public string Title { get; set; } = string.Empty;
+        public string? Description { get; set; }
+        public string Priority { get; set; } = "Medium";
+        public DateTime? StartDate { get; set; }
+        public DateTime? ExpectedEndDate { get; set; }
+        public int? AssignedStaffId { get; set; }
+        public string Status { get; set; } = "Ongoing";
+        public string? Remarks { get; set; }
+    }
+
+    public class UpdateTaskInputDto
+    {
+        public int TaskId { get; set; }
+        public int ProjectId { get; set; }
+        public string? TaskReference { get; set; }
+        public string Title { get; set; } = string.Empty;
+        public string? Description { get; set; }
+        public int? AssignedStaffId { get; set; }
+        public string? AssignedStaffName { get; set; }
+        public DateTime? StartDate { get; set; }
+        public DateTime? ExpectedEndDate { get; set; }
+        public DateTime? ActualCompletionDate { get; set; }
+        public string Status { get; set; } = "Ongoing";
+        public string Priority { get; set; } = "Medium";
+        public int Progress { get; set; }
+        public string? Remarks { get; set; }
     }
 }

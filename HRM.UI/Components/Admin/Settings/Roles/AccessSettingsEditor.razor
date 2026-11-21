@@ -13,13 +13,32 @@
             <div class="grid grid-cols-1 gap-6 xl:grid-cols-12">
                 <section class="min-w-0 xl:col-span-8">
                     <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-                        <div class="flex items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
+                        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
                             <div class="flex items-center gap-3">
-                                <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-blue-600"><span class="material-symbols-rounded" aria-hidden="true">@(Editing ? "edit_note" : "add_circle")</span></div>
+                                <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-blue-600"><AppIcon Name="@(Editing ? "edit_note" : "add_circle")" /></div>
                                 <div><h2 class="text-sm font-semibold text-slate-900">@(Editing ? "Edit" : "Create") @Singular</h2>
                                     <p class="mt-0.5 text-xs text-slate-500">@(GroupsMode ? "Roles are user groups that bundle permissions." : "Permissions are individual actions, grouped by application area.")</p></div>
                             </div>
-                            @if (Editing) { <button type="button" class="rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-600" @onclick="NewItem">Cancel editing</button> }
+                            <div class="flex flex-wrap items-center gap-2">
+                                <div class="inline-flex rounded-xl border border-slate-200 bg-slate-100 p-1" role="tablist" aria-label="Role and permission view mode">
+                                    <button type="button"
+                                            role="tab"
+                                            aria-selected="@(activeView == "editor")"
+                                            class="rounded-lg px-3 py-1.5 text-xs font-semibold transition @(activeView == "editor" ? "bg-white text-blue-700 shadow-xs" : "text-slate-600 hover:text-slate-900")"
+                                            @onclick='() => activeView = "editor"'>
+                                        @(GroupsMode ? "Role Editor" : "Permission Editor")
+                                    </button>
+                                    <button type="button"
+                                            role="tab"
+                                            aria-selected="@(activeView == "area-map")"
+                                            class="rounded-lg px-3 py-1.5 text-xs font-semibold transition flex items-center gap-1.5 @(activeView == "area-map" ? "bg-white text-blue-700 shadow-xs" : "text-slate-600 hover:text-slate-900")"
+                                            @onclick='() => activeView = "area-map"'>
+                                        <i class="bi bi-diagram-3" aria-hidden="true"></i>
+                                        <span>Area Map</span>
+                                    </button>
+                                </div>
+                                @if (Editing) { <button type="button" class="rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-600" @onclick="NewItem">Cancel editing</button> }
+                            </div>
                         </div>
                         <div class="space-y-5 p-5">
                             @if (GroupsMode)
@@ -27,15 +46,29 @@
                                 <label class="block text-xs font-bold uppercase tracking-wide text-slate-700">Role name
                                     <input class="@InputClass" maxlength="250" @bind="role.Name" placeholder="For example Leave Approver" />
                                 </label>
-                                <p class="text-xs text-slate-500">Add or remove permissions below, then save the role to apply your changes.</p>
-                                <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                                    <PermissionAssignmentColumn @key="(role.Id, true)" Assigned="true"
-                                        Permissions="data.Permissions.Where(x => role.PermissionIds.Contains(x.Id)).ToList()"
-                                        OnMove="id => TogglePermission(id, false)" OnMoveGroup="ids => MovePermissions(ids, false)" />
-                                    <PermissionAssignmentColumn @key="(role.Id, false)" Assigned="false"
-                                        Permissions="data.Permissions.Where(x => !role.PermissionIds.Contains(x.Id)).ToList()"
-                                        OnMove="id => TogglePermission(id, true)" OnMoveGroup="ids => MovePermissions(ids, true)" />
-                                </div>
+                                @if (activeView == "area-map")
+                                {
+                                    <RoleAreaMapPanel AreaMap="data.AreaMap"
+                                                      AssignedPermissionIds="role.PermissionIds"
+                                                      SelectedRoleName="@role.Name"
+                                                      InteractiveAssignment="true"
+                                                      OnTogglePermission="args => TogglePermission(args.PermissionId, args.Assign)"
+                                                      OnMoveGroup="args => MovePermissions(args.PermissionIds, args.Assign)" />
+                                }
+                                else
+                                {
+                                    <p class="text-xs text-slate-500">Add or remove permissions below, then save the role to apply your changes.</p>
+                                    <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                                        <PermissionAssignmentColumn @key="(role.Id, true)" Assigned="true"
+                                            Permissions="data.Permissions.Where(x => role.PermissionIds.Contains(x.Id)).ToList()"
+                                            Modules="data.Modules"
+                                            OnMove="id => TogglePermission(id, false)" OnMoveGroup="ids => MovePermissions(ids, false)" />
+                                        <PermissionAssignmentColumn @key="(role.Id, false)" Assigned="false"
+                                            Permissions="data.Permissions.Where(x => !role.PermissionIds.Contains(x.Id)).ToList()"
+                                            Modules="data.Modules"
+                                            OnMove="id => TogglePermission(id, true)" OnMoveGroup="ids => MovePermissions(ids, true)" />
+                                    </div>
+                                }
                                 @if (role.Id > 0)
                                 {
                                     <section aria-label="Assigned staff" class="overflow-hidden rounded-xl border border-slate-200 bg-white">
@@ -62,17 +95,26 @@
                             }
                             else
                             {
-                                <div class="grid grid-cols-1 gap-5 md:grid-cols-2">
-                                    <label class="block text-xs font-bold uppercase tracking-wide text-slate-700">Permission key
-                                        <input class="@InputClass" maxlength="100" readonly="@(permission.Id != 0)" @bind="permission.Key" @bind:event="oninput" placeholder="Leave.Approve" />
-                                        <span class="mt-2 block text-xs font-normal normal-case text-slate-500">@(permission.Id == 0 ? $"Area: {permission.Group}. Keys determine grouping." : "Keys stay unchanged because application access checks use them.")</span>
-                                    </label>
-                                    <label class="block text-xs font-bold uppercase tracking-wide text-slate-700">Permission name<input class="@InputClass" maxlength="250" @bind="permission.Name" /></label>
-                                    <label class="block text-xs font-bold uppercase tracking-wide text-slate-700 md:col-span-2">Description<textarea class="@InputClass" rows="3" maxlength="1000" @bind="permission.Description"></textarea></label>
-                                    <label class="block text-xs font-bold uppercase tracking-wide text-slate-700">Context<select class="@InputClass" @bind="permission.ContextId">@foreach (var item in data.Contexts) { <option value="@item.Id">@item.Name</option> }</select></label>
-                                    <label class="block text-xs font-bold uppercase tracking-wide text-slate-700">Module<select class="@InputClass" @bind="permission.ModuleId"><option value="">Not assigned</option>@foreach (var item in data.Modules) { <option value="@item.Id">@item.Name</option> }</select></label>
-                                </div>
-                                @if (permission.IsSystem) { <p class="rounded-lg bg-violet-50 p-3 text-xs text-violet-700">System permission. Its key and existing assignments are preserved.</p> }
+                                @if (activeView == "area-map")
+                                {
+                                    <RoleAreaMapPanel AreaMap="data.AreaMap"
+                                                      InteractiveAssignment="false"
+                                                      OnSelectPermission="InspectPermissionById" />
+                                }
+                                else
+                                {
+                                    <div class="grid grid-cols-1 gap-5 md:grid-cols-2">
+                                        <label class="block text-xs font-bold uppercase tracking-wide text-slate-700">Permission key
+                                            <input class="@InputClass" maxlength="100" readonly="@(permission.Id != 0)" @bind="permission.Key" @bind:event="oninput" placeholder="Leave.Approve" />
+                                            <span class="mt-2 block text-xs font-normal normal-case text-slate-500">@(permission.Id == 0 ? $"Area: {permission.Group}. Keys determine grouping." : "Keys stay unchanged because application access checks use them.")</span>
+                                        </label>
+                                        <label class="block text-xs font-bold uppercase tracking-wide text-slate-700">Permission name<input class="@InputClass" maxlength="250" @bind="permission.Name" /></label>
+                                        <label class="block text-xs font-bold uppercase tracking-wide text-slate-700 md:col-span-2">Description<textarea class="@InputClass" rows="3" maxlength="1000" @bind="permission.Description"></textarea></label>
+                                        <label class="block text-xs font-bold uppercase tracking-wide text-slate-700">Context<select class="@InputClass" @bind="permission.ContextId">@foreach (var item in data.Contexts) { <option value="@item.Id">@item.Name</option> }</select></label>
+                                        <label class="block text-xs font-bold uppercase tracking-wide text-slate-700">Module<select class="@InputClass" @bind="permission.ModuleId"><option value="">Not assigned</option>@foreach (var item in data.Modules) { <option value="@item.Id">@item.Name</option> }</select></label>
+                                    </div>
+                                    @if (permission.IsSystem) { <p class="rounded-lg bg-violet-50 p-3 text-xs text-violet-700">System permission. Its key and existing assignments are preserved.</p> }
+                                }
                             }
                         </div>
                         <div class="flex gap-3 border-t border-slate-100 bg-slate-50/50 px-5 py-4">
@@ -85,7 +127,7 @@
                     <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
                         <div class="border-b border-slate-200 px-5 py-4">
                             <div class="flex items-center justify-between gap-3"><div><h2 class="text-sm font-semibold text-slate-900">@(GroupsMode ? "Roles" : "Permissions")</h2><p class="mt-0.5 text-xs text-slate-500">@(GroupsMode ? data.Roles.Count : data.Permissions.Count) configured</p></div>
-                                <button type="button" class="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-600 text-white hover:bg-blue-700" aria-label="Add @Singular" title="Add @Singular" @onclick="NewItem"><span class="material-symbols-rounded" aria-hidden="true">add</span></button></div>
+                                <button type="button" class="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-600 text-white hover:bg-blue-700" aria-label="Add @Singular" title="Add @Singular" @onclick="NewItem"><AppIcon Name="add" /></button></div>
                             <input type="search" class="mt-4 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-100" placeholder="Search…" aria-label="Search @(GroupsMode ? "roles" : "permissions")" @bind="search" @bind:event="oninput" />
                         </div>
                         <div class="overflow-y-auto" style="max-height: 680px; scrollbar-gutter: stable;" tabindex="0" aria-label="@(GroupsMode ? "Role list" : "Grouped permission list")">
@@ -120,6 +162,7 @@
 
 @code {
     [Parameter] public bool GroupsMode { get; set; }
+    [Parameter] public string? InitialView { get; set; }
     private PermissionSettingsData? data;
     private PermissionDefinitionDto permission = new();
     private AccessRoleDto role = new();
@@ -127,6 +170,7 @@
     private string? error;
     private string search = "";
     private string staffSearch = "";
+    private string activeView = "editor";
     private IEnumerable<RoleStaffDto> FilteredStaff => role.Members.Where(x =>
         x.Name.Contains(staffSearch, StringComparison.OrdinalIgnoreCase) || x.Username.Contains(staffSearch, StringComparison.OrdinalIgnoreCase));
     private string Singular => GroupsMode ? "Role" : "Permission";
@@ -135,6 +179,11 @@
     private static string ItemClass(bool selected) => "block w-full border-l-4 px-5 py-4 text-left transition-colors " + (selected ? "border-blue-600 bg-blue-50" : "border-transparent hover:bg-slate-50");
     private static bool Matches(PermissionDefinitionDto p, string query) => p.Key.Contains(query, StringComparison.OrdinalIgnoreCase) || p.Name.Contains(query, StringComparison.OrdinalIgnoreCase) || p.Group.Contains(query, StringComparison.OrdinalIgnoreCase) || p.Description.Contains(query, StringComparison.OrdinalIgnoreCase);
     private IEnumerable<PermissionDefinitionDto> FilteredPermissions => data?.Permissions.Where(x => Matches(x, search)) ?? Enumerable.Empty<PermissionDefinitionDto>();
+    protected override void OnParametersSet()
+    {
+        if (!string.IsNullOrWhiteSpace(InitialView))
+            activeView = InitialView.Equals("area-map", StringComparison.OrdinalIgnoreCase) ? "area-map" : "editor";
+    }
     protected override async Task OnInitializedAsync()
     {
         loading = true;
@@ -144,6 +193,14 @@
     }
     private void NewItem() { permission = new(); role = new(); error = null; staffSearch = ""; }
     private void SelectPermission(PermissionDefinitionDto p) { error = null; permission = new() { Id = p.Id, Key = p.Key, Name = p.Name, Description = p.Description, ContextId = p.ContextId, ModuleId = p.ModuleId, IsSystem = p.IsSystem }; }
+    private void InspectPermissionById(int id)
+    {
+        if (data?.Permissions.FirstOrDefault(x => x.Id == id) is { } found)
+        {
+            SelectPermission(found);
+            activeView = "editor";
+        }
+    }
     private void SelectRole(AccessRoleDto r) { error = null; staffSearch = ""; role = new() { Id = r.Id, Name = r.Name, MemberCount = r.MemberCount, PermissionIds = r.PermissionIds.ToList(), Members = r.Members.ToList() }; }
     private void TogglePermission(int id, bool selected) { if (selected && !role.PermissionIds.Contains(id)) role.PermissionIds.Add(id); else if (!selected) role.PermissionIds.Remove(id); }
     private void MovePermissions(List<int> ids, bool selected) { foreach (var id in ids) TogglePermission(id, selected); }

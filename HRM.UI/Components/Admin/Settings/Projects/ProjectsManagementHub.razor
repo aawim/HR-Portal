@@ -1,0 +1,1038 @@
+@page "/admin/settings/projects"
+@page "/admin/settings/projects/projects"
+@using HRM.DTOs
+@using HRM.Services.Interfaces
+@using HRM.Components.Admin.My.Workspace.Teams
+@inject ITeam TeamService
+@inject IWorkspaceDirectoryService Directory
+@inject ILogger<ProjectsManagementHub> Logger
+@inject HRM.Services.ToastService ToastService
+@inject IJSRuntime JS
+@rendermode RenderMode.InteractiveServer
+
+<PageTitle>Projects &amp; Tasks Management - Settings</PageTitle>
+
+<section class="projects-management-page w-full min-w-0 p-2 space-y-4">
+    <!-- 1. Sticky Full-Width Header Matching UI Design Standard -->
+    <header class="sticky top-0 z-30 -mx-2 -mt-2 mb-2 border-b border-slate-200 bg-white/95 backdrop-blur-xs px-3 py-3 shadow-xs flex flex-wrap items-center justify-between gap-3">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-teal-50 border border-teal-200 text-teal-700 flex items-center justify-center text-xl font-bold">
+                📁
+            </div>
+            <div>
+                <div class="flex items-center gap-2">
+                    <h1 class="text-lg font-bold text-slate-900">Projects &amp; Tasks Management</h1>
+                    <span class="rounded-full bg-teal-100 text-teal-800 px-2.5 py-0.5 text-xs font-semibold">
+                        Settings Hub
+                    </span>
+                    <span class="rounded-full bg-slate-100 text-slate-700 px-2.5 py-0.5 text-xs font-medium font-mono">
+                        @filteredProjects.Count @(filteredProjects.Count == 1 ? "project" : "projects")
+                    </span>
+                </div>
+                <p class="text-xs text-slate-500 mt-0.5">
+                    Central management for organizational projects, department milestones, deliverables, and task allocations.
+                </p>
+            </div>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2">
+            <!-- Full Width / Shrink View Toggle -->
+            <button type="button"
+                    class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition-colors"
+                    @onclick="ToggleFullWidthAsync"
+                    title="@(isFullWidth ? "Shrink View (Center standard layout)" : "Full Width (Expand across screen)")">
+                @if (isFullWidth)
+                {
+                    <svg class="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 9L4 4m0 0l5 0m-5 0l0 5m6 6l5 5m0 0l-5 0m5 0l0-5M9 15l-5 5m0 0l5 0m-5 0l0-5m6-6l5-5m0 0l-5 0m5 0l0 5" />
+                    </svg>
+                    <span>Shrink View</span>
+                }
+                else
+                {
+                    <svg class="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-5h-4m4 0v4m0-4l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                    </svg>
+                    <span>Full Width</span>
+                }
+            </button>
+
+            <!-- Refresh Button -->
+            <button type="button"
+                    class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition-colors"
+                    @onclick="LoadDataAsync"
+                    disabled="@loading">
+                <span class="@(loading ? "animate-spin" : "")">↻</span>
+                <span>Refresh</span>
+            </button>
+
+            <!-- Create Project Action Button -->
+            <button type="button"
+                    class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-teal-700 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-teal-800 transition-colors"
+                    @onclick="OpenCreateProjectModal">
+                <span>+</span>
+                <span>New Project</span>
+            </button>
+        </div>
+    </header>
+
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="flex items-center justify-between rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800" role="alert">
+            <div class="flex items-center gap-2">
+                <span>⚠️</span>
+                <span>@errorMessage</span>
+            </div>
+            <button type="button" class="text-rose-600 hover:text-rose-800 font-bold" @onclick="() => errorMessage = null">✕</button>
+        </div>
+    }
+
+    <!-- 2. Two-Panel Responsive Grid Layout -->
+    <div class="page-panels @(isFullWidth ? "page-panels-full" : "page-panels-standard")">
+
+        <!-- ========================================== -->
+        <!-- LEFT PANEL: Filter & Projects Master List  -->
+        <!-- ========================================== -->
+        <div class="page-panel-left min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-xs flex flex-col gap-3">
+            
+            <!-- Filters Bar -->
+            <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-3 flex flex-col gap-2.5">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                        <span>🔍</span>
+                        <span>Search &amp; Filter Projects</span>
+                    </span>
+                    @if (HasActiveFilters)
+                    {
+                        <button type="button"
+                                class="text-[11px] font-semibold text-teal-700 hover:text-teal-900 underline"
+                                @onclick="ResetFilters">
+                            Reset Filters
+                        </button>
+                    }
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+                    <!-- Text Search -->
+                    <div class="sm:col-span-2 lg:col-span-1">
+                        <label class="block text-[11px] font-medium text-slate-600 mb-1">Search</label>
+                        <input type="text"
+                               placeholder="Name or reference…"
+                               class="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-900 placeholder:text-slate-400 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                               @bind="searchQuery"
+                               @bind:event="oninput" />
+                    </div>
+
+                    <!-- Department Filter -->
+                    <div>
+                        <label class="block text-[11px] font-medium text-slate-600 mb-1">Department</label>
+                        <select class="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-900 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                @bind="filterDepartmentId">
+                            <option value="">All Departments</option>
+                            @foreach (var dept in departments)
+                            {
+                                <option value="@dept.OrganisationStructureId">@dept.Name</option>
+                            }
+                        </select>
+                    </div>
+
+                    <!-- Team Filter -->
+                    <div>
+                        <label class="block text-[11px] font-medium text-slate-600 mb-1">Team</label>
+                        <select class="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-900 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                @bind="filterTeamId">
+                            <option value="">All Teams</option>
+                            @foreach (var t in teams)
+                            {
+                                <option value="@t.TeamId">@t.Name</option>
+                            }
+                        </select>
+                    </div>
+
+                    <!-- Status Filter -->
+                    <div>
+                        <label class="block text-[11px] font-medium text-slate-600 mb-1">Status</label>
+                        <select class="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-900 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                @bind="filterStatus">
+                            <option value="">All Statuses</option>
+                            <option value="Planning">Planning</option>
+                            <option value="Active">Active</option>
+                            <option value="InProgress">InProgress</option>
+                            <option value="OnHold">OnHold</option>
+                            <option value="Completed">Completed</option>
+                            <option value="Cancelled">Cancelled</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Projects Table -->
+            @if (loading)
+            {
+                <div class="py-16 text-center text-xs text-slate-500">
+                    <div class="w-6 h-6 border-2 border-teal-600 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+                    Loading projects…
+                </div>
+            }
+            else if (filteredProjects.Count == 0)
+            {
+                <div class="rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center text-xs text-slate-500 space-y-2">
+                    <div class="text-3xl">📁</div>
+                    <p class="font-bold text-slate-700">No projects found</p>
+                    <p class="text-slate-500 max-w-sm mx-auto">
+                        @(HasActiveFilters ? "Try adjusting your filters or search terms." : "Get started by creating your organization's first project.")
+                    </p>
+                    <div class="pt-2">
+                        <button type="button"
+                                class="inline-flex items-center gap-1.5 rounded-lg bg-teal-700 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-teal-800 transition"
+                                @onclick="OpenCreateProjectModal">
+                            + New Project
+                        </button>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="overflow-x-auto rounded-xl border border-slate-200">
+                    <table class="w-full text-left text-xs">
+                        <thead class="bg-slate-50 text-slate-700 font-semibold border-b border-slate-200">
+                            <tr>
+                                <th class="p-2.5">Project</th>
+                                <th class="p-2.5">Unit / Team</th>
+                                <th class="p-2.5">Manager</th>
+                                <th class="p-2.5">Timeline</th>
+                                <th class="p-2.5">Progress</th>
+                                <th class="p-2.5">Status</th>
+                                <th class="p-2.5 text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            @foreach (var proj in filteredProjects)
+                            {
+                                var isSelected = selectedProject?.ProjectId == proj.ProjectId;
+                                <tr class="hover:bg-slate-50/60 transition cursor-pointer @(isSelected ? "bg-teal-50/50" : "")"
+                                    @onclick="() => SelectProjectAsync(proj.ProjectId)">
+                                    <td class="p-2.5">
+                                        <div class="flex items-center gap-2">
+                                            <span class="font-mono text-[11px] font-semibold text-teal-800 bg-teal-50 border border-teal-200 px-2 py-0.5 rounded-md shrink-0">
+                                                @proj.Reference
+                                            </span>
+                                            <div class="min-w-0">
+                                                <div class="font-bold text-slate-900 truncate" title="@proj.Name">
+                                                    @proj.Name
+                                                </div>
+                                                <div class="text-[10px] text-slate-500">
+                                                    @proj.TotalTaskCount tasks · @proj.CompletedTaskCount done
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td class="p-2.5 whitespace-nowrap">
+                                        @if (!string.IsNullOrEmpty(proj.OrganisationStructureName))
+                                        {
+                                            <span class="inline-block rounded bg-indigo-50 border border-indigo-200 text-indigo-700 px-2 py-0.5 text-[10px] font-semibold">
+                                                🏢 @proj.OrganisationStructureName
+                                            </span>
+                                        }
+                                        else if (!string.IsNullOrEmpty(proj.TeamName))
+                                        {
+                                            <span class="inline-block rounded bg-teal-50 border border-teal-200 text-teal-700 px-2 py-0.5 text-[10px] font-semibold">
+                                                🤝 @proj.TeamName
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-slate-400 text-[11px]">General Org</span>
+                                        }
+                                    </td>
+                                    <td class="p-2.5 whitespace-nowrap">
+                                        <div class="flex items-center gap-1.5">
+                                            <div class="w-5 h-5 rounded-full bg-slate-200 text-slate-700 text-[10px] font-bold flex items-center justify-center shrink-0">
+                                                @GetInitials(proj.ProjectManagerName ?? "PM")
+                                            </div>
+                                            <span class="text-slate-800 font-medium truncate max-w-[120px]" title="@proj.ProjectManagerName">
+                                                @(string.IsNullOrEmpty(proj.ProjectManagerName) ? "Unassigned" : proj.ProjectManagerName)
+                                            </span>
+                                        </div>
+                                    </td>
+                                    <td class="p-2.5 whitespace-nowrap text-slate-600 text-[11px]">
+                                        @proj.StartDate.ToString("dd MMM yyyy")
+                                        @if (proj.PlannedEndDate.HasValue)
+                                        {
+                                            <span class="text-slate-400"> → </span>
+                                            <span>@proj.PlannedEndDate.Value.ToString("dd MMM yyyy")</span>
+                                        }
+                                    </td>
+                                    <td class="p-2.5 whitespace-nowrap">
+                                        <div class="flex items-center gap-2">
+                                            <div class="w-16 h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                                                <div class="h-full bg-teal-600 rounded-full transition-all" style="width: @(Math.Clamp(proj.ProgressPercentage, 0, 100))%"></div>
+                                            </div>
+                                            <span class="text-[11px] font-semibold text-slate-700 font-mono">@proj.ProgressPercentage%</span>
+                                        </div>
+                                    </td>
+                                    <td class="p-2.5 whitespace-nowrap">
+                                        <span class="rounded-full px-2.5 py-0.5 text-[11px] font-semibold @GetStatusBadgeClass(proj.Status)">
+                                            @proj.Status
+                                        </span>
+                                    </td>
+                                    <td class="p-2.5 text-right whitespace-nowrap" @onclick:stopPropagation>
+                                        <div class="inline-flex items-center gap-1">
+                                            <button type="button"
+                                                    class="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 shadow-2xs hover:bg-slate-50 transition"
+                                                    @onclick="() => SelectProjectAsync(proj.ProjectId)"
+                                                    title="Inspect Project">
+                                                View
+                                            </button>
+                                            <button type="button"
+                                                    class="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2 py-1 text-[11px] font-semibold text-blue-700 shadow-2xs hover:bg-blue-50 transition"
+                                                    @onclick="() => OpenEditProjectModal(proj)"
+                                                    title="Edit Project">
+                                                Edit
+                                            </button>
+                                            <button type="button"
+                                                    class="inline-flex items-center gap-1 rounded-lg border border-rose-300 bg-white px-2 py-1 text-[11px] font-semibold text-rose-700 shadow-2xs hover:bg-rose-50 transition"
+                                                    @onclick="() => PromptDeleteProject(proj)"
+                                                    title="Delete Project">
+                                                Delete
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+
+        <!-- ================================================= -->
+        <!-- RIGHT PANEL: Selected Project Details & Tasks     -->
+        <!-- ================================================= -->
+        <aside class="page-panel-right min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-xs flex flex-col gap-3">
+            @if (selectedProject == null)
+            {
+                <div class="h-full flex flex-col items-center justify-center text-slate-400 py-16 text-center space-y-2">
+                    <div class="text-5xl mb-2">👈</div>
+                    <h3 class="text-sm font-bold text-slate-700">No Project Selected</h3>
+                    <p class="text-xs text-slate-500 max-w-xs">
+                        Select any project from the left panel to inspect deliverables, milestone progress, team allocations, and manage tasks.
+                    </p>
+                </div>
+            }
+            else
+            {
+                <!-- Project Detail Header Card -->
+                <div class="rounded-xl border border-teal-200 bg-teal-50/40 p-3.5 flex flex-col gap-2.5">
+                    <div class="flex items-start justify-between gap-2">
+                        <div class="min-w-0">
+                            <div class="flex items-center gap-2 mb-1 flex-wrap">
+                                <span class="font-mono text-xs font-bold text-teal-800 bg-teal-100/80 border border-teal-300 px-2 py-0.5 rounded-md">
+                                    @selectedProject.Reference
+                                </span>
+                                <span class="rounded-full px-2.5 py-0.5 text-xs font-semibold @GetStatusBadgeClass(selectedProject.Status)">
+                                    @selectedProject.Status
+                                </span>
+                                @if (!string.IsNullOrEmpty(selectedProject.OrganisationStructureName))
+                                {
+                                    <span class="rounded bg-indigo-100 text-indigo-800 px-2 py-0.5 text-[10px] font-semibold">
+                                        🏢 @selectedProject.OrganisationStructureName
+                                    </span>
+                                }
+                                @if (!string.IsNullOrEmpty(selectedProject.TeamName))
+                                {
+                                    <span class="rounded bg-teal-100 text-teal-800 px-2 py-0.5 text-[10px] font-semibold">
+                                        🤝 @selectedProject.TeamName
+                                    </span>
+                                }
+                            </div>
+                            <h2 class="text-sm font-bold text-slate-900 leading-snug">
+                                @selectedProject.Name
+                            </h2>
+                        </div>
+
+                        <div class="flex items-center gap-1.5 shrink-0">
+                            <button type="button"
+                                    class="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-blue-700 shadow-2xs hover:bg-blue-50 transition"
+                                    @onclick="() => OpenEditProjectModal(selectedProject)">
+                                <span>✏️</span>
+                                <span>Edit</span>
+                            </button>
+                            <button type="button"
+                                    class="inline-flex items-center gap-1 rounded-lg border border-rose-300 bg-white px-2.5 py-1 text-xs font-semibold text-rose-700 shadow-2xs hover:bg-rose-50 transition"
+                                    @onclick="() => PromptDeleteProject(selectedProject)">
+                                <span>🗑️</span>
+                                <span>Delete</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    @if (!string.IsNullOrWhiteSpace(selectedProject.Description))
+                    {
+                        <p class="text-xs text-slate-600 bg-white/70 p-2 rounded-lg border border-slate-200/60 leading-relaxed">
+                            @selectedProject.Description
+                        </p>
+                    }
+
+                    <!-- Metadata Grid -->
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs pt-1">
+                        <div class="bg-white/80 p-2 rounded-lg border border-slate-200/60">
+                            <span class="text-[10px] font-semibold text-slate-500 block uppercase tracking-wider">Manager</span>
+                            <span class="font-bold text-slate-800 truncate block mt-0.5" title="@selectedProject.ProjectManagerName">
+                                @(string.IsNullOrEmpty(selectedProject.ProjectManagerName) ? "Unassigned" : selectedProject.ProjectManagerName)
+                            </span>
+                        </div>
+                        <div class="bg-white/80 p-2 rounded-lg border border-slate-200/60">
+                            <span class="text-[10px] font-semibold text-slate-500 block uppercase tracking-wider">Start Date</span>
+                            <span class="font-bold text-slate-800 block mt-0.5 font-mono">
+                                @selectedProject.StartDate.ToString("dd MMM yyyy")
+                            </span>
+                        </div>
+                        <div class="bg-white/80 p-2 rounded-lg border border-slate-200/60">
+                            <span class="text-[10px] font-semibold text-slate-500 block uppercase tracking-wider">Target End</span>
+                            <span class="font-bold text-slate-800 block mt-0.5 font-mono">
+                                @(selectedProject.PlannedEndDate.HasValue ? selectedProject.PlannedEndDate.Value.ToString("dd MMM yyyy") : "Open")
+                            </span>
+                        </div>
+                        <div class="bg-white/80 p-2 rounded-lg border border-slate-200/60">
+                            <span class="text-[10px] font-semibold text-slate-500 block uppercase tracking-wider">Completion</span>
+                            <div class="flex items-center gap-1.5 mt-0.5">
+                                <div class="flex-1 h-1.5 rounded-full bg-slate-200 overflow-hidden">
+                                    <div class="h-full bg-teal-600 rounded-full" style="width: @(Math.Clamp(selectedProject.ProgressPercentage, 0, 100))%"></div>
+                                </div>
+                                <span class="font-mono text-[11px] font-bold text-slate-800">@selectedProject.ProgressPercentage%</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Assigned Team Members Section -->
+                <div class="rounded-xl border border-slate-200 bg-white p-3 flex flex-col gap-2">
+                    <div class="flex items-center justify-between">
+                        <h3 class="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                            <span>👥 Project Team Members</span>
+                            <span class="rounded-full bg-slate-100 text-slate-600 px-2 py-0.2 text-[10px] font-semibold">
+                                @selectedProject.Members.Count
+                            </span>
+                        </h3>
+                    </div>
+
+                    @if (selectedProject.Members.Count == 0)
+                    {
+                        <p class="text-xs text-slate-400 italic py-1">No staff members directly assigned to this project yet.</p>
+                    }
+                    else
+                    {
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            @foreach (var member in selectedProject.Members)
+                            {
+                                <div @key="member.ProjectMemberId" class="flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-100 text-xs">
+                                    <div class="flex items-center gap-2 min-w-0">
+                                        <div class="w-6 h-6 rounded-full bg-teal-100 text-teal-800 font-bold flex items-center justify-center text-[10px] shrink-0">
+                                            @GetInitials(member.StaffName)
+                                        </div>
+                                        <div class="min-w-0">
+                                            <div class="font-semibold text-slate-800 truncate" title="@member.StaffName">
+                                                @member.StaffName
+                                            </div>
+                                            <div class="text-[10px] text-slate-500">
+                                                Role: @(string.IsNullOrEmpty(member.Role) ? "Contributor" : member.Role)
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <span class="text-[10px] text-slate-400 font-mono shrink-0">
+                                        @member.AssignedDate.ToString("dd MMM yyyy")
+                                    </span>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+
+                <!-- Tasks & Deliverables Section -->
+                <div class="rounded-xl border border-slate-200 bg-white p-3 flex flex-col gap-3">
+                    <div class="flex items-center justify-between pb-2 border-b border-slate-100 flex-wrap gap-2">
+                        <div>
+                            <h3 class="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                                <span>📋 Deliverables &amp; Tasks</span>
+                                <span class="rounded-full bg-teal-100 text-teal-800 px-2 py-0.2 text-[10px] font-semibold">
+                                    @selectedProject.Tasks.Count
+                                </span>
+                            </h3>
+                            <p class="text-[11px] text-slate-500">
+                                Track task milestones, priority levels, and member completion progress.
+                            </p>
+                        </div>
+                        <button type="button"
+                                class="inline-flex items-center gap-1.5 rounded-lg bg-teal-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-teal-800 shadow-xs transition"
+                                @onclick="OpenCreateTaskModal">
+                            <span>+</span>
+                            <span>Add Task</span>
+                        </button>
+                    </div>
+
+                    @if (selectedProject.Tasks.Count == 0)
+                    {
+                        <div class="py-8 text-center text-xs text-slate-500 rounded-xl border border-dashed border-slate-200 p-4 space-y-1">
+                            <p class="font-semibold text-slate-700">No tasks created for this project</p>
+                            <p class="text-slate-400">Click "+ Add Task" above to assign the first task.</p>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="space-y-2">
+                            @foreach (var task in selectedProject.Tasks)
+                            {
+                                <div @key="task.TaskId" class="rounded-xl border border-slate-200 hover:border-slate-300 bg-slate-50/50 p-3 flex flex-col gap-2 transition">
+                                    <div class="flex items-start justify-between gap-2">
+                                        <div class="min-w-0">
+                                            <div class="flex items-center gap-1.5 mb-1 flex-wrap">
+                                                <span class="font-mono text-[10px] font-bold text-slate-700 bg-white border border-slate-200 px-1.5 py-0.2 rounded">
+                                                    @(string.IsNullOrEmpty(task.TaskReference) ? $"TSK-{task.TaskId}" : task.TaskReference)
+                                                </span>
+                                                <span class="rounded px-2 py-0.2 text-[10px] font-semibold @GetPriorityBadgeClass(task.Priority)">
+                                                    @task.Priority
+                                                </span>
+                                                <span class="rounded px-2 py-0.2 text-[10px] font-semibold @GetStatusBadgeClass(task.Status)">
+                                                    @task.Status
+                                                </span>
+                                            </div>
+                                            <h4 class="font-bold text-xs text-slate-900 leading-snug">
+                                                @task.Title
+                                            </h4>
+                                        </div>
+
+                                        <div class="inline-flex items-center gap-1 shrink-0">
+                                            <button type="button"
+                                                    class="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2 py-1 text-[11px] font-semibold text-blue-700 shadow-2xs hover:bg-blue-50 transition"
+                                                    @onclick="() => OpenEditTaskModal(task)">
+                                                Edit
+                                            </button>
+                                            <button type="button"
+                                                    class="inline-flex items-center gap-1 rounded-lg border border-rose-300 bg-white px-2 py-1 text-[11px] font-semibold text-rose-700 shadow-2xs hover:bg-rose-50 transition"
+                                                    @onclick="() => PromptDeleteTask(task)">
+                                                Delete
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    @if (!string.IsNullOrWhiteSpace(task.Description))
+                                    {
+                                        <p class="text-[11px] text-slate-600 leading-relaxed bg-white/60 p-2 rounded border border-slate-100">
+                                            @task.Description
+                                        </p>
+                                    }
+
+                                    <!-- Task Metadata -->
+                                    <div class="flex items-center justify-between text-[11px] text-slate-500 pt-1 border-t border-slate-200/60 flex-wrap gap-2">
+                                        <div class="flex items-center gap-3">
+                                            <span>
+                                                👤 <strong>@(string.IsNullOrEmpty(task.AssignedStaffName) ? "Unassigned" : task.AssignedStaffName)</strong>
+                                            </span>
+                                            @if (task.ExpectedEndDate.HasValue)
+                                            {
+                                                <span class="font-mono">
+                                                    📅 Due: @task.ExpectedEndDate.Value.ToString("dd MMM yyyy")
+                                                </span>
+                                            }
+                                        </div>
+
+                                        <div class="flex items-center gap-2">
+                                            <div class="w-16 h-1.5 rounded-full bg-slate-200 overflow-hidden">
+                                                <div class="h-full bg-teal-600 rounded-full" style="width: @(Math.Clamp(task.Progress, 0, 100))%"></div>
+                                            </div>
+                                            <span class="font-mono font-semibold text-slate-700 text-[10px]">@task.Progress%</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+        </aside>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- MODALS: Create, Edit, Delete Confirmations -->
+    <!-- ========================================== -->
+
+    <!-- 1. Create Project Modal -->
+    <CreateProjectModal Visible="@showCreateProjectModal"
+                        Departments="@departments"
+                        Teams="@teams"
+                        StaffOptions="@staffOptions"
+                        OnSaved="HandleProjectCreatedAsync"
+                        OnClose="() => showCreateProjectModal = false" />
+
+    <!-- 2. Edit Project Modal -->
+    <EditProjectModal Visible="@showEditProjectModal"
+                      Project="@projectToEdit"
+                      Departments="@departments"
+                      Teams="@teams"
+                      StaffOptions="@staffOptions"
+                      OnSaved="HandleProjectUpdatedAsync"
+                      OnClose="() => showEditProjectModal = false" />
+
+    <!-- 3. Create Task Modal -->
+    <CreateTaskModal Visible="@showCreateTaskModal"
+                     ProjectId="@(selectedProject?.ProjectId ?? 0)"
+                     ProjectName="@(selectedProject?.Name)"
+                     StaffOptions="@staffOptions"
+                     OnSaved="HandleTaskCreatedAsync"
+                     OnClose="() => showCreateTaskModal = false" />
+
+    <!-- 4. Edit Task Modal -->
+    <EditTaskModal Visible="@showEditTaskModal"
+                   Task="@taskToEdit"
+                   StaffOptions="@staffOptions"
+                   OnSaved="HandleTaskUpdatedAsync"
+                   OnClose="() => showEditTaskModal = false" />
+
+    <!-- 5. Delete Project Confirmation Modal -->
+    @if (showDeleteProjectConfirm && projectToDelete != null)
+    {
+        <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4" role="dialog" aria-modal="true">
+            <div class="fixed inset-0" @onclick="() => showDeleteProjectConfirm = false"></div>
+            <div class="relative w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl space-y-4 z-10" @onclick:stopPropagation>
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-full bg-rose-100 text-rose-700 flex items-center justify-center text-xl shrink-0">
+                        ⚠️
+                    </div>
+                    <div>
+                        <h3 class="text-sm font-bold text-slate-900">Delete Project?</h3>
+                        <p class="text-xs text-slate-500 mt-0.5">This action will soft-delete the project and archive all associated tasks and allocations.</p>
+                    </div>
+                </div>
+
+                <div class="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs space-y-1">
+                    <div class="font-mono text-[11px] font-bold text-teal-800">@projectToDelete.Reference</div>
+                    <div class="font-semibold text-slate-800">@projectToDelete.Name</div>
+                </div>
+
+                <div class="flex items-center justify-end gap-2 border-t border-slate-100 pt-3">
+                    <button type="button"
+                            class="rounded-lg border border-slate-300 bg-white px-3.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition"
+                            @onclick="() => showDeleteProjectConfirm = false"
+                            disabled="@isDeleting">
+                        Cancel
+                    </button>
+                    <button type="button"
+                            class="inline-flex items-center gap-1.5 rounded-lg bg-rose-600 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-rose-700 transition disabled:opacity-50"
+                            @onclick="ConfirmDeleteProjectAsync"
+                            disabled="@isDeleting">
+                        @if (isDeleting)
+                        {
+                            <span class="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                            <span>Deleting…</span>
+                        }
+                        else
+                        {
+                            <span>Yes, Delete Project</span>
+                        }
+                    </button>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- 6. Delete Task Confirmation Modal -->
+    @if (showDeleteTaskConfirm && taskToDelete != null)
+    {
+        <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4" role="dialog" aria-modal="true">
+            <div class="fixed inset-0" @onclick="() => showDeleteTaskConfirm = false"></div>
+            <div class="relative w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl space-y-4 z-10" @onclick:stopPropagation>
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-full bg-rose-100 text-rose-700 flex items-center justify-center text-xl shrink-0">
+                        ⚠️
+                    </div>
+                    <div>
+                        <h3 class="text-sm font-bold text-slate-900">Delete Task?</h3>
+                        <p class="text-xs text-slate-500 mt-0.5">Are you sure you want to remove this deliverable task?</p>
+                    </div>
+                </div>
+
+                <div class="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs space-y-1">
+                    <div class="font-mono text-[11px] font-bold text-slate-700">@(string.IsNullOrEmpty(taskToDelete.TaskReference) ? $"TSK-{taskToDelete.TaskId}" : taskToDelete.TaskReference)</div>
+                    <div class="font-semibold text-slate-800">@taskToDelete.Title</div>
+                </div>
+
+                <div class="flex items-center justify-end gap-2 border-t border-slate-100 pt-3">
+                    <button type="button"
+                            class="rounded-lg border border-slate-300 bg-white px-3.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition"
+                            @onclick="() => showDeleteTaskConfirm = false"
+                            disabled="@isDeleting">
+                        Cancel
+                    </button>
+                    <button type="button"
+                            class="inline-flex items-center gap-1.5 rounded-lg bg-rose-600 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-rose-700 transition disabled:opacity-50"
+                            @onclick="ConfirmDeleteTaskAsync"
+                            disabled="@isDeleting">
+                        @if (isDeleting)
+                        {
+                            <span class="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                            <span>Deleting…</span>
+                        }
+                        else
+                        {
+                            <span>Yes, Delete Task</span>
+                        }
+                    </button>
+                </div>
+            </div>
+        </div>
+    }
+
+</section>
+
+@code {
+    private List<TeamProjectDto> allProjects = new();
+    private List<OrganisationStructureDropdownDto> departments = new();
+    private List<TeamDto> teams = new();
+    private List<CreateProjectModal.StaffOptionDto> staffOptions = new();
+
+    private TeamProjectDto? selectedProject;
+    private bool loading = true;
+    private bool isDeleting;
+    private string? errorMessage;
+
+    // Filters
+    private string searchQuery = "";
+    private string filterDepartmentId = "";
+    private string filterTeamId = "";
+    private string filterStatus = "";
+
+    // Full width persistence
+    private bool isFullWidth;
+
+    // Modals
+    private bool showCreateProjectModal;
+    private bool showEditProjectModal;
+    private TeamProjectDto? projectToEdit;
+    private bool showDeleteProjectConfirm;
+    private TeamProjectDto? projectToDelete;
+
+    private bool showCreateTaskModal;
+    private bool showEditTaskModal;
+    private TeamProjectTaskDto? taskToEdit;
+    private bool showDeleteTaskConfirm;
+    private TeamProjectTaskDto? taskToDelete;
+
+    private bool HasActiveFilters =>
+        !string.IsNullOrWhiteSpace(searchQuery) ||
+        !string.IsNullOrWhiteSpace(filterDepartmentId) ||
+        !string.IsNullOrWhiteSpace(filterTeamId) ||
+        !string.IsNullOrWhiteSpace(filterStatus);
+
+    private List<TeamProjectDto> filteredProjects => allProjects
+        .Where(p => string.IsNullOrWhiteSpace(searchQuery) ||
+                    p.Name.Contains(searchQuery, StringComparison.OrdinalIgnoreCase) ||
+                    p.Reference.Contains(searchQuery, StringComparison.OrdinalIgnoreCase))
+        .Where(p => string.IsNullOrWhiteSpace(filterDepartmentId) ||
+                    (int.TryParse(filterDepartmentId, out var deptId) && p.OrganisationStructureId == deptId))
+        .Where(p => string.IsNullOrWhiteSpace(filterTeamId) ||
+                    (int.TryParse(filterTeamId, out var tId) && p.TeamId == tId))
+        .Where(p => string.IsNullOrWhiteSpace(filterStatus) ||
+                    string.Equals(p.Status, filterStatus, StringComparison.OrdinalIgnoreCase))
+        .OrderByDescending(p => p.StartDate)
+        .ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDataAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                var saved = await JS.InvokeAsync<string?>("localStorage.getItem", "hrm.projects-hub.full-width");
+                if (bool.TryParse(saved, out var val) && val != isFullWidth)
+                {
+                    isFullWidth = val;
+                    StateHasChanged();
+                }
+            }
+            catch { }
+        }
+    }
+
+    private async Task ToggleFullWidthAsync()
+    {
+        isFullWidth = !isFullWidth;
+        try
+        {
+            await JS.InvokeVoidAsync("localStorage.setItem", "hrm.projects-hub.full-width", isFullWidth.ToString().ToLowerInvariant());
+        }
+        catch { }
+    }
+
+    private async Task LoadDataAsync()
+    {
+        try
+        {
+            loading = true;
+            errorMessage = null;
+
+            // Load all projects
+            allProjects = await TeamService.GetAllProjectsAsync() ?? new();
+
+            // Load departments / structures
+            departments = await TeamService.GetOrganisationStructuresAsync() ?? new();
+
+            // Load teams
+            teams = await TeamService.GetMyTeamsAsync() ?? new();
+
+            // Load staff options for assignment & managers
+            try
+            {
+                var searchRes = await Directory.SearchAsync(new WorkspaceSearchFilter("", StaffOnly: true));
+                if (searchRes?.Staff != null && searchRes.Staff.Count > 0)
+                {
+                    staffOptions = searchRes.Staff.Select(s => new CreateProjectModal.StaffOptionDto
+                    {
+                        StaffId = s.Id,
+                        FullName = s.Name
+                    }).ToList();
+                }
+            }
+            catch { }
+
+            if (staffOptions.Count == 0 && teams.Count > 0)
+            {
+                staffOptions = teams.SelectMany(t => t.Staffs)
+                    .GroupBy(s => s.StaffId)
+                    .Select(g => new CreateProjectModal.StaffOptionDto
+                    {
+                        StaffId = g.Key,
+                        FullName = g.First().FullName
+                    }).ToList();
+            }
+
+            // Restore selected project if possible
+            if (selectedProject != null)
+            {
+                var refreshed = allProjects.FirstOrDefault(p => p.ProjectId == selectedProject.ProjectId);
+                if (refreshed != null)
+                {
+                    selectedProject = await TeamService.GetProjectDetailsAsync(refreshed.ProjectId) ?? refreshed;
+                }
+                else
+                {
+                    selectedProject = allProjects.FirstOrDefault();
+                    if (selectedProject != null)
+                    {
+                        selectedProject = await TeamService.GetProjectDetailsAsync(selectedProject.ProjectId) ?? selectedProject;
+                    }
+                }
+            }
+            else if (allProjects.Count > 0)
+            {
+                selectedProject = await TeamService.GetProjectDetailsAsync(allProjects[0].ProjectId) ?? allProjects[0];
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to load projects management data");
+            errorMessage = "Failed to load projects. Please try refreshing.";
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private async Task SelectProjectAsync(int projectId)
+    {
+        try
+        {
+            var details = await TeamService.GetProjectDetailsAsync(projectId);
+            selectedProject = details ?? allProjects.FirstOrDefault(p => p.ProjectId == projectId);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to select project {ProjectId}", projectId);
+            selectedProject = allProjects.FirstOrDefault(p => p.ProjectId == projectId);
+        }
+    }
+
+    private void ResetFilters()
+    {
+        searchQuery = "";
+        filterDepartmentId = "";
+        filterTeamId = "";
+        filterStatus = "";
+    }
+
+    // Project Modals & Operations
+    private void OpenCreateProjectModal()
+    {
+        showCreateProjectModal = true;
+    }
+
+    private async Task HandleProjectCreatedAsync(int newProjectId)
+    {
+        showCreateProjectModal = false;
+        await LoadDataAsync();
+        await SelectProjectAsync(newProjectId);
+    }
+
+    private void OpenEditProjectModal(TeamProjectDto project)
+    {
+        projectToEdit = project;
+        showEditProjectModal = true;
+    }
+
+    private async Task HandleProjectUpdatedAsync()
+    {
+        showEditProjectModal = false;
+        await LoadDataAsync();
+        if (projectToEdit != null)
+        {
+            await SelectProjectAsync(projectToEdit.ProjectId);
+        }
+    }
+
+    private void PromptDeleteProject(TeamProjectDto project)
+    {
+        projectToDelete = project;
+        showDeleteProjectConfirm = true;
+    }
+
+    private async Task ConfirmDeleteProjectAsync()
+    {
+        if (projectToDelete == null) return;
+        try
+        {
+            isDeleting = true;
+            var ok = await TeamService.DeleteProjectAsync(projectToDelete.ProjectId);
+            if (ok)
+            {
+                ToastService.Success("Project deleted successfully.");
+                showDeleteProjectConfirm = false;
+                if (selectedProject?.ProjectId == projectToDelete.ProjectId)
+                {
+                    selectedProject = null;
+                }
+                projectToDelete = null;
+                await LoadDataAsync();
+            }
+            else
+            {
+                errorMessage = "Failed to delete project.";
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to delete project");
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isDeleting = false;
+        }
+    }
+
+    // Task Modals & Operations
+    private void OpenCreateTaskModal()
+    {
+        showCreateTaskModal = true;
+    }
+
+    private async Task HandleTaskCreatedAsync(int newTaskId)
+    {
+        showCreateTaskModal = false;
+        if (selectedProject != null)
+        {
+            await SelectProjectAsync(selectedProject.ProjectId);
+            // Refresh total counts in list
+            allProjects = await TeamService.GetAllProjectsAsync() ?? new();
+        }
+    }
+
+    private void OpenEditTaskModal(TeamProjectTaskDto task)
+    {
+        taskToEdit = task;
+        showEditTaskModal = true;
+    }
+
+    private async Task HandleTaskUpdatedAsync()
+    {
+        showEditTaskModal = false;
+        if (selectedProject != null)
+        {
+            await SelectProjectAsync(selectedProject.ProjectId);
+            allProjects = await TeamService.GetAllProjectsAsync() ?? new();
+        }
+    }
+
+    private void PromptDeleteTask(TeamProjectTaskDto task)
+    {
+        taskToDelete = task;
+        showDeleteTaskConfirm = true;
+    }
+
+    private async Task ConfirmDeleteTaskAsync()
+    {
+        if (taskToDelete == null) return;
+        try
+        {
+            isDeleting = true;
+            var ok = await TeamService.DeleteTaskAsync(taskToDelete.TaskId);
+            if (ok)
+            {
+                ToastService.Success("Task deleted successfully.");
+                showDeleteTaskConfirm = false;
+                taskToDelete = null;
+                if (selectedProject != null)
+                {
+                    await SelectProjectAsync(selectedProject.ProjectId);
+                    allProjects = await TeamService.GetAllProjectsAsync() ?? new();
+                }
+            }
+            else
+            {
+                errorMessage = "Failed to delete task.";
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to delete task");
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isDeleting = false;
+        }
+    }
+
+    // Helpers
+    private string GetStatusBadgeClass(string? status) => (status?.ToLowerInvariant()) switch
+    {
+        "completed" or "done" or "resolved" => "bg-emerald-100 text-emerald-800",
+        "inprogress" or "active" or "ongoing" => "bg-blue-100 text-blue-800",
+        "planning" or "todo" => "bg-amber-100 text-amber-800",
+        "onhold" or "review" => "bg-purple-100 text-purple-800",
+        "cancelled" or "rejected" => "bg-rose-100 text-rose-800",
+        _ => "bg-slate-100 text-slate-700"
+    };
+
+    private string GetPriorityBadgeClass(string? priority) => (priority?.ToLowerInvariant()) switch
+    {
+        "urgent" or "critical" => "bg-rose-100 text-rose-800 border border-rose-200",
+        "high" => "bg-amber-100 text-amber-800 border border-amber-200",
+        "medium" => "bg-blue-100 text-blue-800 border border-blue-200",
+        "low" => "bg-slate-100 text-slate-700 border border-slate-200",
+        _ => "bg-slate-100 text-slate-700"
+    };
+
+    private string GetInitials(string fullName)
+    {
+        if (string.IsNullOrWhiteSpace(fullName)) return "U";
+        var parts = fullName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length == 1) return parts[0][0].ToString().ToUpperInvariant();
+        return $"{parts[0][0]}{parts[^1][0]}".ToUpperInvariant();
+    }
+}

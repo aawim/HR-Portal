@@ -1,50 +1,32 @@
 using HRM.Api.Authentication;
 using HRM.Hosting;
 using HRM.Api.Infrastructure;
-
+using Microsoft.AspNetCore.Server.Kestrel.Https;
 using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.EntityFrameworkCore;
 using HRM.Models;
-using HRM.Services;
-using HRM.Services.Interfaces;
 using HRM;
-
-
-using HRM.Services.Repositories;
-using HRM.Caching;
-using HRM.WorkPlanning.Abstractions;
-using HRM.WorkPlanning.Builders;
-using HRM.WorkPlanning.Services;
-
-using HRM.Services.WorkPlanning;
-using HRM.Services.Attendance.Repositories;
-using HRM.Services.Attendance.Abstraction;
-using HRM.Services.Attendance.Abstraction.Services;
-using HRM.WorkPlanning.Services.Schedules;
-using HRM.WorkPlanning.Abstractions.Schedules;
-using HRM.WorkPlanning.Abstractions.JobWorkTemplateAssignment;
-using HRM.WorkPlanning.Services.JobWorkTemplateAssignmentService;
-using HRM.Services.Interfaces.Profile;
-using HRM.Services.Interfaces.Leave;
-using HRM.Services.Leave;
-using HRM.Services.JobLeaveTypes;
-using HRM.Services.Interfaces.JobLeaveTypes;
-using HRM.Services.JobPosition;
-using HRM.Services.Interfaces.JobPosition;
-using HRM.Services.Interfaces.LeaveType;
-
-using HRM.Services.Attendance.AttendancePlan;
-using HRM.WorkPlanning;
-using HRM.Models.Archives;
-using HRM.Services.Attendance.Evaluation;
-using HRM.Services.Attendance;
-using HRM.Services.Interfaces.AppovalWF;
+using HRM.ErrorLogs.Extensions;
+using HRM.ErrorLogs.Services;
+using HRM.Services.Diagnostics;
+using HRM.AuditLogs.Abstractions;
+using HRM.AuditLogs.Extensions;
+using HRM.AuditLogs.Interceptors;
+using HRM.AuditLogs.Persistence;
+using HRM.ActivityLogs.Abstractions;
+using HRM.ActivityLogs.Extensions;
+using HRM.ActivityLogs.Persistence;
 
 
 
 var builder = WebApplication.CreateBuilder(args);
+// Edge ingestion independently validates an enrolled client certificate.  Other HTTPS endpoints remain usable without one.
+builder.WebHost.ConfigureKestrel(options => options.ConfigureHttpsDefaults(https =>
+{
+    https.ClientCertificateMode = ClientCertificateMode.AllowCertificate;
+    https.AllowAnyClientCertificate();
+}));
 RuntimeRequirements.RequireCurrent(builder.Environment);
 var publicOrigin = HRM.Application.Transport.DeploymentOrigin.Require(builder.Configuration["Application:PublicOrigin"], "Application:PublicOrigin", !builder.Environment.IsDevelopment());
 builder.Services.AddProtectedHostKeys(builder.Configuration, builder.Environment, "HRM.Api");
@@ -55,14 +37,56 @@ var configuredAuditConnection = builder.Configuration.GetConnectionString("Audit
 if (string.IsNullOrWhiteSpace(configuredAuditConnection)) configuredAuditConnection = builder.Configuration["AuditConnectionStrings:DefaultConnection"];
 var auditConnection = HRM.Helpers.DatabaseConnectionPolicy.Validate(
     configuredAuditConnection, builder.Environment.IsDevelopment(), "ConnectionStrings:AuditConnection");
-builder.Services.AddDbContextFactory<HrmTeContext>(options => options.UseSqlServer(mainConnection));
+var configuredErrorLogsConnection = builder.Configuration.GetConnectionString("ErrorLogsConnection");
+if (string.IsNullOrWhiteSpace(configuredErrorLogsConnection))
+{
+    var csb = new Microsoft.Data.SqlClient.SqlConnectionStringBuilder(mainConnection) { InitialCatalog = "HrmErrorLogs" };
+    configuredErrorLogsConnection = csb.ConnectionString;
+}
+var errorLogsConnection = HRM.Helpers.DatabaseConnectionPolicy.Validate(
+    configuredErrorLogsConnection, builder.Environment.IsDevelopment(), "ConnectionStrings:ErrorLogsConnection");
+var configuredAuditLogsConnection = builder.Configuration.GetConnectionString("AuditLogsConnection");
+if (string.IsNullOrWhiteSpace(configuredAuditLogsConnection))
+{
+    var csb = new Microsoft.Data.SqlClient.SqlConnectionStringBuilder(mainConnection) { InitialCatalog = "HRMAuditLogs" };
+    configuredAuditLogsConnection = csb.ConnectionString;
+}
+var auditLogsConnection = HRM.Helpers.DatabaseConnectionPolicy.Validate(
+    configuredAuditLogsConnection, builder.Environment.IsDevelopment(), "ConnectionStrings:AuditLogsConnection");
+builder.Services.AddSingleton<IAuditContextAccessor, HrmAuditContextAccessor>();
+builder.Services.AddAuditLogs(builder.Configuration, opt =>
+{
+    opt.ConnectionString = auditLogsConnection;
+});
 
-builder.Services.AddDbContextFactory<AuditDbContext>(options =>
+var configuredActivityLogsConnection = builder.Configuration.GetConnectionString("ActivityLogsConnection");
+if (string.IsNullOrWhiteSpace(configuredActivityLogsConnection))
+{
+    var csb = new Microsoft.Data.SqlClient.SqlConnectionStringBuilder(mainConnection) { InitialCatalog = "HRMActivityLogs" };
+    configuredActivityLogsConnection = csb.ConnectionString;
+}
+var activityLogsConnection = HRM.Helpers.DatabaseConnectionPolicy.Validate(
+    configuredActivityLogsConnection, builder.Environment.IsDevelopment(), "ConnectionStrings:ActivityLogsConnection");
+builder.Services.AddSingleton<IActivityContextAccessor, HrmActivityContextAccessor>();
+builder.Services.AddActivityLogs(builder.Configuration, includeBackgroundWorkers: true, configure: opt =>
+{
+    opt.ConnectionString = activityLogsConnection;
+});
+
+builder.Services.AddDbContextFactory<HrmTeContext>((sp, options) =>
+{
+    options.UseSqlServer(mainConnection);
+    options.AddInterceptors(sp.GetRequiredService<AuditSaveChangesInterceptor>());
+});
+
+builder.Services.AddDbContextFactory<HRM.AuditDbContext>(options =>
     options.UseSqlServer(auditConnection));
 
 
 builder.Logging.AddDebug();
 builder.Logging.AddConsole();
+builder.Services.AddSingleton<IErrorLogStore>(sp => new SqlErrorLogStore(builder.Configuration, sp.GetService<ILogger<SqlErrorLogStore>>(), errorLogsConnection));
+builder.Services.AddHrmErrorLogging("HRM.Api");
 builder.Services.AddHrmBackendServices();
 builder.Services.AddResponseCompression(options =>
 {
@@ -76,13 +100,27 @@ builder.Services.Configure<Microsoft.AspNetCore.ResponseCompression.GzipCompress
     options => options.Level = System.IO.Compression.CompressionLevel.Fastest);
 
 builder.Services.AddEfaasAuthentication(builder.Configuration, builder.Environment);
+builder.Services.AddHrmRateLimiting(builder.Configuration);
+builder.Services.AddHrmHealthChecks(mainConnection, auditLogsConnection, activityLogsConnection);
 
 var app = builder.Build();
-await HRM.Services.Attendance.Reconciliation.AttendanceReconciliationSchemaBootstrapper.EnsureSchemaAsync(app.Services);
+var runStartupBootstrap = builder.Configuration.GetValue<bool?>("Database:RunStartupSchemaBootstrap")
+                          ?? app.Environment.IsDevelopment();
+if (runStartupBootstrap)
+{
+    _ = Task.Run(async () =>
+    {
+        await HRM.Services.Attendance.Reconciliation.AttendanceReconciliationSchemaBootstrapper.EnsureSchemaAsync(app.Services);
+        await HRM.Helpers.OrganisationalAccessScopeResolver.EnsureSchemaAsync(app.Services);
+        await AuditSchemaBootstrapper.EnsureSchemaAsync(app.Services);
+        await ActivitySchemaBootstrapper.EnsureSchemaAsync(app.Services);
+    });
+}
 app.UseResponseCompression();
 if (builder.Environment.IsDevelopment() && CredentialExposure.IsExposed(builder.Configuration["Authentication:OpenIdConnect:ClientSecret"]))
     app.Logger.LogWarning("The development eFaas client secret matches a credential exposed in Git history. Rotate it at the provider and update the development secret store.");
 app.UseTrustedProxyHeaders();
+app.UseHrmErrorLogging("HRM.Api");
 
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())
@@ -101,7 +139,7 @@ app.MapGet("/Online/Auth/login", () =>
         new AuthenticationProperties { RedirectUri = "/" },
         new[] { OpenIdConnectDefaults.AuthenticationScheme }
     );
-}).AllowAnonymous();
+}).AllowAnonymous().RequireRateLimiting(HrmRateLimitPolicies.Auth);
 
 app.UseHttpsRedirection();
 
@@ -124,8 +162,9 @@ app.UseRouting();
 // 5. Add Authentication Middleware (MUST be before Antiforgery and Routing)
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseRateLimiter();
 
- 
+app.MapHrmHealthEndpoints();
 app.MapControllers();
 app.UseAntiforgery();
 

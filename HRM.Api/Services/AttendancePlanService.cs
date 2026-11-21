@@ -13,7 +13,8 @@ namespace HRM.Services
 
         private readonly IDbContextFactory<HrmTeContext> _dbFactory;
         private readonly IAttendanceLogDataLoader _loader;
-         private readonly IPlanningProviderResolver _planningProviderResolver;
+        private readonly IUserAccessService _userAccessService;
+        private readonly IPlanningProviderResolver _planningProviderResolver;
         private readonly IWorkPlanGenerator _workPlanGenerator;
 
 
@@ -21,6 +22,7 @@ namespace HRM.Services
         {
             _dbFactory = factory;
             _loader = loader;
+            _userAccessService = userAccessService;
             _workPlanGenerator = workPlanGenerator;
             _planningProviderResolver = planningProviderResolver;
         }
@@ -187,6 +189,15 @@ namespace HRM.Services
         {
             await using var db =
                 await _dbFactory.CreateDbContextAsync(cancellationToken);
+
+            if (_userAccessService is not null)
+            {
+                var scopedOrg = await HRM.Helpers.StaffDataAccess.RequireIndividualAsync(db, _userAccessService, individualId);
+                if (!await db.Jobs.AsNoTracking().AnyAsync(
+                    j => j.JobId == jobId && j.IndividualID == individualId && (!scopedOrg.HasValue || j.OrganisationID == scopedOrg.Value),
+                    cancellationToken))
+                    throw new UnauthorizedAccessException("Work plan is unavailable in the current organisation.");
+            }
 
             var date = workDate.Date;
             var nextDate = date.AddDays(1);
@@ -439,6 +450,18 @@ namespace HRM.Services
             DateTime attendanceTime,
             CancellationToken cancellationToken = default)
         {
+            if (_userAccessService is not null)
+            {
+                await using var authDb = await _dbFactory.CreateDbContextAsync(cancellationToken);
+                var scopedOrg = await HRM.Helpers.StaffDataAccess.RequireIndividualAsync(authDb, _userAccessService, individualId);
+                if (scopedOrg.HasValue && scopedOrg.Value != organisationBusinessEntityId)
+                    throw new UnauthorizedAccessException("Work plan is outside the current organisation.");
+                if (!await authDb.Jobs.AsNoTracking().AnyAsync(
+                    j => j.JobId == jobId && j.IndividualID == individualId && j.OrganisationID == organisationBusinessEntityId,
+                    cancellationToken))
+                    throw new UnauthorizedAccessException("Employment record is unavailable.");
+            }
+
             var workDate = DateOnly.FromDateTime(attendanceTime);
 
             var provider = await _planningProviderResolver.ResolveAsync(
@@ -454,15 +477,6 @@ namespace HRM.Services
                     organisationBusinessEntityId,
                     workDate,
                     cancellationToken);
-            }
-
-            if (provider.UsesLegacyShift)
-            {
-                // Use your existing GetPlanAsync database/legacy logic here.
-                return await GetPlanAsync(
-                    individualId,
-                    jobId,
-                    attendanceTime);
             }
 
             return null;

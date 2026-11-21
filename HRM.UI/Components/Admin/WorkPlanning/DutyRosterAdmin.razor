@@ -3,34 +3,107 @@
 @using HRM.Components.Admin.Settings.Workplan
 @using HRM.Components.Pages.Online
 @inject NavigationManager Navigation
+@inject Microsoft.JSInterop.IJSRuntime JS
 
-<PageTitle>Duty roster</PageTitle>
+<PageTitle>Schedule Manager</PageTitle>
 
-<section class="space-y-4 p-4">
-    <div class="flex flex-wrap gap-2" role="tablist" aria-label="Duty roster sections">
-        <button type="button" role="tab" aria-selected="@(tab == "roster")" class="@(tab == "roster" ? "inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" : "inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors")" @onclick='() => SelectTab("roster")'>Roster</button>
-        <button type="button" role="tab" aria-selected="@(tab == "schedule")" class="@(tab == "schedule" ? "inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" : "inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors")" @onclick='() => SelectTab("schedule")'>Schedule assignment</button>
-        <button type="button" role="tab" aria-selected="@(tab == "manual")" class="@(tab == "manual" ? "inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" : "inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors")" @onclick='() => SelectTab("manual")'>Manual assignment</button>
+<section class="w-full min-w-0 space-y-4 p-2">
+    <!-- Full-Width Sticky Header -->
+    <header class="sticky top-0 z-30 m-0 flex flex-wrap items-center justify-between gap-3 rounded-2xl border-b border-slate-200 bg-white/95 px-3 py-3 shadow-xs backdrop-blur-xs">
+        <div class="min-w-0">
+            <div class="flex flex-wrap items-center gap-2">
+                <span class="rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-semibold text-blue-800">Workforce Scheduling</span>
+                <span class="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-800">Duty &amp; Roster Engine</span>
+            </div>
+            <h1 class="mt-0.5 truncate text-lg font-bold text-slate-900">Schedule Manager</h1>
+            <p class="mt-0.5 text-xs text-slate-500">Manage rosters, draft planning, schedule assignments, manual duty planning, policies, and ledger reviews.</p>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+            <button type="button"
+                    class="inline-flex items-center justify-center rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition-colors"
+                    @onclick="ToggleWidthAsync">
+                @(isFullWidth ? "Shrink View" : "Full Width")
+            </button>
+        </div>
+    </header>
+
+    <!-- Segmented Navigation Bar -->
+    <div class="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-xs @(isFullWidth ? "max-w-none" : "mx-auto max-w-7xl")">
+        <div class="flex flex-wrap gap-0.5 rounded-lg border border-slate-300 bg-slate-50 p-0.5" role="tablist" aria-label="Duty roster sections">
+            @foreach (var item in TabItems)
+            {
+                <button type="button"
+                        role="tab"
+                        aria-selected="@(tab == item.Key)"
+                        class="rounded-md px-3 py-1.5 text-xs font-semibold transition @(tab == item.Key ? "bg-white text-blue-700 shadow-xs" : "text-slate-600 hover:text-slate-900")"
+                        @onclick="() => SelectTab(item.Key)">
+                    @item.Label
+                </button>
+            }
+        </div>
     </div>
-    @if (tab == "schedule")
-    {
-        <ScopeScheduleSettings />
-    }
-    else if (tab == "manual")
-    {
-        <ManualAssignment />
-    }
-    else
-    {
-        <DutyRoster />
-    }
+
+    <div class="@(isFullWidth ? "max-w-none" : "mx-auto max-w-7xl")">
+        @if (tab == "schedule")
+        {
+            <ScopeScheduleSettings />
+        }
+        else if (tab == "draft")
+        {
+            <ScheduleManagerDraft />
+        }
+        else if (tab == "manual")
+        {
+            <ManualAssignment />
+        }
+        else if (tab == "policies")
+        {
+            <ScheduleManagerPolicies />
+        }
+        else if (tab == "review")
+        {
+            <ScheduleManagerReviews />
+        }
+        else
+        {
+            <DutyRoster />
+        }
+    </div>
 </section>
 
 @code {
     [SupplyParameterFromQuery(Name = "tab")] public string? RequestedTab { get; set; }
-    private static readonly string[] Tabs = ["roster", "schedule", "manual"];
+    private sealed record TabItem(string Key, string Label);
+    private static readonly TabItem[] TabItems =
+    [
+        new("roster", "Roster"),
+        new("draft", "Draft Planner"),
+        new("schedule", "Schedule Assignment"),
+        new("manual", "Manual Assignment"),
+        new("policies", "Policies"),
+        new("review", "Session & Ledger Review")
+    ];
+    private static readonly string[] Tabs = ["roster", "draft", "schedule", "manual", "policies", "review"];
     private string tab = "roster";
+    private bool isFullWidth;
+
     protected override void OnParametersSet() => tab = RequestedTab is { } requested && Tabs.Contains(requested) ? requested : "roster";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            isFullWidth = await JS.InvokeAsync<string?>("localStorage.getItem", "hrm.schedule-manager.full-width") == "true";
+            StateHasChanged();
+        }
+    }
+
+    private async Task ToggleWidthAsync()
+    {
+        isFullWidth = !isFullWidth;
+        await JS.InvokeVoidAsync("localStorage.setItem", "hrm.schedule-manager.full-width", isFullWidth ? "true" : "false");
+    }
+
     private void SelectTab(string value)
     {
         if (!Tabs.Contains(value) || value == tab) return;

@@ -15,7 +15,7 @@
 
     @if (isLoading)
     {
-        <div class="rounded-xl border border-slate-200 bg-white p-8 text-center">
+        <div class="rounded-xl border border-slate-200 bg-white p-2 text-center">
             <p class="text-sm text-slate-500">
                 Loading staff schedule...
             </p>
@@ -23,7 +23,7 @@
     }
     else if (!string.IsNullOrWhiteSpace(errorMessage))
     {
-        <div class="rounded-xl border border-amber-200 bg-amber-50 p-5">
+        <div class="rounded-xl border border-amber-200 bg-amber-50 p-2">
 
             <h3 class="font-semibold text-amber-800">
                 Schedule unavailable
@@ -40,22 +40,18 @@
         <CurrentScheduleSummary Schedule="@schedule" />
         @if ((IsManualAssignmentDetailsOpen || IsManualAssignmentRemovalOpen) && selectedManualAssignment is { } selected)
         {
-            <section class="space-y-3 rounded-xl border p-4">
-                <div class="flex items-center justify-between gap-3"><h3 class="font-semibold">@(IsManualAssignmentRemovalOpen ? "Cancel manual assignment" : "Manual assignment details")</h3><button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@cancelling" @onclick="ClosePanel">Close</button></div>
-                <p>@selected.AssignmentName · @selected.WorkTemplateName</p>
-                <p class="text-sm">@selected.StartDateTime.ToString("dd MMM yyyy HH:mm")–@selected.EndDateTime.ToString("dd MMM yyyy HH:mm") · @selected.Status</p>
-                <p class="text-sm">@selected.Description</p>
-                <p class="text-sm">Attendance: @(selected.RequiresAttendance ? "Required" : "Optional") · Checkout: @(selected.RequiresCheckout ? "Required" : "Optional")</p>
+            <section class="rounded-2xl border border-slate-200 bg-white p-2 shadow-xs dark:border-slate-800 dark:bg-slate-900">
+                <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 p-2 dark:border-slate-800"><div><h3 class="text-sm font-bold text-slate-900 dark:text-slate-100">@(IsManualAssignmentRemovalOpen ? "Remove duty assignment" : "Duty assignment details")</h3><p class="text-[11px] text-slate-500">@selected.AssignmentName · @selected.WorkTemplateName</p></div><button class="app-button app-button-ghost app-button-sm" disabled="@cancelling" @onclick="ClosePanel">Close</button></div>
+                <div class="grid gap-2 p-2 text-xs sm:grid-cols-2"><p><span class="font-semibold">Period:</span> @selected.StartDateTime.ToString("dd MMM yyyy HH:mm")–@selected.EndDateTime.ToString("dd MMM yyyy HH:mm")</p><p><span class="font-semibold">Attendance:</span> @(selected.RequiresAttendance ? "Required" : "Optional") · @(selected.RequiresCheckout ? "Checkout required" : "No checkout")</p>@if (!string.IsNullOrWhiteSpace(selected.Description)) { <p class="sm:col-span-2 text-slate-600 dark:text-slate-300">@selected.Description</p> }</div>
                 @if (IsManualAssignmentRemovalOpen)
                 {
-                    <label class="block text-sm">Cancellation reason<textarea class="mt-1 w-full rounded-lg border p-2" maxlength="500" disabled="@cancelling" @bind="cancelReason"></textarea></label>
-                    <button class="inline-flex items-center justify-center gap-2 rounded-lg px-3.5 py-1.5 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-2xs" disabled="@(cancelling || !canManageSchedules || string.IsNullOrWhiteSpace(cancelReason))" @onclick="CancelManualAsync">@(cancelling ? "Cancelling..." : "Cancel assignment")</button>
+                    <div class="flex flex-col gap-2 border-t border-slate-100 p-2 dark:border-slate-800"><label class="block text-xs font-medium text-slate-700 dark:text-slate-300">Reason for removing this duty<textarea class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs dark:border-slate-700 dark:bg-slate-800" maxlength="500" disabled="@cancelling" @bind="cancelReason"></textarea></label><div><button class="app-button app-button-danger app-button-sm" disabled="@(cancelling || !canManageSchedules || string.IsNullOrWhiteSpace(cancelReason))" @onclick="CancelManualAsync">@(cancelling ? "Removing..." : "Remove duty")</button></div></div>
                 }
             </section>
         }
-        @if (!canManageSchedules) { <p class="text-sm text-slate-500">Viewing only. Contact HR to change schedules.</p> }
+        @if (!canManageSchedules) { <p class="rounded-xl border border-slate-200 bg-slate-50 p-2 text-xs text-slate-600 dark:border-slate-800 dark:bg-slate-800/40 dark:text-slate-300">Viewing only. Contact HR to change schedules.</p> }
 
-        <div class="grid grid-cols-1 gap-6 xl:grid-cols-2">
+        <div class="grid grid-cols-1 gap-2 xl:grid-cols-2">
 
             <AssignTemplateDrawer IsOpen="@IsTemplateDrawerOpen"
                                   IsOpenChanged="@HandleTemplateDrawerVisibilityChanged"
@@ -67,12 +63,6 @@
                                   SchedulePurpose="@selectedSchedulePurpose"
                                   CurrentAssignment="@selectedTemplateAssignment"
                                   OnSaved="@HandleTemplateAssignmentSavedAsync" />
-
-            <RemoveTemplateAssignmentDialog IsOpen="@IsTemplateRemovalOpen"
-                                            IsOpenChanged="@HandleTemplateRemovalVisibilityChanged"
-                                            JobId="@schedule.JobId"
-                                            Assignment="@selectedTemplateAssignment"
-                                            OnRemoved="@HandleTemplateRemovedAsync" />
 
             <ManualAssignmentDrawer IsOpen="@IsManualAssignmentDrawerOpen"
                                     IsOpenChanged="@HandleManualDrawerVisibilityChanged"
@@ -86,7 +76,7 @@
         </div>
 
 
-        <div class="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <div class="grid grid-cols-1 gap-2 xl:grid-cols-2">
         @foreach (var purpose in new[] { "Official", "Duty" })
         {
         <TemplateAssignmentCard StaffId="@schedule.IndividualId"
@@ -99,14 +89,13 @@
                                 History="@schedule.TemplateHistory.Where(x => x.SchedulePurpose == purpose).ToList()"
                                 IsDisabled="@(!schedule.HasActiveJob || !canManageSchedules)"
                                 OnAssignRequested="@(() => OpenTemplateAssignmentForPurposeAsync(purpose))"
-                                OnRemoveRequested="@OpenTemplateRemovalAsync"
                                 OnChanged="@HandleScheduleChangedAsync" />
         }
         </div>
 
-        <details class="rounded-xl border p-4">
-        <summary class="cursor-pointer text-sm font-semibold">More options: work adjustments</summary>
-        <div class="mt-4">
+        <details class="rounded-2xl border border-slate-200 bg-white p-2 dark:border-slate-800 dark:bg-slate-900">
+        <summary class="cursor-pointer p-2 text-sm font-semibold text-slate-800 dark:text-slate-100">Duty exceptions and one-off assignments</summary>
+        <div class="p-2">
         <ManualAssignmentCard StaffId="@schedule.IndividualId"
                               JobId="@schedule.JobId"
                               OrganisationBusinessEntityId="@schedule.OrganisationBusinessEntityId"
@@ -171,10 +160,6 @@
     private bool IsTemplateDrawerOpen =>
         activePanel ==
         SchedulePanel.AssignTemplate;
-
-    private bool IsTemplateRemovalOpen =>
-        activePanel ==
-        SchedulePanel.RemoveTemplate;
 
     private bool IsManualAssignmentDrawerOpen =>
         activePanel ==
@@ -308,27 +293,6 @@
         return Task.CompletedTask;
     }
 
-    private Task OpenTemplateRemovalAsync(
-        CurrentWorkTemplateAssignmentDto assignment)
-    {
-        if (schedule is null ||
-            !schedule.HasActiveJob)
-        {
-            return Task.CompletedTask;
-        }
-
-        selectedTemplateAssignment =
-            assignment;
-
-        selectedManualAssignment =
-            null;
-
-        OpenPanel(
-            SchedulePanel.RemoveTemplate);
-
-        return Task.CompletedTask;
-    }
-
     private void HandleTemplateDrawerVisibilityChanged(
         bool isOpen)
     {
@@ -343,34 +307,9 @@
         }
     }
 
-    private void HandleTemplateRemovalVisibilityChanged(
-        bool isOpen)
-    {
-        if (!isOpen &&
-            activePanel ==
-                SchedulePanel.RemoveTemplate)
-        {
-            selectedTemplateAssignment =
-                null;
-
-            ClosePanel();
-        }
-    }
-
     private async Task HandleTemplateAssignmentSavedAsync()
     {
         ToastService.Success("Schedule saved.");
-        selectedTemplateAssignment =
-            null;
-
-        ClosePanel();
-
-        await LoadScheduleAsync();
-    }
-
-    private async Task HandleTemplateRemovedAsync()
-    {
-        ToastService.Success("Schedule end date saved.");
         selectedTemplateAssignment =
             null;
 

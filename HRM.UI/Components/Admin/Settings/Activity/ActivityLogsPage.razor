@@ -1,0 +1,380 @@
+@page "/admin/settings/activity-logs"
+@attribute [Authorize]
+@using HRM.ActivityLogs.Models
+@using HRM.UI.Services.Activity
+@inject IActivityLogApiClient ActivityApi
+
+<PageTitle>Activity Logs — Digital HR</PageTitle>
+
+<div class="@(fullWidth ? "w-full px-4 sm:px-6 lg:px-8" : "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8") py-6 space-y-5">
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+            <h1 class="text-2xl font-bold tracking-tight text-slate-900">Activity Logs</h1>
+            <p class="text-sm text-slate-500">Operational timeline of user and system business activities across Digital HR.</p>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+            <button type="button"
+                    @onclick="() => fullWidth = !fullWidth"
+                    class="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50">
+                <i class="bi @(fullWidth ? "bi-arrows-angle-contract" : "bi-arrows-angle-expand")"></i>
+                @(fullWidth ? "Shrink View" : "Full Width")
+            </button>
+            <a href="@ExportUrl"
+               target="_blank"
+               rel="noopener"
+               class="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50">
+                <i class="bi bi-download"></i>
+                Export CSV
+            </a>
+            <button type="button"
+                    @onclick="LoadAsync"
+                    disabled="@loading"
+                    class="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3.5 py-2 text-xs font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-50">
+                <i class="bi bi-arrow-clockwise"></i>
+                Refresh
+            </button>
+        </div>
+    </div>
+
+    <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm space-y-3">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+            <div>
+                <label class="block text-xs font-medium text-slate-600 mb-1">Search</label>
+                <input type="text" @bind="searchText" @bind:event="oninput" placeholder="Description, target, user..."
+                       class="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500" />
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-slate-600 mb-1">Category</label>
+                <select @bind="category" class="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-900 bg-white focus:border-indigo-500 focus:outline-none">
+                    <option value="">All Categories</option>
+                    @foreach (var cat in Categories)
+                    {
+                        <option value="@cat">@cat</option>
+                    }
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-slate-600 mb-1">Module</label>
+                <input type="text" @bind="module" placeholder="e.g. Payroll, Attendance"
+                       class="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none" />
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-slate-600 mb-1">From (UTC)</label>
+                <input type="date" @bind="fromDate"
+                       class="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none" />
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-slate-600 mb-1">To (UTC)</label>
+                <input type="date" @bind="toDate"
+                       class="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none" />
+            </div>
+        </div>
+        <div class="flex flex-wrap items-center justify-between gap-2 pt-1">
+            <div class="flex flex-wrap items-center gap-2">
+                <input type="text" @bind="userIdFilter" placeholder="User ID"
+                       class="w-32 rounded-lg border border-slate-300 px-2.5 py-1 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none" />
+                <input type="text" @bind="correlationId" placeholder="Correlation ID"
+                       class="w-48 rounded-lg border border-slate-300 px-2.5 py-1 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none" />
+                <input type="text" @bind="targetEntityType" placeholder="Target Entity Type"
+                       class="w-40 rounded-lg border border-slate-300 px-2.5 py-1 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none" />
+            </div>
+            <div class="flex items-center gap-2">
+                <button type="button" @onclick="ResetFiltersAsync"
+                        class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50">
+                    Reset
+                </button>
+                <button type="button" @onclick="ApplyFiltersAsync"
+                        class="rounded-lg bg-slate-900 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-slate-800">
+                    Apply Filters
+                </button>
+            </div>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <div class="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+            @errorMessage
+        </div>
+    }
+
+    <div class="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+        @if (loading)
+        {
+            <div class="p-8 text-center text-sm text-slate-500">Loading activity logs...</div>
+        }
+        else if (result.Items.Count == 0)
+        {
+            <div class="p-10 text-center space-y-1">
+                <p class="text-sm font-medium text-slate-700">No activity records matched your filters.</p>
+                <p class="text-xs text-slate-500">Try widening the date range or clearing category/module filters.</p>
+            </div>
+        }
+        else
+        {
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-slate-200 text-sm">
+                    <thead class="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        <tr>
+                            <th class="px-4 py-3">Timestamp (UTC)</th>
+                            <th class="px-4 py-3">Actor</th>
+                            <th class="px-4 py-3">Category / Type</th>
+                            <th class="px-4 py-3">Module / Action</th>
+                            <th class="px-4 py-3">Target</th>
+                            <th class="px-4 py-3">Description</th>
+                            <th class="px-4 py-3 text-right">Details</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100 bg-white">
+                        @foreach (var item in result.Items)
+                        {
+                            <tr class="hover:bg-slate-50 transition-colors">
+                                <td class="px-4 py-3 whitespace-nowrap text-xs text-slate-600 font-mono">
+                                    @item.OccurredAtUtc.ToString("yyyy-MM-dd HH:mm:ss")
+                                </td>
+                                <td class="px-4 py-3 whitespace-nowrap">
+                                    <div class="text-xs font-medium text-slate-900">@(item.UserId.HasValue ? $"User #{item.UserId}" : "System")</div>
+                                    <div class="text-[11px] text-slate-500">@item.ActorType</div>
+                                </td>
+                                <td class="px-4 py-3 whitespace-nowrap">
+                                    <span class="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium bg-indigo-50 text-indigo-700 ring-1 ring-inset ring-indigo-600/20">
+                                        @item.ActivityCategory
+                                    </span>
+                                    <div class="text-[11px] text-slate-500 mt-0.5 font-mono">@item.ActivityType</div>
+                                </td>
+                                <td class="px-4 py-3 whitespace-nowrap">
+                                    <div class="text-xs font-medium text-slate-800">@item.Module</div>
+                                    <div class="text-[11px] text-slate-500">@item.Action</div>
+                                </td>
+                                <td class="px-4 py-3 whitespace-nowrap">
+                                    @if (!string.IsNullOrWhiteSpace(item.TargetDisplayName) || !string.IsNullOrWhiteSpace(item.TargetEntityType))
+                                    {
+                                        <div class="text-xs font-medium text-slate-800">@(item.TargetDisplayName ?? item.TargetEntityId)</div>
+                                        <div class="text-[11px] text-slate-500">@item.TargetEntityType @(!string.IsNullOrWhiteSpace(item.TargetEntityId) ? $"#{item.TargetEntityId}" : "")</div>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-xs text-slate-400">—</span>
+                                    }
+                                </td>
+                                <td class="px-4 py-3 max-w-md text-xs text-slate-700">
+                                    @item.Description
+                                </td>
+                                <td class="px-4 py-3 whitespace-nowrap text-right">
+                                    <button type="button"
+                                            @onclick="() => selected = item"
+                                            class="rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50">
+                                        Inspect
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="flex items-center justify-between border-t border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
+                <div>
+                    Showing page <span class="font-semibold text-slate-900">@result.Page</span> of
+                    <span class="font-semibold text-slate-900">@Math.Max(1, result.TotalPages)</span>
+                    (<span class="font-semibold text-slate-900">@result.TotalCount</span> total)
+                </div>
+                <div class="flex items-center gap-2">
+                    <button type="button"
+                            disabled="@(page <= 1)"
+                            @onclick="PrevPageAsync"
+                            class="rounded-md border border-slate-300 bg-white px-3 py-1 font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40">
+                        Previous
+                    </button>
+                    <button type="button"
+                            disabled="@(page >= result.TotalPages)"
+                            @onclick="NextPageAsync"
+                            class="rounded-md border border-slate-300 bg-white px-3 py-1 font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40">
+                        Next
+                    </button>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+@if (selected is not null)
+{
+    <div class="fixed inset-0 z-50 flex justify-end bg-slate-900/40 backdrop-blur-xs" @onclick="() => selected = null">
+        <div class="h-full w-full max-w-lg bg-white shadow-2xl border-l border-slate-200 flex flex-col" @onclick:stopPropagation="true">
+            <div class="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+                <div>
+                    <h2 class="text-base font-semibold text-slate-900">Activity Detail #@selected.ActivityLogId</h2>
+                    <p class="text-xs text-slate-500 font-mono">@selected.EventId</p>
+                </div>
+                <button type="button" @onclick="() => selected = null"
+                        class="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+            <div class="flex-1 overflow-y-auto p-5 space-y-4 text-xs">
+                <dl class="grid grid-cols-2 gap-3">
+                    <div>
+                        <dt class="text-slate-500">Occurred (UTC)</dt>
+                        <dd class="font-mono text-slate-900">@selected.OccurredAtUtc.ToString("yyyy-MM-dd HH:mm:ss.fff")</dd>
+                    </div>
+                    <div>
+                        <dt class="text-slate-500">Actor</dt>
+                        <dd class="text-slate-900 font-medium">@(selected.UserId.HasValue ? $"User #{selected.UserId}" : "System") (@selected.ActorType)</dd>
+                    </div>
+                    <div>
+                        <dt class="text-slate-500">Category</dt>
+                        <dd class="text-slate-900">@selected.ActivityCategory</dd>
+                    </div>
+                    <div>
+                        <dt class="text-slate-500">Type</dt>
+                        <dd class="font-mono text-slate-900">@selected.ActivityType</dd>
+                    </div>
+                    <div>
+                        <dt class="text-slate-500">Module / Action</dt>
+                        <dd class="text-slate-900">@selected.Module / @selected.Action</dd>
+                    </div>
+                    <div>
+                        <dt class="text-slate-500">Organisation / Division / Team</dt>
+                        <dd class="text-slate-900">Org @(selected.OrganisationId?.ToString() ?? "—") · Div @(selected.DivisionId?.ToString() ?? "—") · Team @(selected.TeamId?.ToString() ?? "—")</dd>
+                    </div>
+                    <div>
+                        <dt class="text-slate-500">Target</dt>
+                        <dd class="text-slate-900">@(selected.TargetEntityType ?? "—") @(selected.TargetEntityId ?? "")</dd>
+                    </div>
+                    <div>
+                        <dt class="text-slate-500">Correlation ID</dt>
+                        <dd class="font-mono text-slate-900 break-all">@(selected.CorrelationId ?? "—")</dd>
+                    </div>
+                    <div>
+                        <dt class="text-slate-500">Opaque Session ID</dt>
+                        <dd class="font-mono text-slate-900 break-all">@(selected.SessionId ?? "—")</dd>
+                    </div>
+                    <div>
+                        <dt class="text-slate-500">Source</dt>
+                        <dd class="text-slate-900">@(selected.Source ?? "—")</dd>
+                    </div>
+                </dl>
+
+                <div>
+                    <h3 class="text-xs font-semibold text-slate-700 mb-1">Description</h3>
+                    <div class="rounded-lg border border-slate-200 bg-slate-50 p-3 text-slate-800">
+                        @(selected.Description ?? "No description.")
+                    </div>
+                </div>
+
+                @if (!string.IsNullOrWhiteSpace(selected.MetadataJson))
+                {
+                    <div>
+                        <h3 class="text-xs font-semibold text-slate-700 mb-1">Sanitized Metadata</h3>
+                        <pre class="rounded-lg border border-slate-200 bg-slate-900 p-3 text-[11px] text-slate-100 overflow-x-auto">@selected.MetadataJson</pre>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private static readonly string[] Categories = Enum.GetNames<ActivityCategory>();
+
+    private bool fullWidth;
+    private bool loading;
+    private string? errorMessage;
+    private string? searchText;
+    private string? category;
+    private string? module;
+    private string? userIdFilter;
+    private string? correlationId;
+    private string? targetEntityType;
+    private DateTime? fromDate;
+    private DateTime? toDate;
+    private int page = 1;
+    private const int PageSize = 25;
+
+    private ActivityLogPageResult result = new();
+    private ActivityLogDto? selected;
+
+    private ActivityLogFilter CurrentFilter => new()
+    {
+        SearchText = searchText,
+        Category = string.IsNullOrWhiteSpace(category) ? null : category,
+        Module = string.IsNullOrWhiteSpace(module) ? null : module.Trim(),
+        UserId = int.TryParse(userIdFilter, out var parsedUid) ? parsedUid : null,
+        CorrelationId = string.IsNullOrWhiteSpace(correlationId) ? null : correlationId.Trim(),
+        TargetEntityType = string.IsNullOrWhiteSpace(targetEntityType) ? null : targetEntityType.Trim(),
+        FromUtc = fromDate?.Date,
+        ToUtc = toDate?.Date.AddDays(1).AddTicks(-1),
+        Page = page,
+        PageSize = PageSize
+    };
+
+    private string ExportUrl => ActivityApi.BuildExportUrl(CurrentFilter);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task ApplyFiltersAsync()
+    {
+        page = 1;
+        await LoadAsync();
+    }
+
+    private async Task ResetFiltersAsync()
+    {
+        searchText = null;
+        category = null;
+        module = null;
+        userIdFilter = null;
+        correlationId = null;
+        targetEntityType = null;
+        fromDate = null;
+        toDate = null;
+        page = 1;
+        await LoadAsync();
+    }
+
+    private async Task PrevPageAsync()
+    {
+        if (page > 1)
+        {
+            page--;
+            await LoadAsync();
+        }
+    }
+
+    private async Task NextPageAsync()
+    {
+        if (page < result.TotalPages)
+        {
+            page++;
+            await LoadAsync();
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        loading = true;
+        errorMessage = null;
+        try
+        {
+            result = await ActivityApi.SearchAsync(CurrentFilter);
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Forbidden)
+        {
+            errorMessage = "You do not have permission to view organisation-wide activity logs.";
+            result = new ActivityLogPageResult();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Unable to load activity logs: {ex.Message}";
+            result = new ActivityLogPageResult();
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+}

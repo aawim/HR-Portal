@@ -1,0 +1,405 @@
+@using HRM.DTOs.Calendar
+@inject HRM.Services.Calendar.Contracts.SupervisorCalendarServiceContracts.IOperations SupervisorService
+@inject HRM.Services.ToastService Toasts
+
+<div class="space-y-4">
+    <header class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-xs">
+        <div>
+            <div class="flex items-center gap-2">
+                <h3 class="text-base font-bold text-slate-900 dark:text-slate-100">
+                    Team Calendar
+                </h3>
+                <span class="rounded-full bg-teal-50 dark:bg-teal-950/60 text-teal-800 dark:text-teal-300 border border-teal-200 dark:border-teal-800 px-2.5 py-0.5 text-xs font-semibold">
+                    @month.ToString("MMMM yyyy")
+                </span>
+            </div>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Review team coverage, approved leave and supervisor deadlines in one place.
+            </p>
+        </div>
+
+        <div class="flex items-center gap-2 flex-wrap">
+            <select class="rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-200"
+                    value="@selectedTeamId"
+                    @onchange="OnTeamChangedAsync">
+                <option value="0">All My Supervised Teams (@teams.Count)</option>
+                @foreach (var t in teams)
+                {
+                    <option value="@t.TeamId">@t.Name (@t.MemberCount members)</option>
+                }
+            </select>
+
+            <div class="inline-flex items-center rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-0.5">
+                <button type="button"
+                        class="rounded-md px-2.5 py-1 text-xs font-bold text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white"
+                        disabled="@busy"
+                        @onclick="() => MoveMonthAsync(-1)">
+                    <AppIcon Name="chevron_left" Class="text-base" />
+                </button>
+                <span class="px-3 text-xs font-bold text-slate-800 dark:text-slate-100">@month.ToString("MMM yyyy")</span>
+                <button type="button" class="rounded-md px-2.5 py-1 text-xs font-bold text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white" disabled="@busy" @onclick="() => MoveMonthAsync(1)">
+                    <AppIcon Name="chevron_right" Class="text-base" />
+                </button>
+            </div>
+
+            <button type="button"
+                    class="rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200 shadow-2xs hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 transition"
+                    disabled="@busy"
+                    @onclick="GoToTodayAsync">
+                Today
+            </button>
+
+            <button type="button"
+                    class="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200 shadow-2xs hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 transition"
+                    disabled="@busy"
+                    @onclick="LoadDataAsync">
+                <AppIcon Name="refresh" Class="@(busy ? "animate-spin text-base" : "text-base")" />
+                <span>Refresh</span>
+            </button>
+
+            <button type="button"
+                    class="rounded-lg bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 text-xs font-semibold shadow-xs transition"
+                    @onclick="OpenNewTaskModal">
+                <AppIcon Name="add" Class="text-base" /> Add task
+            </button>
+        </div>
+    </header>
+
+    @if (teams.Count == 0 && !busy)
+    {
+        <div class="rounded-2xl border border-amber-200 bg-amber-50 dark:border-amber-900/50 dark:bg-amber-950/20 p-4 text-xs text-amber-900 dark:text-amber-200">
+            You do not currently have active supervisory assignments over any teams in this organisation.
+        </div>
+    }
+
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 shadow-xs">
+            <div class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Team members</div>
+            <div class="mt-1 text-xl font-bold text-slate-900 dark:text-slate-100">@VisibleMemberCount</div>
+            <div class="text-[11px] text-slate-500">in selected scope</div>
+        </div>
+        <div class="rounded-xl border border-rose-100 dark:border-rose-900/60 bg-rose-50/50 dark:bg-rose-950/20 p-3">
+            <div class="text-[11px] font-semibold uppercase tracking-wide text-rose-700 dark:text-rose-300">Leave days</div>
+            <div class="mt-1 text-xl font-bold text-rose-800 dark:text-rose-200">@LeaveDays</div>
+            <div class="text-[11px] text-rose-700/80 dark:text-rose-300/80">approved or planned</div>
+        </div>
+        <div class="rounded-xl border border-amber-100 dark:border-amber-900/60 bg-amber-50/50 dark:bg-amber-950/20 p-3">
+            <div class="text-[11px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">Open tasks</div>
+            <div class="mt-1 text-xl font-bold text-amber-800 dark:text-amber-200">@OpenTasks</div>
+            <div class="text-[11px] text-amber-700/80 dark:text-amber-300/80">@OverdueTasks overdue</div>
+        </div>
+        <div class="rounded-xl border border-blue-100 dark:border-blue-900/60 bg-blue-50/50 dark:bg-blue-950/20 p-3">
+            <div class="text-[11px] font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">Today</div>
+            <div class="mt-1 text-sm font-bold text-blue-800 dark:text-blue-200">@TodayScheduleCount scheduled</div>
+            <div class="text-[11px] text-blue-700/80 dark:text-blue-300/80">@TodayLeaveCount away</div>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
+        <div class="lg:col-span-8 min-w-0 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-xs space-y-3">
+            <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
+                <div>
+                    <h4 class="text-sm font-bold text-slate-900 dark:text-slate-100">Coverage calendar</h4>
+                    <p class="text-[11px] text-slate-500">Select a day to see the team’s schedule and priorities.</p>
+                </div>
+                <span class="text-[11px] font-medium text-slate-500">@ScheduleDays.Count days</span>
+            </div>
+
+            @if (busy)
+            {
+                <div class="p-8 text-center text-xs text-slate-400">Loading calendar…</div>
+            }
+            else
+            {
+                <div class="grid grid-cols-7 gap-1 text-center text-[11px] font-bold text-slate-500">
+                    <span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span class="text-rose-500">Fri</span><span class="text-rose-500">Sat</span>
+                </div>
+                <div class="grid grid-cols-7 gap-1">
+                    @for (var i = 0; i < MonthLeadingOffset; i++) { <div class="min-h-24 rounded-xl bg-slate-50/70 dark:bg-slate-800/20"></div> }
+                    @foreach (var day in ScheduleDays)
+                    {
+                        var dayItems = ScheduleFor(day);
+                        var isSelected = selectedDate.Date == day.Date;
+                        var isToday = day.Date == DateTime.Today;
+                        var leaveCount = dayItems.Count(x => x.ScheduleType is "Leave" or "Plan");
+                        var taskCount = tasks.Count(x => x.DueDateTime.Date == day.Date && x.Status != "Completed");
+                        <button type="button" class="min-h-24 rounded-xl border p-1.5 text-left transition @(isSelected ? "border-blue-500 bg-blue-50/60 ring-2 ring-blue-500/15 dark:bg-blue-950/30" : isToday ? "border-amber-300 bg-amber-50/40 dark:bg-amber-950/20" : "border-slate-200 hover:border-slate-300 dark:border-slate-800 dark:hover:border-slate-700")" @onclick="() => SelectDate(day)">
+                            <span class="text-xs font-bold @(isToday ? "text-amber-600" : "text-slate-800 dark:text-slate-200")">@day.Day</span>
+                            <div class="mt-1 space-y-1 overflow-hidden">
+                                @if (leaveCount > 0) { <div class="truncate rounded bg-rose-100 px-1 py-0.5 text-[9px] font-semibold text-rose-700 dark:bg-rose-950 dark:text-rose-300">@leaveCount away</div> }
+                                @if (taskCount > 0) { <div class="truncate rounded bg-amber-100 px-1 py-0.5 text-[9px] font-semibold text-amber-800 dark:bg-amber-950 dark:text-amber-300">@taskCount task@(taskCount == 1 ? "" : "s")</div> }
+                                @if (dayItems.Any(x => x.ScheduleType == "Official")) { <div class="text-[9px] text-blue-600 dark:text-blue-300">@dayItems.Count(x => x.ScheduleType == "Official") scheduled</div> }
+                            </div>
+                        </button>
+                    }
+                </div>
+                <div class="flex flex-wrap gap-3 border-t border-slate-100 pt-3 text-[11px] text-slate-500 dark:border-slate-800"><span><i class="mr-1 inline-block h-2 w-2 rounded-full bg-blue-500"></i>Scheduled</span><span><i class="mr-1 inline-block h-2 w-2 rounded-full bg-rose-500"></i>Leave / plan</span><span><i class="mr-1 inline-block h-2 w-2 rounded-full bg-amber-500"></i>Open task</span></div>
+            }
+        </div>
+
+        <div class="lg:col-span-4 min-w-0 space-y-4">
+            <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-xs space-y-3">
+                <div class="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+                    <div><h4 class="text-sm font-bold text-slate-900 dark:text-slate-100">@selectedDate.ToString("dddd, dd MMM")</h4><p class="text-[11px] text-slate-500">Team schedule and priorities</p></div>
+                    <span class="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">@SelectedDayItems.Count items</span>
+                </div>
+                @if (SelectedDayItems.Count == 0 && SelectedDayTasks.Count == 0)
+                {
+                    <p class="p-4 text-center text-xs text-slate-400">No team activity or deadlines on this day.</p>
+                }
+                else
+                {
+                    <div class="space-y-2 max-h-96 overflow-y-auto pr-1">
+                        @foreach (var item in SelectedDayItems.Where(x => x.ScheduleType is not ("Official" or "Task")).OrderBy(x => x.StaffName))
+                        {
+                            <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-2.5 text-xs dark:border-slate-800 dark:bg-slate-800/40"><div class="flex items-start justify-between gap-2"><div><span class="font-semibold text-slate-900 dark:text-slate-100">@item.StaffName</span><span class="ml-1.5 rounded px-1 py-0.5 text-[9px] font-semibold @GetScheduleBadge(item.ScheduleType)">@item.ScheduleType</span></div><span class="text-[10px] text-slate-500">@(item.StartTime.HasValue ? item.StartTime.Value.ToString(@"hh\:mm") : "All day")</span></div><p class="mt-1 text-[11px] text-slate-600 dark:text-slate-300">@item.Title</p></div>
+                        }
+                        @foreach (var task in SelectedDayTasks)
+                        {
+                            var isDone = task.Status == "Completed";
+                            <div class="rounded-xl border border-amber-200 bg-amber-50/50 p-2.5 text-xs dark:border-amber-900/60 dark:bg-amber-950/20"><div class="flex items-start justify-between gap-2"><div class="font-semibold @(isDone ? "line-through text-slate-400" : "text-slate-900 dark:text-slate-100")">@task.Title</div><span class="rounded px-1 py-0.5 text-[9px] font-semibold @(task.Priority is "Critical" or "High" ? "bg-rose-100 text-rose-800" : "bg-amber-100 text-amber-800")">@task.Priority</span></div><div class="mt-2 flex items-center justify-between border-t border-amber-200/70 pt-2 text-[10px] text-slate-600 dark:border-amber-900/60 dark:text-slate-300"><span>Due @task.DueDateTime.ToString("HH:mm")</span><div class="flex gap-2">@if (!isDone) { <button type="button" class="font-semibold text-emerald-700" @onclick='() => UpdateTaskStatus(task.SupervisorCalendarTaskId, "Completed")'>Complete</button> } else { <button type="button" class="font-semibold text-slate-600" @onclick='() => UpdateTaskStatus(task.SupervisorCalendarTaskId, "NotStarted")'>Reopen</button> }<button type="button" class="font-semibold text-rose-600" @onclick="() => DeleteTask(task.SupervisorCalendarTaskId)">Delete</button></div></div></div>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Simple Task Creation Modal -->
+@if (showTaskModal)
+{
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
+        <div class="w-full max-w-md rounded-2xl bg-white dark:bg-slate-900 p-5 shadow-xl border border-slate-200 dark:border-slate-800 space-y-4">
+            <h3 class="text-sm font-bold text-slate-900 dark:text-slate-100">Add Supervisor Task</h3>
+
+            <div class="space-y-3 text-xs">
+                <div>
+                    <label class="block font-medium text-slate-700 dark:text-slate-300 mb-1">Title *</label>
+                    <input class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2 text-slate-900 dark:text-slate-100"
+                           @bind="newTask.Title" placeholder="e.g. Monthly Payroll Verification" />
+                </div>
+
+                <div>
+                    <label class="block font-medium text-slate-700 dark:text-slate-300 mb-1">Category</label>
+                    <select class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2 text-slate-900 dark:text-slate-100"
+                            @bind="newTask.TaskCategory">
+                        <option value="General">General</option>
+                        <option value="Payroll">Payroll Preparation / Deadline</option>
+                        <option value="Attendance">Attendance Verification</option>
+                        <option value="LeaveApproval">Leave Approval Review</option>
+                        <option value="Evaluation">Staff Evaluation</option>
+                    </select>
+                </div>
+
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block font-medium text-slate-700 dark:text-slate-300 mb-1">Priority</label>
+                        <select class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2 text-slate-900 dark:text-slate-100"
+                                @bind="newTask.Priority">
+                            <option value="Low">Low</option>
+                            <option value="Normal">Normal</option>
+                            <option value="High">High</option>
+                            <option value="Critical">Critical</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block font-medium text-slate-700 dark:text-slate-300 mb-1">Target Team</label>
+                        <select class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2 text-slate-900 dark:text-slate-100"
+                                @bind="newTask.TeamId">
+                            <option value="">(None / General)</option>
+                            @foreach (var t in teams)
+                            {
+                                <option value="@t.TeamId">@t.Name</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block font-medium text-slate-700 dark:text-slate-300 mb-1">Due Date & Time</label>
+                    <input type="datetime-local" class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2 text-slate-900 dark:text-slate-100"
+                           @bind="newTask.DueDateTime" />
+                </div>
+
+                <div>
+                    <label class="block font-medium text-slate-700 dark:text-slate-300 mb-1">Description / Instructions</label>
+                    <textarea rows="2" class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2 text-slate-900 dark:text-slate-100"
+                              @bind="newTask.Description" placeholder="Optional details..."></textarea>
+                </div>
+            </div>
+
+            <div class="flex items-center justify-end gap-2 pt-2">
+                <button type="button" class="app-button app-button-neutral app-button-sm"
+                        @onclick="() => showTaskModal = false">
+                    Cancel
+                </button>
+                <button type="button" class="app-button app-button-primary app-button-sm"
+                        @onclick="SaveNewTaskAsync">
+                    Save Task
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<SupervisorTeamOptionDto> teams = [];
+    private List<SupervisorCalendarScheduleItemDto> scheduleItems = [];
+    private List<SupervisorCalendarTaskDto> tasks = [];
+
+    private int selectedTeamId;
+    private DateTime month = new(DateTime.Today.Year, DateTime.Today.Month, 1);
+    private DateTime selectedDate = DateTime.Today;
+    private bool busy;
+
+    private DateTime fromDate => month;
+    private DateTime toDate => month.AddMonths(1).AddDays(-1);
+    private int MonthLeadingOffset => (int)month.DayOfWeek;
+    private IReadOnlyList<DateTime> ScheduleDays => Enumerable.Range(0, DateTime.DaysInMonth(month.Year, month.Month)).Select(day => month.AddDays(day)).ToList();
+    private List<SupervisorCalendarScheduleItemDto> SelectedDayItems => ScheduleFor(selectedDate);
+    private List<SupervisorCalendarTaskDto> SelectedDayTasks => tasks.Where(task => task.DueDateTime.Date == selectedDate.Date).OrderBy(task => task.DueDateTime).ToList();
+    private int VisibleMemberCount => selectedTeamId > 0 ? teams.FirstOrDefault(team => team.TeamId == selectedTeamId)?.MemberCount ?? 0 : teams.Sum(team => team.MemberCount);
+    private int LeaveDays => scheduleItems.Count(item => item.ScheduleType is "Leave" or "Plan");
+    private int OpenTasks => tasks.Count(task => task.Status is not ("Completed" or "Cancelled"));
+    private int OverdueTasks => tasks.Count(task => task.Status is not ("Completed" or "Cancelled") && task.DueDateTime.Date < DateTime.Today);
+    private int TodayScheduleCount => scheduleItems.Count(item => item.Date.Date == DateTime.Today && item.ScheduleType == "Official");
+    private int TodayLeaveCount => scheduleItems.Count(item => item.Date.Date == DateTime.Today && item.ScheduleType is ("Leave" or "Plan"));
+
+    private bool showTaskModal;
+    private SupervisorCalendarTaskDto newTask = new() { DueDateTime = DateTime.Today.AddDays(1).AddHours(14) };
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadTeamsAsync();
+        await LoadDataAsync();
+    }
+
+    private async Task LoadTeamsAsync()
+    {
+        try
+        {
+            teams = await SupervisorService.GetSupervisedTeamsAsync();
+        }
+        catch (Exception ex)
+        {
+            Toasts.Error(ex.Message);
+        }
+    }
+
+    private async Task LoadDataAsync()
+    {
+        busy = true;
+        try
+        {
+            int? tid = selectedTeamId > 0 ? selectedTeamId : null;
+            scheduleItems = await SupervisorService.GetTeamSchedulesAsync(fromDate, toDate, tid, null);
+            tasks = await SupervisorService.GetTasksAsync(fromDate, toDate, tid);
+        }
+        catch (Exception ex)
+        {
+            Toasts.Error(ex.Message);
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task OnTeamChangedAsync(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var val))
+        {
+            selectedTeamId = val;
+            await LoadDataAsync();
+        }
+    }
+
+    private async Task MoveMonthAsync(int direction)
+    {
+        month = month.AddMonths(direction);
+        selectedDate = month;
+        await LoadDataAsync();
+    }
+
+    private async Task GoToTodayAsync()
+    {
+        month = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
+        selectedDate = DateTime.Today;
+        await LoadDataAsync();
+    }
+
+    private List<SupervisorCalendarScheduleItemDto> ScheduleFor(DateTime day) =>
+        scheduleItems.Where(item => item.Date.Date == day.Date).ToList();
+
+    private void SelectDate(DateTime day) => selectedDate = day;
+
+    private void OpenNewTaskModal()
+    {
+        newTask = new SupervisorCalendarTaskDto
+        {
+            DueDateTime = selectedDate.Date.AddDays(1).AddHours(14),
+            Priority = "Normal",
+            Status = "NotStarted",
+            TeamId = selectedTeamId > 0 ? selectedTeamId : null
+        };
+        showTaskModal = true;
+    }
+
+    private async Task SaveNewTaskAsync()
+    {
+        if (string.IsNullOrWhiteSpace(newTask.Title))
+        {
+            Toasts.Error("Task title is required.");
+            return;
+        }
+
+        try
+        {
+            await SupervisorService.SaveTaskAsync(newTask);
+            Toasts.Success("Supervisor task created.");
+            showTaskModal = false;
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            Toasts.Error(ex.Message);
+        }
+    }
+
+    private async Task UpdateTaskStatus(int taskId, string status)
+    {
+        try
+        {
+            await SupervisorService.UpdateTaskStatusAsync(taskId, status);
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            Toasts.Error(ex.Message);
+        }
+    }
+
+    private async Task DeleteTask(int taskId)
+    {
+        try
+        {
+            await SupervisorService.DeleteTaskAsync(taskId);
+            Toasts.Success("Task removed.");
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            Toasts.Error(ex.Message);
+        }
+    }
+
+    private static string GetScheduleBadge(string type) => type switch
+    {
+        "Leave" => "bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300",
+        "Plan" => "bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300",
+        "Task" => "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300",
+        "RestDay" => "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400",
+        _ => "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300"
+    };
+}

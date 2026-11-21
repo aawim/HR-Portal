@@ -8,14 +8,18 @@ public sealed class WorkspaceDirectoryService(IDbContextFactory<HrmTeContext> fa
 {
     public async Task<StaffWorkspaceIdentity?> GetStaffIdentityAsync(int staffId, CancellationToken ct = default)
     {
-        await access.RequireContextAsync();
+        var actor = await access.RequireContextAsync();
         var org = await access.GetCurrentOrganisationIdAsync();
-        if (org <= 0 || !await access.HasOrganisationAccessAsync(org)) throw new UnauthorizedAccessException("Use your current organisation.");
+        if (!actor.IsSuperAdministrator && (org <= 0 || !await access.HasOrganisationAccessAsync(org)))
+            throw new UnauthorizedAccessException("Use your current organisation.");
         await using var db = await factory.CreateDbContextAsync(ct);
-        if (!await db.Jobs.AnyAsync(j => j.IndividualID == staffId && j.OrganisationID == org, ct)) return null;
+        if (!await db.Jobs.AnyAsync(j => j.IndividualID == staffId && (actor.IsSuperAdministrator || j.OrganisationID == org), ct))
+            return null;
+        if (!actor.IsSuperAdministrator && !await HRM.Helpers.StaffAttributeAccess.CanViewAsync(db, access, staffId, org, ct))
+            return null;
         var name = await db.Individuals.AsNoTracking().Where(x => x.BusinessEntityId == staffId)
             .Select(x => (x.FirstNameEnglish ?? "") + " " + (x.MiddleNameEnglish ?? "") + " " + (x.LastNameEnglish ?? "")).FirstOrDefaultAsync(ct);
-        return name is null ? null : new(name.Replace("  ", " ").Trim(), await FormerStaffPolicy.IsFormerAsync(db, staffId, org));
+        return name is null ? null : new(name.Replace("  ", " ").Trim(), await FormerStaffPolicy.IsFormerAsync(db, staffId, org > 0 ? org : 0));
     }
 
     public async Task<WorkspaceSearchPage> SearchAsync(WorkspaceSearchFilter filter, CancellationToken token = default)
@@ -92,7 +96,7 @@ public sealed class WorkspaceDirectoryService(IDbContextFactory<HrmTeContext> fa
                     : "")
 
             where (!restricted || allowedIds.Contains(i.BusinessEntityId)) &&
-                (job == null || currentJobs.Any(j => j.JobId == job.JobId)) &&
+                job != null && currentJobs.Any(j => j.JobId == job.JobId) &&
                 (!filter.RequireActivePosition || job != null && job.JobStateId == 4 && job.JoinedDate <= today &&
                     (!job.TerminatedDate.HasValue || job.TerminatedDate > today) &&
                     Db.JobPositions.Any(p => p.JobId == job.JobId && p.JobPositionStateId == 4 &&
@@ -173,8 +177,19 @@ public sealed class WorkspaceDirectoryService(IDbContextFactory<HrmTeContext> fa
         )
         .Distinct()
         .OrderBy(x => x.Name)
-        .Take(10)
+        .Take(50)
         .ToListAsync(token);
+
+        if (!isSuperAdministrator)
+        {
+            var visible = await HRM.Helpers.StaffAttributeAccess.FilterViewableAsync(Db, access, currentOrganisationId,
+                foundStaff.Select(x => x.IndividualId), token);
+            foundStaff = foundStaff.Where(x => visible.Contains(x.IndividualId)).Take(10).ToList();
+        }
+        else
+        {
+            foundStaff = foundStaff.Take(10).ToList();
+        }
 
         // =====================================================
         // ORGANISATION SEARCH

@@ -21,6 +21,10 @@ public static class ApplicationContractCatalog
         typeof(global::HRM.WorkPlanning.Services.Contracts.DutyRosterServiceContracts.IOperations),
         typeof(global::HRM.Services.Leave.Contracts.LeaveHandoverServiceContracts.IOperations),
         typeof(global::HRM.Services.Leave.Contracts.LeaveCalendarServiceContracts.IOperations),
+        typeof(global::HRM.Services.Calendar.Contracts.OrganisationEventServiceContracts.IOperations),
+        typeof(global::HRM.Services.Calendar.Contracts.OrganisationCalendarServiceContracts.IOperations),
+        typeof(global::HRM.Services.Calendar.Contracts.SupervisorCalendarServiceContracts.IOperations),
+        typeof(global::HRM.Services.Calendar.Contracts.CalendarImpactServiceContracts.IOperations),
         typeof(global::HRM.Services.Contracts.LeaveConfigurationSettingsServiceContracts.IOperations),
         typeof(global::HRM.Services.Contracts.LeaveSetConfigurationServiceContracts.IOperations),
         typeof(global::HRM.Services.Leave.Contracts.LeaveHandoverRuleSettingsServiceContracts.IOperations),
@@ -44,9 +48,14 @@ public static class ApplicationContractCatalog
         typeof(global::HRM.Services.Contracts.StaffOnboardingServiceContracts.IOperations),
         typeof(global::HRM.Services.Contracts.FormerStaffServiceContracts.IOperations),
         typeof(global::HRM.Services.Contracts.GroupsManagementServiceContracts.IOperations),
+        typeof(global::HRM.Services.Contracts.StaffGroupServiceContracts.IOperations),
+        typeof(global::HRM.Services.Contracts.SloganServiceContracts.IOperations),
         typeof(global::HRM.Services.Contracts.IndividualRegistrationServiceContracts.IOperations),
         typeof(global::HRM.Services.Contracts.HrRequestInboxServiceContracts.IOperations),
         typeof(global::HRM.Services.Contracts.ItemCatalogueServiceContracts.IOperations),
+        typeof(global::HRM.Services.Contracts.LeadershipAuthorityServiceContracts.IOperations),
+        typeof(global::HRM.Services.Contracts.LeadershipAdministrationServiceContracts.IOperations),
+        typeof(global::HRM.Services.Contracts.EdgeAgentManagementContracts.IOperations),
         typeof(global::HRM.Services.Contracts.StaffTransferServiceContracts.IOperations),
         typeof(global::HRM.Services.Contracts.StaffSeparationServiceContracts.IOperations),
         typeof(global::HRM.Services.Contracts.StaffAssetServiceContracts.IOperations),
@@ -91,6 +100,19 @@ public static class ApplicationContractCatalog
         typeof(global::HRM.Application.Contracts.Pages.IEmployeeAddresses),
         typeof(global::HRM.Services.Contracts.CertificateServiceContracts.IOperations),
         typeof(global::HRM.Services.Contracts.DocumentManagementServiceContracts.IOperations),
-        typeof(global::HRM.Application.Contracts.Pages.IEnterprisePayroll)
+        typeof(global::HRM.Application.Contracts.Pages.IEnterprisePayroll),
+        typeof(global::HRM.Services.Contracts.StaffBankServiceContracts.IOperations),
+        typeof(global::HRM.Services.Contracts.StaffEmergencyContactServiceContracts.IOperations),
+        typeof(global::HRM.Services.Contracts.StaffIdentityDocumentServiceContracts.IOperations)
+        ,typeof(global::HRM.Services.Contracts.CommunicationHubContracts.IOperations)
     ]);
+
+    /// <summary>Reviewed DTO-only contracts served by dedicated HTTP clients instead of the generated v1 transport.</summary>
+    public static IReadOnlyList<Type> DedicatedHttpClients { get; } = Array.AsReadOnly<Type>(
+    [
+        typeof(global::HRM.Application.Contracts.Pages.IGoodsLoanService)
+    ]);
+
+    public static IReadOnlyList<Type> Reviewed { get; } = Array.AsReadOnly(
+        All.Concat(DedicatedHttpClients).ToArray());
 }

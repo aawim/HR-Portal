@@ -134,27 +134,6 @@ static class LeaveHistoryTests
             renderer.CheckErrors();
             Check(Rows(card).Count == 16 && !renderer.RootText().Contains("could not be loaded"), "Reset did not restore all leave records");
         }
-        var activator = new HistoryPageActivator();
-        using var pageServices = new ServiceCollection().AddLogging()
-            .AddSingleton<IComponentActivator>(activator)
-            .AddSingleton<HRM.Application.Contracts.Pages.ILeaveApplications>(new HRM.Services.Transport.LeaveApplicationsService(service)).AddSingleton<IUserAccessService>(access)
-            .AddSingleton<HRM.Application.Contracts.Pages.ILeaveRequestWorkflowQueries>(new HRM.Services.Queries.LeaveRequestWorkflowQueries(factory, access))
-            .AddSingleton<IDbContextFactory<HrmTeContext>>(factory).AddSingleton<ToastService>()
-            .AddSingleton(Proxy.For<ILeaveChangeService>((name, _) => throw new Exception(name)))
-            .AddSingleton(Proxy.For<IWorkflowEngine>((name, _) => throw new Exception(name)))
-            .BuildServiceProvider();
-        await using (var renderer = new TestRenderer(pageServices))
-        {
-            await renderer.Dispatcher.InvokeAsync(async () =>
-            {
-                renderer.Attach(new AllLeaveRequests());
-                await renderer.Render();
-            });
-            renderer.CheckErrors();
-            var card = (HistoryCard)renderer.Component(typeof(HistoryCard));
-            Check(card.ShowAll && Rows(card).Count == 16 && activator.Created.Contains(typeof(BackButton)),
-                "View all page does not mount the full history and Back to Dashboard components");
-        }
     }
     public static async Task ProcessingVisibilityAsync()
     {

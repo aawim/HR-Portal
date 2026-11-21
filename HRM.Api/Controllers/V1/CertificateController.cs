@@ -35,10 +35,15 @@ public sealed class CertificateController(global::HRM.Services.Contracts.Certifi
         public global::HRM.DTOs.Certificates.CertificateRequestInput input { get; set; } = default!;
     }
 
-    [HttpGet("cancel-certificate-request")]
-    public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> CancelCertificateRequest([FromQuery] global::System.Int32 certificateRequestId)
+    [HttpPost("cancel-certificate-request")]
+    public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> CancelCertificateRequest([FromBody] CertificateCancelCertificateRequestRequest request)
     {
-        return Ok(await service.CancelCertificateRequestAsync(certificateRequestId));
+        return Ok(await service.CancelCertificateRequestAsync(request.certificateRequestId));
+    }
+
+    public sealed class CertificateCancelCertificateRequestRequest
+    {
+        public global::System.Int32 certificateRequestId { get; set; }
     }
 
     [HttpGet("get-admin-pending-requests")]

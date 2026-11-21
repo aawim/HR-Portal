@@ -17,7 +17,7 @@
 @inject LeaveStore LeaveStore
 @inject ToastService ToastService
 
-<div class="leave-application">
+<div class="leave-application flex flex-col gap-2 p-2">
 <div class="border-b px-1 pb-3 @(HideHeader ? "hidden" : "")">
     <h2 class="text-2xl font-bold text-slate-800">Leave Application</h2>
     <p class="text-sm text-slate-500">@(LeaveState.ApplicantJobId.HasValue ? "HR application on behalf of the selected staff member. The normal approval flow applies." : "Apply for leave and manage details")</p>
@@ -28,17 +28,12 @@
        <!-- HEADER -->
    
     <!-- LEFT COLUMN (Flexible) -->
-    <div class="leave-application-main space-y-4">
+    <div class="leave-application-main flex flex-col gap-2">
 
         <!-- Top: Equal two columns -->
         <div class="leave-application-calendars">
-            <div class="p-1 rounded">
-                <LeaveCalendarCard ApplicantJobId="LeaveState.ApplicantJobId" RefreshKey="calendarRefresh" OnChanged="CalendarChanged" OnPlanSelected="UsePlan" />
-            </div>
-
-            <div class="p-1 rounded">
-                <LeaveCalendarCard ApplicantJobId="LeaveState.ApplicantJobId" MonthOffset="1" RefreshKey="calendarRefresh" OnChanged="CalendarChanged" OnPlanSelected="UsePlan" />
-            </div>
+            <LeaveCalendarCard ApplicantJobId="LeaveState.ApplicantJobId" RefreshKey="calendarRefresh" OnChanged="CalendarChanged" OnPlanSelected="UsePlan" />
+            <LeaveCalendarCard ApplicantJobId="LeaveState.ApplicantJobId" MonthOffset="1" RefreshKey="calendarRefresh" OnChanged="CalendarChanged" OnPlanSelected="UsePlan" />
         </div>
 
 

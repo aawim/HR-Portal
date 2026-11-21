@@ -430,8 +430,6 @@ static class ScheduleFlowTests
             await PunchOn(closestPunchDate, 6, 30),
             await PunchOn(closestPunchDate, 7, 30) };
         var closestPunchEvaluation = await new HRM.Services.Attendance.AttendanceEvaluationService(factory).EvaluateAsync(1000, 100, closestPunchDate);
-        Console.WriteLine("DEBUG closest: " + string.Join(", ", closestPunches.Select(x => $"{x.ClockType}:{x.WorkPlanSegmentId}:{x.SegmentName}")) +
-            $" first={closestPunchEvaluation.FirstCheckIn} planned={closestPunchEvaluation.PlannedStart} events={closestPunchEvaluation.ResolvedClockCount}");
         Check(closestPunchEvaluation.FirstCheckIn == closestPunchDate.AddHours(7).AddMinutes(30),
             "Attendance evaluation used an early punch instead of the clock event closest to the scheduled start");
         var nightDate = date.AddDays(-8);

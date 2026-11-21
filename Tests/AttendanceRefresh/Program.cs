@@ -27,12 +27,20 @@ using MyAttendance = HRM.Components.Pages.Online.MyAttendanceGrid;
 // Only unrelated dashboard widgets are replaced. Clock buttons use the real
 // AttendanceLogService against an isolated in-memory database. Production
 // connections and employee attendance records are never used.
-if(args.Contains("--application-contracts-only")){await ContractProjectionTests.RunAsync();await UserAppDataRegistrationTests.RunAsync();await ApiOperationContractTests.RunAsync();await OvertimePolicyTests.RunAsync();return 0;}
+if (args.Contains("--edge-agent-only"))
+{
+    await EdgeAgentTests.RunAsync();
+    return 0;
+}
+if(args.Contains("--application-contracts-only")){await ContractProjectionTests.RunAsync();await UserAppDataRegistrationTests.RunAsync();await ApiOperationContractTests.RunAsync();
+if(args.Contains("--access-scope-only")){await StaffAttributeAccessTests.RunAsync();Console.WriteLine("PASS Organisational access scopes, multi-division grants, field-level classification redaction, simulation and audit");return 0;}await OvertimePolicyTests.RunAsync();return 0;}
 await ContractProjectionTests.RunAsync();
 if(args.Contains("--user-app-data-only")){await UserAppDataRegistrationTests.RunAsync();return 0;}
 await UserAppDataRegistrationTests.RunAsync();
-if(args.Contains("--architecture-only")){await ApiOperationContractTests.RunAsync();await UnattachedIndividualSearchTests.RunAsync();await SearchReliabilityTests.RunAsync();return 0;}
+if(args.Contains("--architecture-only")){await ApiOperationContractTests.RunAsync();
+if(args.Contains("--access-scope-only")){await StaffAttributeAccessTests.RunAsync();Console.WriteLine("PASS Organisational access scopes, multi-division grants, field-level classification redaction, simulation and audit");return 0;}await UnattachedIndividualSearchTests.RunAsync();await SearchReliabilityTests.RunAsync();return 0;}
 await ApiOperationContractTests.RunAsync();
+if(args.Contains("--access-scope-only")){await StaffAttributeAccessTests.RunAsync();Console.WriteLine("PASS Organisational access scopes, multi-division grants, field-level classification redaction, simulation and audit");return 0;}
 if(args.Contains("--group-chat-only")){await StaffGroupChatTests.RunAsync();Console.WriteLine("PASS Staff group chat");return 0;}
 if(args.Contains("--chat-only")){await StaffChatTests.RunAsync();Console.WriteLine("PASS Staff chat");return 0;}
 if(args.Contains("--font-size-only")){await UserFontSizeTests.RunAsync();Console.WriteLine("PASS User font size preferences");return 0;}
@@ -109,6 +117,8 @@ catch (Exception ex) { failures++; Console.Error.WriteLine($"FAIL Working hours:
 if (args.Contains("--working-hours-only")) return failures == 0 ? 0 : 1;
 try { await SecurityHardeningTests.RunAsync(); Console.WriteLine("PASS Security hardening: retired endpoints, CSRF, configured database providers, clock ownership, developer-only diagnostics, leave-type privileges and tenant isolation"); }
 catch (Exception ex) { failures++; Console.Error.WriteLine($"FAIL Security hardening: {ex}"); }
+try { await StaffAttributeAccessTests.RunAsync(); Console.WriteLine("PASS Staff ABAC: Political classification default-deny, explicit grants, deny precedence, explicit-only scopes and self access"); }
+catch (Exception ex) { failures++; Console.Error.WriteLine($"FAIL Staff ABAC: {ex}"); }
 if (args.Contains("--security-only")) return failures == 0 ? 0 : 1;
 try { await CrudConsolidationTests.RunAsync(); Console.WriteLine("PASS CRUD consolidation: shared address creation, owner isolation, current-address handling, canonical account writes and legacy adapters"); }
 catch(Exception ex) { failures++; Console.Error.WriteLine($"FAIL CRUD consolidation: {ex}"); }
@@ -441,6 +451,7 @@ static async Task TestRefresh(Type clockType)
         .AddLogging()
         .AddSingleton(attendance).AddSingleton(access).AddSingleton(plans)
         .AddSingleton(Proxy.For<IAttendanceResolver>((name, _) => throw new Exception(name)))
+        .AddSingleton(Proxy.For<HRM.Services.Calendar.Contracts.OrganisationCalendarServiceContracts.IOperations>((method, _) => method == "ResolveEffectiveWorkdayAsync" ? Task.FromResult(new HRM.DTOs.Calendar.EffectiveWorkdayResolutionDto { IsWorkingDay = true, AttendanceRequired = true }) : throw new Exception(method)))
         .AddSingleton(Proxy.For<HRM.Services.Interfaces.IWorkTypeService>((method, _) => method == "CanClockAsync" ? Task.FromResult(true) : throw new Exception(method)))
         .AddSingleton(new AttendanceLogService(db, processor,
             Proxy.For<IOperationLogService>((name, _) => name == "CreateAsync" ? Task.FromResult(new OperationLog { OperationLogId = 1 }) : throw new Exception(name)),
@@ -454,6 +465,7 @@ static async Task TestRefresh(Type clockType)
     SetProperty(page, "AttendanceService", attendance);
     SetProperty(page, "_access", access);
     SetProperty(page, "AttendancePlanService", plans);
+    SetProperty(page, "PortalContext", new HRM.Services.PortalContext());
     SetField(page, "loading", false);
     SetField(page, "allowTestClock", true);
     await renderer.Dispatcher.InvokeAsync(async () =>
@@ -686,6 +698,28 @@ sealed class TestRenderer : Renderer
         return frames.Array.Take(frames.Count).Where(x => x.FrameType == RenderTreeFrameType.Attribute && x.AttributeName == "value")
             .Select(x => x.AttributeValue?.ToString() ?? "").ToList();
     }
+    public List<string> RootOptionValues(string selectId)
+    {
+        var frames = GetCurrentRenderTreeFrames(root);
+        var values = new List<string>();
+        for (var i = 0; i < frames.Count; i++)
+        {
+            var select = frames.Array[i];
+            if (select.FrameType != RenderTreeFrameType.Element || select.ElementName != "select") continue;
+            var selectAttributes = frames.Array.Skip(i + 1).TakeWhile(x => x.FrameType == RenderTreeFrameType.Attribute);
+            if (!selectAttributes.Any(x => x.AttributeName == "id" && x.AttributeValue?.ToString() == selectId)) continue;
+            var end = i + select.ElementSubtreeLength;
+            for (var optionIndex = i + 1; optionIndex < end; optionIndex++)
+            {
+                if (frames.Array[optionIndex].FrameType != RenderTreeFrameType.Element || frames.Array[optionIndex].ElementName != "option") continue;
+                var value = frames.Array.Skip(optionIndex + 1).TakeWhile(x => x.FrameType == RenderTreeFrameType.Attribute)
+                    .FirstOrDefault(x => x.AttributeName == "value");
+                values.Add(value.AttributeValue?.ToString() ?? "");
+            }
+            break;
+        }
+        return values;
+    }
     public int RootDateInputCount()
     {
         var frames = GetCurrentRenderTreeFrames(root);
@@ -768,7 +802,7 @@ sealed class TestContext(DbContextOptions<HrmTeContext> options) : HrmTeContext(
     {
         var types = new[] { typeof(Job), typeof(AttendanceLog), typeof(Leaf), typeof(LeaveType), typeof(AttendanceLogResolution),
             typeof(HRM.Models.WorkPlanning.JobWorkTemplateAssignment), typeof(JobWorkTemplate), typeof(HRM.Models.WorkPlanning.WorkPlan), typeof(HRM.Models.WorkPlanning.WorkAssignment),
-            typeof(HRM.Models.Archives.AssignedWorkType), typeof(HRM.Models.Archives.WorkType) }.Concat(ScheduleTestModel.EligibilityTypes).Distinct().ToArray();
+            typeof(HRM.Models.Archives.AssignedWorkType), typeof(HRM.Models.Archives.WorkType), typeof(HRM.Models.OrganisationCalendarException), typeof(HRM.Models.OrganisationEvent) }.Concat(ScheduleTestModel.EligibilityTypes).Distinct().ToArray();
         foreach (var type in builder.Model.GetEntityTypes().Select(x => x.ClrType).ToArray())
             if (!types.Contains(type)) builder.Ignore(type);
         foreach (var type in types)
@@ -791,6 +825,8 @@ sealed class TestContext(DbContextOptions<HrmTeContext> options) : HrmTeContext(
         builder.Entity<AttendanceLogResolution>().HasOne(x => x.AttendanceLog).WithMany(x => x.AttendanceLogResolutions).HasForeignKey(x => x.AttendanceLogId);
         builder.Entity<HRM.Models.Archives.AssignedWorkType>().HasKey(x => x.AssignedWorkTypeId);
         builder.Entity<HRM.Models.Archives.WorkType>().HasKey(x => x.WorkTypeId);
+        builder.Entity<HRM.Models.OrganisationCalendarException>().HasKey(x => x.OrganisationCalendarExceptionId);
+        builder.Entity<HRM.Models.OrganisationEvent>().HasKey(x => x.OrganisationEventId);
         ScheduleTestModel.Configure(builder);
     }
 }

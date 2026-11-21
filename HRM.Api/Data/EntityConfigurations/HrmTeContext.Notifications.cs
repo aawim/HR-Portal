@@ -31,6 +31,7 @@ public partial class HrmTeContext
                 continue;
             var users = Users.Where(u => u.IsActive && u.LocalUserStateId == 1 &&
                 u.BusinessEntityID == request.ApplicantBusinessEntityId &&
+                u.UserId != request.LastStateChangedByUserId &&
                 (request.OrganisationBusinessEntityID == null || u.UserOrganisation!.BusinessEntityID == request.OrganisationBusinessEntityID))
                 .Select(u => u.UserId);
             var ids = asynchronous ? await users.ToListAsync(token).ConfigureAwait(false) : users.ToList();
@@ -49,6 +50,16 @@ public partial class HrmTeContext
         foreach (var entry in changes)
         {
             var request = entry.Entity;
+            var isItemRequest = ChangeTracker.Entries<ItemStaffRequest>().Any(x =>
+                    ReferenceEquals(x.Entity.Request, request) || x.Entity.RequestId == request.RequestId) ||
+                ItemStaffRequests.Local.Any(x => x.RequestId == request.RequestId) ||
+                (asynchronous
+                    ? await ItemStaffRequests.AnyAsync(x => x.RequestId == request.RequestId, token).ConfigureAwait(false)
+                    : ItemStaffRequests.Any(x => x.RequestId == request.RequestId));
+            // Item requests create their tailored recipient notification explicitly.
+            // Skipping the generic request notification prevents the merged bell inbox
+            // from displaying the same business event twice.
+            if (isItemRequest) continue;
             var from = entry.Property(x => x.RequestStateId).OriginalValue;
             var people = new List<int>();
             if (request.ApplicantBusinessEntityId.HasValue) people.Add(request.ApplicantBusinessEntityId.Value);
@@ -74,6 +85,7 @@ public partial class HrmTeContext
                 people.AddRange(asynchronous ? await subjects.ToListAsync(token) : subjects.ToList());
             }
             var users = Users.Where(x => x.IsActive && x.LocalUserStateId == 1 && people.Contains(x.BusinessEntityID) &&
+                x.UserId != request.LastStateChangedByUserId &&
                 (request.OrganisationBusinessEntityID == null || x.UserOrganisation!.BusinessEntityID == request.OrganisationBusinessEntityID))
                 .Select(x => x.UserId);
             var recipients = asynchronous ? await users.ToListAsync(token).ConfigureAwait(false) : users.ToList();

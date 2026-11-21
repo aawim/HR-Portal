@@ -1,0 +1,720 @@
+@page "/admin/hr/events"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@rendermode RenderMode.InteractiveServer
+@using HRM.DTOs.Calendar
+@inject HRM.Services.Calendar.Contracts.OrganisationEventServiceContracts.IOperations Events
+@inject HRM.Services.ToastService Toasts
+@inject IJSRuntime JS
+
+<PageTitle>Organisation Event Manager - HR Administration</PageTitle>
+
+<div class="mx-auto min-w-7xl max-w-full p-2 flex flex-col gap-2">
+    <!-- Breadcrumb Header -->
+    <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-2">
+        <nav class="flex items-center gap-1.5 text-xs text-slate-500" aria-label="Breadcrumb">
+            <a href="/admin/hr" class="hover:text-blue-600 transition">HR</a>
+            <span>/</span>
+            <span class="text-slate-900 font-semibold">Organisation Event Manager</span>
+        </nav>
+        <a href="/admin/my/workspace" class="text-xs font-semibold text-slate-500 hover:text-slate-800 transition">
+            ← Back to Admin Workspace
+        </a>
+    </div>
+
+    <section class="events-admin-page w-full min-w-0 p-2 space-y-4">
+        <!-- Full-Width Sticky Header -->
+        <header class="events-admin-header sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur-xs px-3 py-3 shadow-xs rounded-2xl flex flex-wrap items-center justify-between gap-3">
+            <div class="min-w-0">
+                <div class="flex items-center gap-2">
+                    <span class="rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-semibold text-blue-800">HR Administration</span>
+                    <span class="text-xs text-slate-400">Calendar &amp; Operational Events</span>
+                    <span class="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-bold text-slate-700">@events.Count events</span>
+                </div>
+                <h1 class="text-lg font-bold text-slate-900 truncate mt-0.5">Organisation Event Manager</h1>
+                <p class="text-xs text-slate-500">Configure organisation meetings, ceremonies, non-working days, and official schedule exceptions.</p>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-2">
+                <!-- Full Width / Shrink View Toggle -->
+                <button type="button"
+                        class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition-colors"
+                        @onclick="ToggleFullWidth"
+                        title="@(isFullWidth ? "Shrink view width" : "Expand to full viewport width")">
+                    @if (isFullWidth)
+                    {
+                        <AppIcon Name="fullscreen" Class="w-3.5 h-3.5 text-slate-600 text-sm" />
+                        <span>Shrink View</span>
+                    }
+                    else
+                    {
+                        <svg class="w-3.5 h-3.5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-5h-4m4 0v4m0-4l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 4h-4m4 0l-5-5"/></svg>
+                        <span>Full Width</span>
+                    }
+                </button>
+
+                <!-- Refresh Button -->
+                <button type="button"
+                        class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition-colors"
+                        disabled="@busy"
+                        @onclick="LoadAsync">
+                    <span class="@(busy ? "animate-spin" : "")">↻</span>
+                    <span>Refresh</span>
+                </button>
+
+                <!-- Primary New Event Button -->
+                <button type="button"
+                        class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 transition-colors"
+                        @onclick="NewEvent">
+                    <span>+ New Event</span>
+                </button>
+            </div>
+        </header>
+
+        @if (error != null)
+        {
+            <div role="alert" class="flex items-center justify-between rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">
+                <div class="flex items-center gap-2">
+                    <svg class="w-4 h-4 text-rose-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    <span>@error</span>
+                </div>
+                <button type="button" class="font-bold text-rose-600 hover:text-rose-900" aria-label="Dismiss" @onclick="() => error = null">✕</button>
+            </div>
+        }
+
+        <!-- 2-Panel Grid System -->
+        <div class="page-panels @(isFullWidth ? "page-panels-full" : "page-panels-standard")">
+            
+            <!-- LEFT PANEL: Filter Toolbar & Event List -->
+            <div class="page-panel-left min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-xs flex flex-col gap-3">
+                
+                <!-- Filters Grid -->
+                <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-3 flex flex-col gap-2.5">
+                    <div class="grid grid-cols-2 gap-2 md:grid-cols-6">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 p-1">From Date</label>
+                            <input type="date" class="@InputClass" @bind="from" @bind:after="LoadAsync" />
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 p-1">To Date</label>
+                            <input type="date" class="@InputClass" @bind="to" @bind:after="LoadAsync" />
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 p-1">Category</label>
+                            <select class="@InputClass" @bind="category" @bind:after="LoadAsync">
+                                <option value="">All Categories</option>
+                                @foreach (var c in Categories) { <option value="@c">@Pretty(c)</option> }
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 p-1">Status</label>
+                            <select class="@InputClass" @bind="status" @bind:after="LoadAsync">
+                                <option value="">All Statuses</option>
+                                @foreach (var s in Statuses) { <option value="@s">@Pretty(s)</option> }
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 p-1">Calendar Impact</label>
+                            <select class="@InputClass" @bind="impact" @bind:after="LoadAsync">
+                                <option value="">All Impacts</option>
+                                @foreach (var i in Impacts) { <option value="@i">@Pretty(i)</option> }
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 p-1">Timeline</label>
+                            <select class="@InputClass" @bind="upcoming" @bind:after="LoadAsync">
+                                <option value="">All Events</option>
+                                <option value="true">Upcoming Only</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Event Table -->
+                <div class="overflow-x-auto rounded-xl border border-slate-200">
+                    <table class="w-full text-left text-xs border-collapse">
+                        <thead class="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold">
+                            <tr>
+                                <th class="p-2.5">Event Title</th>
+                                <th class="p-2.5">Category</th>
+                                <th class="p-2.5">Date &amp; Time</th>
+                                <th class="p-2.5">Venue</th>
+                                <th class="p-2.5">Audience</th>
+                                <th class="p-2.5">Calendar Impact</th>
+                                <th class="p-2.5">Status</th>
+                                <th class="p-2.5 text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            @if (busy)
+                            {
+                                <tr>
+                                    <td colspan="8" class="p-6 text-center text-slate-500">
+                                        <div class="inline-block animate-spin mr-1">↻</div> Loading events…
+                                    </td>
+                                </tr>
+                            }
+                            else if (events.Count == 0)
+                            {
+                                <tr>
+                                    <td colspan="8" class="p-8 text-center text-slate-400 italic">
+                                        No organisation events match the selected filters.
+                                    </td>
+                                </tr>
+                            }
+                            else
+                            {
+                                @foreach (var e in events)
+                                {
+                                    var isRowSelected = (detail?.OrganisationEventId == e.OrganisationEventId) || (editing?.OrganisationEventId == e.OrganisationEventId);
+                                    <tr class="transition-colors @(isRowSelected ? "bg-blue-50/60" : "hover:bg-slate-50")">
+                                        <td class="p-2.5 font-semibold text-slate-900">
+                                            @e.Title
+                                        </td>
+                                        <td class="p-2.5">
+                                            <span class="rounded-full bg-slate-100 text-slate-700 px-2 py-0.5 font-medium text-[11px]">
+                                                @Pretty(e.Category)
+                                            </span>
+                                        </td>
+                                        <td class="p-2.5 whitespace-nowrap text-slate-700">
+                                            @e.StartDateTime.ToString("dd MMM yyyy")
+                                            <span class="text-slate-400 block text-[11px]">
+                                                @(e.IsAllDay ? "All Day" : e.StartDateTime.ToString("HH:mm") + " – " + e.EndDateTime.ToString("HH:mm"))
+                                            </span>
+                                        </td>
+                                        <td class="p-2.5 text-slate-600">
+                                            @(string.IsNullOrWhiteSpace(e.VenueName) ? "—" : e.VenueName)
+                                        </td>
+                                        <td class="p-2.5 text-slate-600">
+                                            @e.AudienceSummary
+                                        </td>
+                                        <td class="p-2.5 whitespace-nowrap">
+                                            @if (e.CalendarImpactType == "None")
+                                            {
+                                                <span class="text-slate-400">Informational</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="rounded-md bg-amber-50 text-amber-800 border border-amber-200 px-1.5 py-0.5 text-[11px] font-semibold">
+                                                    ⚑ @Pretty(e.CalendarImpactType)
+                                                </span>
+                                            }
+                                        </td>
+                                        <td class="p-2.5 whitespace-nowrap">
+                                            <span class="rounded-full border px-2.5 py-0.5 font-semibold text-[11px] @StatusClass(e.Status)">
+                                                @Pretty(e.Status)
+                                            </span>
+                                        </td>
+                                        <td class="p-2.5 text-right whitespace-nowrap">
+                                            <div class="inline-flex items-center gap-1">
+                                                <button type="button"
+                                                        class="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 transition"
+                                                        @onclick="() => OpenDetailAsync(e.OrganisationEventId)">
+                                                    View
+                                                </button>
+                                                @if (e.Status is "Draft" or "PendingApproval" or "Published")
+                                                {
+                                                    <button type="button"
+                                                            class="rounded-lg border border-blue-300 bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-100 transition"
+                                                            @onclick="() => EditAsync(e.OrganisationEventId)">
+                                                        Edit
+                                                    </button>
+                                                }
+                                                <button type="button"
+                                                        class="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50 transition"
+                                                        @onclick="() => DuplicateAsync(e.OrganisationEventId)"
+                                                        title="Duplicate Event">
+                                                    Copy
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- RIGHT PANEL: Form Editor or Detail / Impact Preview -->
+            <aside class="page-panel-right min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-xs flex flex-col gap-3">
+                @if (editing != null)
+                {
+                    <!-- EDIT FORM -->
+                    <div class="flex items-center justify-between border-b border-slate-200 pb-2.5">
+                        <h2 class="font-bold text-slate-900 text-sm">
+                            @(editing.OrganisationEventId == 0 ? "Create New Event" : "Edit Event")
+                        </h2>
+                        <button type="button" class="text-xs text-slate-500 hover:text-slate-800" @onclick="() => editing = null">✕ Close</button>
+                    </div>
+
+                    <div class="space-y-3">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-800 p-1">Event Title *</label>
+                            <input class="@InputClass" maxlength="200" @bind="editing.Title" placeholder="e.g. Annual Staff Gathering" />
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-800 p-1">Category</label>
+                                <select class="@InputClass" @bind="editing.Category">
+                                    @foreach (var c in Categories) { <option value="@c">@Pretty(c)</option> }
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-800 p-1">Event Code</label>
+                                <input class="@InputClass" maxlength="40" @bind="editing.EventCode" placeholder="Optional code" />
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-800 p-1">Start Date &amp; Time</label>
+                                <input type="datetime-local" class="@InputClass" @bind="editing.StartDateTime" />
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-800 p-1">End Date &amp; Time</label>
+                                <input type="datetime-local" class="@InputClass" @bind="editing.EndDateTime" />
+                            </div>
+                        </div>
+
+                        <label class="flex items-center gap-2 p-1 text-xs font-medium text-slate-700">
+                            <input type="checkbox" class="rounded text-blue-600" @bind="editing.IsAllDay" />
+                            <span>All-Day Event</span>
+                        </label>
+
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-800 p-1">Venue Name</label>
+                                <input class="@InputClass" maxlength="200" @bind="editing.VenueName" placeholder="e.g. Main Auditorium" />
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-800 p-1">Online Meeting URL</label>
+                                <input class="@InputClass" maxlength="500" @bind="editing.MeetingUrl" placeholder="https://..." />
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-800 p-1">Venue Address / Location</label>
+                            <input class="@InputClass" maxlength="400" @bind="editing.VenueAddress" placeholder="Physical location details" />
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-800 p-1">Dress Code</label>
+                                <input class="@InputClass" maxlength="200" @bind="editing.DressCode" placeholder="e.g. Formal, Smart Casual" />
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-800 p-1">Attendance Requirement</label>
+                                <select class="@InputClass" @bind="editing.AttendanceRequirement">
+                                    <option value="InformationOnly">Information Only</option>
+                                    <option value="Optional">Optional</option>
+                                    <option value="Required">Required</option>
+                                    <option value="RequiredSelected">Required for Selected Staff</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-800 p-1">Contact Details</label>
+                            <input class="@InputClass" maxlength="300" @bind="editing.ContactInformation" placeholder="Responsible officer name / email / extension" />
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-800 p-1">Description</label>
+                            <textarea rows="2" class="@InputClass" @bind="editing.Description" placeholder="Event overview..."></textarea>
+                        </div>
+
+                        <!-- Target Audience Sub-Card -->
+                        <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-3 flex flex-col gap-2">
+                            <h3 class="font-bold text-slate-800 p-1 text-xs">Target Audience</h3>
+                            <label class="flex items-center gap-2 text-xs font-medium text-slate-700">
+                                <input type="checkbox" class="rounded text-blue-600" checked="@wholeOrganisation" @onchange="e => ToggleOrganisation((bool)e.Value!)" />
+                                <span>Entire Organisation</span>
+                            </label>
+                            @if (!wholeOrganisation)
+                            {
+                                @foreach (var a in editing.Audiences)
+                                {
+                                    <div class="flex items-center gap-2">
+                                        <select class="@InputClass" @bind="a.AudienceType">
+                                            <option value="Department">Department</option>
+                                            <option value="Team">Team</option>
+                                            <option value="Individual">Staff Member</option>
+                                            <option value="EmploymentCategory">Employment Category</option>
+                                        </select>
+                                        <input type="number" min="1" class="@InputClass" placeholder="Target ID" @bind="a.TargetEntityId" />
+                                        <button type="button" class="text-rose-600 hover:text-rose-800 font-bold px-1" title="Remove Audience" @onclick="() => editing.Audiences.Remove(a)">✕</button>
+                                    </div>
+                                }
+                                <button type="button" class="inline-flex items-center self-start text-xs font-semibold text-blue-600 hover:text-blue-800 p-1" @onclick="AddAudience">
+                                    + Add Audience Group
+                                </button>
+                            }
+                        </div>
+
+                        <!-- Calendar Impact Sub-Card -->
+                        <div class="rounded-xl border border-blue-200 bg-blue-50/40 p-3 flex flex-col gap-2.5">
+                            <div>
+                                <h3 class="font-bold text-slate-800 p-1 text-xs">Workday &amp; Calendar Impact</h3>
+                                <p class="text-[11px] text-slate-600 px-1">Specify whether this event alters scheduled work hours or marks non-working holidays.</p>
+                            </div>
+                            <select class="@InputClass" @bind="editing.CalendarImpactType">
+                                @foreach (var i in Impacts) { <option value="@i">@Pretty(i)</option> }
+                            </select>
+
+                            @if (editing.CalendarImpactType is "MarkAsWorkingDay" or "OverrideWorkingHours" or "ShortenedWorkingDay" or "ExtendedWorkingDay")
+                            {
+                                <div class="grid grid-cols-2 gap-2 pt-1">
+                                    <div>
+                                        <label class="block text-xs font-semibold text-slate-800 p-1">Effective Start</label>
+                                        <input type="time" class="@InputClass" @bind="startTime" />
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-semibold text-slate-800 p-1">Effective End</label>
+                                        <input type="time" class="@InputClass" @bind="endTime" />
+                                    </div>
+                                </div>
+                            }
+
+                            @if (editing.CalendarImpactType != "None")
+                            {
+                                <div class="space-y-1.5 pt-1">
+                                    <label class="flex items-center gap-2 text-xs font-medium text-slate-700">
+                                        <input type="checkbox" class="rounded text-blue-600" @bind="editing.AffectsAttendanceExpectation" />
+                                        <span>Affects attendance expectations</span>
+                                    </label>
+                                    <label class="flex items-center gap-2 text-xs font-medium text-slate-700">
+                                        <input type="checkbox" class="rounded text-blue-600" @bind="editing.RequiresLeaveRecalculation" />
+                                        <span>Authorised leave recalculation required</span>
+                                    </label>
+                                </div>
+                            }
+                        </div>
+
+                        <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-200">
+                            <button type="button"
+                                    class="inline-flex items-center rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition"
+                                    @onclick="() => editing = null">
+                                Cancel
+                            </button>
+                            <button type="button"
+                                    class="inline-flex items-center rounded-lg bg-blue-600 px-4 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 disabled:opacity-50 transition"
+                                    disabled="@busy"
+                                    @onclick="SaveAsync">
+                                Save Event
+                            </button>
+                        </div>
+                    </div>
+                }
+                else if (detail != null)
+                {
+                    <!-- DETAIL & AUDIT VIEW -->
+                    <div class="flex items-start justify-between border-b border-slate-200 pb-2.5">
+                        <div>
+                            <span class="rounded-full border px-2.5 py-0.5 text-[11px] font-semibold @StatusClass(detail.Status)">
+                                @Pretty(detail.Status)
+                            </span>
+                            <h2 class="font-bold text-slate-900 text-base mt-1">@detail.Title</h2>
+                        </div>
+                        <button type="button" class="text-xs text-slate-500 hover:text-slate-800" @onclick="() => { detail = null; preview = null; audit.Clear(); }">✕ Close</button>
+                    </div>
+
+                    <dl class="grid grid-cols-3 gap-x-2 gap-y-1 text-xs border-b border-slate-100 pb-3">
+                        <dt class="font-medium text-slate-500">Category</dt>
+                        <dd class="col-span-2 font-semibold text-slate-800">@Pretty(detail.Category)</dd>
+
+                        <dt class="font-medium text-slate-500">Timeline</dt>
+                        <dd class="col-span-2 text-slate-800">
+                            @detail.StartDateTime.ToString("ddd, dd MMM yyyy HH:mm") – @detail.EndDateTime.ToString("ddd, dd MMM yyyy HH:mm")
+                        </dd>
+
+                        <dt class="font-medium text-slate-500">Venue</dt>
+                        <dd class="col-span-2 text-slate-800">@(string.IsNullOrWhiteSpace(detail.VenueName) ? "—" : detail.VenueName)</dd>
+
+                        <dt class="font-medium text-slate-500">Audience</dt>
+                        <dd class="col-span-2 text-slate-800">@detail.AudienceSummary</dd>
+
+                        <dt class="font-medium text-slate-500">Dress Code</dt>
+                        <dd class="col-span-2 text-slate-800">@(string.IsNullOrWhiteSpace(detail.DressCode) ? "—" : detail.DressCode)</dd>
+
+                        <dt class="font-medium text-slate-500">Attendance</dt>
+                        <dd class="col-span-2 text-slate-800">@Pretty(detail.AttendanceRequirement)</dd>
+                    </dl>
+
+                    @if (!string.IsNullOrWhiteSpace(detail.Description))
+                    {
+                        <div class="p-2.5 rounded-xl bg-slate-50 text-xs text-slate-700">
+                            @detail.Description
+                        </div>
+                    }
+
+                    <!-- Impact Preview Box -->
+                    @if (preview != null)
+                    {
+                        <div class="rounded-xl border @(preview.ChangesWorkSchedule ? "border-amber-300 bg-amber-50" : "border-slate-200 bg-slate-50/70") p-3 text-xs flex flex-col gap-1.5">
+                            <h3 class="font-bold text-slate-800">Calendar Impact Preview</h3>
+                            <p class="text-slate-700">@preview.EffectSummary</p>
+                            @if (preview.AffectedDates.Count > 0)
+                            {
+                                <p class="text-[11px] text-slate-600">
+                                    <b>Dates:</b> @string.Join(", ", preview.AffectedDates.Take(8).Select(d => d.ToString("ddd dd MMM"))) @(preview.AffectedDates.Count > 8 ? "…" : "")
+                                </p>
+                            }
+                            @foreach (var w in preview.Warnings) { <p class="text-amber-800 font-medium">⚠️ @w</p> }
+                            @foreach (var c in preview.Conflicts) { <p class="text-rose-700 font-semibold">⛔ @c</p> }
+                        </div>
+                    }
+
+                    <!-- Operations Buttons -->
+                    <div class="flex flex-wrap items-center gap-2 pt-2">
+                        @if (detail.Status is "Draft" or "PendingApproval")
+                        {
+                            <button type="button"
+                                    class="inline-flex items-center rounded-lg bg-emerald-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-emerald-700 disabled:opacity-50 transition"
+                                    disabled="@(busy || preview?.CanPublish == false)"
+                                    @onclick="PublishAsync">
+                                ✓ Publish Event
+                            </button>
+                        }
+                        @if (detail.Status is "Draft" or "PendingApproval" or "Published")
+                        {
+                            <button type="button"
+                                    class="inline-flex items-center rounded-lg border border-rose-300 bg-white px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-50 transition"
+                                    @onclick="() => cancelling = true">
+                                Cancel Event
+                            </button>
+                        }
+                        <button type="button"
+                                class="inline-flex items-center rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition"
+                                @onclick="() => EditAsync(detail.OrganisationEventId)">
+                            Edit
+                        </button>
+                    </div>
+
+                    @if (cancelling)
+                    {
+                        <div class="flex flex-col gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3 mt-2">
+                            <label class="block text-xs font-semibold text-rose-900">Cancellation Reason *</label>
+                            <input class="@InputClass" maxlength="400" @bind="cancelReason" placeholder="Explain why this event is being cancelled..." />
+                            <div class="flex gap-2 justify-end pt-1">
+                                <button type="button" class="px-2.5 py-1 text-xs text-slate-600 hover:text-slate-800" @onclick="() => cancelling = false">Keep Event</button>
+                                <button type="button" class="rounded-lg bg-rose-600 px-3 py-1 text-xs font-semibold text-white hover:bg-rose-700" disabled="@busy" @onclick="CancelAsync">
+                                    Confirm Cancellation
+                                </button>
+                            </div>
+                        </div>
+                    }
+
+                    <!-- Audit Trail -->
+                    <div class="pt-3 border-t border-slate-100">
+                        <h3 class="font-bold text-slate-800 text-xs mb-2">Audit History</h3>
+                        @if (audit.Count == 0)
+                        {
+                            <p class="text-xs text-slate-400 italic">No audit records recorded yet.</p>
+                        }
+                        else
+                        {
+                            <div class="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                                @foreach (var a in audit)
+                                {
+                                    <div class="p-2 rounded-lg border border-slate-100 bg-slate-50/50 text-[11px] text-slate-700">
+                                        <div class="flex items-center justify-between font-semibold">
+                                            <span>@a.Action</span>
+                                            <span class="text-slate-400 text-[10px]">@a.CreatedAtUtc.ToLocalTime().ToString("dd MMM yyyy HH:mm")</span>
+                                        </div>
+                                        @if (!string.IsNullOrWhiteSpace(a.Reason))
+                                        {
+                                            <div class="text-slate-500 mt-0.5">@a.Reason</div>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <div class="p-12 text-center text-xs text-slate-400">
+                        <div class="text-2xl mb-2">📋</div>
+                        Select an event from the list to view details, impact analysis, and audit history, or click <strong>+ New Event</strong> to create one.
+                    </div>
+                }
+            </aside>
+        </div>
+    </section>
+</div>
+
+<style>
+    .events-admin-page {
+        width: 100%;
+        min-width: 0;
+    }
+
+    .events-admin-header {
+        width: 100%;
+        margin: 0;
+    }
+
+    .page-panels {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        align-items: start;
+        gap: 1rem;
+        width: 100%;
+        min-width: 0;
+        padding: 0;
+        margin-inline: auto;
+        transition: max-width .3s ease;
+        box-sizing: border-box;
+    }
+
+    .page-panels-standard {
+        max-width: 80rem;
+    }
+
+    .page-panels-full {
+        max-width: none;
+    }
+
+    .page-panel-left, .page-panel-right {
+        min-width: 0;
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    @@media (min-width: 1024px) {
+        .page-panels {
+            grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+        }
+    }
+</style>
+
+@code {
+    private static readonly string[] Categories = ["Meeting", "Ceremony", "Gathering", "Training", "Workshop", "Holiday", "SpecialWorkingDay", "NonWorkingDay", "WorkingHourChange", "StaffDevelopment", "MandatoryAttendance", "Official"];
+    private static readonly string[] Statuses = ["Draft", "PendingApproval", "Published", "Cancelled", "Completed"];
+    private static readonly string[] Impacts = ["None", "MarkAsNonWorkingDay", "MarkAsWorkingDay", "OverrideWorkingHours", "ShortenedWorkingDay", "ExtendedWorkingDay"];
+    private const string InputClass = "mt-1 w-full rounded-lg border border-slate-300 bg-white p-1.5 text-xs text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500";
+    private const string FullWidthKey = "hrm.organisation-events.full-width";
+
+    private List<OrganisationEventDto> events = [];
+    private OrganisationEventDto? editing, detail;
+    private EventImpactPreviewDto? preview;
+    private List<OrganisationEventAuditDto> audit = [];
+    private DateTime? from = DateTime.Today.AddMonths(-1), to = DateTime.Today.AddMonths(12);
+    private string? category, status, impact, upcoming, error, cancelReason;
+    private bool busy, isFullWidth, cancelling;
+    private CancellationTokenSource? cts;
+
+    private bool wholeOrganisation => editing != null && (editing.Audiences.Count == 0 || editing.Audiences.Any(a => a.AudienceType == "Organisation"));
+    private TimeOnly startTime { get => TimeOnly.FromTimeSpan(editing?.EffectiveWorkStartTime ?? new(9, 0, 0)); set { if (editing != null) editing.EffectiveWorkStartTime = value.ToTimeSpan(); } }
+    private TimeOnly endTime { get => TimeOnly.FromTimeSpan(editing?.EffectiveWorkEndTime ?? new(15, 0, 0)); set { if (editing != null) editing.EffectiveWorkEndTime = value.ToTimeSpan(); } }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        try { isFullWidth = await JS.InvokeAsync<string>("localStorage.getItem", FullWidthKey) == "True"; StateHasChanged(); } catch { }
+        await LoadAsync();
+    }
+
+    private async Task ToggleFullWidth()
+    {
+        isFullWidth = !isFullWidth;
+        try { await JS.InvokeVoidAsync("localStorage.setItem", FullWidthKey, isFullWidth.ToString()); } catch { }
+    }
+
+    private async Task LoadAsync()
+    {
+        cts?.Cancel(); cts = new();
+        busy = true; error = null; StateHasChanged();
+        try { events = await Events.ListAsync(from, to, Nz(category), Nz(status), Nz(impact), null, upcoming == "true" ? true : null); }
+        catch (Exception ex) { error = ex.Message; }
+        busy = false; StateHasChanged();
+    }
+
+    private static string? Nz(string? s) => string.IsNullOrWhiteSpace(s) ? null : s;
+
+    private void NewEvent()
+    {
+        detail = null; preview = null;
+        var start = DateTime.Today.AddDays(1).AddHours(9);
+        editing = new() { StartDateTime = start, EndDateTime = start.AddHours(1), Audiences = [new() { AudienceType = "Organisation" }] };
+    }
+
+    private async Task EditAsync(int id)
+    {
+        await Run(async () => { editing = await Events.GetAsync(id); detail = null; preview = null; });
+    }
+
+    private async Task OpenDetailAsync(int id)
+    {
+        await Run(async () =>
+        {
+            editing = null; cancelling = false; cancelReason = null;
+            detail = await Events.GetAsync(id);
+            preview = await Events.PreviewImpactAsync(id);
+            audit = await Events.AuditAsync(id);
+        });
+    }
+
+    private void ToggleOrganisation(bool on)
+    {
+        if (editing == null) return;
+        editing.Audiences = on ? [new() { AudienceType = "Organisation" }] : [];
+        if (!on) AddAudience();
+    }
+
+    private void AddAudience() => editing?.Audiences.Add(new() { AudienceType = "Department" });
+
+    private async Task SaveAsync()
+    {
+        if (editing == null) return;
+        await Run(async () =>
+        {
+            if (editing.CalendarImpactType is "None" or "MarkAsNonWorkingDay") { editing.EffectiveWorkStartTime = null; editing.EffectiveWorkEndTime = null; }
+            else { editing.EffectiveWorkStartTime ??= startTime.ToTimeSpan(); editing.EffectiveWorkEndTime ??= endTime.ToTimeSpan(); }
+            var id = await Events.SaveAsync(editing);
+            Toasts.Success("Event saved successfully.");
+            editing = null;
+            await LoadAsync();
+            await OpenDetailAsync(id);
+        });
+    }
+
+    private async Task PublishAsync()
+    {
+        if (detail == null) return;
+        var id = detail.OrganisationEventId;
+        await Run(async () => { await Events.PublishAsync(id); Toasts.Success("Event published."); await LoadAsync(); await OpenDetailAsync(id); });
+    }
+
+    private async Task CancelAsync()
+    {
+        if (detail == null) return;
+        var id = detail.OrganisationEventId;
+        await Run(async () => { await Events.CancelAsync(id, cancelReason ?? ""); Toasts.Success("Event cancelled."); cancelling = false; await LoadAsync(); await OpenDetailAsync(id); });
+    }
+
+    private async Task DuplicateAsync(int id)
+    {
+        await Run(async () => { var copy = await Events.DuplicateAsync(id); Toasts.Success("Draft copy created."); await LoadAsync(); await EditAsync(copy); });
+    }
+
+    private async Task Run(Func<Task> action)
+    {
+        busy = true; error = null;
+        try { await action(); }
+        catch (Exception ex) { error = ex.Message; Toasts.Error(ex.Message); }
+        busy = false; StateHasChanged();
+    }
+
+    private static string Pretty(string s) => System.Text.RegularExpressions.Regex.Replace(s, "(?<=[a-z])(?=[A-Z])", " ");
+
+    private static string StatusClass(string s) => s switch
+    {
+        "Published" => "border-emerald-200 bg-emerald-50 text-emerald-800",
+        "Cancelled" => "border-rose-200 bg-rose-50 text-rose-800",
+        "PendingApproval" => "border-amber-200 bg-amber-50 text-amber-800",
+        "Completed" => "border-slate-300 bg-slate-100 text-slate-700",
+        _ => "border-blue-200 bg-blue-50 text-blue-800"
+    };
+}

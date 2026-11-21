@@ -54,6 +54,15 @@ public static class ApiEndpointRegistration
         services.TryAddScoped<global::HRM.Services.Leave.LeaveHandoverService>();
         services.TryAddScoped<global::HRM.Services.Leave.Contracts.LeaveHandoverServiceContracts.IOperations>(provider => provider.GetRequiredService<global::HRM.Services.Leave.LeaveHandoverService>());
         services.TryAddScoped<global::HRM.Services.Leave.LeaveCalendarService>();
+        services.TryAddScoped<global::HRM.Services.Calendar.OrganisationEventService>();
+        services.TryAddScoped<global::HRM.Services.Calendar.Contracts.OrganisationEventServiceContracts.IOperations>(provider => provider.GetRequiredService<global::HRM.Services.Calendar.OrganisationEventService>());
+        services.TryAddScoped<global::HRM.Services.Calendar.Contracts.IOrganisationCalendarResolver, global::HRM.Services.Calendar.OrganisationCalendarResolver>();
+        services.TryAddScoped<global::HRM.Services.Calendar.OrganisationCalendarService>();
+        services.TryAddScoped<global::HRM.Services.Calendar.Contracts.OrganisationCalendarServiceContracts.IOperations>(p => p.GetRequiredService<global::HRM.Services.Calendar.OrganisationCalendarService>());
+        services.TryAddScoped<global::HRM.Services.Calendar.SupervisorCalendarService>();
+        services.TryAddScoped<global::HRM.Services.Calendar.Contracts.SupervisorCalendarServiceContracts.IOperations>(p => p.GetRequiredService<global::HRM.Services.Calendar.SupervisorCalendarService>());
+        services.TryAddScoped<global::HRM.Services.Calendar.CalendarImpactService>();
+        services.TryAddScoped<global::HRM.Services.Calendar.Contracts.CalendarImpactServiceContracts.IOperations>(p => p.GetRequiredService<global::HRM.Services.Calendar.CalendarImpactService>());
         services.TryAddScoped<global::HRM.Services.Leave.Contracts.LeaveCalendarServiceContracts.IOperations>(provider => provider.GetRequiredService<global::HRM.Services.Leave.LeaveCalendarService>());
         services.TryAddScoped<global::HRM.Services.LeaveConfigurationSettingsService>();
         services.TryAddScoped<global::HRM.Services.Contracts.LeaveConfigurationSettingsServiceContracts.IOperations>(provider => provider.GetRequiredService<global::HRM.Services.LeaveConfigurationSettingsService>());
@@ -101,12 +110,26 @@ public static class ApiEndpointRegistration
         services.TryAddScoped<global::HRM.Services.Contracts.FormerStaffServiceContracts.IOperations>(provider => provider.GetRequiredService<global::HRM.Services.FormerStaffService>());
         services.TryAddScoped<global::HRM.Services.GroupsManagementService>();
         services.TryAddScoped<global::HRM.Services.Contracts.GroupsManagementServiceContracts.IOperations>(provider => provider.GetRequiredService<global::HRM.Services.GroupsManagementService>());
+        services.TryAddScoped<global::HRM.Services.StaffGroupService>();
+        services.TryAddScoped<global::HRM.Services.Contracts.StaffGroupServiceContracts.IOperations>(provider => provider.GetRequiredService<global::HRM.Services.StaffGroupService>());
+        services.TryAddScoped<global::HRM.Services.SloganService>();
+        services.TryAddScoped<global::HRM.Services.Contracts.SloganServiceContracts.IOperations>(provider => provider.GetRequiredService<global::HRM.Services.SloganService>());
         services.TryAddScoped<global::HRM.Services.IndividualRegistrationService>();
         services.TryAddScoped<global::HRM.Services.Contracts.IndividualRegistrationServiceContracts.IOperations>(provider => provider.GetRequiredService<global::HRM.Services.IndividualRegistrationService>());
         services.TryAddScoped<global::HRM.Services.HrRequestInboxService>();
         services.TryAddScoped<global::HRM.Services.Contracts.HrRequestInboxServiceContracts.IOperations>(provider => provider.GetRequiredService<global::HRM.Services.HrRequestInboxService>());
         services.TryAddScoped<global::HRM.Services.ItemCatalogueService>();
         services.TryAddScoped<global::HRM.Services.Contracts.ItemCatalogueServiceContracts.IOperations>(provider => provider.GetRequiredService<global::HRM.Services.ItemCatalogueService>());
+        services.TryAddScoped<global::HRM.Services.LeadershipAuthorityService>();
+        services.TryAddScoped<global::HRM.Services.Contracts.LeadershipAuthorityServiceContracts.IOperations>(provider => provider.GetRequiredService<global::HRM.Services.LeadershipAuthorityService>());
+        services.TryAddScoped<global::HRM.Services.LeadershipAdministrationService>();
+        services.TryAddScoped<global::HRM.Services.Contracts.LeadershipAdministrationServiceContracts.IOperations>(provider => provider.GetRequiredService<global::HRM.Services.LeadershipAdministrationService>());
+        services.TryAddSingleton<global::HRM.Services.EdgeAttendance.IEdgeCertificateTrustValidator, global::HRM.Services.EdgeAttendance.DatabaseCertificateTrustValidator>();
+        services.TryAddSingleton<global::HRM.Services.EdgeAttendance.IConnectorCertificateAuthority, global::HRM.Services.EdgeAttendance.ManagedConnectorCertificateAuthority>();
+        services.TryAddScoped<global::HRM.Services.EdgeAttendance.EdgeAgentManagementService>();
+        services.TryAddScoped<global::HRM.Services.Contracts.EdgeAgentManagementContracts.IOperations>(p => p.GetRequiredService<global::HRM.Services.EdgeAttendance.EdgeAgentManagementService>());
+        services.TryAddScoped<global::HRM.Services.EdgeAttendance.EdgeAttendanceIngestionService>();
+        services.TryAddScoped<global::HRM.Services.EdgeAttendance.AttendanceConnectorGatewayService>();
         services.TryAddScoped<global::HRM.Services.StaffTransferService>();
         services.TryAddScoped<global::HRM.Services.Contracts.StaffTransferServiceContracts.IOperations>(provider => provider.GetRequiredService<global::HRM.Services.StaffTransferService>());
         services.TryAddScoped<global::HRM.Services.StaffSeparationService>();
@@ -120,6 +143,12 @@ public static class ApiEndpointRegistration
         services.TryAddScoped<global::HRM.Services.Contracts.DocumentManagementServiceContracts.IOperations>(provider => provider.GetRequiredService<global::HRM.Api.Services.DocumentManagementService>());
         services.TryAddScoped<global::HRM.Services.UserService>();
         services.TryAddScoped<global::HRM.Services.Contracts.UserServiceContracts.IOperations>(provider => provider.GetRequiredService<global::HRM.Services.UserService>());
+        services.TryAddScoped<global::HRM.Services.StaffBankService>();
+        services.TryAddScoped<global::HRM.Services.Contracts.StaffBankServiceContracts.IOperations>(provider => provider.GetRequiredService<global::HRM.Services.StaffBankService>());
+        services.TryAddScoped<global::HRM.Services.StaffEmergencyContactService>();
+        services.TryAddScoped<global::HRM.Services.Contracts.StaffEmergencyContactServiceContracts.IOperations>(provider => provider.GetRequiredService<global::HRM.Services.StaffEmergencyContactService>());
+        services.TryAddScoped<global::HRM.Services.StaffIdentityDocumentService>();
+        services.TryAddScoped<global::HRM.Services.Contracts.StaffIdentityDocumentServiceContracts.IOperations>(provider => provider.GetRequiredService<global::HRM.Services.StaffIdentityDocumentService>());
         services.PostConfigure<Microsoft.AspNetCore.Authentication.Cookies.CookieAuthenticationOptions>(
             Microsoft.AspNetCore.Authentication.Cookies.CookieAuthenticationDefaults.AuthenticationScheme, options =>
             {

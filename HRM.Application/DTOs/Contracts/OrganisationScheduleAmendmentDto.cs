@@ -12,3 +12,12 @@ public sealed class OrganisationScheduleAmendmentDto
     public int Version { get; set; } = 1;
     public int OperationLogId { get; set; }
 }
+
+public sealed class OrganisationScheduleAmendmentRangeDto
+{
+    public DateTime FromDate { get; set; }
+    public DateTime ToDate { get; set; }
+    public TimeSpan OriginalStart { get; set; }
+    public TimeSpan RevisedStart { get; set; }
+    public string Reason { get; set; } = "";
+}

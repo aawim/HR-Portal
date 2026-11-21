@@ -85,6 +85,7 @@ namespace HRM.Services.Attendance.Abstraction.Services
                 }
 
                 var attendanceDate = attendanceLog.Date.Date;
+                await HRM.Services.LeadershipAttendancePolicyResolver.ResolveAsync(context, attendanceLog.IndividualId, attendanceLog.OrganisationId, DateOnly.FromDateTime(attendanceDate), cancellationToken);
                 var nextDate = attendanceDate.AddDays(1);
 
                 var jobId = await context.Jobs
@@ -373,7 +374,7 @@ namespace HRM.Services.Attendance.Abstraction.Services
 
                 return AttendanceProcessingResult.Failed(
                     attendanceLogId,
-                    exception.Message);
+                    "This attendance event was already processed or conflicted with an existing resolution.");
             }
             catch (Exception exception)
             {
@@ -384,7 +385,7 @@ namespace HRM.Services.Attendance.Abstraction.Services
 
                 return AttendanceProcessingResult.Failed(
                     attendanceLogId,
-                    exception.ToString());
+                    "An unexpected error occurred while processing the attendance event.");
             }
         }
 

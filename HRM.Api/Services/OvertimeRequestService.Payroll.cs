@@ -73,7 +73,10 @@ public sealed partial class OvertimeRequestService
         if(string.IsNullOrWhiteSpace(comment)||comment.Length>2000)throw new InvalidOperationException("Enter an action comment of up to 2,000 characters.");
         // Only approved OT claims may reopen a final approval, and only across an explicitly configured edge.
         if(!await db.RequestTypesAllowedRequestStateTransitions.AnyAsync(x=>x.RequestTypeId==row.Request.RequestTypeId&&x.FromRequestStateId==from&&x.ToRequestStateId==to))
-            throw new RequestTransitionConfigurationException($"Transition not allowed for {TypeName}: {from} → {to}. Configure this From State / To State in Settings > State Transitions.");
+            throw new RequestTransitionConfigurationException(
+                $"Missing transition. Enter in this order: 1. Request Type = {TypeName}; " +
+                $"2. From State ID = {from}; 3. To State ID = {to}; " +
+                "4. Select Allow transition; 5. Retry the original request action.");
         await logs.CreateAsync(db,SharedConfig.OperationLogActionTypes.REQUESTS_UPDATE,$"OT claim {row.RequestId}: {from} → {to}; actor {user}; {comment}; previous approved policy: {row.ApprovedPolicyJson}");
         row.Request.RequestStateId=to;row.Request.LastStateChangedByUserId=user;row.Request.LastStateChangedDate=DateTime.UtcNow;row.Request.StateChangeRemarks=comment.Trim()[..Math.Min(comment.Trim().Length,500)];
         instance.WorkflowStatus=to==1?"Returned":to==5?"Cancelled":"Rejected";instance.CompletedAt=DateTime.UtcNow;

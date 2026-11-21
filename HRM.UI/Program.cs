@@ -3,6 +3,7 @@ using HRM.UI.Authentication;
 using HRM.UI.Services.Transport;
 using Microsoft.AspNetCore.Authentication;
 using HRM.Hosting;
+using HRM.ErrorLogs.Extensions;
 
 var builder = WebApplication.CreateBuilder(args);
 RuntimeRequirements.RequireCurrent(builder.Environment);
@@ -25,8 +26,11 @@ builder.Services.AddAntiforgery(options => { options.Cookie.HttpOnly = true; opt
 builder.Services.AddRazorComponents().AddInteractiveServerComponents();
 builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddHrmApiClients();
+builder.Services.AddHrmErrorLogging("HRM.UI");
+builder.Services.AddHealthChecks();
 var app = builder.Build();
 app.UseTrustedProxyHeaders();
+app.UseHrmErrorLogging("HRM.UI");
 if (!app.Environment.IsDevelopment()) { app.UseExceptionHandler("/Error"); app.UseHsts(); }
 app.UseHttpsRedirection();
 app.Use(async (context, next) =>
@@ -42,5 +46,6 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.UseAntiforgery();
 app.MapBackendAuthentication();
+app.MapHealthChecks("/health/live").AllowAnonymous();
 app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
 app.Run();

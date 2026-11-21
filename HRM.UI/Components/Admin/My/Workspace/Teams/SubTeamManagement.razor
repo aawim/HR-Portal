@@ -1,0 +1,572 @@
+@using HRM.DTOs
+@inject HRM.Services.Interfaces.ITeam TeamService
+@inject HRM.Services.ToastService Toasts
+
+<section class="w-full min-w-0 p-2 space-y-2">
+    @if (!string.IsNullOrWhiteSpace(error))
+    {
+        <div class="flex items-center justify-between rounded-xl border border-rose-200 bg-rose-50 p-2.5 text-xs text-rose-800">@error</div>
+    }
+    @if (loading)
+    {
+        <div class="rounded-xl border border-slate-200 bg-white p-4 text-center text-xs text-slate-500">Loading sub-teams…</div>
+    }
+    else if (data != null)
+    {
+        @if (CompactMode)
+        {
+            <div class="space-y-2">
+                <!-- Header / Quick Selector in Compact Mode with Close Button -->
+                <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2 gap-2">
+                    <div class="min-w-0 pr-1">
+                        <div class="flex items-center gap-1.5 flex-wrap">
+                            <h3 class="font-bold text-slate-800 dark:text-slate-100 text-xs truncate">
+                                @(CreateModeOnly || selected == null ? "Create Sub-Team" : selected.Name)
+                            </h3>
+                            <span class="rounded-full bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-400 border border-teal-200 dark:border-teal-800/40 px-2 py-0.2 text-[10px] font-semibold">
+                                @(CreateModeOnly || selected == null ? "New Creator" : "Sub-Team")
+                            </span>
+                        </div>
+                        <p class="text-[10px] text-slate-500 truncate">Under @data.ParentTeamName</p>
+                    </div>
+                    <div class="flex items-center gap-1 shrink-0">
+                        @if (data.CanManage && selected != null && !CreateModeOnly)
+                        {
+                            <button type="button"
+                                    class="rounded-lg bg-teal-700 px-2 py-1 text-[10px] font-semibold text-white hover:bg-teal-800"
+                                    @onclick="NewTeam"
+                                    title="Create another sub-team">
+                                + New
+                            </button>
+                        }
+                        @if (OnClose.HasDelegate)
+                        {
+                            <button type="button"
+                                    class="rounded-lg p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+                                    @onclick="CloseAsync"
+                                    title="Close sub-team panel">
+                                ✕
+                            </button>
+                        }
+                    </div>
+                </div>
+
+                @if (CreateModeOnly || (data.CanManage && editing && selected == null))
+                {
+                    <!-- Create Sub-Team Creator Form -->
+                    <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-2.5 shadow-xs space-y-2">
+                        <h4 class="font-bold text-slate-800 dark:text-slate-100 text-xs">
+                            New Sub-Team Creator
+                        </h4>
+                        <div class="space-y-1.5">
+                            <label class="block text-xs font-medium text-slate-700 dark:text-slate-300">
+                                Sub-Team Name
+                                <input class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-1.5 text-xs"
+                                       placeholder="e.g. Help Desk Tier 1"
+                                       @bind="draft.Name" />
+                            </label>
+                        </div>
+                        <div class="rounded-lg border border-teal-200 dark:border-teal-800/40 bg-teal-50/40 dark:bg-teal-950/20 p-2 space-y-1">
+                            <label class="flex items-center gap-2 text-xs font-semibold text-slate-800 dark:text-slate-200">
+                                <input type="checkbox" @bind="draft.OvertimeEnabled" /> Allow Overtime for this sub-team
+                            </label>
+                            @if (draft.OvertimeEnabled)
+                            {
+                                <div class="grid grid-cols-2 gap-2 pt-1">
+                                    <label class="text-[11px] text-slate-700 dark:text-slate-300">Daily limit (h)<input type="number" step="0.25" min="0.25" max="24" class="mt-0.5 w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-1 text-xs" @bind="draft.MaximumDailyOvertimeHours" /></label>
+                                    <label class="text-[11px] text-slate-700 dark:text-slate-300">Weekly limit (h)<input type="number" step="0.25" min="0.25" max="168" class="mt-0.5 w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-1 text-xs" @bind="draft.MaximumWeeklyOvertimeHours" /></label>
+                                </div>
+                            }
+                        </div>
+                        <button disabled="@(busy || string.IsNullOrWhiteSpace(draft.Name))"
+                                class="rounded-lg bg-teal-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-teal-800 disabled:opacity-50"
+                                @onclick="SaveTeam">
+                            Create Sub-Team
+                        </button>
+                    </div>
+                }
+                else if (selected != null)
+                {
+                    @if (data.SubTeams.Count > 1)
+                    {
+                        <div class="flex flex-wrap items-center gap-1 pb-1">
+                            @foreach (var team in data.SubTeams)
+                            {
+                                var isCurrent = selected?.TeamId == team.TeamId;
+                                <button type="button" @onclick="() => Select(team)"
+                                        class="rounded-lg px-2 py-0.5 text-[11px] font-semibold transition @(isCurrent ? "bg-teal-700 text-white shadow-2xs" : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700")">
+                                    @team.Name (@team.Members.Count)@(team.IsActive ? "" : " · Inactive")
+                                </button>
+                            }
+                        </div>
+                    }
+
+                    <!-- Sub-Team Overtime & Settings -->
+                    <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-2.5 shadow-xs space-y-2">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <h4 class="font-bold text-slate-800 dark:text-slate-100 text-xs">Sub-Team Overtime & Settings</h4>
+                                <p class="text-[10px] text-slate-500">Overtime policy for @(selected?.Name ?? "Sub-Team")</p>
+                            </div>
+                            @if (selected?.OvertimeEnabled == true)
+                            {
+                                <span class="rounded-full bg-emerald-100 dark:bg-emerald-950/60 px-2 py-0.5 text-[10px] font-semibold text-emerald-800 dark:text-emerald-300">
+                                    OT Enabled · @selected.MaximumWeeklyOvertimeHours h/wk
+                                </span>
+                            }
+                            else
+                            {
+                                <span class="rounded-full bg-slate-100 dark:bg-slate-800 px-2 py-0.5 text-[10px] font-medium text-slate-500">
+                                    OT Disabled
+                                </span>
+                            }
+                        </div>
+
+                        @if (data.CanManage)
+                        {
+                            <div class="space-y-1.5">
+                                <label class="block text-xs font-medium text-slate-700 dark:text-slate-300">
+                                    Sub-Team Name
+                                    <input class="mt-0.5 w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-1 text-xs"
+                                           @bind="draft.Name" />
+                                </label>
+                                <div class="rounded-lg border border-teal-200 dark:border-teal-800/40 bg-teal-50/40 dark:bg-teal-950/20 p-2 space-y-1">
+                                    <label class="flex items-center gap-2 text-xs font-semibold text-slate-800 dark:text-slate-200">
+                                        <input type="checkbox" @bind="draft.IsActive" /> Active sub-team
+                                    </label>
+                                    <label class="flex items-center gap-2 text-xs font-semibold text-slate-800 dark:text-slate-200">
+                                        <input type="checkbox" @bind="draft.OvertimeEnabled" /> Allow Overtime for this sub-team
+                                    </label>
+                                    <p class="text-[10px] text-slate-600 dark:text-slate-400">
+                                        Grants eligibility when job type disallows OT. Standard approvals still apply.
+                                    </p>
+                                    @if (draft.OvertimeEnabled)
+                                    {
+                                        <div class="grid grid-cols-2 gap-2 pt-1">
+                                            <label class="text-[11px] text-slate-700 dark:text-slate-300">
+                                                Daily limit (h)
+                                                <input type="number" step="0.25" min="0.25" max="24"
+                                                       class="mt-0.5 w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-1 text-xs"
+                                                       @bind="draft.MaximumDailyOvertimeHours" />
+                                            </label>
+                                            <label class="text-[11px] text-slate-700 dark:text-slate-300">
+                                                Weekly limit (h)
+                                                <input type="number" step="0.25" min="0.25" max="168"
+                                                       class="mt-0.5 w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-1 text-xs"
+                                                       @bind="draft.MaximumWeeklyOvertimeHours" />
+                                            </label>
+                                        </div>
+                                    }
+                                </div>
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <button disabled="@busy"
+                                            class="app-button app-button-primary app-button-sm"
+                                            @onclick="SaveTeam">
+                                        Save Settings
+                                    </button>
+                                    @if (deleteConfirmation)
+                                    {
+                                        <span class="text-[11px] text-rose-700 dark:text-rose-300">Archive this sub-team and remove its members?</span>
+                                        <button disabled="@busy" class="app-button app-button-danger app-button-sm" @onclick="DeleteTeam">Confirm delete</button>
+                                        <button disabled="@busy" class="app-button app-button-neutral app-button-sm" @onclick="() => deleteConfirmation = false">Cancel</button>
+                                    }
+                                    else
+                                    {
+                                        <button disabled="@busy" class="app-button app-button-danger app-button-sm" @onclick="() => deleteConfirmation = true">Delete sub-team</button>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+                    <!-- Adding Staff & Managing Members -->
+                    <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-2.5 shadow-xs space-y-2">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <h4 class="font-bold text-slate-800 dark:text-slate-100 text-xs">Members of @(selected?.Name ?? "Sub-Team")</h4>
+                                <p class="text-[10px] text-slate-500">@(selected?.Members.Count ?? 0) assigned staff</p>
+                            </div>
+                        </div>
+
+                        @if (data.CanManage)
+                        {
+                            <div class="flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-slate-50/70 p-2 dark:border-slate-800 dark:bg-slate-800/50">
+                                <span class="text-[10px] text-slate-500 dark:text-slate-400">Add staff from the parent team.</span>
+                                <button disabled="@(busy || selected == null)" class="shrink-0 rounded-lg bg-teal-700 px-3 py-1 text-xs font-semibold text-white hover:bg-teal-800 disabled:opacity-50" @onclick="OpenMemberModal">Add staff</button>
+                            </div>
+                        }
+
+                        @if (selected?.Members.Count == 0)
+                        {
+                            <p class="py-3 text-center text-[11px] text-slate-400">No members in this sub-team yet.</p>
+                        }
+                        else
+                        {
+                            <div class="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800 max-h-48 overflow-y-auto">
+                                <table class="w-full text-left text-xs">
+                                    <thead class="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold sticky top-0">
+                                        <tr>
+                                            <th class="p-1.5">Staff</th>
+                                            <th class="p-1.5">Role</th>
+                                            <th class="p-1.5 text-right"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                                        @foreach (var m in selected!.Members)
+                                        {
+                                            <tr>
+                                                <td class="p-1.5 font-medium truncate">@m.StaffName</td>
+                                                <td class="p-1.5">
+                                                    <span class="rounded px-1.5 py-0.2 text-[9px] font-semibold @(m.Role is "Supervisor" or "TeamLead" ? "bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300" : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400")">
+                                                        @(m.Role == "TeamLead" ? "Team Lead" : m.Role)
+                                                    </span>
+                                                </td>
+                                                <td class="p-1.5 text-right">
+                                                    @if (data.CanManage)
+                                                    {
+                                                        <button class="text-[11px] font-semibold text-rose-700 hover:text-rose-800"
+                                                                @onclick="() => RemoveMember(m.StaffId)">
+                                                            Remove
+                                                        </button>
+                                                    }
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                    </div>
+
+                    <!-- Schedule Adjustment in Compact Mode -->
+                    <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-2.5 shadow-xs space-y-2">
+                        <div>
+                            <h4 class="font-bold text-slate-800 dark:text-slate-100 text-xs">Schedule Adjustments</h4>
+                            <p class="text-[10px] text-slate-500">Dated overlay check-in / check-out</p>
+                        </div>
+                        @if (data.CanManage)
+                        {
+                            <div class="grid grid-cols-1 gap-1.5">
+                                <label class="text-[11px] text-slate-700 dark:text-slate-300">
+                                    Work Date
+                                    <input type="date" class="mt-0.5 w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-1 text-xs" @bind="adjustmentDate" />
+                                </label>
+                                <div class="grid grid-cols-2 gap-1.5">
+                                    <label class="text-[11px] text-slate-700 dark:text-slate-300">
+                                        Check-in (HH:mm)
+                                        <input type="text" inputmode="numeric" placeholder="08:00" class="mt-0.5 w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-1 text-xs" @bind="checkIn" />
+                                    </label>
+                                    <label class="text-[11px] text-slate-700 dark:text-slate-300">
+                                        Check-out (HH:mm)
+                                        <input type="text" inputmode="numeric" placeholder="14:00" class="mt-0.5 w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-1 text-xs" @bind="checkOut" />
+                                    </label>
+                                </div>
+                                <label class="text-[11px] text-slate-700 dark:text-slate-300">
+                                    Reason
+                                    <input class="mt-0.5 w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-1 text-xs" @bind="adjustmentReason" placeholder="Reason for adjustment" />
+                                </label>
+                                <button disabled="@busy" class="rounded-lg bg-teal-700 px-2.5 py-1 text-xs font-semibold text-white hover:bg-teal-800 disabled:opacity-50" @onclick="SaveAdjustment">Save adjustment</button>
+                            </div>
+                        }
+                        @foreach (var a in selected.Adjustments.Where(x => x.IsActive))
+                        {
+                            <div class="rounded-lg border border-slate-200 dark:border-slate-800 p-1.5 text-[11px]">
+                                <span class="font-semibold">@a.WorkDate.ToString("dd MMM yyyy")</span> · In @(a.RevisedCheckIn?.ToString("hh\\:mm") ?? "sched") · Out @(a.RevisedCheckOut?.ToString("hh\\:mm") ?? "sched")
+                                <p class="mt-0.5 text-slate-500 truncate">@a.Reason</p>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        }
+        else
+        {
+            <div class="grid min-w-0 grid-cols-1 gap-2 xl:grid-cols-[minmax(16rem,0.8fr)_minmax(0,1.5fr)]">
+                <aside class="min-w-0 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-2 shadow-xs space-y-2">
+                    <div class="flex items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-2">
+                        <div><h3 class="font-bold text-slate-800 dark:text-slate-100 text-xs">Sub-teams</h3><p class="text-[11px] text-slate-500">Under @data.ParentTeamName</p></div>
+                        @if (data.CanManage) { <button class="inline-flex items-center rounded-lg bg-teal-700 px-2.5 py-1 text-xs font-semibold text-white hover:bg-teal-800" @onclick="NewTeam">+ New</button> }
+                    </div>
+                    @if (data.SubTeams.Count == 0)
+                    {
+                        <div class="rounded-xl border border-dashed border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-4 text-center text-xs text-slate-500">No sub-teams created.</div>
+                    }
+                    @foreach (var team in data.SubTeams)
+                    {
+                        <button type="button" @onclick="() => Select(team)"
+                                class="w-full rounded-xl border p-2 text-left text-xs transition hover:shadow-xs @(selected?.TeamId == team.TeamId ? "border-teal-500 bg-teal-50/70 dark:bg-teal-950/40 ring-1 ring-teal-500" : "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-700")">
+                            <div class="flex items-center justify-between">
+                                <span class="block font-semibold text-slate-900 dark:text-slate-100">@team.Name</span>
+                                <span class="rounded bg-teal-100 dark:bg-teal-950/60 text-teal-800 dark:text-teal-300 px-1.5 py-0.2 text-[10px] font-bold shrink-0">@team.Members.Count</span>
+                            </div>
+                            <span class="mt-0.5 block text-[11px] text-slate-500">@team.OrganisationStructureName</span>
+                            @if (!team.IsActive) { <span class="mt-1 inline-flex rounded-full bg-slate-100 dark:bg-slate-800 px-2 py-0.2 text-[10px] font-semibold text-slate-600 dark:text-slate-300">Inactive</span> }
+                            @if (team.OvertimeEnabled) { <span class="mt-1 inline-flex rounded-full bg-emerald-100 dark:bg-emerald-950/60 px-2 py-0.2 text-[10px] font-semibold text-emerald-800 dark:text-emerald-300">OT enabled · @team.MaximumWeeklyOvertimeHours h/week</span> }
+                        </button>
+                    }
+                </aside>
+
+                <div class="min-w-0 space-y-2">
+                    @if (data.CanManage && editing)
+                    {
+                        <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-2 shadow-xs space-y-2">
+                            <h3 class="font-bold text-slate-800 dark:text-slate-100 text-xs">@(draft.TeamId == 0 ? "Create sub-team" : "Sub-team configuration")</h3>
+                            <div class="grid grid-cols-1 gap-2 md:grid-cols-2">
+                                <label class="block text-xs font-medium text-slate-700 dark:text-slate-300">Name<input class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-1 text-xs" @bind="draft.Name" /></label>
+                                <label class="block text-xs font-medium text-slate-700 dark:text-slate-300">Organisation structure<select class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-1 text-xs" @bind="draft.OrganisationStructureId"><option value="">Select structure</option>@foreach(var o in data.Structures){<option value="@o.Id">@o.Name</option>}</select></label>
+                            </div>
+                            <div class="rounded-xl border border-teal-200 dark:border-teal-800/40 bg-teal-50/40 dark:bg-teal-950/20 p-2.5 space-y-1.5">
+                                <label class="flex items-center gap-2 text-xs font-semibold text-slate-800 dark:text-slate-200"><input type="checkbox" @bind="draft.IsActive" /> Active sub-team</label>
+                                <label class="flex items-center gap-2 text-xs font-semibold text-slate-800 dark:text-slate-200"><input type="checkbox" @bind="draft.OvertimeEnabled" /> Allow OT through this sub-team</label>
+                                <p class="text-[11px] text-slate-600 dark:text-slate-400">This grants eligibility when the member's job type disallows OT. Evidence and the normal OT approval workflow still apply.</p>
+                                @if (draft.OvertimeEnabled)
+                                {
+                                    <div class="grid grid-cols-2 gap-2">
+                                        <label class="text-xs text-slate-700 dark:text-slate-300">Daily limit (hours)<input type="number" step="0.25" min="0.25" max="24" class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-1 text-xs" @bind="draft.MaximumDailyOvertimeHours" /></label>
+                                        <label class="text-xs text-slate-700 dark:text-slate-300">Weekly limit (hours)<input type="number" step="0.25" min="0.25" max="168" class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-1 text-xs" @bind="draft.MaximumWeeklyOvertimeHours" /></label>
+                                    </div>
+                                }
+                            </div>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <button disabled="@busy" class="app-button app-button-primary app-button-sm" @onclick="SaveTeam">Save sub-team</button>
+                                @if (draft.TeamId != 0)
+                                {
+                                    @if (deleteConfirmation)
+                                    {
+                                        <span class="text-[11px] text-rose-700 dark:text-rose-300">Archive this sub-team and remove its members?</span>
+                                        <button disabled="@busy" class="app-button app-button-danger app-button-sm" @onclick="DeleteTeam">Confirm delete</button>
+                                        <button disabled="@busy" class="app-button app-button-neutral app-button-sm" @onclick="() => deleteConfirmation = false">Cancel</button>
+                                    }
+                                    else
+                                    {
+                                        <button disabled="@busy" class="app-button app-button-danger app-button-sm" @onclick="() => deleteConfirmation = true">Delete sub-team</button>
+                                    }
+                                }
+                            </div>
+                        </div>
+                    }
+
+                    @if (selected != null)
+                    {
+                        <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-2 shadow-xs space-y-2">
+                            <div><h3 class="font-bold text-slate-800 dark:text-slate-100 text-xs">Members and roles</h3><p class="text-[11px] text-slate-500">Supervisor and Team Lead roles apply inside this sub-team.</p></div>
+                            @if (data.CanManage)
+                            {
+                                <div class="flex items-center justify-between gap-2 rounded-xl border border-slate-200 bg-slate-50/70 p-2 dark:border-slate-800 dark:bg-slate-800/50">
+                                    <span class="text-[11px] text-slate-500 dark:text-slate-400">Choose one or more staff from the parent team.</span>
+                                    <button disabled="@busy" class="shrink-0 rounded-lg bg-teal-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-teal-800 disabled:opacity-50" @onclick="OpenMemberModal">Add staff</button>
+                                </div>
+                            }
+                            <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800"><table class="w-full text-left text-xs"><thead class="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold"><tr><th class="p-2">Staff</th><th class="p-2">Role</th><th class="p-2"></th></tr></thead><tbody class="divide-y divide-slate-100 dark:divide-slate-800">@foreach(var m in selected.Members){<tr><td class="p-2 font-medium">@m.StaffName</td><td class="p-2">@(m.Role == "TeamLead" ? "Team Lead" : m.Role)</td><td class="p-2 text-right">@if(data.CanManage){<button class="text-xs font-semibold text-rose-700 hover:text-rose-800" @onclick="() => RemoveMember(m.StaffId)">Remove</button>}</td></tr>}</tbody></table></div>
+                        </div>
+
+                        <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-2 shadow-xs space-y-2">
+                            <div><h3 class="font-bold text-slate-800 dark:text-slate-100 text-xs">Check-in/check-out adjustment</h3><p class="text-[11px] text-slate-500">Only a parent-team supervisor or authorised administrator can save this dated overlay.</p></div>
+                            @if (data.CanManage)
+                            {
+                                <div class="grid grid-cols-1 gap-2 md:grid-cols-3">
+                                    <label class="text-xs text-slate-700 dark:text-slate-300">Work date<input type="date" class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-1 text-xs" @bind="adjustmentDate" /></label>
+                                    <label class="text-xs text-slate-700 dark:text-slate-300">New check-in (optional)<input type="text" inputmode="numeric" placeholder="HH:mm" class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-1 text-xs" @bind="checkIn" /></label>
+                                    <label class="text-xs text-slate-700 dark:text-slate-300">New check-out (optional)<input type="text" inputmode="numeric" placeholder="HH:mm" class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-1 text-xs" @bind="checkOut" /></label>
+                                </div>
+                                <label class="block text-xs text-slate-700 dark:text-slate-300">Reason<textarea class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-1 text-xs" rows="2" @bind="adjustmentReason"></textarea></label>
+                                <button disabled="@busy" class="rounded-lg bg-teal-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-teal-800 disabled:opacity-50" @onclick="SaveAdjustment">Save adjustment</button>
+                            }
+                        @foreach(var a in selected.Adjustments.Where(x => x.IsActive))
+                        {
+                            <div class="rounded-xl border border-slate-200 dark:border-slate-800 p-2 text-xs"><span class="font-semibold">@a.WorkDate.ToString("dd MMM yyyy")</span> · Check-in @(a.RevisedCheckIn?.ToString("hh\\:mm") ?? "scheduled") · Check-out @(a.RevisedCheckOut?.ToString("hh\\:mm") ?? "scheduled")<p class="mt-0.5 text-slate-500">@a.Reason</p></div>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+    }
+}
+</section>
+
+@if (showMemberModal && data != null && selected != null)
+{
+    <div class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-900/60 p-2 backdrop-blur-xs" role="dialog" aria-modal="true" aria-labelledby="add-subteam-staff-title">
+        <div class="fixed inset-0" aria-hidden="true" @onclick="CloseMemberModal"></div>
+        <div class="relative z-10 flex max-h-[85vh] w-full max-w-xl flex-col gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl dark:border-slate-800 dark:bg-slate-900" @onclick:stopPropagation>
+            <div class="flex items-start justify-between border-b border-slate-100 pb-2 dark:border-slate-800">
+                <div>
+                    <h3 id="add-subteam-staff-title" class="text-sm font-bold text-slate-900 dark:text-slate-100">Add staff to @selected.Name</h3>
+                    <p class="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Only staff in @data.ParentTeamName who are not assigned to a sub-team are shown.</p>
+                </div>
+                <button type="button" class="rounded-lg p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-200" aria-label="Close dialog" @onclick="CloseMemberModal"><AppIcon Name="close" Class="h-5 w-5 text-xl" /></button>
+            </div>
+
+            <div class="relative w-full">
+                <span class="pointer-events-none absolute inset-y-0 left-2.5 flex items-center text-slate-400 dark:text-slate-500"><AppIcon Name="search" Class="h-4 w-4 text-base" /></span>
+                <input class="w-full rounded-lg border border-slate-300 bg-white py-1.5 pl-9 pr-8 text-xs text-slate-900 outline-none placeholder:text-slate-400 focus:border-teal-600 focus:ring-1 focus:ring-teal-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100" placeholder="Search parent-team staff..." @bind="memberSearch" @bind:event="oninput" autofocus />
+                @if (!string.IsNullOrWhiteSpace(memberSearch))
+                {
+                    <button type="button" class="absolute inset-y-0 right-2.5 flex items-center text-xs font-bold text-slate-400 hover:text-slate-600" @onclick="() => memberSearch = string.Empty">✕</button>
+                }
+            </div>
+
+            <div class="flex items-center justify-between gap-2 px-2 text-[11px]">
+                <span class="text-slate-500 dark:text-slate-400">@selectedMemberIds.Count selected</span>
+                <div class="flex items-center gap-2 text-[11px]">
+                    <button type="button" class="font-semibold text-teal-700 hover:text-teal-800 dark:text-teal-400" @onclick="SelectVisibleStaff">Select visible</button>
+                    <button type="button" class="font-semibold text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white" @onclick="ClearSelectedStaff">Clear</button>
+                </div>
+            </div>
+
+            <div class="min-h-[12rem] max-h-80 flex-1 overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-700">
+                @if (!FilteredParentStaff.Any())
+                {
+                    <p class="p-2 text-center text-xs text-slate-500 dark:text-slate-400">@(data.Staff.Count == 0 ? "All parent-team staff are already assigned to sub-teams." : "No staff match your search.")</p>
+                }
+                else
+                {
+                    <table class="w-full text-left text-xs">
+                        <thead class="sticky top-0 border-b border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                            <tr><th class="p-2 font-semibold">Staff</th><th class="w-40 p-2 font-semibold">Staff type</th></tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                        @foreach (var staff in FilteredParentStaff)
+                        {
+                            var isSelected = selectedMemberIds.Contains(staff.Id);
+                            <tr @key="staff.Id" class="transition hover:bg-slate-50 dark:hover:bg-slate-800/60">
+                                <td class="p-2">
+                                    <label class="flex cursor-pointer items-center gap-2">
+                                        <input type="checkbox" class="h-4 w-4 rounded border-slate-300 text-teal-700 focus:ring-teal-600 dark:border-slate-600 dark:bg-slate-800" checked="@isSelected" @onchange="e => ToggleStaff(staff.Id, e)" />
+                                        <span class="min-w-0 font-medium text-slate-800 dark:text-slate-100">@staff.Name</span>
+                                    </label>
+                                </td>
+                                <td class="p-2">
+                                    <select aria-label="Staff type for @staff.Name" disabled="@(!isSelected)" value="@GetMemberRole(staff.Id)" @onchange="e => SetMemberRole(staff.Id, e.Value?.ToString())" class="w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100">
+                                    <option value="Member">Member</option>
+                                    <option value="Supervisor">Supervisor</option>
+                                    <option value="TeamLead">Team Lead</option>
+                                </select>
+                                </td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                }
+            </div>
+
+            <div class="flex items-center justify-between gap-2 border-t border-slate-100 pt-2 text-xs dark:border-slate-800">
+                <span class="text-[11px] text-slate-400">@FilteredParentStaff.Count() available</span>
+                <div class="flex items-center gap-2">
+                <button type="button" disabled="@busy" class="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800" @onclick="CloseMemberModal">Cancel</button>
+                <button type="button" disabled="@(busy || selectedMemberIds.Count == 0)" class="rounded-lg bg-teal-700 px-3 py-2 text-xs font-semibold text-white hover:bg-teal-800 disabled:opacity-50" @onclick="SaveMembers">@(busy ? "Adding…" : $"Add {selectedMemberIds.Count} staff")</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public int ParentTeamId { get; set; }
+    [Parameter] public int? SelectedSubTeamId { get; set; }
+    [Parameter] public bool CompactMode { get; set; }
+    [Parameter] public bool CreateModeOnly { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback OnSubTeamsChanged { get; set; }
+    [Parameter] public EventCallback<int?> OnSubTeamSelected { get; set; }
+    private int loadedTeamId; private bool loading; private bool busy; private bool editing; private bool deleteConfirmation; private string? error;
+    private SubTeamWorkspaceDto? data; private SubTeamDto? selected; private SaveSubTeamDto draft = new();
+    private bool showMemberModal; private string memberSearch = ""; private HashSet<int> selectedMemberIds = [];
+    private Dictionary<int, string> selectedMemberRoles = []; private DateTime adjustmentDate = DateTime.Today;
+    private string checkIn = ""; private string checkOut = ""; private string adjustmentReason = "";
+    protected override async Task OnParametersSetAsync()
+    {
+        if (ParentTeamId > 0 && loadedTeamId != ParentTeamId)
+        {
+            loadedTeamId = ParentTeamId;
+            await Load(CreateModeOnly ? null : SelectedSubTeamId);
+            if (CreateModeOnly) NewTeam();
+        }
+        else if (CreateModeOnly && (selected != null || !editing))
+        {
+            NewTeam();
+        }
+        else if (!CreateModeOnly && SelectedSubTeamId.HasValue && selected?.TeamId != SelectedSubTeamId.Value && data != null)
+        {
+            var match = data.SubTeams.FirstOrDefault(x => x.TeamId == SelectedSubTeamId.Value);
+            if (match != null) Select(match);
+        }
+    }
+    private async Task CloseAsync()
+    {
+        if (OnClose.HasDelegate)
+        {
+            await OnClose.InvokeAsync();
+        }
+    }
+    private async Task Load(int? selectId=null){ loading=true;error=null;try{data=await TeamService.LoadSubTeamsAsync(ParentTeamId);selected=data.SubTeams.FirstOrDefault(x=>x.TeamId==(selectId??selected?.TeamId))??data.SubTeams.FirstOrDefault();if(selected!=null&&!CreateModeOnly)Select(selected);}catch(Exception ex){error=ex.Message;}finally{loading=false;} }
+    private void NewTeam()
+    {
+        selected = null;
+        deleteConfirmation = false;
+        editing = true;
+        draft = new() { ParentTeamId = ParentTeamId, IsActive = true, MaximumDailyOvertimeHours = 4, MaximumWeeklyOvertimeHours = 24 };
+        if (OnSubTeamSelected.HasDelegate)
+        {
+            _ = OnSubTeamSelected.InvokeAsync(null);
+        }
+    }
+    private void Select(SubTeamDto team)
+    {
+        selected = team;
+        deleteConfirmation = false;
+        editing = data?.CanManage == true;
+        draft = new()
+        {
+            TeamId = team.TeamId,
+            ParentTeamId = team.ParentTeamId,
+            Name = team.Name,
+            NameDhivehi = team.NameDhivehi,
+            OvertimeEnabled = team.OvertimeEnabled,
+            MaximumDailyOvertimeHours = team.MaximumDailyOvertimeHours,
+            MaximumWeeklyOvertimeHours = team.MaximumWeeklyOvertimeHours,
+            IsActive = team.IsActive
+        };
+        if (OnSubTeamSelected.HasDelegate)
+        {
+            _ = OnSubTeamSelected.InvokeAsync(team.TeamId);
+        }
+    }
+    private async Task Run(Func<Task> action,string success){busy=true;error=null;try{await action();Toasts.Success(success);if(OnSubTeamsChanged.HasDelegate)await OnSubTeamsChanged.InvokeAsync();}catch(Exception ex){error=ex.Message;Toasts.Error(ex.Message);}finally{busy=false;}}
+    private async Task SaveTeam(){var id=0;await Run(async()=>{id=await TeamService.SaveSubTeamAsync(draft);CreateModeOnly=false;},"Sub-team saved.");if(id>0)await Load(id);}
+    private async Task DeleteTeam()
+    {
+        if (selected == null) return;
+        var teamId = selected.TeamId;
+        await Run(() => TeamService.DeleteSubTeamAsync(teamId), "Sub-team deleted.");
+        deleteConfirmation = false;
+        selected = null;
+        await Load();
+    }
+    private IEnumerable<SubTeamOptionDto> FilteredParentStaff => data?.Staff.Where(x =>
+        string.IsNullOrWhiteSpace(memberSearch) || x.Name.Contains(memberSearch, StringComparison.OrdinalIgnoreCase)) ?? [];
+    private void OpenMemberModal(){memberSearch="";selectedMemberIds.Clear();selectedMemberRoles.Clear();showMemberModal=true;}
+    private void CloseMemberModal(){if(busy)return;showMemberModal=false;}
+    private void ToggleStaff(int staffId,ChangeEventArgs change){var value=change.Value is bool checkedValue?checkedValue:string.Equals(change.Value?.ToString(),"true",StringComparison.OrdinalIgnoreCase);ToggleStaff(staffId,value);}
+    private void ToggleStaff(int staffId,bool value){if(value){selectedMemberIds.Add(staffId);selectedMemberRoles.TryAdd(staffId,"Member");}else{selectedMemberIds.Remove(staffId);selectedMemberRoles.Remove(staffId);}}
+    private string GetMemberRole(int staffId)=>selectedMemberRoles.GetValueOrDefault(staffId,"Member");
+    private void SetMemberRole(int staffId,string? role){if(selectedMemberIds.Contains(staffId))selectedMemberRoles[staffId]=role is "Supervisor" or "TeamLead"?role:"Member";}
+    private void SelectVisibleStaff(){foreach(var staff in FilteredParentStaff){selectedMemberIds.Add(staff.Id);selectedMemberRoles.TryAdd(staff.Id,"Member");}}
+    private void ClearSelectedStaff(){selectedMemberIds.Clear();selectedMemberRoles.Clear();}
+    private async Task SaveMembers()
+    {
+        if(selected==null||selectedMemberIds.Count==0)return;
+        var teamId=selected.TeamId;var count=selectedMemberIds.Count;busy=true;error=null;
+        try
+        {
+            foreach(var staffId in selectedMemberIds.ToList())
+                await TeamService.SaveSubTeamMemberAsync(new(){TeamId=teamId,StaffId=staffId,Role=GetMemberRole(staffId),StartDate=DateTime.Today});
+            await Load(teamId);
+            if(OnSubTeamsChanged.HasDelegate)await OnSubTeamsChanged.InvokeAsync();
+            showMemberModal=false;Toasts.Success(count==1?"Staff member assigned.":$"{count} staff members assigned.");
+        }
+        catch(Exception ex){error=ex.Message;Toasts.Error(ex.Message);}
+        finally{busy=false;}
+    }
+    private async Task RemoveMember(int staffId){if(selected==null)return;await Run(()=>TeamService.RemoveSubTeamMemberAsync(selected.TeamId,staffId),"Member removed.");await Load(selected.TeamId);}
+    private async Task SaveAdjustment(){if(selected==null)return;TimeSpan? start=TimeSpan.TryParse(checkIn,out var s)?s:null;TimeSpan? end=TimeSpan.TryParse(checkOut,out var e)?e:null;await Run(()=>TeamService.SaveTeamScheduleAdjustmentAsync(new(){TeamId=selected.TeamId,WorkDate=adjustmentDate,RevisedCheckIn=start,RevisedCheckOut=end,Reason=adjustmentReason}),"Schedule adjustment saved.");checkIn=checkOut=adjustmentReason="";await Load(selected.TeamId);}
+}

@@ -194,7 +194,9 @@ public sealed record EmployeePayrollInputItem(
     List<InputLeaveDeductionItem> UnpaidLeaves,
     List<InputDeductionAgreementItem> Deductions,
     List<InputAdjustmentItem> Adjustments,
-    List<InputAttendanceDeductionItem>? AttendanceDeductions = null
+    List<InputAttendanceDeductionItem>? AttendanceDeductions = null,
+    bool IsMaldivianCitizen = true,
+    DateOnly? DateOfBirth = null
 );
 
 public sealed record InputAttendanceDeductionItem(
@@ -256,5 +258,37 @@ public sealed record InputAdjustmentItem(
     string ComponentCode,
     string Description,
     decimal Amount,
-    bool IsAddition
+    bool IsAddition,
+    bool IsTaxable = true
 );
+
+public sealed record PayrollStatutoryPolicy(
+    decimal EmployeePensionRate = 0.07m,
+    decimal EmployerPensionRate = 0.07m,
+    bool AllowancesArePensionable = false,
+    bool PensionMaldiviansOnly = true,
+    int PensionMinAge = 16,
+    int PensionMaxAge = 65,
+    decimal NormalOvertimeMultiplier = 1.25m,
+    decimal HolidayOvertimeMultiplier = 1.50m,
+    decimal OvertimeHourlyDivisor = 180m,
+    decimal MinimumWageMonthly = 7000m,
+    decimal MaxDeductionPercentage = 40m,
+    decimal RamadanAllowanceAmount = 3000m,
+    string UnpaidLeaveDivisorMode = "CalendarDays",
+    bool RequireBankAccountForPayment = true,
+    string DefaultCurrencyCode = "MVR",
+    IReadOnlyList<HRM.Application.Contracts.Pages.PayrollTaxBracketDto>? TaxBrackets = null
+)
+{
+    public static IReadOnlyList<HRM.Application.Contracts.Pages.PayrollTaxBracketDto> MaldivesDefaultTaxBrackets { get; } =
+    [
+        new(0m, 60000m, 0m),
+        new(60000m, 100000m, 5.5m),
+        new(100000m, 150000m, 8.0m),
+        new(150000m, 200000m, 12.0m),
+        new(200000m, null, 15.0m)
+    ];
+
+    public static PayrollStatutoryPolicy MaldivesDefault { get; } = new(TaxBrackets: MaldivesDefaultTaxBrackets);
+}

@@ -26,7 +26,7 @@ public abstract class AttendanceLogServiceContracts
 
 public interface IOperations
 {
-Task<List<TeamAttendanceDto>> GetMyTeamAttendanceTodayAsync()
+Task<List<TeamAttendanceDto>> GetMyTeamAttendanceTodayAsync(bool includeAllStaff = false)
 ;
 Task<bool> CanUseTestClockAsync() ;
 Task AddClockEventAsync(

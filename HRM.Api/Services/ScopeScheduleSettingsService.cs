@@ -46,10 +46,15 @@ public sealed partial class ScopeScheduleSettingsService(IDbContextFactory<HrmTe
         if(model.OrganisationStructureId.HasValue && !await db.OrganisationStructures.AnyAsync(s=>s.OrganisationStructureId==model.OrganisationStructureId && s.OrganisationBusinessEntityID==org && s.OrganisationStructureStateId==3))
             throw new InvalidOperationException("Select an approved structure in this organisation.");
         if(model.GroupId.HasValue && !await db.Groups.AnyAsync(g=>g.GroupId==model.GroupId && g.BusinessEntityOrganisationId==org)) throw new InvalidOperationException("Select a group in this organisation.");
-        var rotation=StaffScheduleCalendar.Parse(model.RotationTemplateIds);
-        if(model.ScheduleMode=="Rotation" && (!model.RotationAnchorDate.HasValue || rotation.Count is <1 or >90 || rotation.Any(id=>id<0) || !rotation.Any(id=>id>0)))
+        var rotationSlots=StaffScheduleCalendar.ParseSlots(model.RotationTemplateIds);
+        if(model.ScheduleMode=="Rotation" && (!model.RotationAnchorDate.HasValue || rotationSlots.Count is <1 or >90 || rotationSlots.Any(s=>s.TemplateId<0) || !rotationSlots.Any(s=>s.TemplateId>0)))
             throw new InvalidOperationException("Choose a rotation anchor and 1–90 cycle days, including at least one template. Use 0 for rest days.");
-        var ids=(model.ScheduleMode=="Rotation"?rotation.Where(id=>id>0):new[]{model.WorkTemplateId}).Distinct().ToList();
+        if(model.ScheduleMode=="Rotation" && rotationSlots.Any(s=>s.TemplateId>0 && s.StartTime.HasValue && s.EndTime.HasValue && s.StartTime==s.EndTime))
+            throw new InvalidOperationException("Custom shift start and end times cannot be identical.");
+        var serializedRotation=model.ScheduleMode=="Rotation"?SchedulePattern.SerializeSlots(rotationSlots):null;
+        if(serializedRotation!=null && serializedRotation.Length>2000)
+            throw new InvalidOperationException("The rotating shift pattern is too large. Shorten shift labels or cycle length.");
+        var ids=(model.ScheduleMode=="Rotation"?rotationSlots.Where(s=>s.TemplateId>0).Select(s=>s.TemplateId):new[]{model.WorkTemplateId}).Distinct().ToList();
         if(model.ScheduleMode=="Rotation") model.WorkTemplateId=ids.First();
         var available=await db.WorkTemplates.Where(t=>ids.Contains(t.WorkTemplateId) && t.IsActive && (t.IsGlobal || t.OrganisationBusinessEntityId==org) &&
             t.DefaultStartTime.HasValue && t.DefaultEndTime.HasValue && t.WorkTemplateSegments.Any(s=>s.IsActive) &&
@@ -81,7 +86,7 @@ public sealed partial class ScopeScheduleSettingsService(IDbContextFactory<HrmTe
         }
         entity.OrganisationStructureId=model.OrganisationStructureId;entity.GroupId=model.GroupId;entity.WorkTemplateId=model.WorkTemplateId;
         entity.SchedulePurpose=model.SchedulePurpose;entity.ScheduleMode=model.ScheduleMode;entity.WorkingDaysMask=model.ScheduleMode=="Standard"?31:model.WorkingDaysMask;
-        entity.RotationAnchorDate=model.ScheduleMode=="Rotation"?model.RotationAnchorDate?.Date:null;entity.RotationTemplateIds=model.ScheduleMode=="Rotation"?System.Text.Json.JsonSerializer.Serialize(rotation):null;
+        entity.RotationAnchorDate=model.ScheduleMode=="Rotation"?model.RotationAnchorDate?.Date:null;entity.RotationTemplateIds=serializedRotation;
         entity.Priority=model.Priority;entity.EffectiveFrom=model.EffectiveFrom.Date;entity.EffectiveTo=model.EffectiveTo?.Date;entity.OperationLogId=operation.OperationLogId;entity.IsActive=model.IsActive;
         await db.SaveChangesAsync();
         if(entity.IsActive) await ValidateDutiesAsync(db,entity,entity.EffectiveFrom,entity.EffectiveTo);

@@ -897,21 +897,8 @@ public sealed partial class ItemCatalogueService
         }
 
         var refNumber = row.Request?.ReferenceNumber ?? $"IM-{row.RequestId}";
-        var truncatedMessage = message.Length > 500 ? message[..500] : message;
-
         foreach (var approver in approverUsers)
         {
-            db.StaffNotifications.Add(new StaffNotification
-            {
-                UserId = approver.UserId,
-                IndividualId = approver.PersonId,
-                OrganisationId = row.OrganisationId,
-                Kind = "ItemRequest",
-                Message = truncatedMessage,
-                Url = $"/admin/my/workspace?tab=requests&requestId={row.RequestId}",
-                CreatedAtUtc = DateTime.UtcNow
-            });
-
             db.RequestNotifications.Add(new RequestNotification
             {
                 UserId = approver.UserId,
@@ -932,10 +919,7 @@ public sealed partial class ItemCatalogueService
                         u.UserId != senderUserId)
             .Select(u => u.UserId)
             .ToListAsync();
-
-        var refNumber = row.Request?.ReferenceNumber ?? $"IM-{row.RequestId}";
         var truncatedMessage = message.Length > 500 ? message[..500] : message;
-
         foreach (var userId in staffUsers)
         {
             db.StaffNotifications.Add(new StaffNotification
@@ -946,17 +930,6 @@ public sealed partial class ItemCatalogueService
                 Kind = "ItemRequest",
                 Message = truncatedMessage,
                 Url = $"/online/item-requests?requestId={row.RequestId}",
-                CreatedAtUtc = DateTime.UtcNow
-            });
-
-            db.RequestNotifications.Add(new RequestNotification
-            {
-                UserId = userId,
-                RequestId = row.RequestId,
-                NotificationKind = "StateChanged",
-                FromStateId = 1,
-                ToStateId = 1,
-                ReferenceNumber = refNumber,
                 CreatedAtUtc = DateTime.UtcNow
             });
         }

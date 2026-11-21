@@ -1,0 +1,150 @@
+@using HRM.Application.Contracts.Recruitment
+@inject HRM.UI.Services.Recruitment.IRecruitmentApiClient Api
+
+<div class="grid items-start gap-4 lg:grid-cols-12">
+    <section class="lg:col-span-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-xs space-y-3">
+        <div>
+            <h2 class="text-sm font-bold text-slate-900">Create Draft Vacancy</h2>
+            <p class="mt-0.5 text-xs text-slate-500">Draft a job advertisement from an approved recruitment requisition.</p>
+        </div>
+
+        <div class="space-y-3">
+            <label class="block text-xs font-medium text-slate-700">
+                Approved Requisition
+                <select class="@InputClass" @bind="requisition">
+                    <option value="0">-- Select requisition --</option>
+                    @foreach (var row in Rows.Where(x => x.Status == "Approved"))
+                    {
+                        <option value="@row.Id">@row.Reference (@row.RequestedSlots slots)</option>
+                    }
+                </select>
+            </label>
+            <label class="block text-xs font-medium text-slate-700">
+                Advertisement Title
+                <input maxlength="250" class="@InputClass" @bind="title" placeholder="e.g. Senior Administrative Officer" />
+            </label>
+            <label class="block text-xs font-medium text-slate-700">
+                Advertisement Details
+                <textarea rows="4" maxlength="8000" class="@InputClass" @bind="details" placeholder="Enter role requirements, qualifications, and terms..."></textarea>
+            </label>
+            <label class="block text-xs font-medium text-slate-700">
+                Closing Date &amp; Time (Maldives)
+                <input type="datetime-local" class="@InputClass" @bind="closing" />
+            </label>
+        </div>
+
+        <div class="flex justify-end">
+            <button type="button"
+                    class="inline-flex items-center justify-center rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                    disabled="@(busy || requisition <= 0 || string.IsNullOrWhiteSpace(title) || string.IsNullOrWhiteSpace(details))"
+                    @onclick="Create">
+                Create Draft Vacancy
+            </button>
+        </div>
+
+        @if (!string.IsNullOrEmpty(message))
+        {
+            <div role="status" class="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-800">
+                <span>@message</span>
+                <button type="button" class="font-bold text-slate-500 hover:text-slate-800" @onclick="() => message = null">✕</button>
+            </div>
+        }
+    </section>
+
+    <section class="lg:col-span-7 rounded-2xl border border-slate-200 bg-white p-4 shadow-xs space-y-3">
+        <div class="flex items-center justify-between gap-2">
+            <div>
+                <h2 class="text-sm font-bold text-slate-900">Vacancies Register</h2>
+                <p class="text-xs text-slate-500">Draft and published vacancies for your organisation.</p>
+            </div>
+            <span class="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-700">@vacancies.Count records</span>
+        </div>
+
+        <div class="overflow-x-auto rounded-xl border border-slate-200">
+            <table class="w-full text-left text-xs">
+                <thead class="border-b border-slate-200 bg-slate-50 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+                    <tr>
+                        <th class="p-2.5">Reference</th>
+                        <th class="p-2.5">Slots</th>
+                        <th class="p-2.5">Closing (MVT)</th>
+                        <th class="p-2.5">Status</th>
+                        <th class="p-2.5 text-right">Action</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    @if (vacancies.Count == 0)
+                    {
+                        <tr>
+                            <td colspan="5" class="p-6 text-center text-slate-500">No vacancies created yet.</td>
+                        </tr>
+                    }
+                    else
+                    {
+                        @foreach (var vacancy in vacancies)
+                        {
+                            <tr class="hover:bg-slate-50/70 transition-colors">
+                                <td class="p-2.5 font-mono text-[11px] font-semibold text-blue-700">@vacancy.Reference</td>
+                                <td class="p-2.5 font-semibold text-slate-800">@vacancy.Slots</td>
+                                <td class="p-2.5 text-slate-600">@(vacancy.ClosingAtUtc?.AddHours(5).ToString("dd MMM yyyy HH:mm") ?? "—")</td>
+                                <td class="p-2.5">
+                                    <span class="rounded-full px-2.5 py-0.5 text-[11px] font-semibold @(vacancy.Status == "Published" ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800")">@vacancy.Status</span>
+                                </td>
+                                <td class="p-2.5 text-right">
+                                    @if (vacancy.Status == "Draft")
+                                    {
+                                        <button type="button"
+                                                class="inline-flex items-center justify-center rounded-lg border border-blue-300 bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-800 hover:bg-blue-100 disabled:opacity-50 transition-colors"
+                                                disabled="@busy"
+                                                @onclick="() => Publish(vacancy.Id)">
+                                            Publish
+                                        </button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </section>
+</div>
+
+@code {
+    [Parameter] public IReadOnlyList<RecruitmentRequisitionRow> Rows { get; set; } = [];
+    private IReadOnlyList<RecruitmentVacancyRow> vacancies = [];
+    private int requisition;
+    private string title = "", details = "";
+    private string? message;
+    private bool busy;
+    private DateTime closing = DateTime.UtcNow.AddHours(5).AddDays(14);
+    private const string InputClass = "mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try { vacancies = await Api.GetVacanciesAsync(); }
+        catch (HttpRequestException) { message = "Vacancies could not be loaded. Refresh the page."; }
+    }
+
+    private Task Create() => Run(() => Api.CreateVacancyAsync(new(requisition, DateTime.SpecifyKind(closing.AddHours(-5), DateTimeKind.Utc), System.Text.Json.JsonSerializer.Serialize(new { Title = title, Details = details }))));
+    private Task Publish(int id) => Run(() => Api.PublishVacancyAsync(id));
+
+    private async Task Run(Func<Task<HRM.DTOs.ServiceResult>> action)
+    {
+        if (busy) return;
+        busy = true;
+        try
+        {
+            var result = await action();
+            message = result.Message;
+            if (result.Success) vacancies = await Api.GetVacanciesAsync();
+        }
+        catch (HttpRequestException)
+        {
+            message = "The action could not be completed. Check vacancy state and recruitment permissions.";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+}

@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using HRM.DTOs;
 using HRM.DTOs.AttendanceDeductions;
+using HRM.DTOs.UserContext;
 using HRM.Helpers;
 using HRM.Models;
 using HRM.Models.AttendanceDeductions;
@@ -18,17 +19,43 @@ public sealed class AttendanceDeductionService : IAttendanceDeductionService
 {
     private readonly IDbContextFactory<HrmTeContext> _factory;
     private readonly ILogger<AttendanceDeductionService> _logger;
+    private readonly IUserAccessService _access;
 
     public AttendanceDeductionService(
         IDbContextFactory<HrmTeContext> factory,
-        ILogger<AttendanceDeductionService> logger)
+        ILogger<AttendanceDeductionService> logger,
+        IUserAccessService access)
     {
         _factory = factory;
         _logger = logger;
+        _access = access;
+    }
+
+    private async Task<UserContextDto> RequireAuthorisedActorAsync(int organisationId, bool requireManage)
+    {
+        var actor = await _access.RequireContextAsync();
+        if (!actor.IsSuperAdministrator && organisationId > 0 && !await _access.HasOrganisationAccessAsync(organisationId))
+            throw new UnauthorizedAccessException("Access to another organisation's attendance deductions is not permitted.");
+
+        var allowed = actor.IsSuperAdministrator ||
+            await _access.HasPermissionAsync("Admin") ||
+            await _access.HasPermissionAsync("Payroll.Configure") ||
+            await _access.HasPermissionAsync("Payroll.Review") ||
+            await _access.HasPermissionAsync("Payroll.Approve") ||
+            await _access.HasPermissionAsync("Payroll.Calculate") ||
+            await _access.HasPermissionAsync("Attendance.Adjust") ||
+            await _access.HasPermissionAsync("Attendance.Approve") ||
+            (!requireManage && await _access.HasPermissionAsync("Payroll.View"));
+
+        if (!allowed)
+            throw new UnauthorizedAccessException("You do not have permission to access attendance deductions.");
+
+        return actor;
     }
 
     public async Task<AttendanceDeductionPolicy> GetEffectivePolicyAsync(int organisationId, DateOnly workDate)
     {
+        await RequireAuthorisedActorAsync(organisationId, requireManage: false);
         await using var db = await _factory.CreateDbContextAsync();
 
         var policy = await db.AttendanceDeductionPolicies
@@ -72,14 +99,17 @@ public sealed class AttendanceDeductionService : IAttendanceDeductionService
     public async Task<AttendanceAdjustment?> EvaluateDailyDeductionAsync(
         int organisationId, int individualId, int jobId, DateOnly workDate, CancellationToken ct = default)
     {
+        await RequireAuthorisedActorAsync(organisationId, requireManage: true);
         await using var db = await _factory.CreateDbContextAsync(ct);
 
         var policy = await GetEffectivePolicyAsync(organisationId, workDate);
+        var leadershipPolicy = await HRM.Services.LeadershipAttendancePolicyResolver.ResolveAsync(db, individualId, organisationId, workDate, ct);
+        if (leadershipPolicy is { AttendanceRequired: false }) return null;
         var workDateDt = workDate.ToDateTime(TimeOnly.MinValue);
 
         // 1. Resolve employee job and compensation
         var job = await db.Jobs.AsNoTracking()
-            .FirstOrDefaultAsync(j => j.JobId == jobId, ct);
+            .FirstOrDefaultAsync(j => j.JobId == jobId && j.OrganisationID == organisationId && j.IndividualID == individualId, ct);
 
         if (job == null) return null;
 
@@ -97,10 +127,10 @@ public sealed class AttendanceDeductionService : IAttendanceDeductionService
         {
             var serviceAllowance = await (from a in db.StaffAllowances.AsNoTracking()
                                           join t in db.AllowanceTypes.AsNoTracking() on a.AllowanceTypeId equals t.Id
-                                          where a.JobId == jobId &&
-                                                (t.Name.Contains("Service") || t.Name.Contains(policy.ServiceAllowanceComponentCode)) &&
+                                           where a.JobId == jobId && a.OrganisationId == organisationId &&
+                                                 (EF.Functions.Like(t.Name, "%Service%") || EF.Functions.Like(t.Name, $"%{policy.ServiceAllowanceComponentCode}%")) &&
                                                 a.FromDate <= workDateDt && (!a.ToDate.HasValue || a.ToDate.Value >= workDateDt)
-                                          select a.Amount).FirstOrDefaultAsync(ct);
+                                           select a.Amount).SumAsync(ct);
             monthlyServiceAllowance = serviceAllowance;
         }
 
@@ -109,7 +139,11 @@ public sealed class AttendanceDeductionService : IAttendanceDeductionService
         var officialFact = facts.FirstOrDefault(f => f.RequiresAttendance && f.Purpose == "Official");
 
         // If no required official schedule, no deduction applies
-        if (officialFact == null) return null;
+        if (officialFact == null)
+        {
+            await ClearPendingAdjustmentAsync(db, organisationId, jobId, workDate, "No required official schedule exists for this date.", ct);
+            return null;
+        }
 
         int officialWorkingMinutes = (int)(officialFact.ScheduledEnd - officialFact.ScheduledStart).TotalMinutes;
         if (officialWorkingMinutes <= 0) officialWorkingMinutes = policy.DefaultDailyWorkingMinutes;
@@ -121,6 +155,7 @@ public sealed class AttendanceDeductionService : IAttendanceDeductionService
 
         if (hasApprovedLeave)
         {
+            await ClearPendingAdjustmentAsync(db, organisationId, jobId, workDate, "Covered by approved leave.", ct);
             return null; // Covered by approved leave
         }
 
@@ -149,6 +184,7 @@ public sealed class AttendanceDeductionService : IAttendanceDeductionService
             if (hasOfficialDuty)
             {
                 outcome = AttendanceOutcomeClassifications.OfficialDuty;
+                await ClearPendingAdjustmentAsync(db, organisationId, jobId, workDate, "Covered by official duty.", ct);
                 return null;
             }
 
@@ -194,7 +230,8 @@ public sealed class AttendanceDeductionService : IAttendanceDeductionService
                     deductibleMinutes = 0;
                 }
                 // July 2026 Arrival Buffer Rule (e.g. <= 30 minutes late)
-                else if (rawLateMinutes <= policy.ArrivalBufferMinutes)
+                else if (rawLateMinutes <= policy.ArrivalBufferMinutes &&
+                         (!policy.BufferEligibilityCategory.Equals("AllNonShift", StringComparison.OrdinalIgnoreCase) || !officialFact.IsShiftOrDuty))
                 {
                     // Check if make-up time is required and whether it was satisfied
                     if (!policy.BufferMakeUpRequired)
@@ -216,7 +253,8 @@ public sealed class AttendanceDeductionService : IAttendanceDeductionService
                             // If week is still active, pending make-up; if past week without make-up, incomplete
                             var weekStart = workDateDt.AddDays(-(int)workDateDt.DayOfWeek);
                             var weekEnd = weekStart.AddDays(7);
-                            var makeupResult = await WeeklyAttendanceMakeup.LoadAsync(db, individualId, organisationId, weekStart, weekEnd, ct);
+                            var makeupResult = await WeeklyAttendanceMakeup.LoadLateArrivalAsync(
+                                db, individualId, organisationId, weekStart, weekEnd, policy.ArrivalBufferMinutes, ct);
 
                             if (makeupResult.RemainingHours <= 0)
                             {
@@ -268,6 +306,14 @@ public sealed class AttendanceDeductionService : IAttendanceDeductionService
                     basicDeduction = decimal.Round(perMinuteSalary * deductibleMinutes, 2, MidpointRounding.AwayFromZero);
                     estimatedDeduction = basicDeduction;
                 }
+
+                if (deductibleMinutes > 0 && basicDeduction <= 0)
+                {
+                    decimal dailySalary = monthlyBasicSalary / policy.SalaryDivisor;
+                    decimal perMinuteSalary = officialWorkingMinutes > 0 ? dailySalary / officialWorkingMinutes : 0m;
+                    basicDeduction = decimal.Round(perMinuteSalary * deductibleMinutes, 2, MidpointRounding.AwayFromZero);
+                    estimatedDeduction = basicDeduction;
+                }
             }
             else
             {
@@ -280,14 +326,24 @@ public sealed class AttendanceDeductionService : IAttendanceDeductionService
                 int earlyMinutes = (int)Math.Ceiling((officialFact.ScheduledEnd - officialFact.CheckOut.Value).TotalMinutes);
                 if (earlyMinutes > 0 && approvedTimeChange?.Kind != "EarlyCheckOut")
                 {
-                    if (outcome == AttendanceOutcomeClassifications.OnTime)
+                    decimal dailySalary = monthlyBasicSalary / policy.SalaryDivisor;
+                    decimal perMinuteSalary = officialWorkingMinutes > 0 ? dailySalary / officialWorkingMinutes : 0m;
+                    decimal earlyDeduction = decimal.Round(perMinuteSalary * earlyMinutes, 2, MidpointRounding.AwayFromZero);
+                    if (deductibleMinutes > 0 || estimatedDeduction > 0)
+                    {
+                        outcome = AttendanceOutcomeClassifications.PendingVerification;
+                        adjustmentType = AttendanceDeductionTypes.PartialDayAbsence;
+                        deductibleMinutes += earlyMinutes;
+                        basicDeduction += earlyDeduction;
+                        estimatedDeduction = basicDeduction;
+                        isAssumptionVerified = false;
+                    }
+                    else
                     {
                         outcome = AttendanceOutcomeClassifications.EarlyDeparture;
                         adjustmentType = AttendanceDeductionTypes.EarlyDeparture;
                         deductibleMinutes = earlyMinutes;
-                        decimal dailySalary = monthlyBasicSalary / policy.SalaryDivisor;
-                        decimal perMinuteSalary = officialWorkingMinutes > 0 ? (dailySalary / officialWorkingMinutes) : 0m;
-                        basicDeduction = decimal.Round(perMinuteSalary * deductibleMinutes, 2, MidpointRounding.AwayFromZero);
+                        basicDeduction = earlyDeduction;
                         estimatedDeduction = basicDeduction;
                     }
                 }
@@ -298,6 +354,7 @@ public sealed class AttendanceDeductionService : IAttendanceDeductionService
         if (deductibleMinutes <= 0 && estimatedDeduction <= 0 &&
             outcome is AttendanceOutcomeClassifications.OnTime or AttendanceOutcomeClassifications.EligibleBuffer_Completed)
         {
+            await ClearPendingAdjustmentAsync(db, organisationId, jobId, workDate, "Attendance is complete and no deduction applies.", ct);
             return null;
         }
 
@@ -307,6 +364,12 @@ public sealed class AttendanceDeductionService : IAttendanceDeductionService
         var existing = await db.AttendanceAdjustments.FirstOrDefaultAsync(a =>
             a.OrganisationId == organisationId && a.JobId == jobId &&
             a.WorkDate == workDate && a.AdjustmentType == adjustmentType, ct);
+
+        var stale = await db.AttendanceAdjustments.Where(a =>
+            a.OrganisationId == organisationId && a.JobId == jobId && a.WorkDate == workDate &&
+            a.AdjustmentType != adjustmentType && a.PayrollProcessingStatus == AttendanceAdjustmentPayrollStatuses.Pending)
+            .ToListAsync(ct);
+        foreach (var row in stale) VoidAdjustment(row, "Replaced by recalculated attendance outcome.");
 
         if (existing == null)
         {
@@ -358,9 +421,35 @@ public sealed class AttendanceDeductionService : IAttendanceDeductionService
         return existing;
     }
 
+    private static async Task ClearPendingAdjustmentAsync(HrmTeContext db, int organisationId, int jobId,
+        DateOnly workDate, string reason, CancellationToken ct)
+    {
+        var rows = await db.AttendanceAdjustments.Where(a =>
+            a.OrganisationId == organisationId && a.JobId == jobId && a.WorkDate == workDate &&
+            a.PayrollProcessingStatus == AttendanceAdjustmentPayrollStatuses.Pending).ToListAsync(ct);
+        foreach (var row in rows) VoidAdjustment(row, reason);
+        if (rows.Count > 0) await db.SaveChangesAsync(ct);
+    }
+
+    private static void VoidAdjustment(AttendanceAdjustment row, string reason)
+    {
+        row.DeductibleMinutes = 0;
+        row.EstimatedDeductionAmount = 0m;
+        row.BasicSalaryDeductionAmount = 0m;
+        row.ServiceAllowanceDeductionAmount = 0m;
+        row.VerificationStatus = AttendanceAdjustmentVerificationStatuses.Excused;
+        row.ReviewerComments = reason;
+        row.UpdatedAtUtc = DateTime.UtcNow;
+    }
+
     public async Task<List<AttendanceAdjustment>> EvaluateRangeAsync(
         int organisationId, int? individualId, int? jobId, DateOnly fromDate, DateOnly toDate, CancellationToken ct = default)
     {
+        await RequireAuthorisedActorAsync(organisationId, requireManage: true);
+        if (toDate < fromDate) return new List<AttendanceAdjustment>();
+        if (toDate.DayNumber - fromDate.DayNumber > 93)
+            throw new ArgumentOutOfRangeException(nameof(toDate), "Attendance deduction evaluation range cannot exceed 93 days.");
+
         await using var db = await _factory.CreateDbContextAsync(ct);
 
         var jobsQuery = db.Jobs.AsNoTracking().Where(j => j.OrganisationID == organisationId && j.JobStateId == 4);
@@ -392,6 +481,7 @@ public sealed class AttendanceDeductionService : IAttendanceDeductionService
     public async Task<List<AttendanceAdjustmentDto>> GetAdjustmentsAsync(
         int organisationId, DateOnly? fromDate = null, DateOnly? toDate = null, string? verificationStatus = null, string? payrollStatus = null)
     {
+        await RequireAuthorisedActorAsync(organisationId, requireManage: false);
         await using var db = await _factory.CreateDbContextAsync();
 
         var query = db.AttendanceAdjustments.AsNoTracking()
@@ -407,15 +497,26 @@ public sealed class AttendanceDeductionService : IAttendanceDeductionService
             .Take(500)
             .ToListAsync();
 
+        if (rows.Count == 0)
+        {
+            return new List<AttendanceAdjustmentDto>();
+        }
+
         var indIds = rows.Select(r => r.IndividualId).Distinct().ToList();
-        var individuals = await db.Individuals.AsNoTracking()
-            .Where(i => indIds.Contains(i.BusinessEntityId))
-            .ToDictionaryAsync(i => i.BusinessEntityId, i => $"{i.FirstNameEnglish} {i.LastNameEnglish}".Trim());
+        var individuals = indIds.Count > 0
+            ? await db.Individuals.AsNoTracking()
+                .Where(i => indIds.Contains(i.BusinessEntityId))
+                .Select(i => new { i.BusinessEntityId, FullName = (i.FirstNameEnglish + " " + i.LastNameEnglish).Trim() })
+                .ToDictionaryAsync(i => i.BusinessEntityId, i => i.FullName)
+            : new Dictionary<int, string>();
 
         var userIds = rows.Where(r => r.VerifiedByUserId.HasValue).Select(r => r.VerifiedByUserId!.Value).Distinct().ToList();
-        var users = await db.Users.AsNoTracking()
-            .Where(u => userIds.Contains(u.UserId))
-            .ToDictionaryAsync(u => u.UserId, u => u.FullName ?? u.Username);
+        var users = userIds.Count > 0
+            ? await db.Users.AsNoTracking()
+                .Where(u => userIds.Contains(u.UserId))
+                .Select(u => new { u.UserId, FullName = u.FullName ?? u.Username })
+                .ToDictionaryAsync(u => u.UserId, u => u.FullName)
+            : new Dictionary<int, string>();
 
         return rows.Select(r => new AttendanceAdjustmentDto(
             AttendanceAdjustmentId: r.AttendanceAdjustmentId,
@@ -452,19 +553,21 @@ public sealed class AttendanceDeductionService : IAttendanceDeductionService
 
     public async Task<ServiceResult> VerifyAdjustmentAsync(long adjustmentId, int userId, string comments)
     {
+        var organisationId = await _access.GetCurrentOrganisationIdAsync();
+        var actor = await RequireAuthorisedActorAsync(organisationId, requireManage: true);
+        var actorUserId = actor.UserId;
         await using var db = await _factory.CreateDbContextAsync();
-        var adj = await db.AttendanceAdjustments.FirstOrDefaultAsync(a => a.AttendanceAdjustmentId == adjustmentId);
+        var adj = await db.AttendanceAdjustments.FirstOrDefaultAsync(a => a.AttendanceAdjustmentId == adjustmentId && a.OrganisationId == organisationId);
         if (adj == null) return ServiceResult.Fail("Attendance adjustment not found.");
 
-        if (adj.PayrollProcessingStatus == AttendanceAdjustmentPayrollStatuses.Locked ||
-            adj.PayrollProcessingStatus == AttendanceAdjustmentPayrollStatuses.Paid)
+        if (adj.PayrollProcessingStatus != AttendanceAdjustmentPayrollStatuses.Pending)
         {
             return ServiceResult.Fail("This adjustment has already been finalized or paid in payroll.");
         }
 
         string prev = adj.VerificationStatus;
         adj.VerificationStatus = AttendanceAdjustmentVerificationStatuses.Verified;
-        adj.VerifiedByUserId = userId;
+        adj.VerifiedByUserId = actorUserId;
         adj.VerifiedAtUtc = DateTime.UtcNow;
         adj.ReviewerComments = comments;
         adj.UpdatedAtUtc = DateTime.UtcNow;
@@ -475,7 +578,7 @@ public sealed class AttendanceDeductionService : IAttendanceDeductionService
             OrganisationId = adj.OrganisationId,
             Action = "Verify",
             Reason = comments,
-            PerformedByUserId = userId,
+            PerformedByUserId = actorUserId,
             PerformedAtUtc = DateTime.UtcNow,
             PreviousStatus = prev,
             NewStatus = AttendanceAdjustmentVerificationStatuses.Verified
@@ -489,12 +592,14 @@ public sealed class AttendanceDeductionService : IAttendanceDeductionService
     {
         if (string.IsNullOrWhiteSpace(reason)) return ServiceResult.Fail("A valid justification is required to excuse an attendance exception.");
 
+        var organisationId = await _access.GetCurrentOrganisationIdAsync();
+        var actor = await RequireAuthorisedActorAsync(organisationId, requireManage: true);
+        var actorUserId = actor.UserId;
         await using var db = await _factory.CreateDbContextAsync();
-        var adj = await db.AttendanceAdjustments.FirstOrDefaultAsync(a => a.AttendanceAdjustmentId == adjustmentId);
+        var adj = await db.AttendanceAdjustments.FirstOrDefaultAsync(a => a.AttendanceAdjustmentId == adjustmentId && a.OrganisationId == organisationId);
         if (adj == null) return ServiceResult.Fail("Attendance adjustment not found.");
 
-        if (adj.PayrollProcessingStatus == AttendanceAdjustmentPayrollStatuses.Locked ||
-            adj.PayrollProcessingStatus == AttendanceAdjustmentPayrollStatuses.Paid)
+        if (adj.PayrollProcessingStatus != AttendanceAdjustmentPayrollStatuses.Pending)
         {
             return ServiceResult.Fail("Cannot excuse an adjustment that has already been finalized in payroll.");
         }
@@ -505,7 +610,7 @@ public sealed class AttendanceDeductionService : IAttendanceDeductionService
         adj.EstimatedDeductionAmount = 0m;
         adj.BasicSalaryDeductionAmount = 0m;
         adj.ServiceAllowanceDeductionAmount = 0m;
-        adj.VerifiedByUserId = userId;
+        adj.VerifiedByUserId = actorUserId;
         adj.VerifiedAtUtc = DateTime.UtcNow;
         adj.ReviewerComments = $"Excused: {reason}";
         adj.UpdatedAtUtc = DateTime.UtcNow;
@@ -516,7 +621,7 @@ public sealed class AttendanceDeductionService : IAttendanceDeductionService
             OrganisationId = adj.OrganisationId,
             Action = "Excuse",
             Reason = reason,
-            PerformedByUserId = userId,
+            PerformedByUserId = actorUserId,
             PerformedAtUtc = DateTime.UtcNow,
             PreviousStatus = prev,
             NewStatus = AttendanceAdjustmentVerificationStatuses.Excused
@@ -530,12 +635,14 @@ public sealed class AttendanceDeductionService : IAttendanceDeductionService
     {
         if (string.IsNullOrWhiteSpace(reason)) return ServiceResult.Fail("Reason is required to reject an attendance adjustment.");
 
+        var organisationId = await _access.GetCurrentOrganisationIdAsync();
+        var actor = await RequireAuthorisedActorAsync(organisationId, requireManage: true);
+        var actorUserId = actor.UserId;
         await using var db = await _factory.CreateDbContextAsync();
-        var adj = await db.AttendanceAdjustments.FirstOrDefaultAsync(a => a.AttendanceAdjustmentId == adjustmentId);
+        var adj = await db.AttendanceAdjustments.FirstOrDefaultAsync(a => a.AttendanceAdjustmentId == adjustmentId && a.OrganisationId == organisationId);
         if (adj == null) return ServiceResult.Fail("Attendance adjustment not found.");
 
-        if (adj.PayrollProcessingStatus == AttendanceAdjustmentPayrollStatuses.Locked ||
-            adj.PayrollProcessingStatus == AttendanceAdjustmentPayrollStatuses.Paid)
+        if (adj.PayrollProcessingStatus != AttendanceAdjustmentPayrollStatuses.Pending)
         {
             return ServiceResult.Fail("Cannot reject an adjustment that has already been finalized in payroll.");
         }
@@ -546,7 +653,7 @@ public sealed class AttendanceDeductionService : IAttendanceDeductionService
         adj.EstimatedDeductionAmount = 0m;
         adj.BasicSalaryDeductionAmount = 0m;
         adj.ServiceAllowanceDeductionAmount = 0m;
-        adj.VerifiedByUserId = userId;
+        adj.VerifiedByUserId = actorUserId;
         adj.VerifiedAtUtc = DateTime.UtcNow;
         adj.ReviewerComments = $"Rejected: {reason}";
         adj.UpdatedAtUtc = DateTime.UtcNow;
@@ -557,7 +664,7 @@ public sealed class AttendanceDeductionService : IAttendanceDeductionService
             OrganisationId = adj.OrganisationId,
             Action = "Reject",
             Reason = reason,
-            PerformedByUserId = userId,
+            PerformedByUserId = actorUserId,
             PerformedAtUtc = DateTime.UtcNow,
             PreviousStatus = prev,
             NewStatus = AttendanceAdjustmentVerificationStatuses.Rejected
@@ -569,6 +676,7 @@ public sealed class AttendanceDeductionService : IAttendanceDeductionService
 
     public async Task<List<AttendanceDeductionPolicyDto>> GetPoliciesAsync(int organisationId)
     {
+        await RequireAuthorisedActorAsync(organisationId, requireManage: false);
         await using var db = await _factory.CreateDbContextAsync();
         var policies = await db.AttendanceDeductionPolicies.AsNoTracking()
             .Where(p => p.OrganisationId == organisationId)
@@ -605,11 +713,16 @@ public sealed class AttendanceDeductionService : IAttendanceDeductionService
 
     public async Task<ServiceResult> SavePolicyAsync(AttendanceDeductionPolicy policy, int userId)
     {
+        var actor = await RequireAuthorisedActorAsync(policy.OrganisationId, requireManage: true);
+        var currentOrgId = await _access.GetCurrentOrganisationIdAsync();
+        var targetOrgId = actor.IsSuperAdministrator && policy.OrganisationId > 0 ? policy.OrganisationId : currentOrgId;
+        policy.OrganisationId = targetOrgId;
+        var actorUserId = actor.UserId;
         await using var db = await _factory.CreateDbContextAsync();
 
         if (policy.AttendanceDeductionPolicyId == 0)
         {
-            policy.ApprovedByUserId = userId;
+            policy.ApprovedByUserId = actorUserId;
             policy.ApprovedAtUtc = DateTime.UtcNow;
             policy.CreatedAtUtc = DateTime.UtcNow;
             policy.UpdatedAtUtc = DateTime.UtcNow;
@@ -617,7 +730,7 @@ public sealed class AttendanceDeductionService : IAttendanceDeductionService
         }
         else
         {
-            var existing = await db.AttendanceDeductionPolicies.FirstOrDefaultAsync(p => p.AttendanceDeductionPolicyId == policy.AttendanceDeductionPolicyId);
+            var existing = await db.AttendanceDeductionPolicies.FirstOrDefaultAsync(p => p.AttendanceDeductionPolicyId == policy.AttendanceDeductionPolicyId && p.OrganisationId == targetOrgId);
             if (existing == null) return ServiceResult.Fail("Policy not found.");
 
             existing.PolicyCode = policy.PolicyCode;
@@ -642,7 +755,7 @@ public sealed class AttendanceDeductionService : IAttendanceDeductionService
             existing.DeductFromPensionableSalary = policy.DeductFromPensionableSalary;
             existing.RoundingMethod = policy.RoundingMethod;
             existing.RequiresVerification = policy.RequiresVerification;
-            existing.ApprovedByUserId = userId;
+            existing.ApprovedByUserId = actorUserId;
             existing.ApprovedAtUtc = DateTime.UtcNow;
             existing.UpdatedAtUtc = DateTime.UtcNow;
         }
@@ -654,6 +767,7 @@ public sealed class AttendanceDeductionService : IAttendanceDeductionService
     public async Task<AttendanceDeductionCalculationPreviewDto> PreviewCalculationAsync(
         int organisationId, int jobId, DateOnly workDate, int lateMinutes, string kind)
     {
+        await RequireAuthorisedActorAsync(organisationId, requireManage: false);
         await using var db = await _factory.CreateDbContextAsync();
         var policy = await GetEffectivePolicyAsync(organisationId, workDate);
 

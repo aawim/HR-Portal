@@ -11,16 +11,17 @@
                class="mt-3 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-300 focus:ring-2 focus:ring-blue-100" />
     </div>
     <div class="overflow-y-auto" style="max-height: 32rem; scrollbar-gutter: stable;" tabindex="0">
-        @foreach (var group in Filtered.GroupBy(x => x.Group).OrderBy(x => x.Key))
+        @foreach (var group in DisplayGroups)
         {
-            <details class="border-b border-slate-100" open="@(Assigned || group.Key == "Leave" || !string.IsNullOrWhiteSpace(search))">
-                <summary class="cursor-pointer bg-slate-50/50 px-4 py-3 text-xs font-semibold text-slate-700">@group.Key <span class="ml-1 font-normal text-slate-500">(@group.Count())</span></summary>
+            <details class="border-b border-slate-100" open="@(Assigned || group.Name == "Leave" || !string.IsNullOrWhiteSpace(search))">
+                <summary class="cursor-pointer bg-slate-50/50 px-4 py-3 text-xs font-semibold text-slate-700">@group.Name <span class="ml-1 font-normal text-slate-500">(@group.Items.Count)</span></summary>
                 <div class="divide-y divide-slate-100">
                     <div class="px-4 py-2 text-right">
                         <button type="button" class="text-xs font-medium text-blue-600 hover:text-blue-800"
-                                @onclick="() => OnMoveGroup.InvokeAsync(group.Select(x => x.Id).ToList())">@ActionLabel displayed in @group.Key</button>
+                                disabled="@(group.Items.Count == 0)"
+                                @onclick="() => OnMoveGroup.InvokeAsync(group.Items.Select(x => x.Id).ToList())">@ActionLabel displayed in @group.Name</button>
                     </div>
-                    @foreach (var item in group)
+                    @foreach (var item in group.Items)
                     {
                         <div @key="item.Id" class="flex items-start justify-between gap-2 px-4 py-3 hover:bg-slate-50">
                             <div class="min-w-0">
@@ -31,6 +32,10 @@
                             <button type="button" class="shrink-0 rounded-lg border border-slate-200 px-2 py-1 text-xs font-medium text-blue-700 hover:bg-blue-50"
                                     aria-label="@ActionLabel @item.Name" @onclick="() => OnMove.InvokeAsync(item.Id)">@ActionLabel</button>
                         </div>
+                    }
+                    @if (group.Items.Count == 0)
+                    {
+                        <p class="px-4 py-4 text-xs text-slate-500">No permissions in this module.</p>
                     }
                 </div>
             </details>
@@ -47,6 +52,7 @@
 @code {
     [Parameter] public bool Assigned { get; set; }
     [Parameter] public List<PermissionDefinitionDto> Permissions { get; set; } = new();
+    [Parameter] public List<PermissionSettingOption> Modules { get; set; } = new();
     [Parameter] public EventCallback<int> OnMove { get; set; }
     [Parameter] public EventCallback<List<int>> OnMoveGroup { get; set; }
     private string search = "";
@@ -55,4 +61,16 @@
     private IEnumerable<PermissionDefinitionDto> Filtered => Permissions.Where(x =>
         x.Name.Contains(search, StringComparison.OrdinalIgnoreCase) || x.Key.Contains(search, StringComparison.OrdinalIgnoreCase) ||
         x.Group.Contains(search, StringComparison.OrdinalIgnoreCase) || x.Description.Contains(search, StringComparison.OrdinalIgnoreCase));
+    private IEnumerable<DisplayGroup> DisplayGroups
+    {
+        get
+        {
+            var items = Filtered.ToList();
+            var names = Modules.Select(x => x.Name).Append("Unassigned").Concat(items.Select(x => x.Group))
+                .Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.OrdinalIgnoreCase);
+            return names.Select(name => new DisplayGroup(name,
+                items.Where(x => x.Group.Equals(name, StringComparison.OrdinalIgnoreCase)).OrderBy(x => x.Name).ToList()));
+        }
+    }
+    private sealed record DisplayGroup(string Name, List<PermissionDefinitionDto> Items);
 }

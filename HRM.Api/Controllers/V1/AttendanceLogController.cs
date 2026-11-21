@@ -7,9 +7,9 @@ namespace HRM.Api.Controllers.V1;
 public sealed class AttendanceLogController(global::HRM.Services.Contracts.AttendanceLogServiceContracts.IOperations service) : HrmApiController
 {
     [HttpGet("get-my-team-attendance-today")]
-    public async Task<ActionResult<global::System.Collections.Generic.List<global::HRM.DTOs.TeamAttendanceDto>>> GetMyTeamAttendanceToday()
+    public async Task<ActionResult<global::System.Collections.Generic.List<global::HRM.DTOs.TeamAttendanceDto>>> GetMyTeamAttendanceToday([FromQuery] bool includeAllStaff = false)
     {
-        return Ok(await service.GetMyTeamAttendanceTodayAsync());
+        return Ok(await service.GetMyTeamAttendanceTodayAsync(includeAllStaff));
     }
 
     [HttpGet("can-use-test-clock")]

@@ -266,6 +266,7 @@ namespace HRM.Services
                             StructureId = s.OrganisationStructureId,
                             Name = s.Name,
                             TypeId = s.OrganisationStructureTypeId,
+                            TypeName = s.OrganisationStructureType.TypeName,
                             // Safely extract the ParentId if a relationship exists
                             ParentId = relation != null ? relation.ParentOrganisationStructureId : null
                         };

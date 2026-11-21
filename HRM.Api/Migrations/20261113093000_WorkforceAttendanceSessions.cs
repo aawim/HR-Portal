@@ -1,0 +1,9 @@
+using System;
+using HRM.Models;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
+#nullable disable
+namespace HRM.Migrations;
+[DbContext(typeof(HrmTeContext))][Migration("20261113093000_WorkforceAttendanceSessions")]
+public partial class WorkforceAttendanceSessions:Migration
+{protected override void Up(MigrationBuilder m){m.CreateTable("WS_AttendanceSessions",t=>new{Id=t.Column<long>(nullable:false).Annotation("SqlServer:Identity","1, 1"),WorkPlanSegmentId=t.Column<int>(nullable:false),DutyAssignmentId=t.Column<long>(nullable:true),Status=t.Column<string>(maxLength:30,nullable:false),EvaluationStrategy=t.Column<string>(maxLength:50,nullable:false),EvaluationVersion=t.Column<int>(nullable:false),ActualMinutes=t.Column<int>(nullable:false),CreditedMinutes=t.Column<int>(nullable:false),MatchReason=t.Column<string>(maxLength:1000,nullable:true),EvaluatedAtUtc=t.Column<DateTime>(nullable:false),OperationLogId=t.Column<int>(nullable:false)},t=>{t.PrimaryKey("PK_WS_AttendanceSessions",x=>x.Id);t.CheckConstraint("CK_WS_AttendanceSessions_Minutes","[ActualMinutes] >= 0 AND [CreditedMinutes] >= 0");t.ForeignKey("FK_WS_AttendanceSessions_WorkPlanSegments",x=>x.WorkPlanSegmentId,"WorkPlanSegments","WorkPlanSegmentID",onDelete:ReferentialAction.Restrict);t.ForeignKey("FK_WS_AttendanceSessions_DutyAssignments",x=>x.DutyAssignmentId,"WS_DutyAssignments","Id",onDelete:ReferentialAction.Restrict);t.ForeignKey("FK_WS_AttendanceSessions_OperationLogs",x=>x.OperationLogId,"OperationLogs","OperationLogID",onDelete:ReferentialAction.Restrict);});m.CreateIndex("UX_WS_AttendanceSessions_Segment_Version","WS_AttendanceSessions",new[]{"WorkPlanSegmentId","EvaluationVersion"},unique:true);}protected override void Down(MigrationBuilder m)=>m.DropTable("WS_AttendanceSessions");}

@@ -51,10 +51,14 @@ public static class BackendServiceRegistration
         services.AddHttpContextAccessor();
         services.AddScoped<Microsoft.AspNetCore.Components.Authorization.AuthenticationStateProvider, HRM.Api.Authentication.ApiAuthenticationStateProvider>();
         services.AddScoped<Microsoft.AspNetCore.Components.NavigationManager, HRM.Api.Authentication.ApiNavigationManager>();
+        services.AddScoped<HRM.Application.Interfaces.Budget.IBudgetService, HRM.Services.BudgetService>();
+        services.AddScoped<HRM.Services.BudgetService>();
         services.AddScoped<WorkingHoursSettingsService>();
         services.AddScoped<JobTypeOvertimeSettingsService>();
         services.AddScoped<ScopeScheduleSettingsService>();
         services.AddScoped<GroupsManagementService>();
+        services.AddScoped<StaffGroupService>();
+        services.AddScoped<SloganService>();
         services.AddScoped<LeaveConfigurationSettingsService>();
         services.AddScoped<IndividualRegistrationService>();
         services.AddScoped<OvertimeRequestService>();
@@ -159,6 +163,17 @@ public static class BackendServiceRegistration
         services.AddScoped<IWorkPlanBuilder,WorkPlanBuilder>();
 
         services.AddScoped<IPlanningProviderResolver, PlanningProviderResolver>();
+        services.AddScoped<IWorkforcePolicyResolver, WorkforcePolicyResolver>();
+        services.AddScoped<IWorkforcePolicyManagementService, WorkforcePolicyManagementService>();
+        services.AddScoped<IWorkforceConstraintService, WorkforceConstraintService>();
+        services.AddScoped<IWorkforceRosterService, WorkforceRosterService>();
+        services.AddScoped<IWorkforcePayrollExportService, WorkforcePayrollExportService>();
+        services.AddScoped<IDutyOperationService, DutyOperationService>();
+        services.AddHostedService<DutyOperationApprovalCompletionService>();
+        services.AddScoped<IWorkTimeLedgerService, WorkTimeLedgerService>();
+        services.AddScoped<IDutyAvailabilityService, DutyAvailabilityService>();
+        services.AddScoped<IWorkforceAttendanceSessionService, WorkforceAttendanceSessionService>();
+        services.AddScoped<IWorkforceScheduleReviewService, WorkforceScheduleReviewService>();
 
         services.AddScoped<IWorkPlanValidator, WorkPlanValidator>();
 
@@ -203,12 +218,23 @@ public static class BackendServiceRegistration
         services.AddScoped<RequestTransitionSettingsService>();
         services.AddScoped<HRM.Services.Leave.LeaveHandoverService>();
         services.AddScoped<HRM.Services.Leave.LeaveCalendarService>();
+        services.AddScoped<HRM.Services.Calendar.OrganisationEventService>();
+        services.AddScoped<HRM.Services.Communications.CommunicationHubService>();
+        services.AddHttpClient<HRM.Communications.Infrastructure.TelegramCommunicationProvider>(client => client.BaseAddress = new Uri("https://api.telegram.org/")).RemoveAllLoggers();
+        services.AddScoped<HRM.Communications.Contracts.ICommunicationConnectionValidator>(provider => provider.GetRequiredService<HRM.Communications.Infrastructure.TelegramCommunicationProvider>());
+        services.AddScoped<HRM.Services.Contracts.CommunicationHubContracts.IOperations>(provider => provider.GetRequiredService<HRM.Services.Communications.CommunicationHubService>());
+        services.AddScoped<HRM.Services.Calendar.Contracts.IOrganisationCalendarResolver, HRM.Services.Calendar.OrganisationCalendarResolver>();
+        services.AddScoped<HRM.Services.Calendar.OrganisationCalendarService>();
+        services.AddScoped<HRM.Services.Calendar.SupervisorCalendarService>();
+        services.AddScoped<HRM.Services.Calendar.CalendarImpactService>();
         services.AddScoped<HRM.Services.OrganisationWorkspaceService>();
         services.AddScoped<IUserTodoService, UserTodoService>();
         services.AddScoped<ILeaveChangeService, HRM.Services.Leave.LeaveChangeService>();
         services.AddScoped<HRM.Services.JobTypeConfigurationService>();
         services.AddScoped<HRM.Services.StaffOnboardingService>();
         services.AddScoped<HRM.Services.PositionOverviewService>();
+        services.AddScoped<HRM.Application.Contracts.Recruitment.IRecruitmentRequisitionService, HRM.Services.RecruitmentRequisitionService>();
+        services.AddScoped<HRM.Application.Contracts.Recruitment.IRecruitmentApplicationService, HRM.Services.RecruitmentApplicationService>();
         services.AddScoped<HRM.Services.StaffPositionManagementService>();
         services.AddScoped<HRM.Services.PermissionSettingsService>();
         services.AddScoped<HRM.Services.UserSettingsService>();
@@ -229,6 +255,12 @@ public static class BackendServiceRegistration
         services.AddScoped<IDocumentStorageProvider, HRM.Api.Services.PrivateSqlDocumentStorageProvider>();
         services.AddScoped<HRM.Api.Services.DocumentManagementService>();
         services.AddScoped<HRM.Services.Contracts.DocumentManagementServiceContracts.IOperations>(provider => provider.GetRequiredService<HRM.Api.Services.DocumentManagementService>());
+        services.AddScoped<HRM.Application.Contracts.Recruitment.IRecruitmentOfficialTemplateService, HRM.Services.RecruitmentOfficialTemplateService>();
+        services.AddScoped<HRM.Application.Contracts.Recruitment.IRecruitmentScreeningService, HRM.Services.RecruitmentScreeningService>();
+        services.AddScoped<HRM.Application.Contracts.Recruitment.IRecruitmentAssessmentService, HRM.Services.RecruitmentAssessmentService>();
+        services.AddScoped<HRM.Application.Contracts.Recruitment.IRecruitmentResultService, HRM.Services.RecruitmentResultService>();
+        services.AddScoped<HRM.Application.Contracts.Recruitment.IRecruitmentOfferService, HRM.Services.RecruitmentOfferService>();
+        services.AddScoped<HRM.Application.Contracts.Recruitment.IRecruitmentOnboardingHandoffService, HRM.Services.RecruitmentOnboardingHandoffService>();
         if (includeBackgroundWorkers) services.AddHostedService<HRM.Services.StaffTransferActivationWorker>();
 
         services.AddUserAppData();
@@ -260,9 +292,46 @@ public static class BackendServiceRegistration
         // Attendance Deduction Service (Maldives Civil Service Regulation & Payroll Integration)
         services.AddScoped<HRM.Services.Interfaces.IAttendanceDeductionService, HRM.Services.Attendance.Deductions.AttendanceDeductionService>();
 
+        // Staff Goods Loan Management Services
+        services.AddSingleton<HRM.Application.Features.GoodsLoans.IGoodsLoanScheduleCalculator, HRM.Application.Features.GoodsLoans.GoodsLoanScheduleCalculator>();
+        services.AddScoped<HRM.Application.Contracts.Pages.IGoodsLoanService, HRM.Services.GoodsLoans.GoodsLoanService>();
+
+        // Enterprise Audit Logging (HRM.AuditLogs) — TryAdd allows Program.cs AddAuditLogs(...) to take precedence
+        services.AddOptions<HRM.AuditLogs.Options.AuditLogOptions>();
+        Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddSingleton<HRM.AuditLogs.Abstractions.IAuditClock, HRM.AuditLogs.Abstractions.SystemAuditClock>(services);
+        Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddSingleton<HRM.AuditLogs.Abstractions.IAuditContextAccessor, HrmAuditContextAccessor>(services);
+        Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddSingleton<HRM.AuditLogs.Abstractions.IAuditLogService, HRM.AuditLogs.Services.AuditLogService>(services);
+        Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddSingleton<HRM.AuditLogs.Abstractions.IAuditLogQueryService, HRM.AuditLogs.Services.AuditLogQueryService>(services);
+        Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddSingleton<HRM.AuditLogs.Interceptors.AuditSaveChangesInterceptor>(services);
+        Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddSingleton<IDbContextFactory<HRM.AuditLogs.Persistence.AuditDbContext>>(
+            services,
+            _ => new FallbackAuditDbContextFactory());
+
+        // Enterprise Activity Logging (HRM.ActivityLogs) — TryAdd allows Program.cs AddActivityLogs(...) to take precedence
+        services.AddOptions<HRM.ActivityLogs.Models.ActivityLogOptions>();
+        Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddSingleton<HRM.ActivityLogs.Abstractions.IActivityClock, HRM.ActivityLogs.Abstractions.SystemActivityClock>(services);
+        Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddSingleton<HRM.ActivityLogs.Abstractions.IActivityContextAccessor, HrmActivityContextAccessor>(services);
+        Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddSingleton<HRM.ActivityLogs.Processing.ActivityQueueChannel>(services);
+        Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddSingleton<HRM.ActivityLogs.Abstractions.IActivityLogService, HRM.ActivityLogs.Services.ActivityLogService>(services);
+        Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddSingleton<HRM.ActivityLogs.Abstractions.IActivityLogQueryService, HRM.ActivityLogs.Services.ActivityLogQueryService>(services);
+        Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddSingleton<IDbContextFactory<HRM.ActivityLogs.Persistence.ActivityDbContext>>(
+            services,
+            _ => new FallbackActivityDbContextFactory());
+
         services.AddHrmApiEndpoints();
         services.AddAuthorization();
 
         return services;
+    }
+
+    private sealed class FallbackActivityDbContextFactory : IDbContextFactory<HRM.ActivityLogs.Persistence.ActivityDbContext>
+    {
+        public HRM.ActivityLogs.Persistence.ActivityDbContext CreateDbContext()
+            => throw new InvalidOperationException("ActivityDbContext connection string is not configured. Call services.AddActivityLogs(configuration).");
+    }
+    private sealed class FallbackAuditDbContextFactory : IDbContextFactory<HRM.AuditLogs.Persistence.AuditDbContext>
+    {
+        public HRM.AuditLogs.Persistence.AuditDbContext CreateDbContext()
+            => throw new InvalidOperationException("AuditDbContext connection string is not configured. Call services.AddAuditLogs(configuration).");
     }
 }

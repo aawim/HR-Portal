@@ -83,6 +83,14 @@
                     {
                         <HRM.Components.Shared.StaffFinancePanel @key="StaffId" StaffId="StaffId" AdminMode="true" />
                     }
+                    else if (ActiveTab == WorkspaceTab.Bank)
+                    {
+                        <StaffBankAccounts @key="StaffId" IndividualId="StaffId" />
+                    }
+                    else if (ActiveTab == WorkspaceTab.EmergencyContact)
+                    {
+                        <StaffEmergencyContacts @key="StaffId" IndividualId="StaffId" />
+                    }
                     else if (ActiveTab == WorkspaceTab.StaffTransfer)
                     {
                         <HRM.Components.Admin.Hr.Transfers.StaffTransferManagementPage @key="StaffId" StaffId="StaffId" />
@@ -90,6 +98,10 @@
                     else if (ActiveTab == WorkspaceTab.Certificates)
                     {
                         <HRM.Components.Admin.My.Workspace.Staff.Tabs.StaffCertificatesTab @key="StaffId" StaffId="StaffId" OnChanged="OnRequestsChanged" />
+                    }
+                    else if (ActiveTab == WorkspaceTab.GoodsLoans)
+                    {
+                        <HRM.Components.Shared.GoodsLoans.StaffGoodsLoansPanel @key="StaffId" IndividualId="StaffId" IsEmbedded="true" CanEnterLoan="true" />
                     }
                    
 
@@ -123,11 +135,24 @@
         var staffId = StaffId;
         loadedStaffId = staffId;
         Loading = true;
-        var staff = await Directory.GetStaffIdentityAsync(staffId);
-        if (loadedStaffId != staffId || loadedOrganisationId!=org) return;
-        Staff = staff;
-        former = staff?.IsFormer == true;
-        Loading = false;
+        try
+        {
+            var staff = await Directory.GetStaffIdentityAsync(staffId);
+            if (loadedStaffId != staffId || loadedOrganisationId != org) return;
+            Staff = staff;
+            former = staff?.IsFormer == true;
+        }
+        catch (Exception)
+        {
+            Staff = null;
+        }
+        finally
+        {
+            if (loadedStaffId == staffId && loadedOrganisationId == org)
+            {
+                Loading = false;
+            }
+        }
     }
 
 }

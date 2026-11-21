@@ -134,7 +134,10 @@ public class UserSettingsService(IDbContextFactory<HrmTeContext> factory, IUserA
     {
         var ids = desired.Distinct().ToArray();
         if (await db.Roles.CountAsync(x => ids.Contains(x.RoleID)) != ids.Length) throw new InvalidOperationException("A selected permission no longer exists.");
-        if (!actor.IsSuperAdministrator && !await access.HasPermissionAsync("Admin") && ids.Except(existing).Any(id => !actor.Permissions.Any(p => p.RoleID == id)))
+        var added = ids.Except(existing).ToArray();
+        if (!actor.IsSuperAdministrator && await db.Roles.AnyAsync(x => added.Contains(x.RoleID) && x.RoleKey == "Super.Admin.Manage"))
+            throw new UnauthorizedAccessException("Only Super Admin can assign platform administration permission.");
+        if (!actor.IsSuperAdministrator && added.Any(id => !actor.Permissions.Any(p => p.RoleID == id)))
             throw new UnauthorizedAccessException("You can only grant permissions you hold.");
     }
 
@@ -151,6 +154,9 @@ public class UserSettingsService(IDbContextFactory<HrmTeContext> factory, IUserA
         if (groups.Count != desiredGroups.Length) return ServiceResult.Fail("Select roles from the current organisation.");
         var oldDirect = entity.UserRoles.Where(x => x.UserOrganisationId == orgId && x.IsActive).Select(x => x.RoleId).ToArray();
         var oldGroups = entity.UserAssignedUserGroups.Where(x => x.UserGroup.UserOrganisationId == orgId).Select(x => x.UserGroupId).ToArray();
+        if (actor.UserId == entity.UserId &&
+            (model.DirectPermissionIds.Except(oldDirect).Any() || desiredGroups.Except(oldGroups).Any()))
+            throw new UnauthorizedAccessException("You cannot increase your own access.");
         var addedGroupPermissions = groups.Where(x => !oldGroups.Contains(x.UserGroupId)).SelectMany(x => x.UserGroupRoles.Where(r => r.IsActive).Select(r => r.RoleId));
         await ValidateGrantsAsync(db, actor, model.DirectPermissionIds.Concat(addedGroupPermissions), oldDirect);
         var log = await logs.CreateAsync(db, SharedConfig.OperationLogActionTypes.USER_ROLE_UPDATE, $"Updated permissions and roles for account {entity.UserId}");

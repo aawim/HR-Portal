@@ -6,6 +6,9 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using HRM.ErrorLogs.Extensions;
+using HRM.ErrorLogs.Services;
+using HRM.Services.Diagnostics;
 
 var builder = Host.CreateApplicationBuilder(args);
 
@@ -19,6 +22,8 @@ builder.Services.AddDbContextFactory<HrmTeContext>(options =>
 });
 
 // Register Payroll services
+builder.Services.AddSingleton<IErrorLogStore, SqlErrorLogStore>();
+builder.Services.AddHrmErrorLogging("HRM.Payroll.Worker");
 builder.Services.AddSingleton<IPayrollCalculationEngine, PayrollCalculationEngine>();
 builder.Services.AddScoped<IPayrollQueueService, PayrollQueueService>();
 builder.Services.AddScoped<IPayrollSnapshotService, PayrollSnapshotService>();

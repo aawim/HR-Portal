@@ -5,7 +5,9 @@
 @using HRM.DTOs.Organisation
 @implements IDisposable
 
-<section class="departments-page w-full min-w-0 p-2 flex flex-col gap-3">
+<section class="departments-page w-full min-w-0 @(HideHeader ? "" : "p-2") flex flex-col gap-3">
+    @if (!HideHeader)
+    {
     <!-- Full-Width Sticky Header -->
     <header class="departments-header sticky top-0 z-30 m-0 flex w-full min-w-0 flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white/95 backdrop-blur-xs p-3 shadow-xs">
         <div class="flex items-center gap-3">
@@ -36,16 +38,12 @@
                     @onclick="ToggleFullWidth">
                 @if (isFullWidth)
                 {
-                    <svg class="h-4 w-4 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 9L4 4m0 0l5 0m-5 0l0 5m11 11l5 5m0 0l-5 0m5 0l0-5M9 15l-5 5m0 0l5 0m-5 0l0-5m11-11l5-5m0 0l-5 0m5 0l0 5" />
-                    </svg>
+                    <AppIcon Name="fullscreen_exit" Class="h-4 w-4 text-slate-600 text-base" />
                     <span>Shrink View</span>
                 }
                 else
                 {
-                    <svg class="h-4 w-4 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
-                    </svg>
+                    <AppIcon Name="fullscreen" Class="h-4 w-4 text-slate-600 text-base" />
                     <span>Full Width</span>
                 }
             </button>
@@ -74,6 +72,7 @@
             </a>
         </div>
     </header>
+    }
 
     @if (error != null)
     {
@@ -494,6 +493,7 @@
 </style>
 
 @code {
+    [Parameter] public bool HideHeader { get; set; }
     [Inject] private HRM.Services.Interfaces.IUserAccessService Access { get; set; } = null!;
 
     private const string FullWidthSettingKey = "hrm.departments-management.full-width";

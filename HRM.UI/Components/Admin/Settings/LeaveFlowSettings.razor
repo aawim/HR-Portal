@@ -61,15 +61,17 @@
                             </div></div>
                             <div class="grid gap-3 sm:grid-cols-2">
                                 <label>Stage name<input id="@($"flow-stage-name-{index}")" class="mt-1 w-full rounded border p-2" maxlength="150" @bind="stage.Name" /></label>
-                                <label>User Group<select id="@($"flow-stage-group-{index}")" class="mt-1 w-full rounded border p-2" @bind="stage.UserGroupId"><option value="0">Select User Group</option>@foreach (var group in data.UserGroups) { <option value="@group.Id">@group.Name</option> }</select></label>
+                                <label>Approver source<select class="mt-1 w-full rounded border p-2" @bind="stage.ApproverType"><option value="UserGroup">User Group</option><option value="LeadershipPermission">Leadership Permission</option></select></label>
+                                @if (stage.ApproverType == "LeadershipPermission") { <label>Required authority permission<select class="mt-1 w-full rounded border p-2" @bind="stage.PermissionRoleId"><option value="0">Select permission role</option>@foreach (var role in data.PermissionRoles) { <option value="@role.Id">@role.Name</option> }</select></label> }
+                                else { <label>User Group<select id="@($"flow-stage-group-{index}")" class="mt-1 w-full rounded border p-2" @bind="stage.UserGroupId"><option value="0">Select User Group</option>@foreach (var group in data.UserGroups) { <option value="@group.Id">@group.Name</option> }</select></label> }
                                 <label>Processing status<select id="@($"flow-stage-state-{index}")" class="mt-1 w-full rounded border p-2" @bind="stage.StateId"><option value="0">Select processing status</option>@foreach (var state in data.States) { <option value="@state.Id">@state.Name</option> }</select></label>
-                                <label>Eligible reviewers<select id="@($"flow-stage-scope-{index}")" class="mt-1 w-full rounded border p-2" @bind="stage.ApplicantSupervisorOnly"><option value="false">Staff in this User Group within the organisation</option><option value="true">Applicant's team / department supervisors in this User Group</option></select></label>
+                                @if (stage.ApproverType != "LeadershipPermission") { <label>Eligible reviewers<select id="@($"flow-stage-scope-{index}")" class="mt-1 w-full rounded border p-2" @bind="stage.ApplicantSupervisorOnly"><option value="false">Staff in this User Group within the organisation</option><option value="true">Applicant's team / department supervisors in this User Group</option></select></label> }
                             </div>
                         </section>
                     }
                 }
                 <p class="text-sm text-slate-600">Stages run in the displayed order. Any one eligible assigned reviewer completes a stage. A supervisor stage requires both the selected User Group and a supervisor relationship to the applicant. Staff cannot verify or approve their own requests.</p>
-                <button type="button" @onclick="SaveAsync" disabled="@(level == 0 || model.Stages!.Any(x => x.UserGroupId == 0 || x.StateId == 0))" class="rounded bg-blue-600 px-4 py-2 text-white disabled:opacity-50">@(busy ? "Saving…" : "Save approval flow")</button>
+                <button type="button" @onclick="SaveAsync" disabled="@(level == 0 || model.Stages!.Any(x => x.StateId == 0 || (x.ApproverType == "LeadershipPermission" ? x.PermissionRoleId == 0 : x.UserGroupId == 0)))" class="rounded bg-blue-600 px-4 py-2 text-white disabled:opacity-50">@(busy ? "Saving…" : "Save approval flow")</button>
             }
             else
             {

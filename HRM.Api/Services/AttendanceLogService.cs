@@ -35,9 +35,11 @@ namespace HRM.Services
             _environment = environment;
             _configuration = configuration;
         }
-       public async Task<List<TeamAttendanceDto>> GetMyTeamAttendanceTodayAsync()
+       public async Task<List<TeamAttendanceDto>> GetMyTeamAttendanceTodayAsync(bool includeAllStaff = false)
         {
             var context = await _access.RequireContextAsync();
+            if (includeAllStaff && !(context.IsSuperAdministrator || context.IsHRStaff || context.IsHRHead || context.IsHRManager || context.IsOrganisationAdmin || await _access.HasPermissionAsync("Attendance.View") || await _access.HasPermissionAsync("Admin")))
+                throw new UnauthorizedAccessException("Organisation-wide attendance access is required to view all staff.");
             using var db = await _dbFactory.CreateDbContextAsync();
             var today = DateTime.UtcNow.AddHours(5).Date;
             var organisationId = await _access.GetCurrentOrganisationIdAsync();
@@ -56,7 +58,7 @@ namespace HRM.Services
                 .ToListAsync();
 
 
-            if (!teamIds.Any())
+            if (!includeAllStaff && !teamIds.Any())
                 return new List<TeamAttendanceDto>();
 
 
@@ -64,7 +66,12 @@ namespace HRM.Services
             // 2. Get all staff from those teams
             // =====================================================
 
-            var teamStaff = await
+            var teamStaff = includeAllStaff
+                ? await (from job in FormerStaffPolicy.CurrentJobs(db)
+                         join i in db.Individuals on job.IndividualID equals i.BusinessEntityId
+                         where job.OrganisationID == organisationId
+                         select new { TeamID = 0, TeamName = "All staff", StaffID = job.IndividualID, Name = (i.FirstNameEnglish ?? "") + " " + (i.MiddleNameEnglish ?? "") + " " + (i.LastNameEnglish ?? "") }).ToListAsync()
+                : await
             (
                 from ts in db.TeamStaffs
 
@@ -94,8 +101,7 @@ namespace HRM.Services
                         (i.LastNameEnglish ?? "")
                 }
 
-            )
-            .ToListAsync();
+            ).ToListAsync();
 
 
 

@@ -45,9 +45,39 @@
                 @if(model.ScheduleMode=="Weekly") {<div class="flex flex-wrap gap-3">@foreach(var day in Enum.GetValues<DayOfWeek>()){var bit=1<<(int)day;<label><input type="checkbox" checked="@((model.WorkingDaysMask&bit)!=0)" @onchange="e=>ToggleDay(bit,e.Value is true)" /> @day</label>}</div>}
                 @if(model.ScheduleMode=="Rotation")
                 {
-                    <label class="block">Cycle day 1<InputDate @bind-Value="model.RotationAnchorDate" class="mt-1 block rounded border bg-transparent p-2" /></label>
-                    <div class="space-y-2">@for(var i=0;i<rotation.Count;i++){var index=i;<label class="flex flex-wrap items-center gap-2">Day @(index+1)<select @bind="rotation[index]" class="rounded border bg-transparent p-2"><option value="0">Rest day</option>@foreach(var t in data.Templates.Where(t=>t.IsActive)){<option value="@t.Id">@t.Name</option>}</select><button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" @onclick="()=>rotation.RemoveAt(index)">Remove day</button></label>}</div>
-                    <button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@(rotation.Count>=90)" @onclick="()=>rotation.Add(0)">Add cycle day</button>
+                    <div class="rounded-lg border border-slate-200 bg-slate-50/70 p-3 space-y-3">
+                        <div class="flex flex-wrap items-end justify-between gap-2">
+                            <label class="block text-xs font-medium text-slate-700">Cycle day 1<InputDate @bind-Value="model.RotationAnchorDate" class="mt-1 block rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm" /></label>
+                            <div class="flex flex-wrap gap-2">
+                                <button type="button" class="inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 transition-colors" @onclick="ApplyWeeklyPreset">Weekly (Sun–Sat)</button>
+                                <button type="button" class="inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-100 border border-slate-300 disabled:opacity-50 transition-colors" disabled="@(rotation.Count>=90)" @onclick="AddCycleDay">+ Add cycle day</button>
+                            </div>
+                        </div>
+                        <p class="text-xs text-slate-500">Assign a shift template per cycle day (or Rest day) and optionally set custom shift times/labels (e.g. Sun Morning 10:00–12:00, Tue Evening 14:00–16:00).</p>
+                        <div class="space-y-2">
+                            @for(var i=0;i<rotation.Count;i++)
+                            {
+                                var index=i;
+                                var slot=rotation[index];
+                                var dayLabel=model.RotationAnchorDate.HasValue?model.RotationAnchorDate.Value.AddDays(index).ToString("ddd"):$"D{index+1}";
+                                <div class="rounded-lg border border-slate-200 bg-white p-2.5 space-y-2">
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        <span class="inline-flex min-w-[5.25rem] items-center justify-center rounded-md bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700">Day @(index+1) · @dayLabel</span>
+                                        <select @bind="slot.TemplateId" class="flex-1 min-w-[11rem] rounded-md border border-slate-300 bg-white px-2 py-1.5 text-xs"><option value="0">Rest day (Off)</option>@foreach(var t in data.Templates.Where(t=>t.IsActive)){<option value="@t.Id">@t.Name</option>}</select>
+                                        <button type="button" class="inline-flex items-center justify-center rounded-md px-2.5 py-1.5 text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 transition-colors" disabled="@(rotation.Count<=1)" @onclick="()=>rotation.RemoveAt(index)">Remove</button>
+                                    </div>
+                                    @if(slot.TemplateId>0)
+                                    {
+                                        <div class="grid grid-cols-1 gap-2 sm:grid-cols-3 pt-1 border-t border-slate-100">
+                                            <label class="text-[11px] font-medium text-slate-600">Shift label<input type="text" maxlength="40" placeholder="e.g. Morning, Evening" class="mt-0.5 w-full rounded-md border border-slate-300 px-2 py-1 text-xs" @bind="slot.Label" /></label>
+                                            <label class="text-[11px] font-medium text-slate-600">Start override<input type="time" class="mt-0.5 w-full rounded-md border border-slate-300 px-2 py-1 text-xs" value="@slot.StartText" @onchange="e=>slot.StartText=e.Value?.ToString()??string.Empty" /></label>
+                                            <label class="text-[11px] font-medium text-slate-600">End override<input type="time" class="mt-0.5 w-full rounded-md border border-slate-300 px-2 py-1 text-xs" value="@slot.EndText" @onchange="e=>slot.EndText=e.Value?.ToString()??string.Empty" /></label>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </div>
                 }
                 <p class="text-xs text-slate-500">Hours and clock events come from the template. Duty needs default official hours for every affected staff member and duty date. Edits apply from the selected date; earlier settings remain in history. Existing punches and finalized plans are preserved.</p>
                 <div class="flex flex-wrap gap-2"><button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" @onclick="SaveAsync">Save assignment</button><button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" @onclick="()=>model=null">Close</button></div>
@@ -65,56 +95,37 @@
             @if(!Rows.Any()){<tr><td colspan="5" class="p-3 text-slate-500">No @scope.ToLowerInvariant() schedule assignments.</td></tr>}
         </tbody></table></div>
     }
-    <div class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 transition-opacity duration-300 ease-in-out @(showAssignStaffPanel ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none")" @onclick="CloseAssignStaff"></div>
-    <div class="fixed inset-y-0 right-0 z-50 w-full max-w-3xl bg-white shadow-2xl flex flex-col transition-transform duration-300 ease-in-out transform @(showAssignStaffPanel ? "translate-x-0" : "translate-x-full")">
-        <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/50">
-                <h3 class="text-lg font-bold text-slate-800">Assign Staff</h3>
-                <button @onclick="CloseAssignStaff" class="text-slate-400 hover:text-slate-600 transition-colors bg-white hover:bg-slate-100 rounded-full p-1">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                </button>
-            </div>
-            <div class="flex-1 overflow-y-auto p-6 space-y-5">
-                @if (assignStaffLoading) { <p class="text-sm text-slate-500">Loading staff...</p> }
-                else if (assignStaffList.Count == 0) { <p class="text-sm text-slate-500">No active staff in this scope.</p> }
-                else
+    @if (showAssignStaffPanel && data != null)
+    {
+        <div class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-900/60 p-2 backdrop-blur-xs" role="dialog" aria-modal="true" aria-labelledby="assign-schedule-staff-title">
+            <div class="fixed inset-0" aria-hidden="true" @onclick="CloseAssignStaff"></div>
+            <div class="relative z-10 flex max-h-[85vh] w-full max-w-2xl flex-col gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl" @onclick:stopPropagation>
+                <div class="flex items-start justify-between border-b border-slate-100 pb-2">
+                    <div><h3 id="assign-schedule-staff-title" class="text-sm font-bold text-slate-900">Assign staff</h3><p class="mt-0.5 text-xs text-slate-500">Choose staff and create duty work plans from this template.</p></div>
+                    <button type="button" class="rounded-lg p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600" aria-label="Close dialog" @onclick="CloseAssignStaff"><AppIcon Name="close" Class="h-5 w-5 text-xl" /></button>
+                </div>
+
+                @if (assignStaffGroupId == 0)
                 {
-                    <label class="inline-flex items-center gap-2 text-sm"><input type="checkbox" checked="@(assignStaffSelected.Count == assignStaffList.Count)" @onchange="e => SelectAllAssignStaff(e.Value is true)" /> Select all</label>
-                    <div class="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
-                        @foreach (var s in assignStaffList)
-                        {
-                            <label class="flex items-center justify-between gap-2 rounded-md bg-white px-3 py-2 text-sm shadow-sm transition hover:bg-slate-50">
-                                <span class="flex items-center gap-2">
-                                    <input type="checkbox" checked="@assignStaffSelected.Contains(s.IndividualId)" @onchange="e => ToggleAssignStaff(s.IndividualId, e.Value is true)" />
-                                    <span class="font-medium text-slate-800">@s.EmployeeName</span>
-                                </span>
-                                <span class="text-xs text-slate-500">@s.JobTitle</span>
-                            </label>
-                        }
-                    </div>
-                    @if (assignStaffBusy)
-                    {
-                        <div class="inline-flex items-center gap-2 text-sm text-slate-600">
-                            <span class="h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-slate-700"></span>
-                            Generating...
-                        </div>
-                    }
-                    @if (assignStaffMessage != null) { <p class="text-sm">@assignStaffMessage</p> }
+                    <label class="block text-xs font-medium text-slate-700">Organisation structure
+                        <select class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs" @bind="assignStaffStructureId" @bind:after="LoadAssignStaffAsync"><option value="0">Select structure</option>@foreach (var structure in data.Structures) { <option value="@structure.Id">@structure.Name</option> }</select>
+                    </label>
                 }
-            </div>
-            <div class="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
-                <button type="button" class="px-4 py-2 bg-white border border-slate-300 rounded-md text-sm font-bold text-slate-700 hover:bg-slate-50 transition-colors shadow-sm" @onclick="CloseAssignStaff" disabled="@assignStaffBusy">Cancel</button>
-                <button type="button" class="px-6 py-2 bg-blue-600 text-white rounded-md text-sm font-bold hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-50" disabled="@(assignStaffBusy || assignStaffSelected.Count == 0)" @onclick="CreateRosterFromPanel">
-                    @if (assignStaffBusy)
-                    {
-                        <span class="inline-flex items-center gap-2"><span class="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white"></span>Creating...</span>
-                    }
-                    else
-                    {
-                        <span>Create roster</span>
-                    }
-                </button>
+
+                <div class="relative w-full"><input class="w-full rounded-lg border border-slate-300 bg-white py-1.5 pl-3 pr-8 text-xs text-slate-900 outline-none placeholder:text-slate-400 focus:border-teal-600 focus:ring-1 focus:ring-teal-600" placeholder="Search staff or job title..." @bind="assignStaffSearch" @bind:event="oninput" />@if (!string.IsNullOrWhiteSpace(assignStaffSearch)) { <button type="button" class="absolute inset-y-0 right-2 flex items-center text-xs font-bold text-slate-400 hover:text-slate-600" @onclick="() => assignStaffSearch = string.Empty">✕</button> }</div>
+                <div class="flex items-center justify-between gap-2 px-1 text-[11px]"><span class="text-slate-500">@assignStaffSelected.Count selected</span><div class="flex items-center gap-2"><button type="button" class="font-semibold text-teal-700 hover:text-teal-800" @onclick="SelectVisibleAssignStaff">Select visible</button><button type="button" class="font-semibold text-slate-600 hover:text-slate-900" @onclick="ClearAssignStaff">Clear</button></div></div>
+
+                <div class="min-h-[12rem] max-h-80 flex-1 overflow-y-auto rounded-xl border border-slate-200">
+                    @if (assignStaffLoading) { <p class="p-2 text-center text-xs text-slate-500">Loading staff...</p> }
+                    else if (assignStaffStructureId == 0 && assignStaffGroupId == 0) { <p class="p-2 text-center text-xs text-slate-500">Select an organisation structure to load staff.</p> }
+                    else if (!FilteredAssignStaff.Any()) { <p class="p-2 text-center text-xs text-slate-500">@(assignStaffList.Count == 0 ? "No active staff are available in this selection." : "No staff match your search.")</p> }
+                    else { <table class="w-full text-left text-xs"><thead class="sticky top-0 border-b border-slate-200 bg-slate-50 text-slate-600"><tr><th class="p-2 font-semibold"><label class="inline-flex items-center gap-2"><input type="checkbox" checked="@(FilteredAssignStaff.All(x => assignStaffSelected.Contains(x.IndividualId)))" @onchange="e => SelectAllAssignStaff(e.Value is true)" /> Select all</label></th><th class="p-2 font-semibold">Job title</th></tr></thead><tbody class="divide-y divide-slate-100">@foreach (var staff in FilteredAssignStaff) { <tr @key="staff.IndividualId" class="transition hover:bg-slate-50"><td class="p-2"><label class="flex cursor-pointer items-center gap-2"><input type="checkbox" class="h-4 w-4 rounded border-slate-300 text-teal-700 focus:ring-teal-600" checked="@assignStaffSelected.Contains(staff.IndividualId)" @onchange="e => ToggleAssignStaff(staff.IndividualId, e.Value is true)" /><span class="font-medium text-slate-800">@staff.EmployeeName</span></label></td><td class="p-2 text-slate-500">@staff.JobTitle</td></tr> }</tbody></table> }
+                </div>
+                @if (!string.IsNullOrWhiteSpace(assignStaffMessage)) { <p class="rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">@assignStaffMessage</p> }
+                <div class="flex items-center justify-between gap-2 border-t border-slate-100 pt-2"><span class="text-[11px] text-slate-400">@assignStaffList.Count available</span><div class="flex items-center gap-2"><button type="button" class="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50" @onclick="CloseAssignStaff" disabled="@assignStaffBusy">Cancel</button><button type="button" class="rounded-lg bg-teal-700 px-3 py-2 text-xs font-semibold text-white hover:bg-teal-800 disabled:opacity-50" disabled="@(assignStaffBusy || assignStaffSelected.Count == 0)" @onclick="CreateRosterFromPanel">@(assignStaffBusy ? "Creating…" : $"Create roster for {assignStaffSelected.Count}")</button></div></div>
             </div>
         </div>
+    }
 </section>
 @code {
     [Parameter] public int? OrganisationId { get; set; }
@@ -131,32 +142,65 @@
         if(filterStructure.HasValue && !FilteredStructures.Any(s=>s.Id==filterStructure)) filterStructure=null;
         if(model?.OrganisationStructureId is int id && !FilteredStructures.Any(s=>s.Id==id)) model.OrganisationStructureId=null;
     }
+    private sealed class EditableRotationSlot
+    {
+        public int TemplateId { get; set; }
+        public string StartText { get; set; } = string.Empty;
+        public string EndText { get; set; } = string.Empty;
+        public string Label { get; set; } = string.Empty;
+
+        public HRM.Helpers.RotationSlot ToModel() => new(
+            TemplateId,
+            TemplateId > 0 && TimeOnly.TryParse(StartText, out var s) ? s : null,
+            TemplateId > 0 && TimeOnly.TryParse(EndText, out var e) ? e : null,
+            TemplateId > 0 && !string.IsNullOrWhiteSpace(Label) ? Label.Trim() : null);
+
+        public static EditableRotationSlot FromModel(HRM.Helpers.RotationSlot slot) => new()
+        {
+            TemplateId = slot.TemplateId,
+            StartText = slot.StartTime?.ToString("HH:mm") ?? string.Empty,
+            EndText = slot.EndTime?.ToString("HH:mm") ?? string.Empty,
+            Label = slot.Label ?? string.Empty
+        };
+    }
+
     private string? error;
     private bool busy;
-    private List<int> rotation=[0];
+    private List<EditableRotationSlot> rotation=[new()];
     private DateTime lastDay;
     private static DateTime Today=>DateTime.UtcNow.AddHours(5).Date;
+    private void AddCycleDay(){if(rotation.Count<90)rotation.Add(new EditableRotationSlot());}
+    private void ApplyWeeklyPreset()
+    {
+        if(model!=null) model.RotationAnchorDate=HRM.Helpers.SchedulePattern.AlignToSunday(model.EffectiveFrom==default?Today:model.EffectiveFrom);
+        while(rotation.Count<7)rotation.Add(new EditableRotationSlot());
+        if(rotation.Count>7)rotation=rotation.Take(7).ToList();
+    }
     private IEnumerable<HRM.DTOs.Contracts.ScopeScheduleAssignmentDto> Rows=>data?.Assignments.Where(a=>statusFilter=="All" || statusFilter=="Disabled"&&!a.IsActive || statusFilter=="Ended"&&a.IsActive&&a.EffectiveTo<Today || statusFilter=="Enabled"&&a.IsActive&&(!a.EffectiveTo.HasValue||a.EffectiveTo>=Today)).Where(a=>scope=="Group"?a.GroupId.HasValue&&(!filterGroup.HasValue||a.GroupId==filterGroup):scope=="Structure"?a.OrganisationStructureId.HasValue&&(!filterStructureType.HasValue||FilteredStructures.Any(s=>s.Id==a.OrganisationStructureId))&&(!filterStructure.HasValue||a.OrganisationStructureId==filterStructure):!a.GroupId.HasValue&&!a.OrganisationStructureId.HasValue)??[];
     protected override void OnInitialized(){var query=Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(new Uri(Navigation.Uri).Query);if(query.TryGetValue("scope",out var value)&&value.ToString() is "Group" or "Structure")scope=value.ToString();if(query.TryGetValue("groupId",out var group)&&int.TryParse(group,out var id))filterGroup=id;if(query.TryGetValue("structureId",out var structure)&&int.TryParse(structure,out var structureId))filterStructure=structureId;}
     protected override async Task OnParametersSetAsync(){var key=$"{OrganisationId}:{OrganisationOnly}";if(loadedKey==key)return;loadedKey=key;model=null;ending=null;data=null;if(OrganisationOnly){scope="Organisation";filterGroup=null;filterStructure=null;filterStructureType=null;}await LoadAsync();}
     private async Task LoadAsync(){try{error=null;data=await Settings.LoadAsync(OrganisationId);}catch(Exception ex){Logger.LogError(ex,"Loading scope schedules");error=ex is UnauthorizedAccessException?ex.Message:"Schedule assignments could not be loaded. Please contact HR.";}}
     private void ChangeScope(string value){scope=value;model=null;ending=null;error=null;}
-    private void New(){model=new(){EffectiveFrom=Today,GroupId=scope=="Group"?filterGroup:null,OrganisationStructureId=scope=="Structure"?filterStructure:null};rotation=[0];ending=null;error=null;}
-    private void Edit(HRM.DTOs.Contracts.ScopeScheduleAssignmentDto value){if(value.OrganisationStructureId.HasValue && filterStructureType.HasValue)filterStructureType=data?.Structures.FirstOrDefault(s=>s.Id==value.OrganisationStructureId)?.TypeId;model=System.Text.Json.JsonSerializer.Deserialize<HRM.DTOs.Contracts.ScopeScheduleAssignmentDto>(System.Text.Json.JsonSerializer.Serialize(value));if(model!=null&&model.EffectiveFrom<Today)model.EffectiveFrom=Today;rotation=HRM.Helpers.SchedulePattern.Parse(value.RotationTemplateIds);if(rotation.Count==0)rotation=[0];ending=null;}
+    private void New(){model=new(){EffectiveFrom=Today,GroupId=scope=="Group"?filterGroup:null,OrganisationStructureId=scope=="Structure"?filterStructure:null};rotation=[new()];ending=null;error=null;}
+    private void Edit(HRM.DTOs.Contracts.ScopeScheduleAssignmentDto value){if(value.OrganisationStructureId.HasValue && filterStructureType.HasValue)filterStructureType=data?.Structures.FirstOrDefault(s=>s.Id==value.OrganisationStructureId)?.TypeId;model=System.Text.Json.JsonSerializer.Deserialize<HRM.DTOs.Contracts.ScopeScheduleAssignmentDto>(System.Text.Json.JsonSerializer.Serialize(value));if(model!=null&&model.EffectiveFrom<Today)model.EffectiveFrom=Today;rotation=HRM.Helpers.SchedulePattern.ParseSlots(value.RotationTemplateIds).Select(EditableRotationSlot.FromModel).ToList();if(rotation.Count==0)rotation=[new()];ending=null;}
     private void BeginEnd(HRM.DTOs.Contracts.ScopeScheduleAssignmentDto value){ending=value;lastDay=Today;model=null;}
     private void ToggleDay(int bit,bool value){if(model!=null)model.WorkingDaysMask=value?model.WorkingDaysMask|bit:model.WorkingDaysMask&~bit;}
     private string Target(HRM.DTOs.Contracts.ScopeScheduleAssignmentDto a)=>a.GroupId.HasValue?data!.Groups.FirstOrDefault(g=>g.Id==a.GroupId)?.Name??"Group":a.OrganisationStructureId.HasValue?data!.Structures.FirstOrDefault(s=>s.Id==a.OrganisationStructureId)?.Name??"Structure":"Current organisation";
-    private async Task SaveAsync(){if(model==null||busy)return;if(scope=="Group"&&!model.GroupId.HasValue||scope=="Structure"&&!model.OrganisationStructureId.HasValue){error="Select the target group or structure.";return;}model.RotationTemplateIds=model.ScheduleMode=="Rotation"?System.Text.Json.JsonSerializer.Serialize(rotation):null;await Act(async()=>{await Settings.SaveAsync(model,OrganisationId);model=null;},"Schedule assignment saved.");}
+    private async Task SaveAsync(){if(model==null||busy)return;if(scope=="Group"&&!model.GroupId.HasValue||scope=="Structure"&&!model.OrganisationStructureId.HasValue){error="Select the target group or structure.";return;}model.RotationTemplateIds=model.ScheduleMode=="Rotation"?HRM.Helpers.SchedulePattern.SerializeSlots(rotation.Select(x=>x.ToModel())):null;await Act(async()=>{await Settings.SaveAsync(model,OrganisationId);model=null;},"Schedule assignment saved.");}
     private async Task ToggleEnabledAsync(HRM.DTOs.Contracts.ScopeScheduleAssignmentDto row){if(busy)return;await Act(()=>Settings.SetEnabledAsync(row.Id,row.Version,!row.IsActive,OrganisationId),row.IsActive?"Schedule disabled.":"Schedule enabled.");}
     private async Task EndAsync(){if(ending==null||busy)return;await Act(async()=>{await Settings.EndAsync(ending.Id,ending.Version,lastDay,OrganisationId);ending=null;},"Schedule assignment ended.");}
     private async Task Act(Func<Task> action,string success){busy=true;error=null;try{await action();await LoadAsync();Toasts.Success(success);}catch(Exception ex){Logger.LogError(ex,"Saving scope schedules");error=ex is InvalidOperationException or UnauthorizedAccessException?ex.Message:"The change could not be saved. Refresh and try again.";}finally{busy=false;}}
-    // Assign Staff panel state
+    // Assign Staff modal state
     private bool showAssignStaffPanel, assignStaffBusy, assignStaffLoading;
     private List<EligibleAssignmentStaffDto> assignStaffList = [];
     private readonly HashSet<int> assignStaffSelected = [];
     private int assignStaffStructureId, assignStaffGroupId, assignStaffTemplateId;
+    private string assignStaffSearch = string.Empty;
     private DateTime assignStaffFrom = Today, assignStaffTo = Today.AddDays(7);
     private string? assignStaffMessage;
+    private IEnumerable<EligibleAssignmentStaffDto> FilteredAssignStaff => string.IsNullOrWhiteSpace(assignStaffSearch)
+        ? assignStaffList
+        : assignStaffList.Where(staff => $"{staff.EmployeeName} {staff.JobTitle}".Contains(assignStaffSearch, StringComparison.OrdinalIgnoreCase));
     private async Task OpenAssignStaff(HRM.DTOs.Contracts.ScopeScheduleAssignmentDto row)
     {
         assignStaffStructureId = row.OrganisationStructureId ?? 0;
@@ -166,6 +210,7 @@
         assignStaffTo = row.EffectiveTo.HasValue && row.EffectiveTo.Value >= assignStaffFrom ? row.EffectiveTo.Value : assignStaffFrom.AddDays(7);
         assignStaffSelected.Clear();
         assignStaffList = [];
+        assignStaffSearch = string.Empty;
         assignStaffMessage = null;
         showAssignStaffPanel = true;
         await LoadAssignStaffAsync();
@@ -175,6 +220,7 @@
     {
         assignStaffLoading = true;
         assignStaffList = [];
+        assignStaffSelected.Clear();
         try
         {
             if (assignStaffStructureId > 0) assignStaffList = await Assignments.GetDepartmentStaffAsync(assignStaffStructureId);
@@ -184,7 +230,15 @@
         finally { assignStaffLoading = false; }
     }
     private void ToggleAssignStaff(int id, bool on) { if (on) assignStaffSelected.Add(id); else assignStaffSelected.Remove(id); }
-    private void SelectAllAssignStaff(bool on) { assignStaffSelected.Clear(); if (on) foreach (var s in assignStaffList) assignStaffSelected.Add(s.IndividualId); }
+    private void SelectAllAssignStaff(bool on)
+    {
+        foreach (var staff in FilteredAssignStaff)
+        {
+            if (on) assignStaffSelected.Add(staff.IndividualId); else assignStaffSelected.Remove(staff.IndividualId);
+        }
+    }
+    private void SelectVisibleAssignStaff() { foreach (var staff in FilteredAssignStaff) assignStaffSelected.Add(staff.IndividualId); }
+    private void ClearAssignStaff() => assignStaffSelected.Clear();
     private async Task CreateRosterFromPanel()
     {
         if (assignStaffSelected.Count == 0 || assignStaffBusy) return;

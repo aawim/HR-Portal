@@ -36,6 +36,7 @@ namespace HRM.WorkPlanning.Services.Schedules
             await _access.RequireContextAsync();
             var org = await _access.GetCurrentOrganisationIdAsync();
             if (!await _access.HasOrganisationAccessAsync(org)) return StaffScheduleResult.Failure("Organisation access denied.");
+            await HRM.Helpers.StaffDataAccess.RequireIndividualAsync(db, _access, individualId);
             var today = DateTime.UtcNow.AddHours(5).Date;
 
             var activeJob = await db.Jobs
@@ -45,7 +46,8 @@ namespace HRM.WorkPlanning.Services.Schedules
                     x.OrganisationID == org &&
                     x.JobStateId ==
                         SharedConfig.JobStates.APPROVED &&
-                    x.TerminatedDate == null)
+                    x.JoinedDate <= today &&
+                    (!x.TerminatedDate.HasValue || x.TerminatedDate > today))
                 .OrderByDescending(x =>
                     x.JoinedDate)
                 .Select(x => new
@@ -71,10 +73,10 @@ namespace HRM.WorkPlanning.Services.Schedules
                     PositionName =
                         x.JobPositions
                             .Where(position =>
-                                position.FromDate <= today &&
+                                position.JobPositionStateId == SharedConfig.JobPositionStates.APPROVED && position.FromDate <= today &&
                                 (
                                     position.ToDate == null ||
-                                    position.ToDate >= today
+                                    position.ToDate > today
                                 ))
                             .OrderByDescending(position =>
                                 position.FromDate)
@@ -132,20 +134,6 @@ namespace HRM.WorkPlanning.Services.Schedules
 
             schedule.TemplateHistory =
                 await GetTemplateHistoryAsync(
-                    db,
-                    activeJob.JobId,
-                    today,
-                    cancellationToken);
-
-            schedule.CurrentShift =
-                await GetCurrentShiftAsync(
-                    db,
-                    activeJob.JobId,
-                    today,
-                    cancellationToken);
-
-            schedule.ShiftHistory =
-                await GetShiftHistoryAsync(
                     db,
                     activeJob.JobId,
                     today,
@@ -285,32 +273,5 @@ namespace HRM.WorkPlanning.Services.Schedules
                 .ToListAsync(cancellationToken);
         }
 
-        private static Task<CurrentShiftAssignmentDto?>
-            GetCurrentShiftAsync(
-                HrmTeContext db,
-                int jobId,
-                DateTime effectiveDate,
-                CancellationToken cancellationToken)
-        {
-            /*
-             * Replace this with the existing legacy shift assignment query.
-             */
-            return Task.FromResult<CurrentShiftAssignmentDto?>(
-                null);
-        }
-
-        private static Task<List<ShiftAssignmentHistoryDto>>
-            GetShiftHistoryAsync(
-                HrmTeContext db,
-                int jobId,
-                DateTime effectiveDate,
-                CancellationToken cancellationToken)
-        {
-            /*
-             * Replace this with the existing legacy shift history query.
-             */
-            return Task.FromResult(
-                new List<ShiftAssignmentHistoryDto>());
-        }
     }
 }

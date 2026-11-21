@@ -1,0 +1,86 @@
+using System.Net.Http.Json;
+using HRM.Application.Contracts.Recruitment;
+namespace HRM.UI.Services.Recruitment;
+public interface IRecruitmentApiClient {
+    Task<IReadOnlyList<RecruitmentRequisitionRow>> GetRequisitionsAsync(CancellationToken ct = default);
+    Task<IReadOnlyList<AvailablePositionMatrixOption>> GetAvailablePositionsAsync(CancellationToken ct = default);
+    Task<HRM.DTOs.ServiceResult> CreateRequisitionAsync(RecruitmentRequisitionInput input, CancellationToken ct = default);
+    Task<HRM.DTOs.ServiceResult> ApproveRequisitionAsync(int id, CancellationToken ct = default);
+    Task<IReadOnlyList<RecruitmentVacancyRow>> GetVacanciesAsync();
+    Task<HRM.DTOs.ServiceResult> CreateVacancyAsync(RecruitmentVacancyInput input);
+    Task<HRM.DTOs.ServiceResult> PublishVacancyAsync(int id);
+    Task<IReadOnlyList<RecruitmentScreeningApplicationRow>> GetScreeningApplicationsAsync(int vacancyId);
+    Task<HRM.DTOs.ServiceResult> RecordScreeningAsync(RecordScreeningInput input);
+    Task<HRM.DTOs.ServiceResult> DeclareConflictAsync(DeclareRecruitmentConflictInput input);
+    Task<RecruitmentAssessmentWorkspace> GetAssessmentWorkspaceAsync(int vacancyId);
+    Task<HRM.DTOs.ServiceResult> CreateAssessmentAsync(CreateRecruitmentAssessmentInput input);
+    Task<HRM.DTOs.ServiceResult> SubmitScorecardAsync(SubmitPanelScorecardInput input);
+    Task<RecruitmentResultWorkspace> GetResultWorkspaceAsync(int vacancyId);
+    Task<HRM.DTOs.ServiceResult> ResolveObjectionAsync(ResolveRecruitmentObjectionInput input);
+    Task<HRM.DTOs.ServiceResult> FinalizeResultsAsync(int id);
+    Task<RecruitmentOfferWorkspace> GetOfferWorkspaceAsync(int vacancyId);
+    Task<HRM.DTOs.ServiceResult> CreateOfferAsync(CreateRecruitmentOfferInput input);
+    Task<HRM.DTOs.ServiceResult> SubmitOnboardingAsync(SubmitRecruitmentOnboardingInput input);
+    Task<MyRecruitmentWorkspace> GetMyWorkspaceAsync();
+    Task<HRM.DTOs.ServiceResult> AcceptMyOfferAsync(int id);
+    Task<IReadOnlyList<PublishedRecruitmentVacancyRow>> BrowseVacanciesAsync();
+    Task<HRM.DTOs.ServiceResult> RegisterApplicantAsync(ApplicantRegistrationInput input);
+    Task<HRM.DTOs.ServiceResult> ApplyAsync(ApplyToRecruitmentVacancyInput input);
+    Task<RecruitmentDraftDetail?> GetDraftAsync(int vacancy);
+    Task<HRM.DTOs.ServiceResult> SaveDraftAsync(SaveRecruitmentDraftInput input);
+    Task<HRM.DTOs.ServiceResult> SubmitDraftAsync(int id,RecruitmentLifecycleActionInput input);
+    Task<HRM.DTOs.ServiceResult> WithdrawAsync(int id,RecruitmentLifecycleActionInput input);
+    Task<HRM.DTOs.ServiceResult> UploadAsync(int id,string category,string fileName,byte[] content);
+    Task<IReadOnlyList<RecruitmentOfficialTemplateRow>> GetOfficialTemplatesAsync(int policyVersionId, CancellationToken ct = default);
+    Task<HRM.DTOs.ServiceResult> RegisterOfficialTemplateAsync(RegisterRecruitmentOfficialTemplateInput input, CancellationToken ct = default);
+}
+public sealed class RecruitmentApiClient(HttpClient http) : IRecruitmentApiClient
+{
+    public async Task<IReadOnlyList<RecruitmentOfficialTemplateRow>> GetOfficialTemplatesAsync(int policyVersionId, CancellationToken ct = default) => await http.GetFromJsonAsync<List<RecruitmentOfficialTemplateRow>>($"/api/v1/recruitment/official-templates/{policyVersionId}", ct) ?? [];
+    public Task<HRM.DTOs.ServiceResult> RegisterOfficialTemplateAsync(RegisterRecruitmentOfficialTemplateInput input, CancellationToken ct = default) => PostAsync("/api/v1/recruitment/official-templates", input, ct);
+    public async Task<RecruitmentDraftDetail?> GetDraftAsync(int vacancy){using var r=await http.GetAsync($"/api/v1/recruitment/my-applications/vacancy/{vacancy}");if(r.StatusCode==System.Net.HttpStatusCode.NoContent)return null;r.EnsureSuccessStatusCode();return await r.Content.ReadFromJsonAsync<RecruitmentDraftDetail>();}
+    public Task<HRM.DTOs.ServiceResult> SaveDraftAsync(SaveRecruitmentDraftInput input)=>PostAsync("/api/v1/recruitment/my-applications/draft",input,default);
+    public Task<HRM.DTOs.ServiceResult> SubmitDraftAsync(int id,RecruitmentLifecycleActionInput input)=>PostAsync($"/api/v1/recruitment/my-applications/{id}/submit",input,default);
+    public Task<HRM.DTOs.ServiceResult> WithdrawAsync(int id,RecruitmentLifecycleActionInput input)=>PostAsync($"/api/v1/recruitment/my-applications/{id}/withdraw",input,default);
+    public async Task<HRM.DTOs.ServiceResult> UploadAsync(int id,string category,string fileName,byte[] content){using var form=new MultipartFormDataContent();form.Add(new StringContent(category),"category");form.Add(new ByteArrayContent(content),"file",fileName);using var r=await http.PostAsync($"/api/v1/recruitment/my-applications/{id}/documents",form);r.EnsureSuccessStatusCode();return await r.Content.ReadFromJsonAsync<HRM.DTOs.ServiceResult>()??HRM.DTOs.ServiceResult.Fail("No upload result returned.");}
+    public async Task<IReadOnlyList<PublishedRecruitmentVacancyRow>> BrowseVacanciesAsync()=>await http.GetFromJsonAsync<List<PublishedRecruitmentVacancyRow>>("/api/v1/recruitment/applications/vacancies")??[];
+    public Task<HRM.DTOs.ServiceResult> RegisterApplicantAsync(ApplicantRegistrationInput input)=>PostAsync("/api/v1/recruitment/applications/applicants",input,default);
+    public Task<HRM.DTOs.ServiceResult> ApplyAsync(ApplyToRecruitmentVacancyInput input)=>PostAsync("/api/v1/recruitment/my-workspace/apply",input,default);
+    public async Task<MyRecruitmentWorkspace> GetMyWorkspaceAsync()=>await http.GetFromJsonAsync<MyRecruitmentWorkspace>("/api/v1/recruitment/my-workspace")??new([],[]);
+    public Task<HRM.DTOs.ServiceResult> AcceptMyOfferAsync(int id)=>PostAsync($"/api/v1/recruitment/my-workspace/offers/{id}/accept",new{},default);
+    public async Task<RecruitmentOfferWorkspace> GetOfferWorkspaceAsync(int vacancyId)=>await http.GetFromJsonAsync<RecruitmentOfferWorkspace>($"/api/v1/recruitment/offer-workspace/{vacancyId}")??new([],[]);
+    public Task<HRM.DTOs.ServiceResult> CreateOfferAsync(CreateRecruitmentOfferInput input)=>PostAsync("/api/v1/recruitment/offers",input,default);
+    public Task<HRM.DTOs.ServiceResult> SubmitOnboardingAsync(SubmitRecruitmentOnboardingInput input)=>PostAsync("/api/v1/recruitment/onboarding",input,default);
+    public async Task<RecruitmentResultWorkspace> GetResultWorkspaceAsync(int vacancyId)=>await http.GetFromJsonAsync<RecruitmentResultWorkspace>($"/api/v1/recruitment/result-workspace/{vacancyId}")??new(null,false,null,[],[]);
+    public Task<HRM.DTOs.ServiceResult> ResolveObjectionAsync(ResolveRecruitmentObjectionInput input)=>PostAsync("/api/v1/recruitment/results/objections/resolve",input,default);
+    public Task<HRM.DTOs.ServiceResult> FinalizeResultsAsync(int id)=>PostAsync($"/api/v1/recruitment/results/{id}/finalize",new{},default);
+    public async Task<RecruitmentAssessmentWorkspace> GetAssessmentWorkspaceAsync(int vacancyId)=>await http.GetFromJsonAsync<RecruitmentAssessmentWorkspace>($"/api/v1/recruitment/assessment-workspace/{vacancyId}")??new([],[]);
+    public Task<HRM.DTOs.ServiceResult> CreateAssessmentAsync(CreateRecruitmentAssessmentInput input)=>PostAsync("/api/v1/recruitment/assessments",input,default);
+    public Task<HRM.DTOs.ServiceResult> SubmitScorecardAsync(SubmitPanelScorecardInput input)=>PostAsync("/api/v1/recruitment/assessments/scorecards",input,default);
+    public async Task<IReadOnlyList<RecruitmentScreeningApplicationRow>> GetScreeningApplicationsAsync(int vacancyId)=>await http.GetFromJsonAsync<List<RecruitmentScreeningApplicationRow>>($"/api/v1/recruitment/screening/applications/{vacancyId}")??[];
+    public Task<HRM.DTOs.ServiceResult> RecordScreeningAsync(RecordScreeningInput input)=>PostAsync("/api/v1/recruitment/screening",input,default);
+    public Task<HRM.DTOs.ServiceResult> DeclareConflictAsync(DeclareRecruitmentConflictInput input)=>PostAsync("/api/v1/recruitment/screening/conflicts",input,default);
+    public async Task<IReadOnlyList<RecruitmentVacancyRow>> GetVacanciesAsync()=>await http.GetFromJsonAsync<List<RecruitmentVacancyRow>>("/api/v1/recruitment/vacancies")??[];
+    public Task<HRM.DTOs.ServiceResult> CreateVacancyAsync(RecruitmentVacancyInput input)=>PostAsync("/api/v1/recruitment/requisitions/vacancies",new{input},default);
+    public Task<HRM.DTOs.ServiceResult> PublishVacancyAsync(int id)=>PostAsync($"/api/v1/recruitment/requisitions/vacancies/{id}/publish",new{},default);
+    public Task<HRM.DTOs.ServiceResult> CreateRequisitionAsync(RecruitmentRequisitionInput input, CancellationToken ct = default) => PostAsync("/api/v1/recruitment/requisitions", new { input }, ct);
+    public async Task<IReadOnlyList<AvailablePositionMatrixOption>> GetAvailablePositionsAsync(CancellationToken ct = default) => await http.GetFromJsonAsync<List<AvailablePositionMatrixOption>>("/api/v1/recruitment/requisitions/available-positions", ct) ?? [];
+    public Task<HRM.DTOs.ServiceResult> ApproveRequisitionAsync(int id, CancellationToken ct = default) => PostAsync($"/api/v1/recruitment/requisitions/{id}/approve", new { }, ct);
+    private async Task<HRM.DTOs.ServiceResult> PostAsync<T>(string path, T input, CancellationToken ct)
+    {
+        using var response = await http.PostAsJsonAsync(path, input, ct);
+        if (response.StatusCode == System.Net.HttpStatusCode.Forbidden) return HRM.DTOs.ServiceResult.Fail("Recruitment.Manage permission is required for this action.");
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<HRM.DTOs.ServiceResult>(cancellationToken: ct) ?? HRM.DTOs.ServiceResult.Fail("The server returned no action result.");
+    }
+    public async Task<IReadOnlyList<RecruitmentRequisitionRow>> GetRequisitionsAsync(CancellationToken ct = default)
+    {
+        using var response = await http.GetAsync("/api/v1/recruitment/requisitions", ct);
+        if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+            throw new UnauthorizedAccessException("Your session has expired. Sign out and sign in again.");
+        if (response.StatusCode == System.Net.HttpStatusCode.Forbidden)
+            throw new UnauthorizedAccessException("Recruitment access is not assigned for your current organisation. An authorised administrator must assign Recruitment.View or Recruitment.Manage.");
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<List<RecruitmentRequisitionRow>>(cancellationToken: ct) ?? [];
+    }
+}

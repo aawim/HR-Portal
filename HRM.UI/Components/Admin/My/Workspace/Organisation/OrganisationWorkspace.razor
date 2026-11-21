@@ -1,6 +1,8 @@
 @using HRM.DTOs
 @using HRM.Enum
+@using HRM.Services.Interfaces
 @inject HRM.Services.Contracts.OrganisationWorkspaceServiceContracts.IOperations WorkspaceService
+@inject IUserAccessService UserAccess
 @inject ILogger<OrganisationWorkspace> Logger
 
 <div class="min-w-0 space-y-2">
@@ -14,6 +16,8 @@
     }
     else if (data != null)
     {
+        @if (!HideHeader || ActiveTab == WorkspaceTab.Overview)
+        {
         <section class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-2xs">
             <div class="flex flex-wrap items-start justify-between gap-2">
                 <div>
@@ -30,6 +34,7 @@
                 </button>
             </div>
         </section>
+        }
 
         @if (ActiveTab == WorkspaceTab.Overview)
         {
@@ -100,21 +105,25 @@
                     }
                 </section>
             </div>
+            @if (canManageLeadership)
+            {
+                <HRM.Components.Admin.Settings.LeadershipAdministrationPage Embedded="true" InitialOrganisationId="OrganisationId" />
+            }
         }
         else if (ActiveTab == WorkspaceTab.Staff)
         {
             <section class="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs">
-                <div class="flex flex-wrap items-end gap-2 border-b border-slate-100 dark:border-slate-800 p-4">
-                    <label class="min-w-0 flex-1 text-xs font-medium text-slate-600 dark:text-slate-400">
-                        Search staff
-                        <input class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2 text-xs text-slate-800 dark:text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                <div class="flex flex-wrap items-end gap-2 border-b border-slate-100 dark:border-slate-800 px-4 py-3">
+                    <label class="min-w-0 flex-1 text-[11px] font-semibold text-slate-600 dark:text-slate-400">
+                        Search Staff
+                        <input class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs text-slate-800 dark:text-slate-100 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
                                placeholder="Name, employee or SAP number"
                                @bind="search"
                                @bind:event="oninput" />
                     </label>
-                    <label class="text-xs font-medium text-slate-600 dark:text-slate-400">
+                    <label class="text-[11px] font-semibold text-slate-600 dark:text-slate-400">
                         Department
-                        <select class="mt-1 block max-w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2 text-xs text-slate-800 dark:text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        <select class="mt-1 block max-w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs text-slate-800 dark:text-slate-100 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
                                 @bind="department">
                             <option value="0">All departments</option>
                             @foreach (var group in data.Departments)
@@ -123,38 +132,40 @@
                             }
                         </select>
                     </label>
-                    <button type="button" class="rounded-lg bg-teal-600 hover:bg-teal-700 px-3 py-2 text-xs font-bold text-white shadow-2xs transition" @onclick="FilterAsync">Search</button>
+                    <button type="button" class="inline-flex items-center gap-1.5 rounded-lg bg-teal-700 hover:bg-teal-800 dark:bg-teal-600 dark:hover:bg-teal-500 px-3 py-1.5 text-xs font-semibold text-white shadow-xs transition" @onclick="FilterAsync">Search</button>
                 </div>
                 @if (staff.Count == 0)
                 {
-                    <p class="p-4 text-xs text-slate-500 dark:text-slate-400">No active staff match your filters.</p>
+                    <div class="m-4 rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-800 p-8 text-center text-xs text-slate-500 dark:text-slate-400">
+                        No active staff match your filters.
+                    </div>
                 }
                 else
                 {
                     <div class="overflow-x-auto">
                         <table class="w-full text-left text-xs">
-                            <thead class="bg-slate-50 dark:bg-slate-800/60 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                            <thead class="bg-slate-50 dark:bg-slate-800/60 text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
                                 <tr>
-                                    <th class="px-4 py-3">Name</th>
-                                    <th class="px-4 py-3">Department</th>
-                                    <th class="px-4 py-3">Employee no.</th>
-                                    <th class="px-4 py-3">SAP no.</th>
-                                    <th class="px-4 py-3">Joined</th>
+                                    <th class="px-3 py-2.5">Name</th>
+                                    <th class="px-3 py-2.5">Department</th>
+                                    <th class="px-3 py-2.5">Employee No.</th>
+                                    <th class="px-3 py-2.5">SAP No.</th>
+                                    <th class="px-3 py-2.5">Joined</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
                                 @foreach (var person in staff)
                                 {
                                     <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition">
-                                        <td class="px-4 py-3">
-                                            <button type="button" class="text-left font-semibold text-teal-600 dark:text-teal-400 hover:underline" @onclick="() => OpenStaffAsync(person)">
+                                        <td class="px-3 py-2.5">
+                                            <button type="button" class="text-left font-semibold text-teal-700 dark:text-teal-400 hover:underline" @onclick="() => OpenStaffAsync(person)">
                                                 @person.Name
                                             </button>
                                         </td>
-                                        <td class="px-4 py-3 text-slate-700 dark:text-slate-300">@person.Department</td>
-                                        <td class="px-4 py-3 text-slate-500 dark:text-slate-400 font-mono">@(person.EmployeeNumber ?? "—")</td>
-                                        <td class="px-4 py-3 text-slate-500 dark:text-slate-400 font-mono">@(person.SapNumber ?? "—")</td>
-                                        <td class="whitespace-nowrap px-4 py-3 text-slate-600 dark:text-slate-400">@person.Joined.ToString("dd MMM yyyy")</td>
+                                        <td class="px-3 py-2.5 text-slate-700 dark:text-slate-300">@person.Department</td>
+                                        <td class="px-3 py-2.5 text-slate-500 dark:text-slate-400 font-mono">@(person.EmployeeNumber ?? "—")</td>
+                                        <td class="px-3 py-2.5 text-slate-500 dark:text-slate-400 font-mono">@(person.SapNumber ?? "—")</td>
+                                        <td class="whitespace-nowrap px-3 py-2.5 text-slate-600 dark:text-slate-400">@person.Joined.ToString("dd MMM yyyy")</td>
                                     </tr>
                                 }
                             </tbody>
@@ -163,6 +174,10 @@
                 }
                 @Pagination
             </section>
+        }
+        else if (ActiveTab == WorkspaceTab.Permissions && IsSuperAdmin)
+        {
+            <HRM.Components.Admin.Settings.Organisations.OrganisationPermissions InitialOrganisationId="OrganisationId" HideHeader="true" />
         }
         else if (ActiveTab is WorkspaceTab.Teams or WorkspaceTab.AssignedRoles or WorkspaceTab.Permissions or WorkspaceTab.LeaveType)
         {
@@ -214,43 +229,64 @@
                 }
             </section>
         }
+        else if (ActiveTab == WorkspaceTab.Departments)
+        {
+            <HRM.Components.Admin.Hr.Group.DepartmentManagement HideHeader="true" />
+        }
+        else if (ActiveTab == WorkspaceTab.Attendance)
+        {
+            <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-2 shadow-2xs">
+                <HRM.Components.Admin.Attendance.Attendance.OrganisationDaily />
+            </div>
+            @if (canManageLeadership)
+            {
+                <HRM.Components.Admin.Settings.LeadershipAdministrationPage Embedded="true" InitialOrganisationId="OrganisationId" />
+            }
+        }
         else if (ActiveTab == WorkspaceTab.Documents)
         {
             <section class="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs">
                 <div class="border-b border-slate-100 dark:border-slate-800 px-4 py-3 flex items-center justify-between flex-wrap gap-2">
                     <div>
-                        <h2 class="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">Organisation Documents &amp; Publications</h2>
-                        <p class="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Policies, circulars, guidelines, official letters, agreements, and structure records linked to this organisation.</p>
+                        <h2 class="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+                            <span>Organisation Documents &amp; Publications</span>
+                            <span class="rounded-full bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-400 border border-teal-200 dark:border-teal-800/40 px-2 py-0.5 text-[10px] font-semibold">
+                                @total records
+                            </span>
+                        </h2>
+                        <p class="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">Policies, circulars, guidelines, official letters, agreements, and structure records linked to this organisation.</p>
                     </div>
                     <a href="/admin/hr/documents/organisation"
-                       class="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 transition">
+                       class="inline-flex items-center gap-1.5 rounded-lg bg-teal-700 hover:bg-teal-800 dark:bg-teal-600 dark:hover:bg-teal-500 px-3 py-1.5 text-xs font-semibold text-white shadow-xs transition">
                         Open Enterprise Document Centre
                     </a>
                 </div>
                 @if (documents.Count == 0)
                 {
-                    <p class="p-4 text-xs text-slate-500 dark:text-slate-400">No documents are linked to this organisation.</p>
+                    <div class="m-4 rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-800 p-8 text-center text-xs text-slate-500 dark:text-slate-400">
+                        No documents are linked to this organisation.
+                    </div>
                 }
                 else
                 {
                     <div class="overflow-x-auto">
                         <table class="w-full text-left text-xs">
-                            <thead class="bg-slate-50 dark:bg-slate-800/60 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                            <thead class="bg-slate-50 dark:bg-slate-800/60 text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
                                 <tr>
-                                    <th class="px-4 py-3">Document</th>
-                                    <th class="px-4 py-3">Type</th>
-                                    <th class="px-4 py-3">Date</th>
-                                    <th class="px-4 py-3">Size</th>
+                                    <th class="px-3 py-2.5">Document</th>
+                                    <th class="px-3 py-2.5">Type</th>
+                                    <th class="px-3 py-2.5">Date</th>
+                                    <th class="px-3 py-2.5">Size</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
                                 @foreach (var document in documents)
                                 {
                                     <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition">
-                                        <td class="px-4 py-3 font-semibold text-slate-800 dark:text-slate-200">@document.Name</td>
-                                        <td class="px-4 py-3 text-slate-600 dark:text-slate-400">@document.Type</td>
-                                        <td class="px-4 py-3 text-slate-600 dark:text-slate-400">@(document.Date?.ToString("dd MMM yyyy") ?? "—")</td>
-                                        <td class="px-4 py-3 text-slate-500 dark:text-slate-400 font-mono">@(document.Size.HasValue ? $"{document.Size.Value / 1024m:0.#} KB" : "—")</td>
+                                        <td class="px-3 py-2.5 font-semibold text-slate-800 dark:text-slate-200">@document.Name</td>
+                                        <td class="px-3 py-2.5 text-slate-600 dark:text-slate-400">@document.Type</td>
+                                        <td class="px-3 py-2.5 text-slate-600 dark:text-slate-400">@(document.Date?.ToString("dd MMM yyyy") ?? "—")</td>
+                                        <td class="px-3 py-2.5 text-slate-500 dark:text-slate-400 font-mono">@(document.Size.HasValue ? $"{document.Size.Value / 1024m:0.#} KB" : "—")</td>
                                     </tr>
                                 }
                             </tbody>
@@ -266,6 +302,9 @@
 @code {
     [Parameter] public int OrganisationId { get; set; }
     [Parameter] public WorkspaceTab ActiveTab { get; set; }
+    [Parameter] public bool IsSuperAdmin { get; set; }
+    [Parameter] public bool HideHeader { get; set; }
+    private bool canManageLeadership;
     [Parameter] public EventCallback<WorkspaceSearchResult> OnStaffSelected { get; set; }
     [Parameter] public EventCallback<OrganisationWorkspaceData> OnLoaded { get; set; }
 
@@ -289,6 +328,12 @@
     protected override async Task OnParametersSetAsync()
     {
         if (loadedId == OrganisationId && loadedTab == ActiveTab) return;
+        try
+        {
+            var actor = await UserAccess.RequireContextAsync();
+            canManageLeadership = actor.IsSuperAdministrator || await UserAccess.HasPermissionAsync("Leadership.Appointment.Manage");
+        }
+        catch { canManageLeadership = false; }
         if (loadedId != OrganisationId) { data = null; search = ""; department = 0; }
         loadedId = OrganisationId; loadedTab = ActiveTab; page = 0; resourceSearch = ""; resourceLimit = 50;
         await LoadAsync();

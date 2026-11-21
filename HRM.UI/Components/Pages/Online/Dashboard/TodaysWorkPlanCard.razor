@@ -1,50 +1,169 @@
 @using HRM.DTOs.Attendance
+@using HRM.DTOs.Calendar
 @using HRM.Services.Interfaces
 @using HRM.Services.Attendance.AttendancePlan
+@using HRM.Services.Calendar.Contracts
 @inject IUserAccessService UserAccess
 @inject IAttendancePlanService Plans
 @inject IAttendanceService Attendance
+@inject OrganisationCalendarServiceContracts.IOperations OrgCalendar
 @inject ILogger<TodaysWorkPlanCard> Logger
 @implements IDisposable
 
-<section class="min-w-0 overflow-hidden rounded-xl border bg-white shadow-sm" aria-label="Today's Work Plan">
-    <div class="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-2">
-        <div><h3 class="font-semibold">Today's Work Plan</h3><p class="mt-1 text-xs text-slate-500">@today.ToString("dd MMM yyyy")</p></div>
-        <button type="button" class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@loading" @onclick="LoadAsync" aria-label="Refresh today's work plan"><i class="fas fa-sync" aria-hidden="true"></i></button>
+<section class="min-w-0 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm" aria-label="Today's Work Plan">
+    <!-- Header -->
+    <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 px-3 py-2">
+        <div>
+            <h3 class="text-sm font-semibold text-slate-800 dark:text-slate-100">Today's Work Plan</h3>
+            <p class="text-xs text-slate-500 dark:text-slate-400">@today.ToString("dd MMM yyyy")</p>
+        </div>
+        <button type="button"
+                class="inline-flex items-center justify-center rounded-md p-1.5 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-300 dark:border-slate-700 disabled:opacity-50 transition"
+                disabled="@loading"
+                @onclick="LoadAsync"
+                aria-label="Refresh today's work plan">
+            <i class="bi bi-arrow-clockwise @(loading ? "animate-spin" : "")" aria-hidden="true"></i>
+        </button>
     </div>
-    <div class="space-y-2 px-4 py-2">
-        <a href="/online/duty-roster" class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">Today's duty roster</a>
-        @if (loading) { <p role="status" class="text-sm text-slate-500">Loading today's work plan...</p> }
-        else if (error != null) { <p role="alert" class="text-sm text-amber-700">@error</p> }
-        else if (plan == null || (plan.Assignments.Count == 0 && plan.Segments.Count == 0)) { <p class="text-sm text-slate-500">@scheduleMessage</p> }
+
+    <!-- Main Content Container with p-2 -->
+    <div class="space-y-2 p-2">
+        @if (loading)
+        {
+            <p role="status" class="text-xs text-slate-500 dark:text-slate-400 py-1 text-center">Loading today's work plan...</p>
+        }
+        else if (error != null)
+        {
+            <p role="alert" class="text-xs text-amber-700 dark:text-amber-400 py-1 text-center">@error</p>
+        }
         else
         {
-            @if (plan.TemporaryWorkingHoursMessage != null) { <p role="status" class="rounded-lg border p-3 text-sm">@plan.TemporaryWorkingHoursMessage</p> }
-            @if (plan.ScheduleAmendmentMessage != null) { <p role="status" class="rounded-lg border p-3 text-sm">@plan.ScheduleAmendmentMessage</p> }
-            @foreach (var assignment in plan.Assignments.Where(x => x.IsValid).OrderBy(x => x.SchedulePurpose == "Official" ? 0 : 1).ThenBy(x => x.StartDateTime))
+            var validAssignments = plan?.Assignments.Where(x => x.IsValid).ToList() ?? [];
+            var applicableAssignments = isOfficialWorkingDay
+                ? validAssignments.OrderBy(x => x.SchedulePurpose == "Official" ? 0 : 1).ThenBy(x => x.StartDateTime).ToList()
+                : validAssignments.Where(x => x.SchedulePurpose != "Official").OrderBy(x => x.StartDateTime).ToList();
+
+            var validSegments = plan?.Segments ?? [];
+            var applicableSegments = isOfficialWorkingDay
+                ? validSegments.OrderBy(x => x.StartDateTime).ThenBy(x => x.SequenceNumber).ToList()
+                : validSegments.Where(x => x.SchedulePurpose != "Official").OrderBy(x => x.StartDateTime).ThenBy(x => x.SequenceNumber).ToList();
+
+            var hasApplicableDuty = applicableAssignments.Any(x => x.SchedulePurpose != "Official") ||
+                                    (!applicableAssignments.Any() && applicableSegments.Any(x => x.SchedulePurpose != "Official"));
+
+            @* Holiday or Weekend indicator when non-working day *@
+            @if (isPublicHoliday)
             {
-                <section class="border-t pt-2" aria-label="@assignment.Name">
-                    <div class="flex flex-wrap items-center justify-between gap-2">
-                        <h4 class="break-words text-sm font-semibold">@assignment.Name</h4>
-                        <span class="rounded-full px-2 py-0.5 text-[11px] font-medium @(assignment.SchedulePurpose == "Official" ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-blue-50 text-blue-700 border border-blue-200")">
-                            @(assignment.SchedulePurpose == "Official" ? "Primary · Official" : $"Additional · {assignment.SchedulePurpose}") (@Time(assignment.StartDateTime)–@Time(assignment.EndDateTime))
-                        </span>
+                <div class="rounded-md bg-purple-50 dark:bg-purple-950/50 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800/60 p-2 text-center space-y-0.5">
+                    <div class="text-xs font-bold">Public Holiday</div>
+                    @if (!string.IsNullOrWhiteSpace(holidayTitle))
+                    {
+                        <div class="text-[11px] font-semibold text-purple-800 dark:text-purple-200">@holidayTitle</div>
+                    }
+                    @if (!hasApplicableDuty)
+                    {
+                        <div class="text-[11px] text-purple-600 dark:text-purple-400">Enjoy your day off!</div>
+                    }
+                </div>
+            }
+            else if (isWeekend && !isOfficialWorkingDay)
+            {
+                <div class="rounded-md bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 p-2 text-center space-y-0.5">
+                    <div class="text-xs font-bold">Happy Weekend</div>
+                    @if (!hasApplicableDuty)
+                    {
+                        <div class="text-[11px] text-emerald-600 dark:text-emerald-400">Enjoy your day off!</div>
+                    }
+                </div>
+            }
+
+            @* Notification Messages *@
+            @if (plan?.TemporaryWorkingHoursMessage != null)
+            {
+                <p role="status" class="rounded-md border border-amber-200 dark:border-amber-800/60 bg-amber-50 dark:bg-amber-950/40 p-2 text-xs text-amber-900 dark:text-amber-200">
+                    @plan.TemporaryWorkingHoursMessage
+                </p>
+            }
+            @if (plan?.ScheduleAmendmentMessage != null)
+            {
+                <p role="status" class="rounded-md border border-blue-200 dark:border-blue-800/60 bg-blue-50 dark:bg-blue-950/40 p-2 text-xs text-blue-900 dark:text-blue-200">
+                    @plan.ScheduleAmendmentMessage
+                </p>
+            }
+
+            @* Assignments & Schedules *@
+            @if (applicableAssignments.Count > 0)
+            {
+                @foreach (var assignment in applicableAssignments)
+                {
+                    <section class="space-y-1.5 pt-1.5 first:pt-0" aria-label="@assignment.Name">
+                        <div class="flex items-center justify-between gap-2 border-b border-slate-200 dark:border-slate-800 pb-1">
+                            <div>
+                                <h4 class="text-xs font-semibold text-slate-800 dark:text-slate-100">
+                                    @(assignment.SchedulePurpose == "Official"
+                                        ? (string.IsNullOrWhiteSpace(assignment.Name) || assignment.Name == "Official" ? "Official Schedule" : assignment.Name)
+                                        : assignment.Name)
+                                </h4>
+                                <div class="text-xs font-medium font-mono text-slate-600 dark:text-slate-400">
+                                    @Time(DisplayStart(assignment)) – @Time(DisplayEnd(assignment))
+                                </div>
+                            </div>
+                            <span class="rounded-full px-2 py-0.5 text-[10px] font-semibold @(assignment.SchedulePurpose == "Official" ? "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800" : "bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800")">
+                                @(assignment.SchedulePurpose == "Official" ? "Official" : assignment.SchedulePurpose)
+                            </span>
+                        </div>
+
+                        <div class="divide-y divide-slate-100 dark:divide-slate-800">
+                            @foreach (var item in EventsFor(assignment))
+                            {
+                                var condition = EventCondition(item);
+                                <div class="flex items-center justify-between py-1 text-xs">
+                                    <div class="flex items-center gap-2">
+                                        <time class="font-mono font-medium text-slate-600 dark:text-slate-400 tabular-nums">@Time(item.StartDateTime)</time>
+                                        <span class="font-medium text-slate-800 dark:text-slate-200">@EventName(item.Name)</span>
+                                    </div>
+                                    @if (!string.IsNullOrWhiteSpace(condition))
+                                    {
+                                        <span class="@(condition == "Required" ? "text-[11px] font-semibold text-blue-600 dark:text-blue-400" : "text-[11px] text-slate-500 dark:text-slate-400")">
+                                            @condition
+                                        </span>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </section>
+                }
+            }
+            else if (applicableSegments.Count > 0)
+            {
+                <section class="space-y-1.5 pt-1.5" aria-label="Schedule Events">
+                    <div class="border-b border-slate-200 dark:border-slate-800 pb-1">
+                        <h4 class="text-xs font-semibold text-slate-800 dark:text-slate-100">Schedule Events</h4>
                     </div>
-                    <ol class="mt-1 divide-y">
-                        @foreach(var item in EventsFor(assignment))
+                    <div class="divide-y divide-slate-100 dark:divide-slate-800">
+                        @foreach (var item in applicableSegments)
                         {
-                            <AttendanceEventRow Timestamp="item.StartDateTime" Event="@EventName(item.Name)"
-                                Condition="@EventCondition(item)" Tone="@(IsClockEvent(item.Name) && item.IsMandatory && item.RequiresAttendance ? "info" : "muted")" />
+                            var condition = EventCondition(item);
+                            <div class="flex items-center justify-between py-1 text-xs">
+                                <div class="flex items-center gap-2">
+                                    <time class="font-mono font-medium text-slate-600 dark:text-slate-400 tabular-nums">@Time(item.StartDateTime)</time>
+                                    <span class="font-medium text-slate-800 dark:text-slate-200">@EventName(item.Name)</span>
+                                </div>
+                                @if (!string.IsNullOrWhiteSpace(condition))
+                                {
+                                    <span class="@(condition == "Required" ? "text-[11px] font-semibold text-blue-600 dark:text-blue-400" : "text-[11px] text-slate-500 dark:text-slate-400")">
+                                        @condition
+                                    </span>
+                                }
+                            </div>
                         }
-                    </ol>
+                    </div>
                 </section>
             }
-            @if (!plan.Assignments.Any(x=>x.IsValid) && plan.Segments.Count>0)
+            else if (isOfficialWorkingDay && !isPublicHoliday)
             {
-                <ol class="divide-y">@foreach(var item in plan.Segments.OrderBy(x=>x.StartDateTime).ThenBy(x=>x.SequenceNumber))
-                {<AttendanceEventRow Timestamp="item.StartDateTime" Event="@EventName(item.Name)" Condition="@EventCondition(item)" />}</ol>
+                <p class="text-xs text-slate-500 dark:text-slate-400 py-2 text-center">@scheduleMessage</p>
             }
-            @if (plan.Segments.Count == 0) { <p class="text-sm text-slate-500">No events are configured for this plan.</p> }
         }
     </div>
 </section>
@@ -57,41 +176,80 @@
     private bool loading;
     private string? error;
     private AttendanceWorkPlanDto? plan;
+    private bool isPublicHoliday;
+    private string? holidayTitle;
+    private bool isWeekend;
+    private bool isOfficialWorkingDay = true;
+    private EffectiveWorkdayResolutionDto? workdayResolution;
     private CancellationTokenSource? loadCancellation;
     private bool disposed;
+
     protected override async Task OnParametersSetAsync()
     {
         if (loadedKey == RefreshKey) return;
         loadedKey = RefreshKey;
         await LoadAsync();
     }
+
     private async Task LoadAsync()
     {
-        if(disposed)return;
+        if (disposed) return;
         loadCancellation?.Cancel();
-        var cancellation=new CancellationTokenSource();loadCancellation=cancellation;
-        using var ownedCancellation=cancellation;
-        loading = true; error = null; today = DateTime.UtcNow.AddHours(5).Date;
+        var cancellation = new CancellationTokenSource();
+        loadCancellation = cancellation;
+        using var ownedCancellation = cancellation;
+        loading = true;
+        error = null;
+        today = DateTime.UtcNow.AddHours(5).Date;
+
         try
         {
             var context = await UserAccess.RequireContextAsync();
-            AttendanceWorkPlanDto? loaded=null;
-            if(context.ActiveJob!=null)
+            try
             {
-                for(var attempt=0;;attempt++)
+                workdayResolution = await OrgCalendar.ResolveEffectiveWorkdayAsync(today, context.IndividualId);
+                isPublicHoliday = workdayResolution?.IsHoliday == true;
+                holidayTitle = WorkdayResTitle(workdayResolution);
+                isWeekend = (workdayResolution != null)
+                    ? (workdayResolution.IsWeekend && !workdayResolution.IsSpecialWorkingDay)
+                    : (today.DayOfWeek is DayOfWeek.Friday or DayOfWeek.Saturday);
+                isOfficialWorkingDay = workdayResolution != null
+                    ? workdayResolution.IsWorkingDay
+                    : !(today.DayOfWeek is DayOfWeek.Friday or DayOfWeek.Saturday);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogDebug(ex, "Could not resolve calendar workday for today");
+                isWeekend = today.DayOfWeek is DayOfWeek.Friday or DayOfWeek.Saturday;
+                isOfficialWorkingDay = !isWeekend;
+                isPublicHoliday = false;
+            }
+
+            AttendanceWorkPlanDto? loaded = null;
+            if (context.ActiveJob != null)
+            {
+                for (var attempt = 0; ; attempt++)
                 {
-                    try{loaded=await Plans.GetOrGenerateAsync(context.IndividualId,context.ActiveJob.JobId,context.ActiveJob.OrganisationId,today,cancellation.Token);break;}
-                    catch(HRM.UI.Services.Transport.ApiOperationException ex) when(ex.Code=="503"&&attempt==0)
-                    {await Task.Delay(300,cancellation.Token);}
+                    try
+                    {
+                        loaded = await Plans.GetOrGenerateAsync(context.IndividualId, context.ActiveJob.JobId, context.ActiveJob.OrganisationId, today, cancellation.Token);
+                        break;
+                    }
+                    catch (HRM.UI.Services.Transport.ApiOperationException ex) when (ex.Code == "503" && attempt == 0)
+                    {
+                        await Task.Delay(300, cancellation.Token);
+                    }
                 }
             }
-            if(cancellation.IsCancellationRequested||disposed)return;
-            plan=loaded;
+
+            if (cancellation.IsCancellationRequested || disposed) return;
+            plan = loaded;
             scheduleMessage = "No active schedule found";
+
             if (context.ActiveJob != null && (plan == null || (plan.Assignments.Count == 0 && plan.Segments.Count == 0)))
             {
                 var evaluation = await Attendance.GetEvaluationAsync(context.IndividualId, context.ActiveJob.JobId, context.ActiveJob.OrganisationId, today);
-                if(cancellation.IsCancellationRequested||disposed)return;
+                if (cancellation.IsCancellationRequested || disposed) return;
                 scheduleMessage = evaluation.Status switch
                 {
                     HRM.Enum.AttendanceDailyStatus.RestDay => "No scheduled work today (rest day)",
@@ -101,31 +259,73 @@
                 };
             }
         }
-        catch(OperationCanceledException) when(cancellation.IsCancellationRequested){ }
-        catch (Exception ex) { if(!cancellation.IsCancellationRequested&&!disposed){Logger.LogError(ex, "Loading today's work plan"); error = ex is HRM.UI.Services.Transport.ApiOperationException {Code:"503"}?"The server is temporarily busy. Please refresh shortly.":"Today's work plan could not be loaded. Please try refreshing.";plan=null;} }
-        finally { if(ReferenceEquals(loadCancellation,cancellation)){loadCancellation=null;loading=false;} }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
+        catch (Exception ex)
+        {
+            if (!cancellation.IsCancellationRequested && !disposed)
+            {
+                Logger.LogError(ex, "Loading today's work plan");
+                error = ex is HRM.UI.Services.Transport.ApiOperationException { Code: "503" }
+                    ? "The server is temporarily busy. Please refresh shortly."
+                    : "Today's work plan could not be loaded. Please try refreshing.";
+                plan = null;
+            }
+        }
+        finally
+        {
+            if (ReferenceEquals(loadCancellation, cancellation))
+            {
+                loadCancellation = null;
+                loading = false;
+            }
+        }
     }
-    public void Dispose(){disposed=true;loadCancellation?.Cancel();}
+
+    public void Dispose()
+    {
+        disposed = true;
+        loadCancellation?.Cancel();
+    }
+
+    private static string? WorkdayResTitle(EffectiveWorkdayResolutionDto? res)
+    {
+        if (res == null) return null;
+        if (!string.IsNullOrWhiteSpace(res.EventTitle)) return res.EventTitle;
+        if (!string.IsNullOrWhiteSpace(res.StatusDescription) && !res.StatusDescription.Contains("Normal Working Day") && !res.StatusDescription.Contains("Weekend"))
+            return res.StatusDescription;
+        return null;
+    }
+
     private static string Time(DateTime value) => value.ToString("HH:mm");
+
+    private DateTime DisplayStart(AttendanceWorkAssignmentDto assignment)
+        => EventsFor(assignment).Where(x => EventName(x.Name) == "Clock in").Select(x => x.StartDateTime).DefaultIfEmpty(assignment.StartDateTime).Min();
+
+    private DateTime DisplayEnd(AttendanceWorkAssignmentDto assignment)
+        => EventsFor(assignment).Where(x => EventName(x.Name) == "Clock out").Select(x => x.StartDateTime).DefaultIfEmpty(assignment.EndDateTime).Max();
+
     private IEnumerable<AttendanceWorkSegmentDto> EventsFor(AttendanceWorkAssignmentDto assignment)
     {
-        var matching=plan!.Segments.Where(s=>s.WorkAssignmentId==assignment.WorkAssignmentId).ToList();
-        if(matching.Count==0)
-            matching=plan.Segments.Where(s=>!s.WorkAssignmentId.HasValue && s.SchedulePurpose==assignment.SchedulePurpose && s.Name.Contains(" · ",StringComparison.Ordinal) &&
-                s.Name[..s.Name.LastIndexOf(" · ",StringComparison.Ordinal)]==assignment.Name && plan.Assignments.Count(a=>a.IsValid && a.SchedulePurpose==s.SchedulePurpose && a.Name==assignment.Name)==1).ToList();
-        if(matching.Count==0)
-            matching=plan.Segments.Where(s=>!s.WorkAssignmentId.HasValue && s.SchedulePurpose==assignment.SchedulePurpose && s.StartDateTime>=assignment.StartDateTime && s.StartDateTime<=assignment.EndDateTime &&
-                plan.Assignments.Count(a=>a.IsValid && a.SchedulePurpose==s.SchedulePurpose && s.StartDateTime>=a.StartDateTime && s.StartDateTime<=a.EndDateTime)==1).ToList();
-        return matching.OrderBy(s=>s.StartDateTime).ThenBy(s=>s.SequenceNumber);
+        var matching = plan!.Segments.Where(s => s.WorkAssignmentId == assignment.WorkAssignmentId).ToList();
+        if (matching.Count == 0)
+            matching = plan.Segments.Where(s => !s.WorkAssignmentId.HasValue && s.SchedulePurpose == assignment.SchedulePurpose && s.Name.Contains(" · ", StringComparison.Ordinal) &&
+                s.Name[..s.Name.LastIndexOf(" · ", StringComparison.Ordinal)] == assignment.Name && plan.Assignments.Count(a => a.IsValid && a.SchedulePurpose == s.SchedulePurpose && a.Name == assignment.Name) == 1).ToList();
+        if (matching.Count == 0)
+            matching = plan.Segments.Where(s => !s.WorkAssignmentId.HasValue && s.SchedulePurpose == assignment.SchedulePurpose && s.StartDateTime >= assignment.StartDateTime && s.StartDateTime <= assignment.EndDateTime &&
+                plan.Assignments.Count(a => a.IsValid && a.SchedulePurpose == s.SchedulePurpose && s.StartDateTime >= a.StartDateTime && s.StartDateTime <= a.EndDateTime) == 1).ToList();
+        return matching.OrderBy(s => s.StartDateTime).ThenBy(s => s.SequenceNumber);
     }
-    private static string? EventCondition(AttendanceWorkSegmentDto item)=>IsClockEvent(item.Name)
+
+    private static string? EventCondition(AttendanceWorkSegmentDto item) => IsClockEvent(item.Name)
         ? item.IsMandatory && item.RequiresAttendance ? "Required" : "Optional"
-        : item.EndDateTime>item.StartDateTime ? $"Until {Time(item.EndDateTime)}" : null;
+        : item.EndDateTime > item.StartDateTime ? $"Until {Time(item.EndDateTime)}" : null;
+
     private static string EventName(string value)
     {
         var name = value.Split(" · ").Last();
         var normalized = string.Concat(name.Where(char.IsLetterOrDigit)).ToUpperInvariant();
         return normalized switch { "CHECKIN" or "CLOCKIN" or "DUTYCHECKIN" => "Clock in", "CHECKOUT" or "CLOCKOUT" or "DUTYCHECKOUT" => "Clock out", _ => name };
     }
+
     private static bool IsClockEvent(string value) => EventName(value) is "Clock in" or "Clock out";
 }

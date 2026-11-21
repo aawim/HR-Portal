@@ -1,0 +1,668 @@
+@page "/admin/hr/staff-groups"
+@using HRM.Services
+@using HRM.Services.Contracts
+@using Microsoft.AspNetCore.Components.Authorization
+@using static HRM.Services.Contracts.StaffGroupServiceContracts
+@attribute [Authorize]
+@rendermode RenderMode.InteractiveServer
+
+@inject StaffGroupServiceContracts.IOperations StaffGroupService
+@inject ToastService ToastService
+@inject IJSRuntime JS
+
+<PageTitle>Staff Groups - HR Portal</PageTitle>
+
+<section class="w-full min-w-0 p-2 flex flex-col gap-2 bg-slate-50/50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
+    <!-- Header -->
+    <div class="staff-overview-no-print flex flex-col gap-2 p-2">
+        <div class="flex items-center justify-between flex-wrap gap-2">
+            <div>
+                <div class="flex items-center gap-2">
+                    <a href="/admin/hr" class="text-xs font-semibold text-teal-700 dark:text-teal-400 hover:underline">← HR</a>
+                    <span class="text-slate-300 dark:text-slate-700">/</span>
+                    <h1 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">Staff Groups</h1>
+                </div>
+                <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                    Create cross-department staff groups with schedule, overtime, work type, leave policy, and admin portal access overrides.
+                </p>
+            </div>
+            <div class="flex items-center gap-2">
+                <button type="button"
+                        class="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200 shadow-xs hover:bg-slate-50 dark:hover:bg-slate-700 transition"
+                        @onclick="ToggleFullWidthAsync">
+                    <span>@(isFullWidth ? "⤢ Shrink View" : "⤡ Full Width")</span>
+                </button>
+                <button type="button"
+                        class="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200 shadow-xs hover:bg-slate-50 dark:hover:bg-slate-700 transition"
+                        disabled="@loading"
+                        @onclick="LoadWorkspaceAsync">
+                    <span class="@(loading ? "animate-spin" : "")">↻</span>
+                    <span>Refresh</span>
+                </button>
+                <button type="button"
+                        class="inline-flex items-center gap-1.5 rounded-lg bg-teal-700 hover:bg-teal-800 text-white px-3.5 py-1.5 text-xs font-semibold shadow-xs transition"
+                        @onclick="StartNewGroup">
+                    <span>+ New Staff Group</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="w-full min-w-0 flex flex-col gap-2 transition-all duration-300 @(isFullWidth ? "max-w-none" : "max-w-7xl mx-auto")">
+    @if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <div class="staff-overview-no-print flex items-center justify-between rounded-xl border border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/40 p-3 text-xs text-rose-800 dark:text-rose-200">
+            <span>@errorMessage</span>
+            <button type="button" class="font-bold" @onclick="() => errorMessage = null">✕</button>
+        </div>
+    }
+
+    @if (loading && workspace == null)
+    {
+        <div class="flex flex-col items-center justify-center p-12 my-6 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs">
+            <div class="w-10 h-10 border-4 border-teal-600 border-t-transparent rounded-full animate-spin"></div>
+            <p class="mt-3 text-sm font-semibold text-slate-700 dark:text-slate-200">Loading Staff Groups...</p>
+        </div>
+    }
+    else if (workspace != null)
+    {
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-3 items-start">
+            <!-- LEFT: Groups List -->
+            <div class="staff-overview-no-print lg:col-span-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 shadow-xs flex flex-col gap-2">
+                <div class="flex items-center justify-between gap-2">
+                    <div class="flex rounded-lg border border-slate-300 dark:border-slate-700 p-0.5 bg-slate-50 dark:bg-slate-800 text-xs font-semibold">
+                        <button type="button"
+                                class="px-2.5 py-1 rounded-md transition @(showDissolved ? "text-slate-600 dark:text-slate-300" : "bg-white dark:bg-slate-700 text-teal-700 dark:text-teal-300 shadow-xs")"
+                                @onclick="() => showDissolved = false">
+                            Active (@workspace.Groups.Count(g => !g.IsDissolved))
+                        </button>
+                        <button type="button"
+                                class="px-2.5 py-1 rounded-md transition @(showDissolved ? "bg-white dark:bg-slate-700 text-teal-700 dark:text-teal-300 shadow-xs" : "text-slate-600 dark:text-slate-300")"
+                                @onclick="() => showDissolved = true">
+                            Dissolved (@workspace.Groups.Count(g => g.IsDissolved))
+                        </button>
+                    </div>
+                </div>
+
+                <input type="search"
+                       @bind="groupSearch"
+                       @bind:event="oninput"
+                       placeholder="Search groups..."
+                       class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs text-slate-900 dark:text-slate-100" />
+
+                <div class="flex flex-col gap-2 max-h-[36rem] overflow-y-auto">
+                    @foreach (var g in FilteredGroups)
+                    {
+                        var selected = selectedDetail?.Group.StaffGroupId == g.StaffGroupId && !editingForm;
+                        <button type="button"
+                                class="text-left rounded-xl border p-3 transition flex flex-col gap-1.5 @(selected ? "border-teal-600 bg-teal-50/60 dark:bg-teal-950/30 ring-1 ring-teal-600" : "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-700")"
+                                @onclick="() => SelectGroupAsync(g.StaffGroupId)">
+                            <div class="flex items-center justify-between gap-2">
+                                <span class="font-bold text-sm text-slate-900 dark:text-slate-100 truncate">@g.Name</span>
+                                <span class="rounded-full px-2 py-0.5 text-[11px] font-bold @(g.IsDissolved ? "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400" : "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300")">
+                                    @(g.IsDissolved ? "Dissolved" : $"{g.ActiveMemberCount} staff")
+                                </span>
+                            </div>
+                            <div class="flex flex-wrap gap-1 text-[10px] font-semibold">
+                                @if (g.WorkTemplateId.HasValue)
+                                {
+                                    <span class="rounded bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 px-1.5 py-0.5">Schedule: @g.WorkTemplateName</span>
+                                }
+                                @if (g.OvertimeEnabled.HasValue)
+                                {
+                                    <span class="rounded bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 px-1.5 py-0.5">OT: @(g.OvertimeEnabled.Value ? "Enabled" : "Disabled")</span>
+                                }
+                                @if (g.WorkTypeId.HasValue)
+                                {
+                                    <span class="rounded bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 px-1.5 py-0.5">@g.WorkTypeName</span>
+                                }
+                                @if (g.LeaveSetId.HasValue)
+                                {
+                                    <span class="rounded bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 px-1.5 py-0.5">Leave: @g.LeaveSetName</span>
+                                }
+                                @if (g.AdminPortalAccessEnabled)
+                                {
+                                    <span class="rounded bg-teal-100 dark:bg-teal-950/60 text-teal-800 dark:text-teal-300 px-1.5 py-0.5">Admin Access</span>
+                                }
+                            </div>
+                        </button>
+                    }
+                    @if (!FilteredGroups.Any())
+                    {
+                        <div class="rounded-xl border border-dashed border-slate-300 dark:border-slate-700 p-6 text-center text-xs text-slate-500">
+                            No @(showDissolved ? "dissolved" : "active") staff groups found.
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- RIGHT: Group Form OR Group Detail + Members + Printable Roster -->
+            <div class="lg:col-span-8 flex flex-col gap-3">
+                @if (editingForm)
+                {
+                    <div class="staff-overview-no-print rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-xs space-y-3">
+                        <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2">
+                            <h2 class="text-base font-bold">@(form.StaffGroupId == 0 ? "Create Staff Group" : $"Edit Group: {form.Name}")</h2>
+                            <button type="button" class="text-xs font-semibold text-slate-500 hover:text-slate-800" @onclick="CancelEdit">✕ Cancel</button>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                            <div>
+                                <label class="block text-xs font-semibold p-1">Group Name *</label>
+                                <input type="text" @bind="form.Name" class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs" />
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold p-1">Code</label>
+                                <input type="text" @bind="form.Code" class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs" />
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold p-1">Effective From</label>
+                                <InputDate @bind-Value="form.EffectiveFrom" class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs" />
+                            </div>
+                            <div class="md:col-span-2">
+                                <label class="block text-xs font-semibold p-1">Description</label>
+                                <input type="text" @bind="form.Description" class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs" />
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold p-1">Effective To (Optional)</label>
+                                <InputDate @bind-Value="form.EffectiveTo" class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs" />
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2 border-t border-slate-100 dark:border-slate-800">
+                            <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 p-3 space-y-2">
+                                <h3 class="text-xs font-bold text-slate-800 dark:text-slate-200">Work Schedule &amp; Work Type Override</h3>
+                                <div>
+                                    <label class="block text-xs font-medium p-1">Schedule Template</label>
+                                    <select @bind="form.WorkTemplateId" class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs">
+                                        <option value="">-- Inherit staff's own schedule --</option>
+                                        @foreach (var wt in workspace.WorkTemplates)
+                                        {
+                                            <option value="@wt.Id">@wt.Name @(string.IsNullOrWhiteSpace(wt.Extra) ? "" : $"({wt.Extra})")</option>
+                                        }
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium p-1">Work Type / Clocking Rule</label>
+                                    <select @bind="form.WorkTypeId" class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs">
+                                        <option value="">-- Inherit staff's own work type --</option>
+                                        @foreach (var wt in workspace.WorkTypes)
+                                        {
+                                            <option value="@wt.Id">@wt.Name</option>
+                                        }
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium p-1">Leave Policy (Leave Set)</label>
+                                    <select @bind="form.LeaveSetId" class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs">
+                                        <option value="">-- Inherit staff's own leave policy --</option>
+                                        @foreach (var ls in workspace.LeaveSets)
+                                        {
+                                            <option value="@ls.Id">@ls.Name</option>
+                                        }
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 p-3 space-y-2">
+                                <h3 class="text-xs font-bold text-slate-800 dark:text-slate-200">Overtime (OT) &amp; Portal Access</h3>
+                                <div>
+                                    <label class="block text-xs font-medium p-1">Overtime Eligibility</label>
+                                    <select @bind="overtimeMode" class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs">
+                                        <option value="inherit">Inherit from staff's own Job Type</option>
+                                        <option value="enabled">Enabled (Override)</option>
+                                        <option value="disabled">Disabled (Override)</option>
+                                    </select>
+                                </div>
+                                @if (overtimeMode == "enabled")
+                                {
+                                    <div class="grid grid-cols-3 gap-2">
+                                        <div>
+                                            <label class="block text-[11px] font-medium">Daily Max (h)</label>
+                                            <input type="number" step="0.5" @bind="form.MaximumDailyOvertimeHours" class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-xs" />
+                                        </div>
+                                        <div>
+                                            <label class="block text-[11px] font-medium">Weekly Max (h)</label>
+                                            <input type="number" step="0.5" @bind="form.MaximumWeeklyOvertimeHours" class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-xs" />
+                                        </div>
+                                        <div>
+                                            <label class="block text-[11px] font-medium">Rate Multiplier</label>
+                                            <input type="number" step="0.05" @bind="form.OvertimeRateMultiplier" placeholder="1.25" class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-xs" />
+                                        </div>
+                                    </div>
+                                }
+                                <label class="flex items-start gap-2 pt-2 cursor-pointer text-xs">
+                                    <input type="checkbox" @bind="form.AdminPortalAccessEnabled" class="mt-0.5 rounded border-slate-300" />
+                                    <span>
+                                        <strong class="block text-slate-800 dark:text-slate-100">Grant Admin Portal Access</strong>
+                                        <span class="text-[11px] text-slate-500 dark:text-slate-400">
+                                            Members receive Admin Portal access while in this group. Removing access or dissolving the group preserves existing direct grants.
+                                        </span>
+                                    </span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="flex justify-end gap-2 pt-2">
+                            <button type="button" class="rounded-lg border border-slate-300 dark:border-slate-700 px-3 py-1.5 text-xs font-semibold" @onclick="CancelEdit">Cancel</button>
+                            <button type="button" disabled="@saving" class="rounded-lg bg-teal-700 hover:bg-teal-800 text-white px-4 py-1.5 text-xs font-semibold disabled:opacity-50" @onclick="SaveGroupAsync">
+                                @(saving ? "Saving..." : "Save Staff Group")
+                            </button>
+                        </div>
+                    </div>
+                }
+                else if (selectedDetail != null)
+                {
+                    var g = selectedDetail.Group;
+                    <!-- Group Configuration Summary (Included in Print!) -->
+                    <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-xs space-y-3">
+                        <div class="flex flex-wrap items-start justify-between gap-2 border-b border-slate-200 dark:border-slate-800 pb-3">
+                            <div>
+                                <div class="flex items-center gap-2">
+                                    <h2 class="text-lg font-bold text-slate-900 dark:text-slate-100">@g.Name</h2>
+                                    @if (!string.IsNullOrWhiteSpace(g.Code))
+                                    {
+                                        <span class="rounded bg-slate-100 dark:bg-slate-800 px-2 py-0.5 text-xs font-mono">@g.Code</span>
+                                    }
+                                    <span class="rounded-full px-2.5 py-0.5 text-[11px] font-bold @(g.IsDissolved ? "bg-rose-100 text-rose-800" : "bg-emerald-100 text-emerald-800")">
+                                        @(g.IsDissolved ? "Dissolved" : "Active")
+                                    </span>
+                                </div>
+                                <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                    @g.OrganisationName · Effective @g.EffectiveFrom.ToString("dd MMM yyyy")@(g.EffectiveTo.HasValue ? $" – {g.EffectiveTo.Value:dd MMM yyyy}" : "")
+                                </p>
+                                @if (!string.IsNullOrWhiteSpace(g.Description))
+                                {
+                                    <p class="text-xs text-slate-600 dark:text-slate-300 mt-1">@g.Description</p>
+                                }
+                            </div>
+
+                            <div class="staff-overview-no-print flex flex-wrap items-center gap-2">
+                                <button type="button"
+                                        class="inline-flex items-center gap-1 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs font-semibold hover:bg-slate-50"
+                                        @onclick="PrintGroupStaffAsync">
+                                    <span>🖨️ Print Staff List</span>
+                                </button>
+                                @if (!g.IsDissolved)
+                                {
+                                    <button type="button"
+                                            class="inline-flex items-center gap-1 rounded-lg border border-teal-300 bg-teal-50 text-teal-800 px-3 py-1.5 text-xs font-semibold hover:bg-teal-100"
+                                            @onclick="() => ToggleAdminAccessAsync(!g.AdminPortalAccessEnabled)">
+                                        <span>@(g.AdminPortalAccessEnabled ? "Revoke Group Admin Access" : "Grant Group Admin Access")</span>
+                                    </button>
+                                    <button type="button"
+                                            class="inline-flex items-center gap-1 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs font-semibold hover:bg-slate-50"
+                                            @onclick="() => EditGroup(g)">
+                                        <span>✏️ Edit</span>
+                                    </button>
+                                    <button type="button"
+                                            class="inline-flex items-center gap-1 rounded-lg bg-rose-600 hover:bg-rose-700 text-white px-3 py-1.5 text-xs font-semibold"
+                                            @onclick="() => showDissolveConfirm = !showDissolveConfirm">
+                                        <span>Dissolve Group</span>
+                                    </button>
+                                }
+                            </div>
+                        </div>
+
+                        @if (showDissolveConfirm && !g.IsDissolved)
+                        {
+                            <div class="staff-overview-no-print rounded-xl border border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/30 p-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                                <div class="flex-grow w-full">
+                                    <p class="text-xs font-bold text-rose-800 dark:text-rose-200">Dissolve "@g.Name"? All @g.ActiveMemberCount active staff will return to their original schedules, OT, work types, leave policies, and direct portal access.</p>
+                                    <input type="text" @bind="dissolveReason" placeholder="Optional reason for dissolving..." class="mt-1.5 w-full rounded-lg border border-rose-300 bg-white dark:bg-slate-900 px-2.5 py-1 text-xs" />
+                                </div>
+                                <div class="flex items-center gap-2 shrink-0">
+                                    <button type="button" class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold" @onclick="() => showDissolveConfirm = false">Cancel</button>
+                                    <button type="button" class="rounded-lg bg-rose-600 hover:bg-rose-700 text-white px-3 py-1.5 text-xs font-bold" @onclick="DissolveSelectedGroupAsync">Confirm Dissolve</button>
+                                </div>
+                            </div>
+                        }
+
+                        <div class="grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs">
+                            <div class="rounded-xl border border-slate-200 dark:border-slate-800 p-2.5">
+                                <span class="text-[11px] text-slate-500 block">Schedule</span>
+                                <strong class="text-slate-900 dark:text-slate-100">@(g.WorkTemplateName ?? "Inherited")</strong>
+                            </div>
+                            <div class="rounded-xl border border-slate-200 dark:border-slate-800 p-2.5">
+                                <span class="text-[11px] text-slate-500 block">Work Type</span>
+                                <strong class="text-slate-900 dark:text-slate-100">@(g.WorkTypeName ?? "Inherited")</strong>
+                            </div>
+                            <div class="rounded-xl border border-slate-200 dark:border-slate-800 p-2.5">
+                                <span class="text-[11px] text-slate-500 block">Overtime (OT)</span>
+                                <strong class="text-slate-900 dark:text-slate-100">
+                                    @(g.OvertimeEnabled == null ? "Inherited" : g.OvertimeEnabled.Value ? $"Enabled ({g.MaximumWeeklyOvertimeHours?.ToString("0.#") ?? "-"}h/wk)" : "Disabled")
+                                </strong>
+                            </div>
+                            <div class="rounded-xl border border-slate-200 dark:border-slate-800 p-2.5">
+                                <span class="text-[11px] text-slate-500 block">Leave Policy</span>
+                                <strong class="text-slate-900 dark:text-slate-100">@(g.LeaveSetName ?? "Inherited")</strong>
+                            </div>
+                            <div class="rounded-xl border border-slate-200 dark:border-slate-800 p-2.5">
+                                <span class="text-[11px] text-slate-500 block">Admin Portal Access</span>
+                                <strong class="@(g.AdminPortalAccessEnabled ? "text-teal-700 dark:text-teal-400" : "text-slate-700 dark:text-slate-300")">
+                                    @(g.AdminPortalAccessEnabled ? "Granted via Group" : "Not Granted")
+                                </strong>
+                            </div>
+                        </div>
+
+                        @if (!g.IsDissolved)
+                        {
+                            <!-- Add Staff Section -->
+                            <div class="staff-overview-no-print rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 p-3 space-y-2">
+                                <div class="flex flex-wrap items-center justify-between gap-2">
+                                    <span class="text-xs font-bold text-slate-800 dark:text-slate-200">Add Staff (Any Department / Job Type)</span>
+                                    <input type="search" @bind="candidateSearch" @bind:event="oninput" placeholder="Search staff by name, ID, department, job type..."
+                                           class="w-full sm:w-72 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1 text-xs" />
+                                </div>
+                                <div class="max-h-40 overflow-y-auto divide-y divide-slate-200 dark:divide-slate-700 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
+                                    @foreach (var c in FilteredCandidates.Take(25))
+                                    {
+                                        var inOtherGroup = c.ActiveStaffGroupId.HasValue && c.ActiveStaffGroupId != g.StaffGroupId;
+                                        var alreadyHere = c.ActiveStaffGroupId == g.StaffGroupId;
+                                        <div class="flex items-center justify-between gap-2 p-2 text-xs">
+                                            <div>
+                                                <span class="font-semibold text-slate-900 dark:text-slate-100">@c.FullName</span>
+                                                <span class="text-slate-400 ml-1">@c.EmployeeNumber</span>
+                                                <div class="text-[11px] text-slate-500">@c.DepartmentName · @c.JobTypeName · @c.JobTitleName</div>
+                                            </div>
+                                            @if (alreadyHere)
+                                            {
+                                                <span class="rounded-full bg-emerald-100 text-emerald-800 px-2 py-0.5 text-[10px] font-bold">In This Group</span>
+                                            }
+                                            else if (inOtherGroup)
+                                            {
+                                                <span class="rounded-full bg-amber-100 text-amber-800 px-2 py-0.5 text-[10px] font-bold">In: @c.ActiveStaffGroupName</span>
+                                            }
+                                            else
+                                            {
+                                                <button type="button"
+                                                        class="rounded-lg bg-teal-700 hover:bg-teal-800 text-white px-2.5 py-1 text-[11px] font-semibold"
+                                                        @onclick="() => AddMemberAsync(c.IndividualId)">
+                                                    + Add
+                                                </button>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        }
+
+                        <!-- Printable Staff Roster Table -->
+                        <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
+                            <table class="w-full text-left text-xs">
+                                <thead class="bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-semibold border-b border-slate-200 dark:border-slate-700">
+                                    <tr>
+                                        <th class="p-2">#</th>
+                                        <th class="p-2">Staff</th>
+                                        <th class="p-2">Department</th>
+                                        <th class="p-2">Job Type / Title</th>
+                                        <th class="p-2">Joined</th>
+                                        <th class="p-2">Admin Access</th>
+                                        <th class="p-2">Status</th>
+                                        <th class="p-2 staff-overview-no-print text-right">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                                    @{ var idx = 0; }
+                                    @foreach (var m in selectedDetail.Members)
+                                    {
+                                        idx++;
+                                        <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-800/40">
+                                            <td class="p-2 text-slate-400">@idx</td>
+                                            <td class="p-2">
+                                                <div class="font-semibold text-slate-900 dark:text-slate-100">@m.FullName</div>
+                                                <div class="text-[11px] text-slate-500">@m.EmployeeNumber</div>
+                                            </td>
+                                            <td class="p-2">@m.DepartmentName</td>
+                                            <td class="p-2">
+                                                <div>@m.JobTypeName</div>
+                                                <div class="text-[11px] text-slate-500">@m.JobTitleName</div>
+                                            </td>
+                                            <td class="p-2">@m.JoinedAtUtc.ToLocalTime().ToString("dd MMM yyyy")</td>
+                                            <td class="p-2">
+                                                @if (m.CurrentAdminPortalAccess)
+                                                {
+                                                    <span class="rounded-full px-2 py-0.5 text-[10px] font-bold @(m.HadDirectAdminPortalAccess ? "bg-blue-100 text-blue-800" : "bg-teal-100 text-teal-800")">
+                                                        @(m.HadDirectAdminPortalAccess ? "Direct Grant" : "Via Group")
+                                                    </span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-slate-400">None</span>
+                                                }
+                                            </td>
+                                            <td class="p-2">
+                                                <span class="rounded-full px-2 py-0.5 text-[10px] font-bold @(m.IsActive ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-600")">
+                                                    @(m.IsActive ? "Active" : $"Left {m.LeftAtUtc?.ToLocalTime().ToString("dd MMM")}")
+                                                </span>
+                                            </td>
+                                            <td class="p-2 staff-overview-no-print text-right">
+                                                @if (m.IsActive && !g.IsDissolved)
+                                                {
+                                                    <button type="button"
+                                                            class="rounded-lg border border-rose-200 text-rose-700 hover:bg-rose-50 px-2 py-1 text-[11px] font-semibold"
+                                                            @onclick="() => RemoveMemberAsync(m.IndividualId)">
+                                                        Remove
+                                                    </button>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                    @if (selectedDetail.Members.Count == 0)
+                                    {
+                                        <tr><td colspan="8" class="p-6 text-center text-slate-500">No members in this group yet.</td></tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <div class="rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-10 text-center text-xs text-slate-500">
+                        Select a Staff Group on the left or click <strong>+ New Staff Group</strong> to configure schedule, OT, work type, leave policy, and admin portal access.
+                    </div>
+                }
+            </div>
+        </div>
+    }
+    </div>
+</section>
+
+@code {
+    private const string FullWidthKey = "hrm.staff-groups.full-width";
+    private bool isFullWidth;
+    private bool loading = true;
+    private bool saving;
+    private bool showDissolved;
+    private bool editingForm;
+    private bool showDissolveConfirm;
+    private string groupSearch = "";
+    private string candidateSearch = "";
+    private string? dissolveReason;
+    private string? errorMessage;
+    private string overtimeMode = "inherit";
+
+    private StaffGroupWorkspaceDto? workspace;
+    private StaffGroupDetailDto? selectedDetail;
+    private StaffGroupSaveRequest form = new();
+
+    private IEnumerable<StaffGroupDto> FilteredGroups => (workspace?.Groups ?? [])
+        .Where(g => g.IsDissolved == showDissolved)
+        .Where(g => string.IsNullOrWhiteSpace(groupSearch) || g.Name.Contains(groupSearch, StringComparison.OrdinalIgnoreCase) || (g.Code?.Contains(groupSearch, StringComparison.OrdinalIgnoreCase) ?? false));
+
+    private IEnumerable<StaffGroupStaffCandidateDto> FilteredCandidates => (workspace?.StaffCandidates ?? [])
+        .Where(c => string.IsNullOrWhiteSpace(candidateSearch)
+            || c.FullName.Contains(candidateSearch, StringComparison.OrdinalIgnoreCase)
+            || (c.EmployeeNumber?.Contains(candidateSearch, StringComparison.OrdinalIgnoreCase) ?? false)
+            || c.DepartmentName.Contains(candidateSearch, StringComparison.OrdinalIgnoreCase)
+            || c.JobTypeName.Contains(candidateSearch, StringComparison.OrdinalIgnoreCase));
+
+    protected override async Task OnInitializedAsync() => await LoadWorkspaceAsync();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                var saved = await JS.InvokeAsync<string?>("localStorage.getItem", FullWidthKey);
+                if (bool.TryParse(saved, out var val)) { isFullWidth = val; StateHasChanged(); }
+            }
+            catch { }
+        }
+    }
+
+    private async Task ToggleFullWidthAsync()
+    {
+        isFullWidth = !isFullWidth;
+        try { await JS.InvokeVoidAsync("localStorage.setItem", FullWidthKey, isFullWidth ? "true" : "false"); } catch { }
+    }
+
+    private async Task LoadWorkspaceAsync()
+    {
+        loading = true;
+        errorMessage = null;
+        try
+        {
+            workspace = await StaffGroupService.LoadAsync();
+            if (selectedDetail != null)
+            {
+                selectedDetail = await StaffGroupService.GetDetailAsync(selectedDetail.Group.StaffGroupId);
+            }
+            else if (workspace.Groups.FirstOrDefault(g => !g.IsDissolved) is { } first)
+            {
+                selectedDetail = await StaffGroupService.GetDetailAsync(first.StaffGroupId);
+            }
+        }
+        catch (Exception ex) { errorMessage = ex.Message; }
+        finally { loading = false; }
+    }
+
+    private async Task SelectGroupAsync(int id)
+    {
+        editingForm = false;
+        showDissolveConfirm = false;
+        try { selectedDetail = await StaffGroupService.GetDetailAsync(id); }
+        catch (Exception ex) { errorMessage = ex.Message; }
+    }
+
+    private void StartNewGroup()
+    {
+        form = new StaffGroupSaveRequest { EffectiveFrom = DateTime.Today };
+        overtimeMode = "inherit";
+        editingForm = true;
+    }
+
+    private void EditGroup(StaffGroupDto g)
+    {
+        form = new StaffGroupSaveRequest
+        {
+            StaffGroupId = g.StaffGroupId,
+            Name = g.Name,
+            Code = g.Code,
+            Description = g.Description,
+            WorkTemplateId = g.WorkTemplateId,
+            ScheduleMode = g.ScheduleMode,
+            WorkingDaysMask = g.WorkingDaysMask,
+            WorkTypeId = g.WorkTypeId,
+            OvertimeEnabled = g.OvertimeEnabled,
+            MaximumDailyOvertimeHours = g.MaximumDailyOvertimeHours,
+            MaximumWeeklyOvertimeHours = g.MaximumWeeklyOvertimeHours,
+            OvertimeRateMultiplier = g.OvertimeRateMultiplier,
+            LeaveSetId = g.LeaveSetId,
+            AdminPortalAccessEnabled = g.AdminPortalAccessEnabled,
+            EffectiveFrom = g.EffectiveFrom,
+            EffectiveTo = g.EffectiveTo
+        };
+        overtimeMode = g.OvertimeEnabled == null ? "inherit" : g.OvertimeEnabled.Value ? "enabled" : "disabled";
+        editingForm = true;
+    }
+
+    private void CancelEdit() => editingForm = false;
+
+    private async Task SaveGroupAsync()
+    {
+        saving = true;
+        errorMessage = null;
+        try
+        {
+            form.OvertimeEnabled = overtimeMode switch
+            {
+                "enabled" => true,
+                "disabled" => false,
+                _ => null
+            };
+            var saved = await StaffGroupService.SaveGroupAsync(form);
+            editingForm = false;
+            ToastService.Success($"Staff group '{saved.Name}' saved.");
+            workspace = await StaffGroupService.LoadAsync();
+            selectedDetail = await StaffGroupService.GetDetailAsync(saved.StaffGroupId);
+        }
+        catch (Exception ex) { errorMessage = ex.Message; }
+        finally { saving = false; }
+    }
+
+    private async Task AddMemberAsync(int individualId)
+    {
+        if (selectedDetail == null) return;
+        errorMessage = null;
+        try
+        {
+            await StaffGroupService.AddMembersAsync(new StaffGroupMembersRequest
+            {
+                StaffGroupId = selectedDetail.Group.StaffGroupId,
+                IndividualIds = [individualId]
+            });
+            ToastService.Success("Staff member added to group.");
+            await LoadWorkspaceAsync();
+        }
+        catch (Exception ex) { errorMessage = ex.Message; }
+    }
+
+    private async Task RemoveMemberAsync(int individualId)
+    {
+        if (selectedDetail == null) return;
+        errorMessage = null;
+        try
+        {
+            await StaffGroupService.RemoveMemberAsync(selectedDetail.Group.StaffGroupId, individualId);
+            ToastService.Info("Staff member removed and restored to original configuration.");
+            await LoadWorkspaceAsync();
+        }
+        catch (Exception ex) { errorMessage = ex.Message; }
+    }
+
+    private async Task ToggleAdminAccessAsync(bool enable)
+    {
+        if (selectedDetail == null) return;
+        errorMessage = null;
+        try
+        {
+            await StaffGroupService.SetAdminPortalAccessAsync(selectedDetail.Group.StaffGroupId, enable);
+            ToastService.Success(enable ? "Admin portal access granted to group members." : "Group admin portal access revoked (direct grants preserved).");
+            await LoadWorkspaceAsync();
+        }
+        catch (Exception ex) { errorMessage = ex.Message; }
+    }
+
+    private async Task DissolveSelectedGroupAsync()
+    {
+        if (selectedDetail == null) return;
+        errorMessage = null;
+        try
+        {
+            await StaffGroupService.DissolveGroupAsync(selectedDetail.Group.StaffGroupId, dissolveReason);
+            showDissolveConfirm = false;
+            dissolveReason = null;
+            ToastService.Info("Group dissolved. All members restored to original configuration.");
+            await LoadWorkspaceAsync();
+        }
+        catch (Exception ex) { errorMessage = ex.Message; }
+    }
+
+    private async Task PrintGroupStaffAsync()
+    {
+        try { await JS.InvokeVoidAsync("window.print"); } catch { }
+    }
+}

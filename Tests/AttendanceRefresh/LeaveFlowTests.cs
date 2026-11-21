@@ -134,8 +134,9 @@ static class LeaveFlowTests
             db.RequestTypesAllowedRequestStateTransitions.Remove(await db.RequestTypesAllowedRequestStateTransitions.SingleAsync(x => x.RequestTypeId == 105 && x.FromRequestStateId == 3 && x.ToRequestStateId == 4));
             await db.SaveChangesAsync();
         }
+        early.Version = 1;
         var blockedFlow = await config.SaveAsync(early);
-        Check(!blockedFlow.Success && blockedFlow.Message.Contains("Transition not allowed"), "Workflow save restored a removed approval transition");
+        Check(!blockedFlow.Success && (blockedFlow.Message.Contains("transitions must be configured", StringComparison.OrdinalIgnoreCase) || blockedFlow.Message.Contains("Transition not allowed", StringComparison.OrdinalIgnoreCase)), "Workflow save restored a removed approval transition");
         await using (var db = factory.CreateDbContext())
         {
             Check(!await db.RequestTypesAllowedRequestStateTransitions.AnyAsync(x => x.RequestTypeId == 105 && x.FromRequestStateId == 3 && x.ToRequestStateId == 4),

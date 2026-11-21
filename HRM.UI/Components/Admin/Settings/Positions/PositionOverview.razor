@@ -12,9 +12,10 @@
                     @(data?.Organisation ?? "Positions")
                 </span>
             </div>
-            <p class="text-xs text-slate-500 mt-0.5">Existing positions and currently assigned staff members.</p>
+            <p class="text-xs text-slate-500 mt-0.5">@(data?.Positions.Count ?? 0) positions · @CurrentStaffCount current staff. Only approved, currently effective job assignments are counted.</p>
         </div>
         <div class="flex flex-wrap items-center gap-2">
+            <button type="button" class="app-button app-button-secondary app-button-sm" aria-pressed="@tableView" @onclick="() => tableView = !tableView">@(tableView ? "Card view" : "Table view")</button>
             <button type="button"
                     class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 disabled:opacity-50 transition-colors"
                     disabled="@loading"
@@ -54,32 +55,41 @@
     }
     else if (data != null)
     {
-        <div class="grid min-w-0 items-start gap-4 xl:grid-cols-3">
+        <div class="grid min-w-0 items-start gap-2 lg:grid-cols-12">
             <!-- Left Main Panel: Active Positions -->
-            <div class="min-w-0 space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-xs xl:col-span-2">
-                <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
-                    <div>
-                        <h3 class="text-sm font-bold text-slate-900">Active Positions</h3>
-                        <p class="text-xs text-slate-500">
-                            @data.Positions.Count positions · @CurrentStaffCount current staff. Only approved, currently effective job assignments are counted.
-                        </p>
-                    </div>
-                </div>
-
-                <div class="relative">
-                    <input aria-label="Search positions or staff"
-                           type="search"
-                           placeholder="Search position, staff or department…"
-                           @bind="search"
-                           @bind:event="oninput"
-                           class="w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
-                </div>
-
+            <div class="min-w-0 space-y-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-xs lg:col-span-9">
                 @if (!VisiblePositions.Any())
                 {
                     <div class="rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center text-xs text-slate-500">
                         No positions match the search criteria.
                     </div>
+                }
+                else if (tableView)
+                {
+                    <div class="overflow-x-auto rounded-xl border border-slate-200">
+                        <table class="w-full text-left text-xs">
+                            <caption class="sr-only">Positions and their currently assigned staff</caption>
+                            <thead class="border-b border-slate-200 bg-slate-50 text-slate-700"><tr>
+                                <th class="p-2.5" scope="col" aria-sort="@(sortDescending ? "descending" : "ascending")"><button type="button" class="font-semibold" @onclick="() => sortDescending = !sortDescending">Position <span aria-hidden="true">@(sortDescending ? "↓" : "↑")</span></button></th>
+                                <th class="p-2.5" scope="col">Type</th><th class="p-2.5" scope="col">Scope</th><th class="p-2.5" scope="col">Status</th><th class="p-2.5" scope="col">Current staff</th><th class="p-2.5" scope="col">Staff details</th>
+                            </tr></thead>
+                            <tbody class="divide-y divide-slate-100">
+                            @foreach (var position in TablePositions)
+                            {
+                                var staff = StaffFor(position).ToList();
+                                <tr @key="position.Id" class="hover:bg-slate-50/50">
+                                    <td class="p-2.5 font-semibold">@position.Name</td>
+                                    <td class="p-2.5">@(position.MatrixId.HasValue ? "Government Job Matrix" : "Custom / Existing")</td>
+                                    <td class="p-2.5">@(position.IsGlobal ? "Global" : "Organisation")</td>
+                                    <td class="p-2.5">@(position.IsActive ? "Active" : "Inactive")</td>
+                                    <td class="p-2.5">@staff.Select(x=>x.IndividualId).Distinct().Count()</td>
+                                    <td class="p-2.5">@if(staff.Count==0){<span class="text-slate-500">No current staff</span>}else{<details><summary class="cursor-pointer text-blue-600">View staff</summary><ul class="mt-2 space-y-2">@foreach(var employee in staff){<li><a class="font-semibold text-blue-600 hover:underline" href="/admin/my/workspace?entityType=Staff&entityId=@employee.IndividualId">@employee.Name</a><div class="text-slate-500">@employee.Department · @employee.From.ToString("dd MMM yyyy") – @(employee.To?.ToString("dd MMM yyyy") ?? "Ongoing")</div></li>}</ul></details>}</td>
+                                </tr>
+                            }
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="flex flex-wrap items-center justify-between gap-2 p-2 text-xs"><span>@VisiblePositions.Count() matching positions · Page @SafePage of @PageCount</span><div class="flex items-center gap-2"><label>Rows <select class="rounded border border-slate-300 p-1" @bind="pageSize" @bind:after="ResetPage"><option value="10">10</option><option value="25">25</option><option value="50">50</option></select></label><button class="app-button app-button-secondary app-button-sm" disabled="@(SafePage<=1)" @onclick="()=>page=SafePage-1">Previous</button><button class="app-button app-button-secondary app-button-sm" disabled="@(SafePage>=PageCount)" @onclick="()=>page=SafePage+1">Next</button></div></div>
                 }
                 else
                 {
@@ -145,7 +155,16 @@
             </div>
 
             <!-- Right Sidebar: Position Schemes Summary -->
-            <div class="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
+            <div class="space-y-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-xs lg:col-span-3"><h3 class="text-sm font-bold text-slate-900">Filter positions</h3>                <div class="relative">
+                    <input aria-label="Search positions or staff"
+                           type="search"
+                           placeholder="Search position, staff or department…"
+                           @bind="search"
+                           @bind:event="oninput"
+                           class="w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                </div>
+
+<label class="block p-1 text-xs font-medium text-slate-700">Type<select class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs" @bind="positionType"><option value="">All types</option><option value="custom">Custom / Existing</option><option value="matrix">Government Job Matrix</option></select></label>
                 <div class="border-b border-slate-100 pb-3">
                     <h3 class="text-sm font-bold text-slate-900">Position Schemes</h3>
                     <p class="text-xs text-slate-500">Overview of configured frameworks and positions.</p>
@@ -177,11 +196,20 @@
     private PositionOverviewData? data;
     private bool loading = true;
     private string search = "";
+    private bool tableView = true;
+    private bool sortDescending;
+    private int page = 1;
+    private int pageSize = 25;
+    private int PageCount => Math.Max(1,(VisiblePositions.Count()+pageSize-1)/pageSize);
+    private int SafePage => Math.Clamp(page,1,PageCount);
+    private void ResetPage()=>page=1;
+    private IEnumerable<PositionOverviewRow> TablePositions => (sortDescending ? VisiblePositions.OrderByDescending(x=>x.Name) : VisiblePositions.OrderBy(x=>x.Name)).ThenBy(x=>x.Id).Skip((SafePage-1)*pageSize).Take(pageSize);
+    private string positionType = "";
     private string? error;
     private int CurrentStaffCount => data?.Positions.SelectMany(x => x.Staff).Where(x => x.IsCurrent).Select(x => x.IndividualId).Distinct().Count() ?? 0;
     private IEnumerable<PositionOverviewStaff> StaffFor(PositionOverviewRow position) => position.Staff.Where(x => x.IsCurrent);
     private bool Matches(string value) => value.Contains(search.Trim(), StringComparison.OrdinalIgnoreCase);
-    private IEnumerable<PositionOverviewRow> VisiblePositions => data?.Positions.Where(p => string.IsNullOrWhiteSpace(search) || Matches(p.Name) ||
+    private IEnumerable<PositionOverviewRow> VisiblePositions => data?.Positions.Where(p => (positionType == "" || (positionType == "matrix" ? p.MatrixId.HasValue : !p.MatrixId.HasValue))).Where(p => string.IsNullOrWhiteSpace(search) || Matches(p.Name) ||
         StaffFor(p).Any(s => Matches(s.Name) || Matches(s.Department))) ?? [];
     protected override Task OnInitializedAsync() => LoadAsync();
     private async Task LoadAsync()

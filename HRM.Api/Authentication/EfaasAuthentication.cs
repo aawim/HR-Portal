@@ -46,9 +46,17 @@ public static class EfaasAuthentication
                     ValidateAudience = true, ValidateLifetime = true, ValidateIssuerSigningKey = true, RequireSignedTokens = true };
                 options.Scope.Clear(); foreach (var scope in new[] { "openid", "efaas.profile", "efaas.email", "efaas.mobile", "efaas.birthdate" }) options.Scope.Add(scope);
                 foreach (var claim in new[] { "idnumber", "full_name", "first_name", "last_name", "email", "mobile", "dob", "photo", "user_type", "sub", "middle_name", "given_name", "family_name" }) options.ClaimActions.MapUniqueJsonKey(claim, claim);
+                options.CorrelationCookie.Path = "/";
+                options.NonceCookie.Path = "/";
                 // Use the registered public origin, never a caller's Host/forwarded header, for protocol callbacks.
                 options.Events.OnRedirectToIdentityProvider = context => { context.ProtocolMessage.RedirectUri = new Uri(origin, "Online/Auth/Callback").AbsoluteUri; return Task.CompletedTask; };
                 options.Events.OnRedirectToIdentityProviderForSignOut = context => { context.ProtocolMessage.PostLogoutRedirectUri = new Uri(origin, "signout-callback-oidc").AbsoluteUri; return Task.CompletedTask; };
+                options.Events.OnRemoteFailure = context =>
+                {
+                    context.Response.Redirect("/Online/Auth/login");
+                    context.HandleResponse();
+                    return Task.CompletedTask;
+                };
             });
         services.AddOptions<CookieAuthenticationOptions>(CookieAuthenticationDefaults.AuthenticationScheme)
             .Configure<ProtectedTicketStore>((options, store) => options.SessionStore = store);

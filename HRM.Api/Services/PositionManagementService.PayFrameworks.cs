@@ -104,4 +104,78 @@ public sealed partial class PositionManagementService
             db.Positions.Add(new(){Name=name,PositionFrameworkId=matrix.FrameworkId,PositionMatrixId=positionMatrix.PositionMatrixId,OrganisationId=actor.Org,IsActive=true,IsGlobal=false,IsSalaryGivenBasedOnPostion=true,OperationLogId=log.OperationLogId});
         await db.SaveChangesAsync();await tx.CommitAsync();return ServiceResult.Ok($"Position matrix created with {input.Slots} positions available for staff assignment through the existing approval flow.");
     }
+
+    public async Task<ServiceResult> UpdatePositionMatrixAsync(UpdatePositionMatrixInput input)
+    {
+        var actor=await ScopeAsync();if(!actor.Manage)throw new UnauthorizedAccessException("Position configuration permission is required.");
+        if(input.PositionMatrixId<=0||input.ApprovedSlots<1||input.ApprovedSlots>100000)return ServiceResult.Fail("Enter valid approved staffing slots (1–100,000).");
+        var reason=string.IsNullOrWhiteSpace(input.ChangeReason)?"Updated position matrix slots":input.ChangeReason.Trim();
+        if(reason.Length>500)return ServiceResult.Fail("Change reason must be 500 characters or fewer.");
+
+        await using var db=await factory.CreateDbContextAsync();await using var tx=await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+        var pm=await db.PositionMatrices.SingleOrDefaultAsync(x=>x.PositionMatrixId==input.PositionMatrixId&&x.OrganisationId==actor.Org&&x.IsActive);
+        if(pm==null)return ServiceResult.Fail("Position matrix not found in your organisation.");
+
+        var jm=await db.FrameworkJobMatrices.SingleOrDefaultAsync(x=>x.JobMatrixId==pm.JobMatrixId&&x.IsActive);
+        if(jm?.FrameworkId==null)return ServiceResult.Fail("The linked job matrix is inactive or unavailable.");
+        if(input.EffectiveTo.HasValue&&(input.EffectiveTo.Value.Date<pm.EffectiveFrom||(jm.EffectiveTo.HasValue&&input.EffectiveTo.Value.Date>jm.EffectiveTo.Value)))
+            return ServiceResult.Fail("Effective end date must fall within the job matrix effective period.");
+
+        var today=DateTime.UtcNow.AddHours(5).Date;
+        var existingPositions=await db.Positions.Where(p=>p.PositionMatrixId==pm.PositionMatrixId&&p.OrganisationId==actor.Org&&p.IsActive!=false).OrderBy(p=>p.PositionId).ToListAsync();
+        var existingIds=existingPositions.Select(p=>p.PositionId).ToList();
+        var occupiedIds=(await db.JobPositions.Where(x=>existingIds.Contains(x.PositionId)&&x.Job.OrganisationID==actor.Org&&x.JobPositionStateId==4&&x.FromDate<=today&&(!x.ToDate.HasValue||x.ToDate>today)&&x.Job.JobStateId==4&&x.Job.JoinedDate<=today&&(!x.Job.TerminatedDate.HasValue||x.Job.TerminatedDate>today)).Select(x=>x.PositionId).Distinct().ToListAsync()).ToHashSet();
+
+        if(input.ApprovedSlots<occupiedIds.Count)
+            return ServiceResult.Fail($"Cannot reduce approved slots to {input.ApprovedSlots}; {occupiedIds.Count} slot(s) are currently occupied by active staff.");
+
+        var title=await db.FrameworkJobTitles.SingleAsync(x=>x.JobTitleId==pm.JobTitleId);
+        var positionName=$"{title.Name} · {jm.MatrixCode}";
+        var previousSlots=pm.ApprovedSlots;
+        var log=await logs.CreateAsync(db,SharedConfig.OperationLogActionTypes.REQUESTS_UPDATE,$"Update position matrix #{pm.PositionMatrixId} in org {actor.Org}: slots {previousSlots} -> {input.ApprovedSlots}; reason: {reason}.");
+
+        if(input.ApprovedSlots>existingPositions.Count)
+        {
+            var toAdd=input.ApprovedSlots-existingPositions.Count;
+            for(var i=0;i<toAdd;i++)
+            {
+                db.Positions.Add(new Position
+                {
+                    Name=positionName,
+                    PositionFrameworkId=jm.FrameworkId,
+                    PositionMatrixId=pm.PositionMatrixId,
+                    OrganisationId=actor.Org,
+                    IsActive=true,
+                    IsGlobal=false,
+                    IsSalaryGivenBasedOnPostion=true,
+                    OperationLogId=log.OperationLogId
+                });
+            }
+        }
+        else if(input.ApprovedSlots<existingPositions.Count)
+        {
+            var toRemove=existingPositions.Count-input.ApprovedSlots;
+            var freeSlots=existingPositions.Where(p=>!occupiedIds.Contains(p.PositionId)).OrderByDescending(p=>p.PositionId).Take(toRemove).ToList();
+            if(freeSlots.Count<toRemove)return ServiceResult.Fail("Not enough unoccupied slots available to reduce approved slots.");
+            foreach(var free in freeSlots){free.IsActive=false;free.OperationLogId=log.OperationLogId;}
+        }
+
+        pm.ApprovedSlots=input.ApprovedSlots;
+        pm.EffectiveTo=input.EffectiveTo?.Date;
+        pm.OperationLogId=log.OperationLogId;
+        db.FrameworkPositionMatrixHistories.Add(new FrameworkPositionMatrixHistory
+        {
+            PositionMatrixId=pm.PositionMatrixId,
+            PreviousApprovedSlots=previousSlots,
+            NewApprovedSlots=input.ApprovedSlots,
+            ChangeReason=reason,
+            ChangedAt=DateTime.UtcNow,
+            OperationLogId=log.OperationLogId
+        });
+
+        await db.SaveChangesAsync();await tx.CommitAsync();
+        var delta=input.ApprovedSlots-previousSlots;
+        var summary=delta>0?$"Added {delta} extra position slot(s) (total {input.ApprovedSlots}).":delta<0?$"Reduced position slots by {-delta} (total {input.ApprovedSlots}).":$"Updated position matrix ({input.ApprovedSlots} slots).";
+        return ServiceResult.Ok(summary);
+    }
 }

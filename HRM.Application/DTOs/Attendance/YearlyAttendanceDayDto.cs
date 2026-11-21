@@ -27,6 +27,7 @@ namespace HRM.DTOs.Attendance
         public string? LeaveTypeName { get; set; }
 
         public bool IsHoliday { get; set; }
+        public bool IsMissingClock { get; set; }
 
         public int ClockEventCount { get; set; }
 

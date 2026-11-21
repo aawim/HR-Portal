@@ -4,11 +4,20 @@ public sealed record PositionFrameworkOption(int Id,string Code,string Name,bool
 public sealed record PositionMatrixOption(int Id,string Name,decimal BasicSalary,int ApprovedSlots)
 {
     public int FrameworkId {get;init;}
+    public int JobMatrixId {get;init;}
+    public string JobMatrixCode {get;init;}="";
+    public string JobTitle {get;init;}="";
+    public int UsedSlots {get;init;}
+    public int AvailableSlots {get;init;}
+    public DateTime EffectiveFrom {get;init;}
+    public DateTime? EffectiveTo {get;init;}
 }
+public sealed record UpdatePositionMatrixInput(int PositionMatrixId,int ApprovedSlots,DateTime? EffectiveTo,string ChangeReason);
 public sealed record PositionLookup(int Id,string Name);
 public sealed record PositionSalaryRow(decimal Amount,DateOnly EffectiveDate);
 public sealed record ManagedPosition(int Id,string Name,string? DhivehiName,string? Description,bool Active,bool Global,int? FrameworkId,int? MatrixId,string Framework,int CurrentStaff,bool CanEdit)
 {
+    public int? JobMatrixId {get;init;}
     public int? TypeId {get;init;}
     public int? RankId {get;init;}
     public int? ClassificationId {get;init;}
@@ -36,4 +45,5 @@ public interface IPositionManagement
     Task<ServiceResult> SaveFrameworkAsync(PayFrameworkInput input);
     Task<ServiceResult> SaveJobMatrixAsync(JobMatrixInput input);
     Task<ServiceResult> CreatePositionMatrixAsync(PositionMatrixInput input);
+    Task<ServiceResult> UpdatePositionMatrixAsync(UpdatePositionMatrixInput input);
 }
