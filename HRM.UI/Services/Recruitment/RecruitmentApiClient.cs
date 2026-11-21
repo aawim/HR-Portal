@@ -31,9 +31,13 @@ public interface IRecruitmentApiClient {
     Task<HRM.DTOs.ServiceResult> SubmitDraftAsync(int id,RecruitmentLifecycleActionInput input);
     Task<HRM.DTOs.ServiceResult> WithdrawAsync(int id,RecruitmentLifecycleActionInput input);
     Task<HRM.DTOs.ServiceResult> UploadAsync(int id,string category,string fileName,byte[] content);
+    Task<IReadOnlyList<RecruitmentOfficialTemplateRow>> GetOfficialTemplatesAsync(int policyVersionId, CancellationToken ct = default);
+    Task<HRM.DTOs.ServiceResult> RegisterOfficialTemplateAsync(RegisterRecruitmentOfficialTemplateInput input, CancellationToken ct = default);
 }
 public sealed class RecruitmentApiClient(HttpClient http) : IRecruitmentApiClient
 {
+    public async Task<IReadOnlyList<RecruitmentOfficialTemplateRow>> GetOfficialTemplatesAsync(int policyVersionId, CancellationToken ct = default) => await http.GetFromJsonAsync<List<RecruitmentOfficialTemplateRow>>($"/api/v1/recruitment/official-templates/{policyVersionId}", ct) ?? [];
+    public Task<HRM.DTOs.ServiceResult> RegisterOfficialTemplateAsync(RegisterRecruitmentOfficialTemplateInput input, CancellationToken ct = default) => PostAsync("/api/v1/recruitment/official-templates", input, ct);
     public async Task<RecruitmentDraftDetail?> GetDraftAsync(int vacancy){using var r=await http.GetAsync($"/api/v1/recruitment/my-applications/vacancy/{vacancy}");if(r.StatusCode==System.Net.HttpStatusCode.NoContent)return null;r.EnsureSuccessStatusCode();return await r.Content.ReadFromJsonAsync<RecruitmentDraftDetail>();}
     public Task<HRM.DTOs.ServiceResult> SaveDraftAsync(SaveRecruitmentDraftInput input)=>PostAsync("/api/v1/recruitment/my-applications/draft",input,default);
     public Task<HRM.DTOs.ServiceResult> SubmitDraftAsync(int id,RecruitmentLifecycleActionInput input)=>PostAsync($"/api/v1/recruitment/my-applications/{id}/submit",input,default);
