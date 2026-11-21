@@ -36,12 +36,70 @@ public sealed class GoodsLoanService : IGoodsLoanService
         _logger = logger;
     }
 
+    private async Task<int> ResolveAuthorisedOrgAsync(int? requestedOrganisationId)
+    {
+        var actor = await _access.RequireContextAsync();
+        var currentOrg = await _access.GetCurrentOrganisationIdAsync();
+        if (!actor.IsSuperAdministrator)
+        {
+            if (currentOrg <= 0 || !await _access.HasOrganisationAccessAsync(currentOrg))
+                throw new UnauthorizedAccessException("Organisation access is required.");
+            if (requestedOrganisationId.HasValue && requestedOrganisationId.Value > 0 && requestedOrganisationId.Value != currentOrg)
+                throw new UnauthorizedAccessException("Access to another organisation's goods loan data is not permitted.");
+            return currentOrg;
+        }
+        var org = requestedOrganisationId.HasValue && requestedOrganisationId.Value > 0 ? requestedOrganisationId.Value : currentOrg;
+        if (org <= 0)
+            throw new UnauthorizedAccessException("Select an organisation.");
+        return org;
+    }
+
+    private async Task RequireManagerAsync(int organisationId)
+    {
+        var actor = await _access.RequireContextAsync();
+        var org = await ResolveAuthorisedOrgAsync(organisationId);
+        var canManage = actor.IsSuperAdministrator ||
+            actor.IsHRStaff ||
+            actor.IsHRHead ||
+            actor.IsHRManager ||
+            actor.IsOrganisationAdmin ||
+            actor.IsHeadOfOrganisation ||
+            await _access.HasPermissionAsync("Admin") ||
+            await _access.HasPermissionAsync("GoodsLoan.Manage") ||
+            await _access.HasPermissionAsync("Payroll.Manage");
+        if (!canManage || org != organisationId)
+            throw new UnauthorizedAccessException("Goods Loan management permission in the current organisation is required.");
+    }
+
+    private async Task<int> RequireStaffReadOrManagerAsync(int individualId, int? requestedOrganisationId)
+    {
+        var actor = await _access.RequireContextAsync();
+        var org = await ResolveAuthorisedOrgAsync(requestedOrganisationId);
+        if (individualId > 0 && actor.IndividualId == individualId)
+            return org;
+
+        var canView = actor.IsSuperAdministrator ||
+            actor.IsHRStaff ||
+            actor.IsHRHead ||
+            actor.IsHRManager ||
+            actor.IsOrganisationAdmin ||
+            actor.IsHeadOfOrganisation ||
+            await _access.HasPermissionAsync("Admin") ||
+            await _access.HasPermissionAsync("GoodsLoan.View") ||
+            await _access.HasPermissionAsync("GoodsLoan.Manage") ||
+            await _access.HasPermissionAsync("Payroll.Manage") ||
+            await _access.HasPermissionAsync("Employee.View");
+        if (!canView)
+            throw new UnauthorizedAccessException("You can only view your own goods loan summary.");
+        return org;
+    }
+
     #region Stores
 
     public async Task<List<GoodsLoanStoreDto>> GetStoresAsync(int? organisationId = null, CancellationToken ct = default)
     {
+        var org = await ResolveAuthorisedOrgAsync(organisationId);
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
-        var org = organisationId ?? await _access.GetCurrentOrganisationIdAsync();
 
         var stores = await db.GoodsLoanStores
             .AsNoTracking()
@@ -68,6 +126,7 @@ public sealed class GoodsLoanService : IGoodsLoanService
 
     public async Task<GoodsLoanStoreDto?> GetStoreByIdAsync(int storeId, CancellationToken ct = default)
     {
+        await ResolveAuthorisedOrgAsync(null);
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
         var s = await db.GoodsLoanStores.AsNoTracking().FirstOrDefaultAsync(x => x.StoreID == storeId, ct);
         if (s == null) return null;
@@ -94,6 +153,8 @@ public sealed class GoodsLoanService : IGoodsLoanService
             return ServiceResult.Failed("Store code and store name are required.");
         }
 
+        var org = await ResolveAuthorisedOrgAsync(null);
+        await RequireManagerAsync(org);
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
         var userCtx = await _access.RequireContextAsync();
         var userId = userCtx.UserId > 0 ? userCtx.UserId : userCtx.IndividualId;
@@ -145,6 +206,8 @@ public sealed class GoodsLoanService : IGoodsLoanService
 
     public async Task<ServiceResult> ToggleStoreActiveAsync(int storeId, bool isActive, CancellationToken ct = default)
     {
+        var org = await ResolveAuthorisedOrgAsync(null);
+        await RequireManagerAsync(org);
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
         var store = await db.GoodsLoanStores.FirstOrDefaultAsync(s => s.StoreID == storeId, ct);
         if (store == null) return ServiceResult.Failed("Store not found.");
@@ -160,8 +223,8 @@ public sealed class GoodsLoanService : IGoodsLoanService
 
     public async Task<List<GoodsLoanStoreAgreementDto>> GetAgreementsAsync(int? organisationId = null, int? storeId = null, CancellationToken ct = default)
     {
+        var org = await ResolveAuthorisedOrgAsync(organisationId);
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
-        var org = organisationId ?? await _access.GetCurrentOrganisationIdAsync();
 
         var query = db.GoodsLoanStoreAgreements.AsNoTracking().AsQueryable();
 
@@ -210,6 +273,7 @@ public sealed class GoodsLoanService : IGoodsLoanService
             .FirstOrDefaultAsync(x => x.AgreementID == agreementId, ct);
 
         if (a == null) return null;
+        await ResolveAuthorisedOrgAsync(a.OrganisationBusinessEntityID);
 
         return new GoodsLoanStoreAgreementDto
         {
@@ -234,11 +298,8 @@ public sealed class GoodsLoanService : IGoodsLoanService
     public async Task<ServiceResult> SaveAgreementAsync(SaveGoodsLoanStoreAgreementRequest request, CancellationToken ct = default)
     {
         if (request.StoreID <= 0) return ServiceResult.Failed("Store selection is required.");
-        if (request.OrganisationBusinessEntityID <= 0)
-        {
-            request.OrganisationBusinessEntityID = await _access.GetCurrentOrganisationIdAsync();
-        }
-        if (request.OrganisationBusinessEntityID <= 0) return ServiceResult.Failed("Organisation is required.");
+        request.OrganisationBusinessEntityID = await ResolveAuthorisedOrgAsync(request.OrganisationBusinessEntityID > 0 ? request.OrganisationBusinessEntityID : null);
+        await RequireManagerAsync(request.OrganisationBusinessEntityID);
         if (string.IsNullOrWhiteSpace(request.AgreementNumber)) return ServiceResult.Failed("Agreement number is required.");
         if (request.MinimumMonths <= 0 || request.MaximumMonths < request.MinimumMonths)
         {
@@ -280,7 +341,7 @@ public sealed class GoodsLoanService : IGoodsLoanService
         }
         else
         {
-            var agreement = await db.GoodsLoanStoreAgreements.FirstOrDefaultAsync(a => a.AgreementID == request.AgreementID, ct);
+            var agreement = await db.GoodsLoanStoreAgreements.FirstOrDefaultAsync(a => a.AgreementID == request.AgreementID && a.OrganisationBusinessEntityID == request.OrganisationBusinessEntityID, ct);
             if (agreement == null) return ServiceResult.Failed("Agreement not found.");
 
             agreement.StoreID = request.StoreID;
@@ -306,6 +367,7 @@ public sealed class GoodsLoanService : IGoodsLoanService
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
         var a = await db.GoodsLoanStoreAgreements.FirstOrDefaultAsync(x => x.AgreementID == agreementId, ct);
         if (a == null) return ServiceResult.Failed("Agreement not found.");
+        await RequireManagerAsync(a.OrganisationBusinessEntityID);
 
         a.IsActive = isActive;
         await db.SaveChangesAsync(ct);
@@ -318,8 +380,8 @@ public sealed class GoodsLoanService : IGoodsLoanService
 
     public async Task<List<GoodsLoanDeductionPolicyDto>> GetPoliciesAsync(int? organisationId = null, CancellationToken ct = default)
     {
+        var org = await ResolveAuthorisedOrgAsync(organisationId);
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
-        var org = organisationId ?? await _access.GetCurrentOrganisationIdAsync();
 
         var query = db.GoodsLoanDeductionPolicies.AsNoTracking().AsQueryable();
         if (org > 0)
@@ -350,6 +412,7 @@ public sealed class GoodsLoanService : IGoodsLoanService
 
     public async Task<GoodsLoanDeductionPolicyDto?> GetActivePolicyAsync(int organisationId, CancellationToken ct = default)
     {
+        organisationId = await ResolveAuthorisedOrgAsync(organisationId > 0 ? organisationId : null);
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
         var today = DateTime.Today;
 
@@ -402,10 +465,8 @@ public sealed class GoodsLoanService : IGoodsLoanService
             return ServiceResult.Failed("Maximum salary percentage must be between 1% and 100%.");
         }
 
-        if (request.OrganisationBusinessEntityID <= 0)
-        {
-            request.OrganisationBusinessEntityID = await _access.GetCurrentOrganisationIdAsync();
-        }
+        request.OrganisationBusinessEntityID = await ResolveAuthorisedOrgAsync(request.OrganisationBusinessEntityID > 0 ? request.OrganisationBusinessEntityID : null);
+        await RequireManagerAsync(request.OrganisationBusinessEntityID);
 
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
 
@@ -431,7 +492,7 @@ public sealed class GoodsLoanService : IGoodsLoanService
         }
         else
         {
-            var policy = await db.GoodsLoanDeductionPolicies.FirstOrDefaultAsync(p => p.PolicyID == request.PolicyID, ct);
+            var policy = await db.GoodsLoanDeductionPolicies.FirstOrDefaultAsync(p => p.PolicyID == request.PolicyID && p.OrganisationBusinessEntityID == request.OrganisationBusinessEntityID, ct);
             if (policy == null) return ServiceResult.Failed("Policy not found.");
 
             policy.PolicyName = request.PolicyName.Trim();
@@ -455,6 +516,7 @@ public sealed class GoodsLoanService : IGoodsLoanService
 
     public async Task<GoodsLoanEligibilityResult> CheckEligibilityAsync(GoodsLoanEligibilityCheckRequest request, CancellationToken ct = default)
     {
+        request.OrganisationBusinessEntityID = await RequireStaffReadOrManagerAsync(request.IndividualID, request.OrganisationBusinessEntityID > 0 ? request.OrganisationBusinessEntityID : null);
         var result = new GoodsLoanEligibilityResult();
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
 
@@ -657,8 +719,8 @@ public sealed class GoodsLoanService : IGoodsLoanService
 
     public async Task<GoodsLoanStaffWorkspaceSummary> GetStaffWorkspaceSummaryAsync(int individualId, int? organisationId = null, CancellationToken ct = default)
     {
+        var org = await RequireStaffReadOrManagerAsync(individualId, organisationId);
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
-        var org = organisationId ?? await _access.GetCurrentOrganisationIdAsync();
 
         var loans = await db.GoodsLoans
             .AsNoTracking()
@@ -816,7 +878,7 @@ public sealed class GoodsLoanService : IGoodsLoanService
         var actor = await _access.RequireContextAsync();
         var currentOrg = await _access.GetCurrentOrganisationIdAsync();
 
-        if (!actor.IsSuperAdministrator && currentOrg > 0 && loan.OrganisationBusinessEntityID != currentOrg)
+        if (!actor.IsSuperAdministrator && (currentOrg <= 0 || loan.OrganisationBusinessEntityID != currentOrg || !await _access.HasOrganisationAccessAsync(currentOrg)))
         {
             return null;
         }
@@ -1028,6 +1090,7 @@ public sealed class GoodsLoanService : IGoodsLoanService
                 .FirstOrDefaultAsync(l => l.LoanID == loanId, ct);
 
             if (loan == null) return ServiceResult.Failed("Loan not found.");
+            await RequireManagerAsync(loan.OrganisationBusinessEntityID);
             if (loan.Status != GoodsLoanStatus.PendingApproval)
             {
                 return ServiceResult.Failed($"Cannot approve loan in status '{loan.Status}'. Only pending loans can be approved.");
@@ -1103,11 +1166,16 @@ public sealed class GoodsLoanService : IGoodsLoanService
             _logger.LogInformation("Goods loan {LoanNumber} approved and activated with {Count} instalments.", loan.LoanNumber, schedule.Count);
             return ServiceResult.Ok();
         }
+        catch (UnauthorizedAccessException)
+        {
+            await tx.RollbackAsync(ct);
+            throw;
+        }
         catch (Exception ex)
         {
             await tx.RollbackAsync(ct);
             _logger.LogError(ex, "Failed to approve goods loan {LoanId}", loanId);
-            return ServiceResult.Failed($"Approval error: {ex.Message}");
+            return ServiceResult.Failed("Failed to approve loan. Please try again.");
         }
     }
 
@@ -1116,6 +1184,7 @@ public sealed class GoodsLoanService : IGoodsLoanService
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
         var loan = await db.GoodsLoans.FirstOrDefaultAsync(l => l.LoanID == loanId, ct);
         if (loan == null) return ServiceResult.Failed("Loan not found.");
+        await RequireManagerAsync(loan.OrganisationBusinessEntityID);
 
         if (loan.Status != GoodsLoanStatus.PendingApproval)
         {
@@ -1156,6 +1225,7 @@ public sealed class GoodsLoanService : IGoodsLoanService
             .FirstOrDefaultAsync(l => l.LoanID == loanId, ct);
 
         if (loan == null) return ServiceResult.Failed("Loan not found.");
+        await RequireManagerAsync(loan.OrganisationBusinessEntityID);
 
         if (loan.Status == GoodsLoanStatus.Completed || loan.Status == GoodsLoanStatus.Cancelled)
         {
@@ -1213,6 +1283,7 @@ public sealed class GoodsLoanService : IGoodsLoanService
             .FirstOrDefaultAsync(l => l.LoanID == request.LoanID, ct);
 
         if (loan == null) return ServiceResult.Failed("Loan not found.");
+        await RequireManagerAsync(loan.OrganisationBusinessEntityID);
         if (loan.Status != GoodsLoanStatus.Active)
         {
             return ServiceResult.Failed($"Cannot settle loan in status '{loan.Status}'. Only active loans can be settled.");
@@ -1274,6 +1345,8 @@ public sealed class GoodsLoanService : IGoodsLoanService
 
     public async Task<List<GoodsLoanStoreSettlementDto>> GetStoreSettlementsAsync(int organisationId, int? storeId = null, CancellationToken ct = default)
     {
+        organisationId = await ResolveAuthorisedOrgAsync(organisationId > 0 ? organisationId : null);
+        await RequireManagerAsync(organisationId);
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
         var query = db.GoodsLoanStoreSettlements
             .AsNoTracking()
@@ -1321,6 +1394,8 @@ public sealed class GoodsLoanService : IGoodsLoanService
             return ServiceResult.Failed("Please select at least one loan to include in the settlement.");
         }
 
+        request.OrganisationBusinessEntityID = await ResolveAuthorisedOrgAsync(request.OrganisationBusinessEntityID > 0 ? request.OrganisationBusinessEntityID : null);
+        await RequireManagerAsync(request.OrganisationBusinessEntityID);
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
         var loans = await db.GoodsLoans
             .Include(l => l.Agreement)
@@ -1367,6 +1442,7 @@ public sealed class GoodsLoanService : IGoodsLoanService
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
         var s = await db.GoodsLoanStoreSettlements.FirstOrDefaultAsync(x => x.SettlementID == settlementID, ct);
         if (s == null) return ServiceResult.Failed("Settlement not found.");
+        await RequireManagerAsync(s.OrganisationBusinessEntityID);
 
         if (s.Status != GoodsLoanSettlementStatus.Draft)
         {
@@ -1383,6 +1459,7 @@ public sealed class GoodsLoanService : IGoodsLoanService
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
         var s = await db.GoodsLoanStoreSettlements.FirstOrDefaultAsync(x => x.SettlementID == settlementID, ct);
         if (s == null) return ServiceResult.Failed("Settlement not found.");
+        await RequireManagerAsync(s.OrganisationBusinessEntityID);
 
         s.Status = GoodsLoanSettlementStatus.Paid;
         s.PaymentReference = paymentReference;
@@ -1401,6 +1478,8 @@ public sealed class GoodsLoanService : IGoodsLoanService
 
     public async Task<List<GoodsLoanDto>> GetStoreMonthlyDeductionsReportAsync(int organisationId, DateTime month, CancellationToken ct = default)
     {
+        organisationId = await ResolveAuthorisedOrgAsync(organisationId > 0 ? organisationId : null);
+        await RequireManagerAsync(organisationId);
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
         var targetMonth = new DateTime(month.Year, month.Month, 1);
 

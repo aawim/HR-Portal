@@ -14,8 +14,20 @@ namespace HRM.Services;
 
 public sealed class StaffBankService(
     IDbContextFactory<HrmTeContext> factory,
+    IUserAccessService access,
     ILogger<StaffBankService> logger) : StaffBankServiceContracts.IOperations
 {
+    private async Task RequireWriteAsync(HrmTeContext db, int individualId)
+    {
+        var actor = await access.RequireContextAsync();
+        if (individualId > 0 && actor.IndividualId == individualId) return;
+        var org = await access.GetCurrentOrganisationIdAsync();
+        var canManage = actor.IsSuperAdministrator || actor.IsHRStaff || actor.IsHRHead || actor.IsHRManager ||
+            actor.IsOrganisationAdmin || await access.HasPermissionAsync("Admin") || await access.HasPermissionAsync("Employee.Edit");
+        if (!canManage || org <= 0 || !await access.HasOrganisationAccessAsync(org) ||
+            !await db.Jobs.AsNoTracking().AnyAsync(j => j.IndividualID == individualId && j.OrganisationID == org))
+            throw new UnauthorizedAccessException("You do not have permission to modify bank accounts for this staff member.");
+    }
     private static bool _tableEnsured;
     private static readonly object _tableLock = new();
 
@@ -64,6 +76,7 @@ public sealed class StaffBankService(
         if (individualId <= 0) return [];
 
         await using var db = await factory.CreateDbContextAsync();
+        await HRM.Helpers.StaffDataAccess.RequireIndividualAsync(db, access, individualId);
         await EnsureTableAsync(db);
 
         var list = await db.StaffBankAccounts
@@ -103,6 +116,7 @@ public sealed class StaffBankService(
             return ServiceResult.Fail("Account holder name is required.");
 
         await using var db = await factory.CreateDbContextAsync();
+        await RequireWriteAsync(db, input.IndividualId);
         await EnsureTableAsync(db);
 
         var existingAccounts = await db.StaffBankAccounts
@@ -176,6 +190,8 @@ public sealed class StaffBankService(
         var entity = await db.StaffBankAccounts.FirstOrDefaultAsync(b => b.Id == id);
         if (entity == null) return ServiceResult.Fail("Bank account not found.");
 
+        await RequireWriteAsync(db, entity.IndividualId);
+
         var individualId = entity.IndividualId;
         var wasPrimary = entity.IsPrimary;
 
@@ -200,6 +216,7 @@ public sealed class StaffBankService(
         if (id <= 0 || individualId <= 0) return ServiceResult.Fail("Invalid parameters.");
 
         await using var db = await factory.CreateDbContextAsync();
+        await RequireWriteAsync(db, individualId);
         await EnsureTableAsync(db);
 
         var accounts = await db.StaffBankAccounts

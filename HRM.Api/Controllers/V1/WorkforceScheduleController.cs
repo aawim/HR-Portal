@@ -51,7 +51,9 @@ public sealed class WorkforceScheduleController(IWorkforceRosterService rosters,
     public async Task<IActionResult> Publish(int rosterVersionId, [FromBody] PublishRequest request, CancellationToken cancellationToken)
     {
         var user = await access.RequireContextAsync();
-        await WorkPlanningAccess.RequireOrganisationAsync(access, write: true);
+        var organisationId = await WorkPlanningAccess.RequireOrganisationAsync(access, write: true);
+        var validation = await rosters.ValidateAsync(rosterVersionId, organisationId, cancellationToken);
+        if (!validation.IsValid) return BadRequest(string.Join(" ", validation.Errors));
         var logId = await logs.CreateLogAsync(SharedConfig.OperationLogActionTypes.WORK_ASSIGNMENT_CREATE, "Published workforce roster.");
         await rosters.PublishAsync(rosterVersionId, user.UserId, logId, cancellationToken);
         return NoContent();
