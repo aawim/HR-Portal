@@ -6,14 +6,14 @@ namespace HRM.Api.Controllers.V1;
 [Route("api/v1/individual-registration")]
 public sealed class IndividualRegistrationController(global::HRM.Services.Contracts.IndividualRegistrationServiceContracts.IOperations service) : HrmApiController
 {
-    [ApiPermission("Individual.Create")]
+    [ApiPermission("Individual.Create", "Individual.Add", "Admin")]
     [HttpGet("load")]
     public async Task<ActionResult<global::HRM.Services.RegistrationOptions>> Load()
     {
         return Ok(await service.LoadAsync());
     }
 
-    [ApiPermission("Individual.Create")]
+    [ApiPermission("Individual.Create", "Individual.Add", "Admin")]
     [HttpPost("register")]
     public async Task<ActionResult<global::System.Int32>> Register([FromBody] IndividualRegistrationRegisterRequest request)
     {

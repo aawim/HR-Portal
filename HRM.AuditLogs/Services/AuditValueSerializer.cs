@@ -24,6 +24,7 @@ public static class AuditValueSerializer
         string raw = value switch
         {
             string s => s,
+            byte[] bytes => $"[binary {bytes.Length} bytes]",
             DateTime dt => dt.Kind == DateTimeKind.Utc
                 ? dt.ToString("O", CultureInfo.InvariantCulture)
                 : dt.ToString("yyyy-MM-ddTHH:mm:ss.fff", CultureInfo.InvariantCulture),
