@@ -102,8 +102,11 @@ public sealed class StaffGroupService(
             .Select(l => new StaffGroupOptionDto(l.LeaveSetId, l.Name, null))
             .ToListAsync();
 
+        var today = DateTime.UtcNow.AddHours(5).Date;
         var activeMemberships = await db.StaffGroupMembers.AsNoTracking()
-            .Where(m => m.OrganisationId == orgId && m.IsActive)
+            .Where(m => m.OrganisationId == orgId && m.IsActive &&
+                        m.StaffGroup.IsActive && !m.StaffGroup.IsDissolved &&
+                        (!m.StaffGroup.EffectiveTo.HasValue || m.StaffGroup.EffectiveTo >= today))
             .Select(m => new { m.IndividualId, m.StaffGroupId, GroupName = m.StaffGroup.Name })
             .ToDictionaryAsync(m => m.IndividualId, m => (m.StaffGroupId, m.GroupName));
 
@@ -308,6 +311,11 @@ public sealed class StaffGroupService(
             entity.UpdatedAtUtc = DateTime.UtcNow;
         }
 
+        var effectiveFrom = request.EffectiveFrom == default ? DateTime.UtcNow.AddHours(5).Date : request.EffectiveFrom.Date;
+        var effectiveTo = request.EffectiveTo?.Date;
+        if (effectiveTo.HasValue && effectiveTo.Value < effectiveFrom)
+            throw new InvalidOperationException("Effective To date cannot be earlier than Effective From date.");
+
         entity.Name = name;
         entity.Code = string.IsNullOrWhiteSpace(request.Code) ? null : request.Code.Trim();
         entity.Description = string.IsNullOrWhiteSpace(request.Description) ? null : request.Description.Trim();
@@ -321,8 +329,8 @@ public sealed class StaffGroupService(
         entity.OvertimeRateMultiplier = request.OvertimeRateMultiplier;
         entity.LeaveSetId = request.LeaveSetId;
         entity.AdminPortalAccessEnabled = request.AdminPortalAccessEnabled;
-        entity.EffectiveFrom = request.EffectiveFrom == default ? DateTime.Today : request.EffectiveFrom.Date;
-        entity.EffectiveTo = request.EffectiveTo?.Date;
+        entity.EffectiveFrom = effectiveFrom;
+        entity.EffectiveTo = effectiveTo;
         entity.OperationLogId = logId;
 
         await db.SaveChangesAsync();
@@ -330,6 +338,13 @@ public sealed class StaffGroupService(
         if (request.StaffGroupId != 0 && previousAdminAccess != request.AdminPortalAccessEnabled)
         {
             await ApplyGroupAdminAccessChangeAsync(db, entity, request.AdminPortalAccessEnabled);
+            await db.SaveChangesAsync();
+        }
+
+        if (request.StaffGroupId != 0 && entity.Members.Any(m => m.IsActive))
+        {
+            var memberJobIds = entity.Members.Where(m => m.IsActive).Select(m => m.JobId).Distinct().ToList();
+            await InvalidateUnusedGeneratedPlansAsync(db, orgId, memberJobIds, DateTime.UtcNow.AddHours(5).Date);
             await db.SaveChangesAsync();
         }
 
@@ -354,8 +369,11 @@ public sealed class StaffGroupService(
         if (!group.IsActive || group.IsDissolved)
             throw new InvalidOperationException("Cannot add staff to an inactive or dissolved group.");
 
+        var today = DateTime.UtcNow.AddHours(5).Date;
         var conflicts = await db.StaffGroupMembers.AsNoTracking()
-            .Where(m => m.OrganisationId == orgId && m.IsActive && ids.Contains(m.IndividualId))
+            .Where(m => m.OrganisationId == orgId && m.IsActive && ids.Contains(m.IndividualId) &&
+                        m.StaffGroup.IsActive && !m.StaffGroup.IsDissolved &&
+                        (!m.StaffGroup.EffectiveTo.HasValue || m.StaffGroup.EffectiveTo >= today))
             .Select(m => new { m.IndividualId, GroupName = m.StaffGroup.Name, m.StaffGroupId })
             .ToListAsync();
 
@@ -411,6 +429,11 @@ public sealed class StaffGroupService(
             });
         }
 
+        if (group.WorkTemplateId.HasValue)
+        {
+            await InvalidateUnusedGeneratedPlansAsync(db, orgId, jobs.Values.Distinct().ToList(), today);
+        }
+
         await db.SaveChangesAsync();
         await tx.CommitAsync();
     }
@@ -442,6 +465,7 @@ public sealed class StaffGroupService(
             }
         }
 
+        await InvalidateUnusedGeneratedPlansAsync(db, orgId, [member.JobId], DateTime.UtcNow.AddHours(5).Date);
         await db.SaveChangesAsync();
         await tx.CommitAsync();
     }
@@ -518,8 +542,41 @@ public sealed class StaffGroupService(
             m.OperationLogId = logId;
         }
 
+        if (activeMembers.Count > 0)
+        {
+            await InvalidateUnusedGeneratedPlansAsync(db, orgId, activeMembers.Select(m => m.JobId).Distinct().ToList(), DateTime.UtcNow.AddHours(5).Date);
+        }
+
         await db.SaveChangesAsync();
         await tx.CommitAsync();
+    }
+
+    private static async Task InvalidateUnusedGeneratedPlansAsync(HrmTeContext db, int orgId, List<int> jobIds, DateTime fromDate)
+    {
+        if (jobIds.Count == 0) return;
+        var plans = await db.WorkPlans
+            .Include(p => p.WorkPlanSegments)
+            .Include(p => p.WorkAssignments).ThenInclude(a => a.WorkAssignmentSegments)
+            .Include(p => p.WorkAssignments).ThenInclude(a => a.WorkAssignmentOwners)
+            .Where(p => p.OrganisationBusinessEntityId == orgId && jobIds.Contains(p.JobId) &&
+                        p.IsValid && p.IsGenerated && !p.IsManual && !p.IsFinalized &&
+                        p.WorkDate >= fromDate.Date &&
+                        !db.AttendanceLogResolutions.Any(r => r.WorkPlanId == p.WorkPlanId) &&
+                        !db.AttendanceLogs.Any(l => l.OrganisationId == orgId && l.IndividualId == p.IndividualId && l.Date.Date == p.WorkDate.Date) &&
+                        !p.WorkPlanSegments.Any(s => s.AttendanceId.HasValue || s.IsCompleted))
+            .ToListAsync();
+
+        foreach (var plan in plans)
+        {
+            plan.IsValid = false;
+            foreach (var seg in plan.WorkPlanSegments) seg.IsValid = false;
+            foreach (var a in plan.WorkAssignments)
+            {
+                a.IsValid = false;
+                foreach (var seg in a.WorkAssignmentSegments) seg.IsValid = false;
+                foreach (var owner in a.WorkAssignmentOwners) owner.IsValid = false;
+            }
+        }
     }
 
     private static async Task ApplyGroupAdminAccessChangeAsync(HrmTeContext db, StaffGroup group, bool enabled)

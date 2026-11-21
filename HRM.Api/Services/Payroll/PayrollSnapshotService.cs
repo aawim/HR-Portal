@@ -125,6 +125,29 @@ public sealed class PayrollSnapshotService : IPayrollSnapshotService
                         !db.OvertimePayrollItems.Any(i => i.RequestId == o.RequestId))
             .ToListAsync();
 
+        // 5b. Independent Staff Group OT rate multiplier overrides (effective-dated per OT work date)
+        var staffGroupOtRates = db.Model.FindEntityType(typeof(StaffGroupMember)) != null && overtimeClaims.Count > 0
+            ? await db.StaffGroupMembers.AsNoTracking()
+                .Where(m => m.OrganisationId == organisationId && jobIds.Contains(m.JobId) &&
+                            m.StaffGroup.OvertimeRateMultiplier.HasValue && m.StaffGroup.OvertimeRateMultiplier > 0 &&
+                            m.StaffGroup.EffectiveFrom <= periodEndDt &&
+                            (!m.StaffGroup.EffectiveTo.HasValue || m.StaffGroup.EffectiveTo >= periodStartDt))
+                .Select(m => new
+                {
+                    m.JobId,
+                    m.IndividualId,
+                    m.IsActive,
+                    m.JoinedAtUtc,
+                    m.LeftAtUtc,
+                    m.StaffGroup.EffectiveFrom,
+                    m.StaffGroup.EffectiveTo,
+                    m.StaffGroup.IsDissolved,
+                    m.StaffGroup.DissolvedAtUtc,
+                    Multiplier = m.StaffGroup.OvertimeRateMultiplier!.Value
+                })
+                .ToListAsync()
+            : [];
+
         // 6. Unpaid Leave
         var leaves = await db.Leaves
             .AsNoTracking()
@@ -215,7 +238,8 @@ public sealed class PayrollSnapshotService : IPayrollSnapshotService
                 ));
             }
 
-            // OT claims (Employment Act Sec. 37-38: 1.25x normal working day, 1.50x Friday & official public holiday)
+            // OT claims (Employment Act Sec. 37-38: 1.25x normal working day, 1.50x Friday & official public holiday,
+            // plus any active Independent Staff Group OvertimeRateMultiplier on the OT work date)
             var empOt = new List<InputOvertimeItem>();
             foreach (var ot in overtimeClaims.Where(x => x.JobId == job.JobId))
             {
@@ -223,6 +247,17 @@ public sealed class PayrollSnapshotService : IPayrollSnapshotService
                 bool isHolidayOrFriday = otDate.DayOfWeek == DayOfWeek.Friday ||
                     holidayDates.Any(h => otDate >= h.EffectiveDate.Date && otDate <= h.EffectiveEndDate.Date);
                 decimal appliedMultiplier = isHolidayOrFriday ? holidayOvertimeMultiplier : overtimeMultiplier;
+                var groupMultiplier = staffGroupOtRates
+                    .Where(g => (g.JobId == job.JobId || g.IndividualId == job.IndividualID) &&
+                                g.EffectiveFrom.Date <= otDate &&
+                                (!g.EffectiveTo.HasValue || g.EffectiveTo.Value.Date >= otDate) &&
+                                (!g.IsDissolved || (g.DissolvedAtUtc.HasValue && g.DissolvedAtUtc.Value.Date >= otDate)) &&
+                                (g.IsActive || (g.LeftAtUtc.HasValue && g.LeftAtUtc.Value.Date >= otDate)))
+                    .Select(g => (decimal?)g.Multiplier)
+                    .Max();
+                if (groupMultiplier.HasValue && groupMultiplier.Value > appliedMultiplier)
+                    appliedMultiplier = groupMultiplier.Value;
+
                 decimal hourlyRate = basicSalary > 0 && overtimeHourlyDivisor > 0
                     ? (basicSalary / overtimeHourlyDivisor) * appliedMultiplier
                     : 0m;

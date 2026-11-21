@@ -20,17 +20,19 @@ public static class EffectiveStaffSchedules
         }
         if(db.Model.FindEntityType(typeof(StaffGroupMember))!=null)
         {
+            var fromDate = from.Date;
+            var toDate = to.Date;
             var sgMembers=await db.StaffGroupMembers.AsNoTracking()
                 .Include(m=>m.StaffGroup).ThenInclude(g=>g.WorkTemplate!).ThenInclude(t=>t.WorkTemplateSegments).ThenInclude(s=>s.WorkSegmentType)
                 .Where(m=>m.OrganisationId==job.OrganisationID && m.IndividualId==job.IndividualID && m.IsActive &&
                     m.StaffGroup.IsActive && !m.StaffGroup.IsDissolved && m.StaffGroup.WorkTemplateId.HasValue &&
-                    m.StaffGroup.EffectiveFrom<=to && (!m.StaffGroup.EffectiveTo.HasValue || m.StaffGroup.EffectiveTo>=from))
+                    m.StaffGroup.EffectiveFrom<=toDate && (!m.StaffGroup.EffectiveTo.HasValue || m.StaffGroup.EffectiveTo>=fromDate))
                 .ToListAsync(ct);
             foreach(var m in sgMembers)
             {
                 var g=m.StaffGroup;
-                var first=g.EffectiveFrom.Date<from.Date?from.Date:g.EffectiveFrom.Date;
-                var last=g.EffectiveTo?.Date??to.Date; if(last>to.Date) last=to.Date;
+                var first=g.EffectiveFrom.Date<fromDate?fromDate:g.EffectiveFrom.Date;
+                var last=g.EffectiveTo?.Date??toDate; if(last>toDate) last=toDate;
                 if(last>=first && g.WorkTemplate!=null)
                     result.Add(new(new() {JobWorkTemplateAssignmentID=-100000-g.StaffGroupId,JobID=job.JobId,WorkTemplateID=g.WorkTemplateId!.Value,WorkTemplate=g.WorkTemplate,
                         SchedulePurpose="Official",ScheduleMode=g.ScheduleMode,WorkingDaysMask=g.WorkingDaysMask,EffectiveFrom=first,EffectiveTo=last,IsActive=true},
