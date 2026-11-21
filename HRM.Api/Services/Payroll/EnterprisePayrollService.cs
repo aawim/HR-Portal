@@ -24,6 +24,7 @@ public sealed class EnterprisePayrollService : IEnterprisePayroll
     private readonly IPayrollPaymentService _paymentService;
     private readonly IPayslipService _payslipService;
     private readonly ILogger<EnterprisePayrollService> _logger;
+    private readonly HRM.ActivityLogs.Abstractions.IActivityLogService? _activityLogs;
 
     public EnterprisePayrollService(
         IDbContextFactory<HrmTeContext> factory,
@@ -33,7 +34,8 @@ public sealed class EnterprisePayrollService : IEnterprisePayroll
         IPayrollProcessor processor,
         IPayrollPaymentService paymentService,
         IPayslipService payslipService,
-        ILogger<EnterprisePayrollService> logger)
+        ILogger<EnterprisePayrollService> logger,
+        HRM.ActivityLogs.Abstractions.IActivityLogService? activityLogs = null)
     {
         _factory = factory;
         _access = access;
@@ -43,6 +45,7 @@ public sealed class EnterprisePayrollService : IEnterprisePayroll
         _paymentService = paymentService;
         _payslipService = payslipService;
         _logger = logger;
+        _activityLogs = activityLogs;
     }
 
     private async Task<(int orgId, int userId, int individualId, bool isSuper)> RequireOrgScopeAsync()
@@ -533,6 +536,24 @@ public sealed class EnterprisePayrollService : IEnterprisePayroll
 
         db.PayrollRuns.Add(run);
         await db.SaveChangesAsync();
+
+        if (_activityLogs is not null)
+        {
+            await _activityLogs.RecordAsync(new HRM.ActivityLogs.Models.ActivityLogRequest
+            {
+                Category = HRM.ActivityLogs.Models.ActivityCategory.Payroll,
+                ActivityType = HRM.ActivityLogs.Models.ActivityTypes.PayrollGenerationStarted,
+                Module = "Payroll",
+                Action = "INITIATE",
+                Description = $"Initiated payroll run '{run.Title}' ({run.RunType}).",
+                TargetEntityType = nameof(PayrollRun),
+                TargetEntityId = run.PayrollRunId.ToString(),
+                TargetDisplayName = run.Title,
+                OrganisationId = orgId,
+                RequireGuaranteedDelivery = true
+            });
+        }
+
         return ServiceResult.Ok("Payroll run created.");
     }
 

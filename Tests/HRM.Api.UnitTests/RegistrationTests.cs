@@ -77,6 +77,7 @@ public sealed class RegistrationTests
             typeof(HRM.Api.Controllers.V1.RecruitmentScreeningQueriesController),
             typeof(HRM.Api.Controllers.V1.RecruitmentVacancyQueriesController),
             typeof(HRM.Api.Controllers.V1.SessionTokensController),
+            typeof(HRM.Api.Controllers.V1.ActivityLogsController),
             typeof(HRM.Api.Controllers.V1.TeamController),
             typeof(HRM.Api.Controllers.V1.WorkforceScheduleController)
         };

@@ -307,12 +307,28 @@ public static class BackendServiceRegistration
             services,
             _ => new FallbackAuditDbContextFactory());
 
+        // Enterprise Activity Logging (HRM.ActivityLogs) — TryAdd allows Program.cs AddActivityLogs(...) to take precedence
+        services.AddOptions<HRM.ActivityLogs.Models.ActivityLogOptions>();
+        Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddSingleton<HRM.ActivityLogs.Abstractions.IActivityClock, HRM.ActivityLogs.Abstractions.SystemActivityClock>(services);
+        Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddSingleton<HRM.ActivityLogs.Abstractions.IActivityContextAccessor, HrmActivityContextAccessor>(services);
+        Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddSingleton<HRM.ActivityLogs.Processing.ActivityQueueChannel>(services);
+        Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddSingleton<HRM.ActivityLogs.Abstractions.IActivityLogService, HRM.ActivityLogs.Services.ActivityLogService>(services);
+        Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddSingleton<HRM.ActivityLogs.Abstractions.IActivityLogQueryService, HRM.ActivityLogs.Services.ActivityLogQueryService>(services);
+        Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddSingleton<IDbContextFactory<HRM.ActivityLogs.Persistence.ActivityDbContext>>(
+            services,
+            _ => new FallbackActivityDbContextFactory());
+
         services.AddHrmApiEndpoints();
         services.AddAuthorization();
 
         return services;
     }
 
+    private sealed class FallbackActivityDbContextFactory : IDbContextFactory<HRM.ActivityLogs.Persistence.ActivityDbContext>
+    {
+        public HRM.ActivityLogs.Persistence.ActivityDbContext CreateDbContext()
+            => throw new InvalidOperationException("ActivityDbContext connection string is not configured. Call services.AddActivityLogs(configuration).");
+    }
     private sealed class FallbackAuditDbContextFactory : IDbContextFactory<HRM.AuditLogs.Persistence.AuditDbContext>
     {
         public HRM.AuditLogs.Persistence.AuditDbContext CreateDbContext()

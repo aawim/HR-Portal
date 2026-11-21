@@ -19,19 +19,22 @@ public sealed class AttendanceReconciliationService : IAttendanceReconciliationS
     private readonly IUserAccessService? _access;
     private readonly IOperationLogService? _operationLogs;
     private readonly HRM.AuditLogs.Abstractions.IAuditLogService? _auditLogs;
+    private readonly HRM.ActivityLogs.Abstractions.IActivityLogService? _activityLogs;
 
     public AttendanceReconciliationService(
         IDbContextFactory<HrmTeContext> dbFactory,
         IWorkPlanGenerator? workPlanGenerator = null,
         IUserAccessService? access = null,
         IOperationLogService? operationLogs = null,
-        HRM.AuditLogs.Abstractions.IAuditLogService? auditLogs = null)
+        HRM.AuditLogs.Abstractions.IAuditLogService? auditLogs = null,
+        HRM.ActivityLogs.Abstractions.IActivityLogService? activityLogs = null)
     {
         _dbFactory = dbFactory ?? throw new ArgumentNullException(nameof(dbFactory));
         _workPlanGenerator = workPlanGenerator;
         _access = access;
         _operationLogs = operationLogs;
         _auditLogs = auditLogs;
+        _activityLogs = activityLogs;
     }
 
     public async Task<AttendanceReconciliationResult> ReconcileAsync(
@@ -389,6 +392,22 @@ public sealed class AttendanceReconciliationService : IAttendanceReconciliationS
                 reason: request.Reason,
                 organisationId: newOverride.OrganisationId,
                 cancellationToken: cancellationToken);
+        }
+
+        if (_activityLogs is not null)
+        {
+            await _activityLogs.RecordAsync(new HRM.ActivityLogs.Models.ActivityLogRequest
+            {
+                Category = HRM.ActivityLogs.Models.ActivityCategory.Attendance,
+                ActivityType = HRM.ActivityLogs.Models.ActivityTypes.AttendanceCorrectionApplied,
+                Module = "Attendance",
+                Action = "OVERRIDE",
+                Description = $"Applied attendance manual override ({newOverride.OverrideAction}) for {request.WorkDate:yyyy-MM-dd}.",
+                TargetEntityType = "AttendanceManualOverride",
+                TargetEntityId = newOverride.AttendanceManualOverrideId.ToString(),
+                TargetDisplayName = $"Attendance {request.WorkDate:yyyy-MM-dd}",
+                OrganisationId = newOverride.OrganisationId
+            }, cancellationToken);
         }
 
         return await ReconcileInternalAsync(

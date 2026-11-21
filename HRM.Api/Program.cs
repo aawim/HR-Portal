@@ -14,6 +14,9 @@ using HRM.AuditLogs.Abstractions;
 using HRM.AuditLogs.Extensions;
 using HRM.AuditLogs.Interceptors;
 using HRM.AuditLogs.Persistence;
+using HRM.ActivityLogs.Abstractions;
+using HRM.ActivityLogs.Extensions;
+using HRM.ActivityLogs.Persistence;
 
 
 
@@ -56,6 +59,20 @@ builder.Services.AddAuditLogs(builder.Configuration, opt =>
     opt.ConnectionString = auditLogsConnection;
 });
 
+var configuredActivityLogsConnection = builder.Configuration.GetConnectionString("ActivityLogsConnection");
+if (string.IsNullOrWhiteSpace(configuredActivityLogsConnection))
+{
+    var csb = new Microsoft.Data.SqlClient.SqlConnectionStringBuilder(mainConnection) { InitialCatalog = "HRMActivityLogs" };
+    configuredActivityLogsConnection = csb.ConnectionString;
+}
+var activityLogsConnection = HRM.Helpers.DatabaseConnectionPolicy.Validate(
+    configuredActivityLogsConnection, builder.Environment.IsDevelopment(), "ConnectionStrings:ActivityLogsConnection");
+builder.Services.AddSingleton<IActivityContextAccessor, HrmActivityContextAccessor>();
+builder.Services.AddActivityLogs(builder.Configuration, includeBackgroundWorkers: true, configure: opt =>
+{
+    opt.ConnectionString = activityLogsConnection;
+});
+
 builder.Services.AddDbContextFactory<HrmTeContext>((sp, options) =>
 {
     options.UseSqlServer(mainConnection);
@@ -90,6 +107,7 @@ _ = Task.Run(async () =>
     await HRM.Services.Attendance.Reconciliation.AttendanceReconciliationSchemaBootstrapper.EnsureSchemaAsync(app.Services);
     await HRM.Helpers.OrganisationalAccessScopeResolver.EnsureSchemaAsync(app.Services);
     await AuditSchemaBootstrapper.EnsureSchemaAsync(app.Services);
+    await ActivitySchemaBootstrapper.EnsureSchemaAsync(app.Services);
 });
 app.UseResponseCompression();
 if (builder.Environment.IsDevelopment() && CredentialExposure.IsExposed(builder.Configuration["Authentication:OpenIdConnect:ClientSecret"]))

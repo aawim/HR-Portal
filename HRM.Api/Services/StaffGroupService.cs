@@ -10,7 +10,8 @@ public sealed class StaffGroupService(
     IDbContextFactory<HrmTeContext> factory,
     IUserAccessService access,
     IOperationLogService logs,
-    HRM.AuditLogs.Abstractions.IAuditLogService? auditLogs = null) : IOperations
+    HRM.AuditLogs.Abstractions.IAuditLogService? auditLogs = null,
+    HRM.ActivityLogs.Abstractions.IActivityLogService? activityLogs = null) : IOperations
 {
     private async Task<(int OrgId, int UserId)> RequireHrWriteAsync()
     {
@@ -572,6 +573,22 @@ public sealed class StaffGroupService(
                 OrganisationId = orgId,
                 Description = $"Dissolved Staff Group '{group.Name}' ({activeMembers.Count} active member(s) removed).",
                 Reason = group.DissolveReason
+            });
+        }
+
+        if (activityLogs is not null)
+        {
+            await activityLogs.RecordAsync(new HRM.ActivityLogs.Models.ActivityLogRequest
+            {
+                Category = HRM.ActivityLogs.Models.ActivityCategory.Administration,
+                ActivityType = HRM.ActivityLogs.Models.ActivityTypes.AdministrativeAction,
+                Module = "StaffGroups",
+                Action = "DISSOLVE",
+                Description = $"Dissolved staff group '{group.Name}' ({activeMembers.Count} member(s) reverted).",
+                TargetEntityType = nameof(StaffGroup),
+                TargetEntityId = group.StaffGroupId.ToString(),
+                TargetDisplayName = group.Name,
+                OrganisationId = orgId
             });
         }
     }
