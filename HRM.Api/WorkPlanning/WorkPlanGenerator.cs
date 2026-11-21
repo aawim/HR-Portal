@@ -73,7 +73,7 @@ namespace HRM.WorkPlanning
                 throw new UnauthorizedAccessException("The existing work plan belongs to another staff member or organisation.");
             if (plan?.IsFinalized == true) return await HRM.Helpers.OfficialScheduleAmendments.ApplyAsync(db, MapToDto(plan), cancellationToken);
 
-            var selections = new List<(WorkTemplate Template, TimeOnly? Start, TimeOnly? End, string? Label, int Priority, string Purpose, long? RosterAssignmentId)>();
+            var selections = new List<(WorkTemplate Template, TimeOnly? Start, TimeOnly? End, string? Label, int Priority, string Purpose, long? RosterAssignmentId, DateTime? OccurrenceEnd)>();
             var job = await db.Jobs.AsNoTracking().SingleAsync(j=>j.JobId==jobId && j.OrganisationID==organisationBusinessEntityId, cancellationToken);
             var candidates = await HRM.Helpers.EffectiveStaffSchedules.LoadAsync(db,job,date,date,cancellationToken);
             var attached = HRM.Helpers.EffectiveStaffSchedules.On(candidates,date).Select(c=>c.Assignment).ToList();
@@ -91,21 +91,21 @@ namespace HRM.WorkPlanning
                     item.ScheduleMode=="Rotation" ? slot.StartTime : item.ScheduledStartTime,
                     item.ScheduleMode=="Rotation" ? slot.EndTime : null,
                     item.ScheduleMode=="Rotation" ? slot.Label : null,
-                    0,item.SchedulePurpose,null));
+                    0,item.SchedulePurpose,null,null));
             }
             var rosterDuties = await db.DutyAssignments.AsNoTracking()
                 .Where(x => x.JobId == jobId && x.IndividualId == individualId && x.Status == "Assigned" &&
                     x.DutyOccurrence.Status == "Planned" && x.DutyOccurrence.WorkforceRosterVersion.Status == "Published" &&
                     x.DutyOccurrence.WorkforceRosterVersion.WorkforceRoster.Status == "Published" &&
-                    x.DutyOccurrence.StartAt < date.AddDays(1) && x.DutyOccurrence.EndAt > date &&
+                    x.DutyOccurrence.StartAt >= date && x.DutyOccurrence.StartAt < date.AddDays(1) &&
                     x.DutyOccurrence.DutyType.WorkTemplateId.HasValue)
-                .Select(x => new { x.Id, x.DutyOccurrence.DutyType.WorkTemplateId, x.DutyOccurrence.StartAt })
+                .Select(x => new { x.Id, x.DutyOccurrence.DutyType.WorkTemplateId, x.DutyOccurrence.StartAt, x.DutyOccurrence.EndAt })
                 .ToListAsync(cancellationToken);
             foreach (var duty in rosterDuties)
             {
                 var template = await db.WorkTemplates.AsNoTracking().Include(x => x.WorkTemplateSegments)
                     .SingleOrDefaultAsync(x => x.WorkTemplateId == duty.WorkTemplateId && x.IsActive, cancellationToken);
-                if (template != null) selections.Add((template, TimeOnly.FromDateTime(duty.StartAt), null, null, 100, "Duty", duty.Id));
+                if (template != null) selections.Add((template, TimeOnly.FromDateTime(duty.StartAt), null, null, 100, "Duty", duty.Id, duty.EndAt));
             }
             var hasRecordedAttendance = plan != null && (plan.WorkPlanSegments.Any(s=>s.IsCompleted || s.AttendanceId.HasValue) ||
                 await db.AttendanceLogResolutions.AnyAsync(r=>r.WorkPlanId==plan.WorkPlanId,cancellationToken) ||
@@ -120,11 +120,13 @@ namespace HRM.WorkPlanning
                         var expectedEnd = ResolveAssignmentEnd(date, clock, desired[0].End, desired[0].Template);
                         if (!expectedEnd.HasValue || assignment.EndDateTime == expectedEnd.Value) continue;
                     }
-                    foreach(var snapshot in plan.WorkPlanSegments.Where(s=>s.IsValid && s.SchedulePurpose==assignment.SchedulePurpose &&
-                        assignment.WorkAssignmentSegments.Any(a=>a.IsValid && a.WorkTemplateSegmentId==s.WorkTemplateSegmentId && a.WorkSegmentTypeId==s.WorkSegmentTypeId && a.StartDateTime==s.StartDateTime))) snapshot.IsValid=false;
-                    assignment.IsValid=false;
-                    foreach(var segment in assignment.WorkAssignmentSegments)segment.IsValid=false;
-                    foreach(var owner in assignment.WorkAssignmentOwners)owner.IsValid=false;
+                    InvalidateAssignment(plan, assignment);
+                }
+                foreach (var assignment in plan.WorkAssignments.Where(a => a.IsValid && a.AssignmentSource == WorkAssignmentSource.Roster))
+                {
+                    var desired = selections.Where(s => s.RosterAssignmentId == assignment.SourceReferenceId).ToList();
+                    if (desired.Count == 1 && desired[0].Start.HasValue && assignment.StartDateTime == date.Add(desired[0].Start.Value.ToTimeSpan()) && assignment.EndDateTime == desired[0].OccurrenceEnd) continue;
+                    InvalidateAssignment(plan, assignment);
                 }
             }
             if(selections.Count==0)
@@ -152,7 +154,7 @@ namespace HRM.WorkPlanning
                     x.SchedulePurpose == "Duty" && x.CancellationReason != null && x.CancellationReason.StartsWith(HRM.WorkPlanning.Services.DutyRosterService.MovementMarker))) continue;
                 if (plan.WorkAssignments.Any(x => x.IsValid && x.WorkTemplateId == selection.Template.WorkTemplateId && x.SchedulePurpose == selection.Purpose &&
                     (selection.RosterAssignmentId.HasValue ? x.SourceReferenceId == selection.RosterAssignmentId : !x.SourceReferenceId.HasValue))) continue;
-                var assignment = AddTemplate(plan, selection.Template, selection.Start, selection.End, selection.Label, selection.Priority, state, now, workDate, selection.Purpose);
+                var assignment = AddTemplate(plan, selection.Template, selection.Start, selection.End, selection.Label, selection.Priority, state, now, workDate, selection.Purpose, selection.OccurrenceEnd);
                 if (selection.RosterAssignmentId.HasValue) { assignment.AssignmentSource = WorkAssignmentSource.Roster; assignment.SourceReferenceId = selection.RosterAssignmentId; }
             }
             var ids = plan.WorkAssignments.Where(x => x.IsValid).Select(x => x.WorkTemplateId).Distinct().ToList();
@@ -160,6 +162,15 @@ namespace HRM.WorkPlanning
             await db.SaveChangesAsync(cancellationToken);
             await tx.CommitAsync(cancellationToken);
             return await HRM.Helpers.OfficialScheduleAmendments.ApplyAsync(db, MapToDto(plan), cancellationToken);
+        }
+
+        private static void InvalidateAssignment(WorkPlan plan, WorkAssignment assignment)
+        {
+            foreach (var snapshot in plan.WorkPlanSegments.Where(s => s.IsValid && s.SchedulePurpose == assignment.SchedulePurpose &&
+                assignment.WorkAssignmentSegments.Any(a => a.IsValid && a.WorkTemplateSegmentId == s.WorkTemplateSegmentId && a.WorkSegmentTypeId == s.WorkSegmentTypeId && a.StartDateTime == s.StartDateTime))) snapshot.IsValid = false;
+            assignment.IsValid = false;
+            foreach (var segment in assignment.WorkAssignmentSegments) segment.IsValid = false;
+            foreach (var owner in assignment.WorkAssignmentOwners) owner.IsValid = false;
         }
 
         private static DateTime? ResolveAssignmentEnd(DateTime date, TimeOnly start, TimeOnly? endOverride, WorkTemplate template)
@@ -181,7 +192,7 @@ namespace HRM.WorkPlanning
             return null;
         }
 
-        private static WorkAssignment AddTemplate(WorkPlan plan, WorkTemplate template, TimeOnly? assignedStart, TimeOnly? assignedEnd, string? slotLabel, int priority, int state, DateTime now, DateOnly date, string purpose)
+        private static WorkAssignment AddTemplate(WorkPlan plan, WorkTemplate template, TimeOnly? assignedStart, TimeOnly? assignedEnd, string? slotLabel, int priority, int state, DateTime now, DateOnly date, string purpose, DateTime? occurrenceEnd = null)
         {
             var start = assignedStart ?? template.DefaultStartTime ?? throw new InvalidOperationException($"Template '{template.Name}' has no start time.");
             var sources = template.WorkTemplateSegments.Where(x => x.IsActive).OrderBy(x => x.SequenceNumber).ToList();
@@ -195,8 +206,8 @@ namespace HRM.WorkPlanning
                 GraceMinutes = template.DefaultGraceMinutes, RequiresAttendance = template.RequiresAttendance, RequiresCheckOut = template.RequiresCheckOut,
                 Priority = priority, AssignmentSource = WorkAssignmentSource.Template, IsValid = true, CreatedDate = now };
             var slotStart = date.ToDateTime(start);
-            DateTime? customSlotEnd = null;
-            if (assignedEnd.HasValue)
+            DateTime? customSlotEnd = occurrenceEnd;
+            if (assignedEnd.HasValue && !occurrenceEnd.HasValue)
             {
                 customSlotEnd = date.ToDateTime(assignedEnd.Value);
                 if (customSlotEnd.Value <= slotStart) customSlotEnd = customSlotEnd.Value.AddDays(1);

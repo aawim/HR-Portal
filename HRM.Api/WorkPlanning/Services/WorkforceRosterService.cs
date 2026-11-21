@@ -7,6 +7,14 @@ namespace HRM.WorkPlanning.Services;
 
 public sealed class WorkforceRosterService(IDbContextFactory<HrmTeContext> factory, IDutyAvailabilityService availability, IWorkforceConstraintService constraints) : IWorkforceRosterService
 {
+    private static readonly HRM.WorkPlanning.WorkPlanGenerationGate MutationGate = new();
+    private static Task<IDisposable> EnterMutationAsync(int organisationId, CancellationToken ct) => MutationGate.EnterAsync(organisationId, 0, DateOnly.MinValue, ct);
+    private static async Task LockMutationAsync(HrmTeContext db, int organisationId, CancellationToken ct)
+    {
+        if (!db.Database.IsSqlServer()) return;
+        var resource = $"HRM.WorkforceRoster:{organisationId}";
+        await db.Database.ExecuteSqlInterpolatedAsync($"DECLARE @r int; EXEC @r=sys.sp_getapplock @Resource={resource}, @LockMode='Exclusive', @LockOwner='Transaction', @LockTimeout=5000; IF @r < 0 THROW 51000, 'Roster is busy. Refresh and try again.', 1;", ct);
+    }
     public async Task<WorkforceRosterDraft> CreateDraftAsync(CreateWorkforceRosterRequest request, CancellationToken cancellationToken = default)
     {
         if (request.EndsOn < request.StartsOn) throw new InvalidOperationException("The roster end date cannot precede its start date.");
@@ -21,6 +29,11 @@ public sealed class WorkforceRosterService(IDbContextFactory<HrmTeContext> facto
     public async Task<WorkforceRosterValidation> ValidateAsync(int rosterVersionId, int? organisationId = null, CancellationToken cancellationToken = default)
     {
         await using var db = await factory.CreateDbContextAsync(cancellationToken);
+        return await ValidateCoreAsync(db, rosterVersionId, organisationId, cancellationToken);
+    }
+
+    private async Task<WorkforceRosterValidation> ValidateCoreAsync(HrmTeContext db, int rosterVersionId, int? organisationId, CancellationToken cancellationToken)
+    {
         var version = await db.WorkforceRosterVersions.AsNoTracking().Include(x => x.WorkforceRoster).SingleOrDefaultAsync(x => x.Id == rosterVersionId, cancellationToken) ?? throw new InvalidOperationException("Roster version not found.");
         if (organisationId.HasValue && version.WorkforceRoster.OrganisationId != organisationId.Value) throw new UnauthorizedAccessException("The roster belongs to another organisation.");
         var occurrences = await db.DutyOccurrences.AsNoTracking().Where(x => x.WorkforceRosterVersionId == rosterVersionId).ToListAsync(cancellationToken);
@@ -43,6 +56,15 @@ public sealed class WorkforceRosterService(IDbContextFactory<HrmTeContext> facto
             .Where(x => occurrences.Select(o => o.Id).Contains(x.DutyOccurrenceId) && x.Status == "Assigned")
             .Select(x => new { x.JobId, x.IndividualId, x.DutyOccurrenceId, x.DutyOccurrence.StartAt, x.DutyOccurrence.EndAt })
             .ToListAsync(cancellationToken);
+        var staffIds = assignedDuties.Select(x => x.IndividualId).Distinct().ToList();
+        var publishedDuties = await db.DutyAssignments.AsNoTracking().Where(x => x.Status == "Assigned" && staffIds.Contains(x.IndividualId) &&
+            x.DutyOccurrence.WorkforceRosterVersionId != rosterVersionId && x.DutyOccurrence.Status == "Planned" &&
+            x.DutyOccurrence.WorkforceRosterVersion.Status == "Published" && x.DutyOccurrence.WorkforceRosterVersion.WorkforceRoster.Status == "Published" &&
+            x.DutyOccurrence.WorkforceRosterVersion.WorkforceRoster.OrganisationId == version.WorkforceRoster.OrganisationId)
+            .Select(x => new { x.JobId, x.IndividualId, x.DutyOccurrenceId, x.DutyOccurrence.StartAt, x.DutyOccurrence.EndAt }).ToListAsync(cancellationToken);
+        foreach (var duty in assignedDuties)
+            foreach (var other in publishedDuties.Where(x => x.IndividualId == duty.IndividualId && x.StartAt < duty.EndAt && x.EndAt > duty.StartAt))
+                errors.Add($"Staff member {duty.IndividualId} has overlapping duty occurrences {duty.DutyOccurrenceId} and published duty {other.DutyOccurrenceId}.");
         foreach (var staffDuties in assignedDuties.GroupBy(x => x.IndividualId))
         {
             var ordered = staffDuties.OrderBy(x => x.StartAt).ToList();
@@ -76,35 +98,47 @@ public sealed class WorkforceRosterService(IDbContextFactory<HrmTeContext> facto
     {
         if (request.EndAt <= request.StartAt || request.RequiredStaffCount < 1 || string.IsNullOrWhiteSpace(request.TimeZoneId)) throw new InvalidOperationException("Provide valid duty times, staffing and time zone.");
         await using var db = await factory.CreateDbContextAsync(cancellationToken);
+        using var lease = await EnterMutationAsync(request.OrganisationId, cancellationToken);
+        await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, cancellationToken);
+        await LockMutationAsync(db, request.OrganisationId, cancellationToken);
         var version = await db.WorkforceRosterVersions.Include(x => x.WorkforceRoster).SingleOrDefaultAsync(x => x.Id == request.RosterVersionId, cancellationToken) ?? throw new InvalidOperationException("Roster version not found.");
         if (version.WorkforceRoster.OrganisationId != request.OrganisationId) throw new UnauthorizedAccessException("The roster belongs to another organisation.");
         if (version.Status != "Draft") throw new InvalidOperationException("Only a draft roster can be changed.");
         if (request.StartAt.Date < version.WorkforceRoster.StartsOn.Date || request.EndAt.AddTicks(-1).Date > version.WorkforceRoster.EndsOn.Date) throw new InvalidOperationException("Duty must fall within the roster period.");
         if (!await db.DutyTypes.AnyAsync(x => x.Id == request.DutyTypeId && x.OrganisationId == version.WorkforceRoster.OrganisationId && x.IsActive, cancellationToken)) throw new InvalidOperationException("Select an active duty type in this organisation.");
         var occurrence = new DutyOccurrence { WorkforceRosterVersionId = request.RosterVersionId, DutyTypeId = request.DutyTypeId, StartAt = request.StartAt, EndAt = request.EndAt, RequiredStaffCount = request.RequiredStaffCount, TimeZoneId = request.TimeZoneId.Trim(), LocationName = request.LocationName?.Trim(), SourceKey = request.SourceKey?.Trim(), OperationLogId = request.OperationLogId };
-        db.DutyOccurrences.Add(occurrence); await db.SaveChangesAsync(cancellationToken); return occurrence.Id;
+        db.DutyOccurrences.Add(occurrence); await db.SaveChangesAsync(cancellationToken); await transaction.CommitAsync(cancellationToken); return occurrence.Id;
     }
 
     public async Task<long> AssignAsync(AssignDutyRequest request, CancellationToken cancellationToken = default)
     {
         await using var db = await factory.CreateDbContextAsync(cancellationToken);
+        using var lease = await EnterMutationAsync(request.OrganisationId, cancellationToken);
+        await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, cancellationToken);
+        await LockMutationAsync(db, request.OrganisationId, cancellationToken);
         var occurrence = await db.DutyOccurrences.Include(x => x.WorkforceRosterVersion).ThenInclude(x => x.WorkforceRoster).SingleOrDefaultAsync(x => x.Id == request.DutyOccurrenceId, cancellationToken) ?? throw new InvalidOperationException("Duty occurrence not found.");
         if (occurrence.WorkforceRosterVersion.WorkforceRoster.OrganisationId != request.OrganisationId) throw new UnauthorizedAccessException("The duty belongs to another organisation.");
         if (occurrence.WorkforceRosterVersion.Status != "Draft") throw new InvalidOperationException("Only a draft roster can be changed.");
         if (!await db.Jobs.AnyAsync(x => x.JobId == request.JobId && x.IndividualID == request.IndividualId && x.OrganisationID == occurrence.WorkforceRosterVersion.WorkforceRoster.OrganisationId, cancellationToken)) throw new InvalidOperationException("The selected job does not belong to the staff member in this organisation.");
         if (await db.DutyAssignments.AnyAsync(x => x.DutyOccurrenceId == request.DutyOccurrenceId && x.JobId == request.JobId, cancellationToken)) throw new InvalidOperationException("This staff member is already assigned to the duty.");
         var assignment = new DutyAssignment { DutyOccurrenceId = request.DutyOccurrenceId, JobId = request.JobId, IndividualId = request.IndividualId, AssignedByUserId = request.ActorUserId, AssignedAtUtc = DateTime.UtcNow, AssignmentReason = request.Reason?.Trim(), OperationLogId = request.OperationLogId };
-        db.DutyAssignments.Add(assignment); await db.SaveChangesAsync(cancellationToken); return assignment.Id;
+        db.DutyAssignments.Add(assignment); await db.SaveChangesAsync(cancellationToken); await transaction.CommitAsync(cancellationToken); return assignment.Id;
     }
 
     public async Task PublishAsync(int rosterVersionId, int actorUserId, int operationLogId, CancellationToken cancellationToken = default)
     {
-        var validation = await ValidateAsync(rosterVersionId, cancellationToken: cancellationToken); if (!validation.IsValid) throw new InvalidOperationException(string.Join(" ", validation.Errors));
         await using var db = await factory.CreateDbContextAsync(cancellationToken);
+        var organisationId = await db.WorkforceRosterVersions.Where(x => x.Id == rosterVersionId).Select(x => x.WorkforceRoster.OrganisationId).SingleAsync(cancellationToken);
+        using var lease = await EnterMutationAsync(organisationId, cancellationToken);
+        await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, cancellationToken);
+        await LockMutationAsync(db, organisationId, cancellationToken);
+        var validation = await ValidateCoreAsync(db, rosterVersionId, organisationId, cancellationToken);
+        if (!validation.IsValid) throw new InvalidOperationException(string.Join(" ", validation.Errors));
         var version = await db.WorkforceRosterVersions.Include(x => x.WorkforceRoster).SingleAsync(x => x.Id == rosterVersionId, cancellationToken);
         if (version.Status != "Draft") throw new InvalidOperationException("Only a draft roster version can be published.");
         version.Status = "Published"; version.PublishedAtUtc = DateTime.UtcNow; version.PublishedByUserId = actorUserId; version.OperationLogId = operationLogId;
         version.WorkforceRoster.Status = "Published"; version.WorkforceRoster.OperationLogId = operationLogId; version.WorkforceRoster.Version++;
         await db.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
     }
 }

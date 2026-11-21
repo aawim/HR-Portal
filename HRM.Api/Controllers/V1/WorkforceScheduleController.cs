@@ -118,6 +118,12 @@ public sealed class WorkforceScheduleController(IWorkforceRosterService rosters,
     [HttpGet("sessions")]
     public async Task<ActionResult<IReadOnlyList<WorkforceSessionReviewRow>>> GetSessions(CancellationToken cancellationToken)
         => Ok(await reviews.GetSessionsAsync(await WorkPlanningAccess.RequireOrganisationAsync(access), cancellationToken));
+    [HttpGet("sessions/page")]
+    public async Task<ActionResult<WorkforceReviewPage<WorkforceSessionReviewRow>>> GetSessionsPage([FromQuery] WorkforceReviewQuery query, CancellationToken cancellationToken)
+        => Ok(await reviews.GetSessionsPageAsync(await WorkPlanningAccess.RequireOrganisationAsync(access), query, cancellationToken));
+    [HttpGet("ledger/page")]
+    public async Task<ActionResult<WorkforceReviewPage<WorkforceLedgerReviewRow>>> GetLedgerPage([FromQuery] WorkforceReviewQuery query, CancellationToken cancellationToken)
+        => Ok(await reviews.GetLedgerPageAsync(await WorkPlanningAccess.RequireOrganisationAsync(access), query, cancellationToken));
 
     [HttpGet("ledger")]
     public async Task<ActionResult<IReadOnlyList<WorkforceLedgerReviewRow>>> GetLedger(CancellationToken cancellationToken)

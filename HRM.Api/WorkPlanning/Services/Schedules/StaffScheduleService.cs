@@ -36,6 +36,7 @@ namespace HRM.WorkPlanning.Services.Schedules
             await _access.RequireContextAsync();
             var org = await _access.GetCurrentOrganisationIdAsync();
             if (!await _access.HasOrganisationAccessAsync(org)) return StaffScheduleResult.Failure("Organisation access denied.");
+            await HRM.Helpers.StaffDataAccess.RequireIndividualAsync(db, _access, individualId);
             var today = DateTime.UtcNow.AddHours(5).Date;
 
             var activeJob = await db.Jobs
@@ -45,7 +46,8 @@ namespace HRM.WorkPlanning.Services.Schedules
                     x.OrganisationID == org &&
                     x.JobStateId ==
                         SharedConfig.JobStates.APPROVED &&
-                    x.TerminatedDate == null)
+                    x.JoinedDate <= today &&
+                    (!x.TerminatedDate.HasValue || x.TerminatedDate > today))
                 .OrderByDescending(x =>
                     x.JoinedDate)
                 .Select(x => new
@@ -71,10 +73,10 @@ namespace HRM.WorkPlanning.Services.Schedules
                     PositionName =
                         x.JobPositions
                             .Where(position =>
-                                position.FromDate <= today &&
+                                position.JobPositionStateId == SharedConfig.JobPositionStates.APPROVED && position.FromDate <= today &&
                                 (
                                     position.ToDate == null ||
-                                    position.ToDate >= today
+                                    position.ToDate > today
                                 ))
                             .OrderByDescending(position =>
                                 position.FromDate)
