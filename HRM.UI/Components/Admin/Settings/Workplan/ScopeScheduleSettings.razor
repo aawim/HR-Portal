@@ -45,9 +45,39 @@
                 @if(model.ScheduleMode=="Weekly") {<div class="flex flex-wrap gap-3">@foreach(var day in Enum.GetValues<DayOfWeek>()){var bit=1<<(int)day;<label><input type="checkbox" checked="@((model.WorkingDaysMask&bit)!=0)" @onchange="e=>ToggleDay(bit,e.Value is true)" /> @day</label>}</div>}
                 @if(model.ScheduleMode=="Rotation")
                 {
-                    <label class="block">Cycle day 1<InputDate @bind-Value="model.RotationAnchorDate" class="mt-1 block rounded border bg-transparent p-2" /></label>
-                    <div class="space-y-2">@for(var i=0;i<rotation.Count;i++){var index=i;<label class="flex flex-wrap items-center gap-2">Day @(index+1)<select @bind="rotation[index]" class="rounded border bg-transparent p-2"><option value="0">Rest day</option>@foreach(var t in data.Templates.Where(t=>t.IsActive)){<option value="@t.Id">@t.Name</option>}</select><button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" @onclick="()=>rotation.RemoveAt(index)">Remove day</button></label>}</div>
-                    <button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@(rotation.Count>=90)" @onclick="()=>rotation.Add(0)">Add cycle day</button>
+                    <div class="rounded-lg border border-slate-200 bg-slate-50/70 p-3 space-y-3">
+                        <div class="flex flex-wrap items-end justify-between gap-2">
+                            <label class="block text-xs font-medium text-slate-700">Cycle day 1<InputDate @bind-Value="model.RotationAnchorDate" class="mt-1 block rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm" /></label>
+                            <div class="flex flex-wrap gap-2">
+                                <button type="button" class="inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 transition-colors" @onclick="ApplyWeeklyPreset">Weekly (Sun–Sat)</button>
+                                <button type="button" class="inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-100 border border-slate-300 disabled:opacity-50 transition-colors" disabled="@(rotation.Count>=90)" @onclick="AddCycleDay">+ Add cycle day</button>
+                            </div>
+                        </div>
+                        <p class="text-xs text-slate-500">Assign a shift template per cycle day (or Rest day) and optionally set custom shift times/labels (e.g. Sun Morning 10:00–12:00, Tue Evening 14:00–16:00).</p>
+                        <div class="space-y-2">
+                            @for(var i=0;i<rotation.Count;i++)
+                            {
+                                var index=i;
+                                var slot=rotation[index];
+                                var dayLabel=model.RotationAnchorDate.HasValue?model.RotationAnchorDate.Value.AddDays(index).ToString("ddd"):$"D{index+1}";
+                                <div class="rounded-lg border border-slate-200 bg-white p-2.5 space-y-2">
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        <span class="inline-flex min-w-[5.25rem] items-center justify-center rounded-md bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700">Day @(index+1) · @dayLabel</span>
+                                        <select @bind="slot.TemplateId" class="flex-1 min-w-[11rem] rounded-md border border-slate-300 bg-white px-2 py-1.5 text-xs"><option value="0">Rest day (Off)</option>@foreach(var t in data.Templates.Where(t=>t.IsActive)){<option value="@t.Id">@t.Name</option>}</select>
+                                        <button type="button" class="inline-flex items-center justify-center rounded-md px-2.5 py-1.5 text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 transition-colors" disabled="@(rotation.Count<=1)" @onclick="()=>rotation.RemoveAt(index)">Remove</button>
+                                    </div>
+                                    @if(slot.TemplateId>0)
+                                    {
+                                        <div class="grid grid-cols-1 gap-2 sm:grid-cols-3 pt-1 border-t border-slate-100">
+                                            <label class="text-[11px] font-medium text-slate-600">Shift label<input type="text" maxlength="40" placeholder="e.g. Morning, Evening" class="mt-0.5 w-full rounded-md border border-slate-300 px-2 py-1 text-xs" @bind="slot.Label" /></label>
+                                            <label class="text-[11px] font-medium text-slate-600">Start override<input type="time" class="mt-0.5 w-full rounded-md border border-slate-300 px-2 py-1 text-xs" value="@slot.StartText" @onchange="e=>slot.StartText=e.Value?.ToString()??string.Empty" /></label>
+                                            <label class="text-[11px] font-medium text-slate-600">End override<input type="time" class="mt-0.5 w-full rounded-md border border-slate-300 px-2 py-1 text-xs" value="@slot.EndText" @onchange="e=>slot.EndText=e.Value?.ToString()??string.Empty" /></label>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </div>
                 }
                 <p class="text-xs text-slate-500">Hours and clock events come from the template. Duty needs default official hours for every affected staff member and duty date. Edits apply from the selected date; earlier settings remain in history. Existing punches and finalized plans are preserved.</p>
                 <div class="flex flex-wrap gap-2"><button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" @onclick="SaveAsync">Save assignment</button><button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" @onclick="()=>model=null">Close</button></div>
@@ -112,22 +142,51 @@
         if(filterStructure.HasValue && !FilteredStructures.Any(s=>s.Id==filterStructure)) filterStructure=null;
         if(model?.OrganisationStructureId is int id && !FilteredStructures.Any(s=>s.Id==id)) model.OrganisationStructureId=null;
     }
+    private sealed class EditableRotationSlot
+    {
+        public int TemplateId { get; set; }
+        public string StartText { get; set; } = string.Empty;
+        public string EndText { get; set; } = string.Empty;
+        public string Label { get; set; } = string.Empty;
+
+        public HRM.Helpers.RotationSlot ToModel() => new(
+            TemplateId,
+            TemplateId > 0 && TimeOnly.TryParse(StartText, out var s) ? s : null,
+            TemplateId > 0 && TimeOnly.TryParse(EndText, out var e) ? e : null,
+            TemplateId > 0 && !string.IsNullOrWhiteSpace(Label) ? Label.Trim() : null);
+
+        public static EditableRotationSlot FromModel(HRM.Helpers.RotationSlot slot) => new()
+        {
+            TemplateId = slot.TemplateId,
+            StartText = slot.StartTime?.ToString("HH:mm") ?? string.Empty,
+            EndText = slot.EndTime?.ToString("HH:mm") ?? string.Empty,
+            Label = slot.Label ?? string.Empty
+        };
+    }
+
     private string? error;
     private bool busy;
-    private List<int> rotation=[0];
+    private List<EditableRotationSlot> rotation=[new()];
     private DateTime lastDay;
     private static DateTime Today=>DateTime.UtcNow.AddHours(5).Date;
+    private void AddCycleDay(){if(rotation.Count<90)rotation.Add(new EditableRotationSlot());}
+    private void ApplyWeeklyPreset()
+    {
+        if(model!=null) model.RotationAnchorDate=HRM.Helpers.SchedulePattern.AlignToSunday(model.EffectiveFrom==default?Today:model.EffectiveFrom);
+        while(rotation.Count<7)rotation.Add(new EditableRotationSlot());
+        if(rotation.Count>7)rotation=rotation.Take(7).ToList();
+    }
     private IEnumerable<HRM.DTOs.Contracts.ScopeScheduleAssignmentDto> Rows=>data?.Assignments.Where(a=>statusFilter=="All" || statusFilter=="Disabled"&&!a.IsActive || statusFilter=="Ended"&&a.IsActive&&a.EffectiveTo<Today || statusFilter=="Enabled"&&a.IsActive&&(!a.EffectiveTo.HasValue||a.EffectiveTo>=Today)).Where(a=>scope=="Group"?a.GroupId.HasValue&&(!filterGroup.HasValue||a.GroupId==filterGroup):scope=="Structure"?a.OrganisationStructureId.HasValue&&(!filterStructureType.HasValue||FilteredStructures.Any(s=>s.Id==a.OrganisationStructureId))&&(!filterStructure.HasValue||a.OrganisationStructureId==filterStructure):!a.GroupId.HasValue&&!a.OrganisationStructureId.HasValue)??[];
     protected override void OnInitialized(){var query=Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(new Uri(Navigation.Uri).Query);if(query.TryGetValue("scope",out var value)&&value.ToString() is "Group" or "Structure")scope=value.ToString();if(query.TryGetValue("groupId",out var group)&&int.TryParse(group,out var id))filterGroup=id;if(query.TryGetValue("structureId",out var structure)&&int.TryParse(structure,out var structureId))filterStructure=structureId;}
     protected override async Task OnParametersSetAsync(){var key=$"{OrganisationId}:{OrganisationOnly}";if(loadedKey==key)return;loadedKey=key;model=null;ending=null;data=null;if(OrganisationOnly){scope="Organisation";filterGroup=null;filterStructure=null;filterStructureType=null;}await LoadAsync();}
     private async Task LoadAsync(){try{error=null;data=await Settings.LoadAsync(OrganisationId);}catch(Exception ex){Logger.LogError(ex,"Loading scope schedules");error=ex is UnauthorizedAccessException?ex.Message:"Schedule assignments could not be loaded. Please contact HR.";}}
     private void ChangeScope(string value){scope=value;model=null;ending=null;error=null;}
-    private void New(){model=new(){EffectiveFrom=Today,GroupId=scope=="Group"?filterGroup:null,OrganisationStructureId=scope=="Structure"?filterStructure:null};rotation=[0];ending=null;error=null;}
-    private void Edit(HRM.DTOs.Contracts.ScopeScheduleAssignmentDto value){if(value.OrganisationStructureId.HasValue && filterStructureType.HasValue)filterStructureType=data?.Structures.FirstOrDefault(s=>s.Id==value.OrganisationStructureId)?.TypeId;model=System.Text.Json.JsonSerializer.Deserialize<HRM.DTOs.Contracts.ScopeScheduleAssignmentDto>(System.Text.Json.JsonSerializer.Serialize(value));if(model!=null&&model.EffectiveFrom<Today)model.EffectiveFrom=Today;rotation=HRM.Helpers.SchedulePattern.Parse(value.RotationTemplateIds);if(rotation.Count==0)rotation=[0];ending=null;}
+    private void New(){model=new(){EffectiveFrom=Today,GroupId=scope=="Group"?filterGroup:null,OrganisationStructureId=scope=="Structure"?filterStructure:null};rotation=[new()];ending=null;error=null;}
+    private void Edit(HRM.DTOs.Contracts.ScopeScheduleAssignmentDto value){if(value.OrganisationStructureId.HasValue && filterStructureType.HasValue)filterStructureType=data?.Structures.FirstOrDefault(s=>s.Id==value.OrganisationStructureId)?.TypeId;model=System.Text.Json.JsonSerializer.Deserialize<HRM.DTOs.Contracts.ScopeScheduleAssignmentDto>(System.Text.Json.JsonSerializer.Serialize(value));if(model!=null&&model.EffectiveFrom<Today)model.EffectiveFrom=Today;rotation=HRM.Helpers.SchedulePattern.ParseSlots(value.RotationTemplateIds).Select(EditableRotationSlot.FromModel).ToList();if(rotation.Count==0)rotation=[new()];ending=null;}
     private void BeginEnd(HRM.DTOs.Contracts.ScopeScheduleAssignmentDto value){ending=value;lastDay=Today;model=null;}
     private void ToggleDay(int bit,bool value){if(model!=null)model.WorkingDaysMask=value?model.WorkingDaysMask|bit:model.WorkingDaysMask&~bit;}
     private string Target(HRM.DTOs.Contracts.ScopeScheduleAssignmentDto a)=>a.GroupId.HasValue?data!.Groups.FirstOrDefault(g=>g.Id==a.GroupId)?.Name??"Group":a.OrganisationStructureId.HasValue?data!.Structures.FirstOrDefault(s=>s.Id==a.OrganisationStructureId)?.Name??"Structure":"Current organisation";
-    private async Task SaveAsync(){if(model==null||busy)return;if(scope=="Group"&&!model.GroupId.HasValue||scope=="Structure"&&!model.OrganisationStructureId.HasValue){error="Select the target group or structure.";return;}model.RotationTemplateIds=model.ScheduleMode=="Rotation"?System.Text.Json.JsonSerializer.Serialize(rotation):null;await Act(async()=>{await Settings.SaveAsync(model,OrganisationId);model=null;},"Schedule assignment saved.");}
+    private async Task SaveAsync(){if(model==null||busy)return;if(scope=="Group"&&!model.GroupId.HasValue||scope=="Structure"&&!model.OrganisationStructureId.HasValue){error="Select the target group or structure.";return;}model.RotationTemplateIds=model.ScheduleMode=="Rotation"?HRM.Helpers.SchedulePattern.SerializeSlots(rotation.Select(x=>x.ToModel())):null;await Act(async()=>{await Settings.SaveAsync(model,OrganisationId);model=null;},"Schedule assignment saved.");}
     private async Task ToggleEnabledAsync(HRM.DTOs.Contracts.ScopeScheduleAssignmentDto row){if(busy)return;await Act(()=>Settings.SetEnabledAsync(row.Id,row.Version,!row.IsActive,OrganisationId),row.IsActive?"Schedule disabled.":"Schedule enabled.");}
     private async Task EndAsync(){if(ending==null||busy)return;await Act(async()=>{await Settings.EndAsync(ending.Id,ending.Version,lastDay,OrganisationId);ending=null;},"Schedule assignment ended.");}
     private async Task Act(Func<Task> action,string success){busy=true;error=null;try{await action();await LoadAsync();Toasts.Success(success);}catch(Exception ex){Logger.LogError(ex,"Saving scope schedules");error=ex is InvalidOperationException or UnauthorizedAccessException?ex.Message:"The change could not be saved. Refresh and try again.";}finally{busy=false;}}

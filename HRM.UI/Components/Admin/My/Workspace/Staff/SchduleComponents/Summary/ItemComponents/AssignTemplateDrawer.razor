@@ -32,14 +32,51 @@
                             }
                             @if (scheduleMode == "Rotation")
                             {
-                                <label class="block text-sm">Cycle day 1 date<InputDate class="mt-1 w-full rounded-lg border p-2.5" @bind-Value="anchor" /></label>
-                                <p class="text-xs text-slate-500">The cycle repeats from this date, including Fridays and Saturdays. Add shifts or rest days in order.</p>
-                                @for (var n = 0; n < rotation.Count; n++)
-                                {
-                                    var index = n;
-                                    <div class="flex items-center gap-2"><label class="flex-1 text-sm">Day @(index + 1)<select class="ml-2 rounded-lg border p-2" @bind="rotation[index]"><option value="0">Rest day</option>@foreach (var item in templates) { <option value="@item.WorkTemplateId">@item.Name · @item.DefaultStartTime?.ToString("HH:mm")–@item.DefaultEndTime?.ToString("HH:mm")</option> }</select></label><button type="button" class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" @onclick="() => rotation.RemoveAt(index)" aria-label="Remove cycle day">Remove</button></div>
-                                }
-                                <button type="button" class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@(rotation.Count >= 90)" @onclick="() => rotation.Add(0)">Add cycle day</button>
+                                <div class="rounded-lg border border-slate-200 bg-slate-50/70 p-3 space-y-3">
+                                    <div class="flex flex-wrap items-end justify-between gap-2">
+                                        <label class="block flex-1 min-w-[10rem] text-xs font-medium text-slate-700">Cycle day 1 date<InputDate class="mt-1 w-full rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm" @bind-Value="anchor" /></label>
+                                        <div class="flex flex-wrap gap-2">
+                                            <button type="button" class="inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 transition-colors" @onclick="ApplyWeeklyPreset">Weekly (Sun–Sat)</button>
+                                            <button type="button" class="inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-100 border border-slate-300 disabled:opacity-50 transition-colors" disabled="@(rotation.Count >= 90)" @onclick="AddCycleDay">+ Add cycle day</button>
+                                        </div>
+                                    </div>
+                                    <p class="text-xs text-slate-500">Assign a shift template to each cycle day (or Rest day). Optionally set a custom label and start/end time per day (e.g. Sun Morning 10:00–12:00, Tue Evening 14:00–16:00).</p>
+                                    <div class="space-y-2">
+                                        @for (var n = 0; n < rotation.Count; n++)
+                                        {
+                                            var index = n;
+                                            var ov = SlotOverride(index);
+                                            var dayName = anchor != default ? anchor.AddDays(index).ToString("ddd") : $"D{index + 1}";
+                                            <div class="rounded-lg border border-slate-200 bg-white p-2.5 space-y-2">
+                                                <div class="flex flex-wrap items-center gap-2">
+                                                    <span class="inline-flex min-w-[5.25rem] items-center justify-center rounded-md bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700">Day @(index + 1) · @dayName</span>
+                                                    <select class="flex-1 min-w-[11rem] rounded-md border border-slate-300 bg-white px-2 py-1.5 text-xs" @bind="rotation[index]">
+                                                        <option value="0">Rest day (Off)</option>
+                                                        @foreach (var item in templates)
+                                                        {
+                                                            <option value="@item.WorkTemplateId">@item.Name · @item.DefaultStartTime?.ToString("HH:mm")–@item.DefaultEndTime?.ToString("HH:mm")</option>
+                                                        }
+                                                    </select>
+                                                    <button type="button" class="inline-flex items-center justify-center rounded-md px-2.5 py-1.5 text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 transition-colors" disabled="@(rotation.Count <= 1)" @onclick="() => RemoveCycleDay(index)" aria-label="Remove cycle day">Remove</button>
+                                                </div>
+                                                @if (rotation[index] > 0)
+                                                {
+                                                    <div class="grid grid-cols-1 gap-2 sm:grid-cols-3 pt-1 border-t border-slate-100">
+                                                        <label class="text-[11px] font-medium text-slate-600">Shift label (optional)
+                                                            <input type="text" maxlength="40" placeholder="e.g. Morning, Evening" class="mt-0.5 w-full rounded-md border border-slate-300 px-2 py-1 text-xs" @bind="ov.Label" />
+                                                        </label>
+                                                        <label class="text-[11px] font-medium text-slate-600">Start override
+                                                            <input type="time" class="mt-0.5 w-full rounded-md border border-slate-300 px-2 py-1 text-xs" value="@ov.StartText" @onchange="e => ov.StartText = e.Value?.ToString() ?? string.Empty" />
+                                                        </label>
+                                                        <label class="text-[11px] font-medium text-slate-600">End override
+                                                            <input type="time" class="mt-0.5 w-full rounded-md border border-slate-300 px-2 py-1 text-xs" value="@ov.EndText" @onchange="e => ov.EndText = e.Value?.ToString() ?? string.Empty" />
+                                                        </label>
+                                                    </div>
+                                                }
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
                             }
                             else
                             {
@@ -70,6 +107,29 @@
                         }
                         <p class="text-sm">@Dates</p>
                         <p class="text-sm">@(scheduleMode == "Rotation" ? $"Repeats every {rotation.Count} days from {anchor:dd MMM yyyy}" : scheduleMode == "Weekly" ? "Attendance follows the selected weekdays" : SchedulePurpose == "Duty" ? "Every day within the assigned dates" : "Friday and Saturday are weekends")</p>
+                        @if (scheduleMode == "Rotation" && rotation.Count > 0 && anchor != default && from != default)
+                        {
+                            <div class="pt-2 border-t border-slate-100">
+                                <p class="text-xs font-semibold text-slate-700 mb-1.5">Upcoming 7-day preview</p>
+                                <div class="flex flex-wrap gap-1.5">
+                                    @for (var d = 0; d < 7; d++)
+                                    {
+                                        var previewDay = from.Date.AddDays(d);
+                                        var offset = (previewDay - anchor.Date).Days;
+                                        var idx = ((offset % rotation.Count) + rotation.Count) % rotation.Count;
+                                        var slotTplId = rotation[idx];
+                                        var ov = idx < rotationOverrides.Count ? rotationOverrides[idx] : null;
+                                        var tpl = slotTplId > 0 ? templates.FirstOrDefault(x => x.WorkTemplateId == slotTplId) : null;
+                                        var startTxt = !string.IsNullOrWhiteSpace(ov?.StartText) ? ov.StartText : tpl?.DefaultStartTime?.ToString("HH:mm");
+                                        var endTxt = !string.IsNullOrWhiteSpace(ov?.EndText) ? ov.EndText : tpl?.DefaultEndTime?.ToString("HH:mm");
+                                        var titleTxt = !string.IsNullOrWhiteSpace(ov?.Label) ? ov.Label : tpl?.Name;
+                                        <span class="inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] @(slotTplId > 0 ? "border-blue-200 bg-blue-50 text-blue-800" : "border-slate-200 bg-slate-50 text-slate-500")">
+                                            <strong>@previewDay.ToString("ddd dd")</strong>: @(slotTplId > 0 ? $"{titleTxt} ({startTxt}–{endTxt})" : "Off")
+                                        </span>
+                                    }
+                                </div>
+                            </div>
+                        }
                         @if (SchedulePurpose == "Duty" && OfficialSchedule != null)
                         {
                             <p class="text-xs text-slate-500">Official hours: @OfficialSchedule.DefaultStartTime?.ToString("HH:mm")–@OfficialSchedule.DefaultEndTime?.ToString("HH:mm").</p>
@@ -101,6 +161,26 @@
     [Parameter] public CurrentWorkTemplateAssignmentDto? CurrentAssignment { get; set; }
     [Parameter] public CurrentWorkTemplateAssignmentDto? OfficialSchedule { get; set; }
     [Parameter] public EventCallback OnSaved { get; set; }
+    private sealed class EditableRotationOverride
+    {
+        public string StartText { get; set; } = string.Empty;
+        public string EndText { get; set; } = string.Empty;
+        public string Label { get; set; } = string.Empty;
+
+        public HRM.Helpers.RotationSlot ToModel(int templateId) => new(
+            templateId,
+            templateId > 0 && TimeOnly.TryParse(StartText, out var s) ? s : null,
+            templateId > 0 && TimeOnly.TryParse(EndText, out var e) ? e : null,
+            templateId > 0 && !string.IsNullOrWhiteSpace(Label) ? Label.Trim() : null);
+
+        public static EditableRotationOverride FromModel(HRM.Helpers.RotationSlot slot) => new()
+        {
+            StartText = slot.StartTime?.ToString("HH:mm") ?? string.Empty,
+            EndText = slot.EndTime?.ToString("HH:mm") ?? string.Empty,
+            Label = slot.Label ?? string.Empty
+        };
+    }
+
     private List<WorkTemplateLookupDto> templates = [];
     private bool wasOpen, saving;
     private string? error;
@@ -110,10 +190,40 @@
     private string scheduleMode = "Standard";
     private bool[] weekdays = [true, true, true, true, true, false, false];
     private List<int> rotation = [0];
+    private List<EditableRotationOverride> rotationOverrides = [new()];
     private DateTime anchor = DateTime.UtcNow.AddHours(5).Date;
     private WorkTemplateLookupDto? Selected => templates.FirstOrDefault(x => x.WorkTemplateId == templateId);
     private bool CanSave => !saving && from != default && (period != "DateRange" || to >= from) &&
         (scheduleMode == "Rotation" ? rotation.Any(x => x > 0) && anchor != default : Selected != null && (scheduleMode != "Weekly" || weekdays.Any(x => x)));
+    private EditableRotationOverride SlotOverride(int index)
+    {
+        while (rotationOverrides.Count <= index) rotationOverrides.Add(new EditableRotationOverride());
+        return rotationOverrides[index];
+    }
+    private void AddCycleDay()
+    {
+        if (rotation.Count < 90)
+        {
+            rotation.Add(0);
+            rotationOverrides.Add(new EditableRotationOverride());
+        }
+    }
+    private void RemoveCycleDay(int index)
+    {
+        if (rotation.Count <= 1) return;
+        rotation.RemoveAt(index);
+        if (index < rotationOverrides.Count) rotationOverrides.RemoveAt(index);
+    }
+    private void ApplyWeeklyPreset()
+    {
+        anchor = HRM.Helpers.SchedulePattern.AlignToSunday(from == default ? DateTime.UtcNow.AddHours(5).Date : from);
+        while (rotation.Count < 7) { rotation.Add(0); rotationOverrides.Add(new EditableRotationOverride()); }
+        if (rotation.Count > 7)
+        {
+            rotation = rotation.Take(7).ToList();
+            rotationOverrides = rotationOverrides.Take(7).ToList();
+        }
+    }
     private string Hours => scheduleMode == "Rotation" ? "Hours follow each cycle template" : $"{Selected?.DefaultStartTime:HH:mm}–{Selected?.DefaultEndTime:HH:mm}";
     private string Dates => period == "OneDay" ? from.ToString("dd MMM yyyy") : period == "Ongoing" ? $"From {from:dd MMM yyyy}, ongoing" : $"{from:dd MMM yyyy}–{to:dd MMM yyyy}";
     private static string Minutes(int n) => $"{n / 60}h {n % 60:00}m";
@@ -153,8 +263,10 @@
             scheduleMode = CurrentAssignment?.ScheduleMode ?? "Standard";
             anchor = CurrentAssignment?.RotationAnchorDate ?? from;
             weekdays = Enumerable.Range(0, 7).Select(n => ((CurrentAssignment?.WorkingDaysMask ?? 31) & (1 << n)) != 0).ToArray();
-            rotation = HRM.Helpers.SchedulePattern.Parse(CurrentAssignment?.RotationTemplateIds);
-            if (rotation.Count == 0) rotation.Add(0);
+            var parsedSlots = HRM.Helpers.SchedulePattern.ParseSlots(CurrentAssignment?.RotationTemplateIds);
+            rotation = parsedSlots.Select(x => x.TemplateId).ToList();
+            rotationOverrides = parsedSlots.Select(EditableRotationOverride.FromModel).ToList();
+            if (rotation.Count == 0) { rotation.Add(0); rotationOverrides.Add(new EditableRotationOverride()); }
             try { templates = await AssignmentService.SearchTemplatesAsync(OrganisationBusinessEntityId, null); }
             catch { error = "Templates could not be loaded. Close and try again."; templates = []; }
         }
@@ -166,10 +278,15 @@
         saving = true; error = null;
         try
         {
+            var rotationModels = scheduleMode == "Rotation"
+                ? rotation.Select((tplId, idx) => (idx < rotationOverrides.Count ? rotationOverrides[idx] : new EditableRotationOverride()).ToModel(tplId)).ToList()
+                : [];
             var result = await AssignmentService.AssignAsync(new() { JobId = JobId, IndividualId = StaffId, OrganisationBusinessEntityId = OrganisationBusinessEntityId,
-                    WorkTemplateId = scheduleMode == "Rotation" ? rotation.First(x => x > 0) : templateId, SchedulePurpose = SchedulePurpose,
+                    WorkTemplateId = scheduleMode == "Rotation" ? rotationModels.First(x => x.TemplateId > 0).TemplateId : templateId, SchedulePurpose = SchedulePurpose,
                     ScheduleMode = scheduleMode, WorkingDaysMask = scheduleMode == "Weekly" ? Enumerable.Range(0, 7).Where(n => weekdays[n]).Sum(n => 1 << n) : 31,
-                    RotationAnchorDate = anchor, RotationTemplateIds = rotation.ToList(),
+                    RotationAnchorDate = anchor,
+                    RotationTemplateIds = rotation.ToList(),
+                    RotationPatternJson = scheduleMode == "Rotation" ? HRM.Helpers.SchedulePattern.SerializeSlots(rotationModels) : null,
                     EffectiveFrom = from, EffectiveTo = period == "OneDay" ? from : period == "DateRange" ? to : null });
             if (!result.Success) { error = result.Message; return; }
             await OnSaved.InvokeAsync(); await IsOpenChanged.InvokeAsync(false);
