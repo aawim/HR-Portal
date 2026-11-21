@@ -10,6 +10,7 @@ namespace HRM.Api.Controllers.V1;
 public sealed class AttendanceConnectorController(AttendanceConnectorGatewayService gateway) : ControllerBase
 {
     [HttpPost("enroll")]
+    [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting(HRM.Api.Infrastructure.HrmRateLimitPolicies.Auth)]
     [ProducesResponseType(typeof(ConnectorEnrollmentResponse), StatusCodes.Status200OK)]
     public async Task<ActionResult<ConnectorEnrollmentResponse>> Enroll([FromBody] ConnectorEnrollmentRequest request, CancellationToken ct)
     {

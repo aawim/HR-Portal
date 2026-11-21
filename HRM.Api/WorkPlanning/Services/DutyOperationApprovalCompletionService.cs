@@ -22,7 +22,9 @@ public sealed class DutyOperationApprovalCompletionService(IServiceScopeFactory 
     {
         using var scope = scopes.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<HrmTeContext>();
-        var operations = await db.DutyOperations.AsNoTracking().Where(x => x.Status == "Requested" && x.Request.RequestStateId == 4).Select(x => x.Id).Take(100).ToListAsync(cancellationToken);
+        await using var lockLease = await HRM.Api.Infrastructure.SqlAppLock.TryAcquireAsync(db, "HRM_DutyOperationApprovalCompletion", cancellationToken);
+        if (lockLease == null) return;
+        var operations = await db.DutyOperations.AsNoTracking().Where(x => x.Status == "Requested" && x.Request != null && x.Request.RequestStateId == 4).Select(x => x.Id).Take(100).ToListAsync(cancellationToken);
         var applicator = scope.ServiceProvider.GetRequiredService<IDutyOperationService>();
         foreach (var operationId in operations)
         {

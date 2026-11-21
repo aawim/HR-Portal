@@ -23,9 +23,13 @@ public sealed class ActivityRetentionProcessor(
         {
             try
             {
-                var deleted = await RunCleanupOnceAsync(stoppingToken);
-                if (deleted > 0)
-                    logger.LogInformation("Activity retention cleanup removed {Count} expired activity log(s).", deleted);
+                await using var lockLease = await TryAcquireSqlAppLockAsync(stoppingToken);
+                if (lockLease is not null)
+                {
+                    var deleted = await RunCleanupOnceAsync(stoppingToken);
+                    if (deleted > 0)
+                        logger.LogInformation("Activity retention cleanup removed {Count} expired activity log(s).", deleted);
+                }
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
@@ -107,5 +111,66 @@ public sealed class ActivityRetentionProcessor(
         }
 
         return totalDeleted;
+    }
+
+    private async Task<IAsyncDisposable?> TryAcquireSqlAppLockAsync(CancellationToken ct)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        if (!db.Database.IsSqlServer())
+            return NoOpDisposable.Instance;
+
+        var connString = db.Database.GetConnectionString();
+        if (string.IsNullOrWhiteSpace(connString))
+            return NoOpDisposable.Instance;
+
+        var conn = new Microsoft.Data.SqlClient.SqlConnection(connString);
+        await conn.OpenAsync(ct);
+
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "sp_getapplock";
+        cmd.CommandType = System.Data.CommandType.StoredProcedure;
+        cmd.Parameters.AddWithValue("@Resource", "HRM_ActivityRetentionProcessor");
+        cmd.Parameters.AddWithValue("@LockMode", "Exclusive");
+        cmd.Parameters.AddWithValue("@LockOwner", "Session");
+        cmd.Parameters.AddWithValue("@LockTimeout", 0);
+        var returnParam = cmd.Parameters.Add("@ReturnVal", System.Data.SqlDbType.Int);
+        returnParam.Direction = System.Data.ParameterDirection.ReturnValue;
+
+        await cmd.ExecuteNonQueryAsync(ct);
+        var result = (int)(returnParam.Value ?? -999);
+        if (result < 0)
+        {
+            await conn.DisposeAsync();
+            return null;
+        }
+
+        return new SqlAppLockLease(conn);
+    }
+
+    private sealed class SqlAppLockLease(Microsoft.Data.SqlClient.SqlConnection conn) : IAsyncDisposable
+    {
+        public async ValueTask DisposeAsync()
+        {
+            try
+            {
+                if (conn.State == System.Data.ConnectionState.Open)
+                {
+                    await using var cmd = conn.CreateCommand();
+                    cmd.CommandText = "sp_releaseapplock";
+                    cmd.CommandType = System.Data.CommandType.StoredProcedure;
+                    cmd.Parameters.AddWithValue("@Resource", "HRM_ActivityRetentionProcessor");
+                    cmd.Parameters.AddWithValue("@LockOwner", "Session");
+                    await cmd.ExecuteNonQueryAsync();
+                }
+            }
+            catch { }
+            finally { await conn.DisposeAsync(); }
+        }
+    }
+
+    private sealed class NoOpDisposable : IAsyncDisposable
+    {
+        public static readonly NoOpDisposable Instance = new();
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 }

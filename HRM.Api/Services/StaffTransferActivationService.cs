@@ -785,6 +785,10 @@ public sealed class StaffTransferActivationWorker(
                 var activator = scope.ServiceProvider.GetRequiredService<IStaffTransferActivationService>();
                 await using var db = await factory.CreateDbContextAsync(stoppingToken);
 
+                await using var lockLease = await HRM.Api.Infrastructure.SqlAppLock.TryAcquireAsync(db, "HRM_StaffTransferActivationWorker", stoppingToken);
+                if (lockLease == null)
+                    continue;
+
                 var today = StaffTransferActivationService.TodayMaldives;
                 var dueTransferIds = await db.StaffTransfers.AsNoTracking()
                     .Where(t => (t.Status == StaffTransferStatuses.Approved || t.Status == StaffTransferStatuses.Scheduled) &&
