@@ -462,10 +462,10 @@ public sealed class MaldivesAttendanceDeductionTests
 
         // Pensionable base = 70000 - 1000 = 69000; Employee pension = 69000 * 0.07 = 4830
         // Net taxable income = 70000 - 1000 - 4830 = 64170 MVR
-        // Over 60,000 bracket: (64170 - 60000) * 0.05 = 4170 * 0.05 = 208.50 MVR
+        // Over 60,000 bracket (MIRA Income Tax Act 25/2019): (64170 - 60000) * 0.055 = 4170 * 0.055 = 229.35 MVR
         var taxLine = result.Lines.FirstOrDefault(l => l.ComponentCode == "TAX_WHT");
         Assert.NotNull(taxLine);
-        Assert.Equal(208.50m, taxLine.CalculatedAmount);
+        Assert.Equal(229.35m, taxLine.CalculatedAmount);
     }
 
     [Fact]

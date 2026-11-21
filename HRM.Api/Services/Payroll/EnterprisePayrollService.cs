@@ -103,13 +103,28 @@ public sealed class EnterprisePayrollService : IEnterprisePayroll
             catch { }
         }
 
+        var policy = PayrollStatutoryPolicyLoader.FromRules(rules);
+
         return new PayrollConfigurationDto(
             EmployeePensionPercentage: eeRule?.PercentageValue ?? 7.0m,
             EmployerPensionPercentage: erRule?.PercentageValue ?? 7.0m,
-            OvertimeMultiplier: otRule?.PercentageValue ?? 1.50m,
+            OvertimeMultiplier: otRule?.PercentageValue ?? 1.25m,
             DefaultPaymentDay: defPaymentDay,
             AttendanceCutoffDay: attCutoffDay,
-            AdjustmentCutoffDay: adjCutoffDay
+            AdjustmentCutoffDay: adjCutoffDay,
+            HolidayOvertimeMultiplier: policy.HolidayOvertimeMultiplier,
+            OvertimeHourlyDivisor: policy.OvertimeHourlyDivisor,
+            AllowancesArePensionable: policy.AllowancesArePensionable,
+            PensionMaldiviansOnly: policy.PensionMaldiviansOnly,
+            PensionMinAge: policy.PensionMinAge,
+            PensionMaxAge: policy.PensionMaxAge,
+            MinimumWageMonthly: policy.MinimumWageMonthly,
+            MaxDeductionPercentage: policy.MaxDeductionPercentage,
+            RamadanAllowanceAmount: policy.RamadanAllowanceAmount,
+            UnpaidLeaveDivisorMode: policy.UnpaidLeaveDivisorMode,
+            RequireBankAccountForPayment: policy.RequireBankAccountForPayment,
+            DefaultCurrencyCode: policy.DefaultCurrencyCode,
+            TaxBrackets: (policy.TaxBrackets ?? PayrollStatutoryPolicy.MaldivesDefaultTaxBrackets).ToList()
         );
     }
 
@@ -126,6 +141,24 @@ public sealed class EnterprisePayrollService : IEnterprisePayroll
 
         if (input.OvertimeMultiplier < 1.0m || input.OvertimeMultiplier > 5.0m)
             return ServiceResult.Fail("Overtime rate multiplier must be between 1.0 and 5.0.");
+
+        if (input.HolidayOvertimeMultiplier < 1.0m || input.HolidayOvertimeMultiplier > 5.0m)
+            return ServiceResult.Fail("Friday / holiday overtime multiplier must be between 1.0 and 5.0.");
+
+        if (input.OvertimeHourlyDivisor < 100m || input.OvertimeHourlyDivisor > 360m)
+            return ServiceResult.Fail("Overtime monthly hourly divisor must be between 100 and 360.");
+
+        if (input.PensionMinAge < 14 || input.PensionMaxAge <= input.PensionMinAge || input.PensionMaxAge > 100)
+            return ServiceResult.Fail("Pension age range is invalid.");
+
+        if (input.MinimumWageMonthly < 0 || input.RamadanAllowanceAmount < 0 || input.MaxDeductionPercentage < 0 || input.MaxDeductionPercentage > 100)
+            return ServiceResult.Fail("Statutory wage, Ramadan allowance, or deduction percentage values are out of range.");
+
+        var normalizedBrackets = (input.TaxBrackets is { Count: > 0 } ? input.TaxBrackets : PayrollStatutoryPolicy.MaldivesDefaultTaxBrackets.ToList())
+            .OrderBy(b => b.MinAmount)
+            .ToList();
+        if (normalizedBrackets.Any(b => b.MinAmount < 0 || (b.MaxAmount.HasValue && b.MaxAmount.Value <= b.MinAmount) || b.RatePercentage < 0 || b.RatePercentage > 100))
+            return ServiceResult.Fail("One or more income tax brackets have invalid thresholds or rates.");
 
         var rules = await db.CalculationRules
             .Where(r => r.OrganisationId == orgId)
@@ -211,6 +244,40 @@ public sealed class EnterprisePayrollService : IEnterprisePayroll
             AdjustmentCutoffDay = Math.Clamp(input.AdjustmentCutoffDay, 1, 31)
         });
         periodSettingsRule.IsActive = true;
+
+        // 5. Future-Resistant Statutory Policy (MIRA EWT Brackets, MRPS rules, CSC/Employment Act OT & Wage rules, MMA banking)
+        var statutoryRule = rules.FirstOrDefault(r => r.RuleCode == PayrollStatutoryPolicyLoader.StatutoryRuleCode);
+        if (statutoryRule == null)
+        {
+            statutoryRule = new CalculationRule
+            {
+                OrganisationId = orgId,
+                RuleCode = PayrollStatutoryPolicyLoader.StatutoryRuleCode,
+                RuleName = "Maldives Statutory Payroll Policy",
+                RuleType = "StatutoryPolicy",
+                EffectiveFrom = new DateOnly(2020, 1, 1),
+                IsActive = true,
+                CreatedAtUtc = DateTime.UtcNow
+            };
+            db.CalculationRules.Add(statutoryRule);
+        }
+        statutoryRule.ConfigurationJson = JsonSerializer.Serialize(new PayrollStatutoryPolicyLoader.StoredStatutoryConfig
+        {
+            HolidayOvertimeMultiplier = input.HolidayOvertimeMultiplier,
+            OvertimeHourlyDivisor = input.OvertimeHourlyDivisor,
+            AllowancesArePensionable = input.AllowancesArePensionable,
+            PensionMaldiviansOnly = input.PensionMaldiviansOnly,
+            PensionMinAge = input.PensionMinAge,
+            PensionMaxAge = input.PensionMaxAge,
+            MinimumWageMonthly = input.MinimumWageMonthly,
+            MaxDeductionPercentage = input.MaxDeductionPercentage,
+            RamadanAllowanceAmount = input.RamadanAllowanceAmount,
+            UnpaidLeaveDivisorMode = string.Equals(input.UnpaidLeaveDivisorMode, "Fixed30", StringComparison.OrdinalIgnoreCase) ? "Fixed30" : "CalendarDays",
+            RequireBankAccountForPayment = input.RequireBankAccountForPayment,
+            DefaultCurrencyCode = string.IsNullOrWhiteSpace(input.DefaultCurrencyCode) ? "MVR" : input.DefaultCurrencyCode.Trim().ToUpperInvariant(),
+            TaxBrackets = normalizedBrackets
+        });
+        statutoryRule.IsActive = true;
 
         db.PayrollAuditEvents.Add(new PayrollAuditEvent
         {

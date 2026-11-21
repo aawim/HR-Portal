@@ -57,6 +57,7 @@ public sealed class PayrollSnapshotService : IPayrollSnapshotService
         var allJobs = await db.Jobs
             .AsNoTracking()
             .Include(j => j.Individual)
+            .ThenInclude(i => i!.Country)
             .Where(j => j.OrganisationID == organisationId &&
                         j.JobStateId == 4 && // Approved active job
                         j.JoinedDate <= periodEndDt &&
@@ -101,13 +102,18 @@ public sealed class PayrollSnapshotService : IPayrollSnapshotService
             .Where(t => t.OrganisationId == organisationId)
             .ToDictionaryAsync(t => t.Id, t => t.Name);
 
-        var overtimeMultiplier = await db.CalculationRules.AsNoTracking()
-            .Where(r => r.OrganisationId == organisationId && r.IsActive && r.RuleCode == "OT_STANDARD" &&
-                        r.EffectiveFrom <= periodEnd && (!r.EffectiveTo.HasValue || r.EffectiveTo.Value >= periodStart))
-            .OrderByDescending(r => r.EffectiveFrom)
-            .Select(r => (decimal?)r.PercentageValue)
-            .FirstOrDefaultAsync() ?? 1.50m;
-        if (overtimeMultiplier <= 0) overtimeMultiplier = 1.50m;
+        var statutoryPolicy = await PayrollStatutoryPolicyLoader.LoadAsync(db, organisationId);
+        decimal overtimeMultiplier = statutoryPolicy.NormalOvertimeMultiplier;
+        decimal holidayOvertimeMultiplier = statutoryPolicy.HolidayOvertimeMultiplier;
+        decimal overtimeHourlyDivisor = statutoryPolicy.OvertimeHourlyDivisor;
+
+        var holidayDates = await db.OrganisationCalendarExceptions
+            .AsNoTracking()
+            .Where(e => e.OrganisationBusinessEntityId == organisationId && e.IsActive && e.IsApproved &&
+                        e.EffectiveDate <= periodEndDt && e.EffectiveEndDate >= periodStartDt &&
+                        e.CalendarImpactType == "MarkAsNonWorkingDay")
+            .Select(e => new { e.EffectiveDate, e.EffectiveEndDate })
+            .ToListAsync();
 
         // 5. Approved Overtime
         var overtimeClaims = await db.OvertimeRequests
@@ -202,18 +208,24 @@ public sealed class PayrollSnapshotService : IPayrollSnapshotService
                     Type: SalaryComponentType.FixedAllowance,
                     Amount: a.Amount,
                     IsTaxable: true,
-                    IsPensionable: true,
+                    IsPensionable: statutoryPolicy.AllowancesArePensionable,
                     IsProratable: true,
                     FromDate: DateOnly.FromDateTime(a.FromDate),
                     ToDate: a.ToDate.HasValue ? DateOnly.FromDateTime(a.ToDate.Value) : null
                 ));
             }
 
-            // OT claims
+            // OT claims (Employment Act Sec. 37-38: 1.25x normal working day, 1.50x Friday & official public holiday)
             var empOt = new List<InputOvertimeItem>();
             foreach (var ot in overtimeClaims.Where(x => x.JobId == job.JobId))
             {
-                decimal hourlyRate = basicSalary > 0 ? (basicSalary / 160m) * overtimeMultiplier : 0m;
+                var otDate = ot.WorkDate.Date;
+                bool isHolidayOrFriday = otDate.DayOfWeek == DayOfWeek.Friday ||
+                    holidayDates.Any(h => otDate >= h.EffectiveDate.Date && otDate <= h.EffectiveEndDate.Date);
+                decimal appliedMultiplier = isHolidayOrFriday ? holidayOvertimeMultiplier : overtimeMultiplier;
+                decimal hourlyRate = basicSalary > 0 && overtimeHourlyDivisor > 0
+                    ? (basicSalary / overtimeHourlyDivisor) * appliedMultiplier
+                    : 0m;
                 decimal otAmount = decimal.Round(hourlyRate * ((decimal)ot.Minutes / 60m), 2, MidpointRounding.AwayFromZero);
                 empOt.Add(new InputOvertimeItem(
                     RequestId: ot.RequestId,
@@ -276,16 +288,18 @@ public sealed class PayrollSnapshotService : IPayrollSnapshotService
                 ));
             }
 
-            // Adjustments
+            // Adjustments (Ramadan Allowance is statutory tax-exempt under Employment Act Sec. 51)
             var empAdjustments = new List<InputAdjustmentItem>();
             foreach (var adj in adjustments.Where(x => x.JobId == job.JobId))
             {
+                bool isTaxExempt = adj.ComponentCode.Contains("RAMADAN", StringComparison.OrdinalIgnoreCase);
                 empAdjustments.Add(new InputAdjustmentItem(
                     AdjustmentId: adj.PayrollAdjustmentId,
                     ComponentCode: adj.ComponentCode,
                     Description: adj.Description,
                     Amount: adj.Amount,
-                    IsAddition: adj.IsAddition
+                    IsAddition: adj.IsAddition,
+                    IsTaxable: !isTaxExempt
                 ));
             }
 
@@ -331,6 +345,11 @@ public sealed class PayrollSnapshotService : IPayrollSnapshotService
                 att.UpdatedAtUtc = DateTime.UtcNow;
             }
 
+            bool isMaldivian = individual?.Country == null ||
+                string.Equals(individual.Country.Isoalpha2Code, "MV", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(individual.Country.NameEnglish, "Maldives", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(individual.Country.NationalityEnglish, "Maldivian", StringComparison.OrdinalIgnoreCase);
+
             var inputItem = new EmployeePayrollInputItem(
                 JobId: job.JobId,
                 IndividualId: job.IndividualID,
@@ -342,9 +361,9 @@ public sealed class PayrollSnapshotService : IPayrollSnapshotService
                 StepNumber: stepNumber,
                 BasicSalary: basicSalary,
                 CurrencyTypeId: comp?.CurrencyTypeId ?? 1,
-                BankName: comp?.BankName ?? "Bank of Maldives",
-                BankBranch: comp?.BankBranch ?? "Male Branch",
-                BankAccountNumber: comp?.BankAccountNumber ?? $"7701{job.IndividualID:D8}",
+                BankName: comp?.BankName ?? string.Empty,
+                BankBranch: comp?.BankBranch ?? string.Empty,
+                BankAccountNumber: comp?.BankAccountNumber ?? string.Empty,
                 AccountHolderName: comp?.AccountHolderName ?? employeeName,
                 JoinedDate: DateOnly.FromDateTime(job.JoinedDate),
                 TerminatedDate: job.TerminatedDate.HasValue ? DateOnly.FromDateTime(job.TerminatedDate.Value) : null,
@@ -353,7 +372,9 @@ public sealed class PayrollSnapshotService : IPayrollSnapshotService
                 UnpaidLeaves: empLeaves,
                 Deductions: empDeductions,
                 Adjustments: empAdjustments,
-                AttendanceDeductions: empAttDeductions
+                AttendanceDeductions: empAttDeductions,
+                IsMaldivianCitizen: isMaldivian,
+                DateOfBirth: individual?.DateOfBirth.HasValue == true ? DateOnly.FromDateTime(individual.DateOfBirth.Value) : null
             );
 
             inputItems.Add(inputItem);

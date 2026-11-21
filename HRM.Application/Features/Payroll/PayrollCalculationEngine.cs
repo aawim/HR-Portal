@@ -14,7 +14,8 @@ public interface IPayrollCalculationEngine
         decimal employeePensionRate = 0.07m,
         decimal employerPensionRate = 0.07m,
         decimal taxThreshold = 60000m,
-        decimal taxRate = 0.05m
+        decimal taxRate = 0.055m,
+        PayrollStatutoryPolicy? statutoryPolicy = null
     );
 }
 
@@ -38,8 +39,10 @@ public sealed class PayrollCalculationEngine : IPayrollCalculationEngine
         decimal employeePensionRate = 0.07m,
         decimal employerPensionRate = 0.07m,
         decimal taxThreshold = 60000m,
-        decimal taxRate = 0.05m)
+        decimal taxRate = 0.055m,
+        PayrollStatutoryPolicy? statutoryPolicy = null)
     {
+        var policy = statutoryPolicy ?? PayrollStatutoryPolicy.MaldivesDefault;
         var lines = new List<PayrollLineDto>();
         var warnings = new List<string>();
         var errors = new List<string>();
@@ -156,8 +159,11 @@ public sealed class PayrollCalculationEngine : IPayrollCalculationEngine
 
         // 4. Adjustments (Additions)
         decimal totalAdditionAdjustments = 0m;
+        decimal taxableAdditionAdjustments = 0m;
         foreach (var adj in input.Adjustments.Where(x => x.IsAddition))
         {
+            bool isRamadan = adj.ComponentCode.Contains("RAMADAN", StringComparison.OrdinalIgnoreCase);
+            bool isTaxableAdj = adj.IsTaxable && !isRamadan;
             lines.Add(new PayrollLineDto(
                 0,
                 0,
@@ -167,11 +173,12 @@ public sealed class PayrollCalculationEngine : IPayrollCalculationEngine
                 adj.Amount,
                 1.0m,
                 adj.Amount,
-                IsTaxable: true,
+                IsTaxable: isTaxableAdj,
                 IsPensionable: false,
                 $"AdjId: {adj.AdjustmentId}"
             ));
             totalAdditionAdjustments += adj.Amount;
+            if (isTaxableAdj) taxableAdditionAdjustments += adj.Amount;
         }
 
         // Gross Earnings
@@ -242,11 +249,49 @@ public sealed class PayrollCalculationEngine : IPayrollCalculationEngine
             }
         }
 
-        // 5. Deductions: Pension (Maldives Pension Office Reg 2021/R-27: Qualifying basic attendance deductions reduce pensionable base)
-        decimal adjustedBasicSalary = Math.Max(0m, proratedBasic - totalAttendanceBasicDeductions);
-        decimal pensionBase = adjustedBasicSalary + pensionableAllowances;
-        decimal employeePension = decimal.Round(pensionBase * employeePensionRate, 2, MidpointRounding.AwayFromZero);
-        decimal employerPension = decimal.Round(pensionBase * employerPensionRate, 2, MidpointRounding.AwayFromZero);
+        // 5. Deductions: Unpaid Leaves (computed before MRPS & MIRA EWT so unpaid leave reduces pensionable & taxable base)
+        decimal totalUnpaidLeaveDeductions = 0m;
+        int leaveDivisor = string.Equals(policy.UnpaidLeaveDivisorMode, "Fixed30", StringComparison.OrdinalIgnoreCase) ? 30 : daysInMonth;
+        foreach (var leave in input.UnpaidLeaves)
+        {
+            decimal dailyRate = leaveDivisor > 0 ? (basicSalary / leaveDivisor) : 0m;
+            decimal deductionAmount = decimal.Round(dailyRate * leave.CalendarDays * leave.DeductionRate, 2, MidpointRounding.AwayFromZero);
+            if (deductionAmount > 0)
+            {
+                lines.Add(new PayrollLineDto(
+                    0,
+                    0,
+                    "UNPAID_LEAVE",
+                    $"Unpaid Leave ({leave.LeaveTypeName} - {leave.CalendarDays} days)",
+                    SalaryComponentType.UnpaidLeaveDeduction,
+                    dailyRate,
+                    leave.CalendarDays,
+                    deductionAmount,
+                    IsTaxable: false,
+                    IsPensionable: false,
+                    $"LeaveId: {leave.LeaveId}"
+                ));
+                totalUnpaidLeaveDeductions += deductionAmount;
+            }
+        }
+
+        // 6. Deductions: MRPS Pension (Maldives Pension Act 8/2009 & MPAO Reg 2021/R-27)
+        // Mandatory for eligible Maldivian citizens within configured statutory age bounds (default 16-65).
+        bool pensionEligible = !policy.PensionMaldiviansOnly || input.IsMaldivianCitizen;
+        if (pensionEligible && input.DateOfBirth.HasValue)
+        {
+            int age = periodEnd.Year - input.DateOfBirth.Value.Year;
+            if (input.DateOfBirth.Value > periodEnd.AddYears(-age)) age--;
+            if (age < policy.PensionMinAge || age >= policy.PensionMaxAge)
+            {
+                pensionEligible = false;
+            }
+        }
+
+        decimal adjustedBasicSalary = Math.Max(0m, proratedBasic - totalAttendanceBasicDeductions - totalUnpaidLeaveDeductions);
+        decimal pensionBase = pensionEligible ? (adjustedBasicSalary + pensionableAllowances) : 0m;
+        decimal employeePension = pensionEligible ? decimal.Round(pensionBase * employeePensionRate, 2, MidpointRounding.AwayFromZero) : 0m;
+        decimal employerPension = pensionEligible ? decimal.Round(pensionBase * employerPensionRate, 2, MidpointRounding.AwayFromZero) : 0m;
 
         if (employeePension > 0)
         {
@@ -280,31 +325,6 @@ public sealed class PayrollCalculationEngine : IPayrollCalculationEngine
                 IsPensionable: false,
                 "Statutory Employer Contribution"
             ));
-        }
-
-        // 6. Deductions: Unpaid Leaves
-        decimal totalUnpaidLeaveDeductions = 0m;
-        foreach (var leave in input.UnpaidLeaves)
-        {
-            decimal dailyRate = daysInMonth > 0 ? (basicSalary / daysInMonth) : 0m;
-            decimal deductionAmount = decimal.Round(dailyRate * leave.CalendarDays * leave.DeductionRate, 2, MidpointRounding.AwayFromZero);
-            if (deductionAmount > 0)
-            {
-                lines.Add(new PayrollLineDto(
-                    0,
-                    0,
-                    "UNPAID_LEAVE",
-                    $"Unpaid Leave ({leave.LeaveTypeName} - {leave.CalendarDays} days)",
-                    SalaryComponentType.UnpaidLeaveDeduction,
-                    dailyRate,
-                    leave.CalendarDays,
-                    deductionAmount,
-                    IsTaxable: false,
-                    IsPensionable: false,
-                    $"LeaveId: {leave.LeaveId}"
-                ));
-                totalUnpaidLeaveDeductions += deductionAmount;
-            }
         }
 
         // 7. Deductions: Loan and Agreement Deductions
@@ -351,27 +371,36 @@ public sealed class PayrollCalculationEngine : IPayrollCalculationEngine
             totalDeductionAdjustments += adj.Amount;
         }
 
-        // 9. Withholding Tax (Income Tax)
-        // Taxable base = Taxable earnings (net of qualifying attendance deductions) - Employee Pension
+        // 9. Employee Withholding Tax (MIRA Progressive Income Tax Brackets — Income Tax Act 25/2019)
+        // Taxable base = Taxable earnings (net of attendance & unpaid leave deductions) - Employee MRPS Pension
         decimal totalAttendanceDeductions = totalAttendanceBasicDeductions + totalAttendanceServiceDeductions + totalAttendanceOtherDeductions;
-        decimal taxableBase = Math.Max(0m, (proratedBasic - totalAttendanceBasicDeductions) + (taxableAllowances - totalAttendanceServiceDeductions) + totalOvertime + totalAdditionAdjustments - employeePension);
-        decimal employeeTax = 0m;
-        if (taxableBase > taxThreshold)
+        decimal taxableBase = Math.Max(0m,
+            (proratedBasic - totalAttendanceBasicDeductions - totalUnpaidLeaveDeductions)
+            + (taxableAllowances - totalAttendanceServiceDeductions)
+            + totalOvertime
+            + taxableAdditionAdjustments
+            - employeePension);
+
+        var brackets = (policy.TaxBrackets != null && policy.TaxBrackets.Count > 0)
+            ? policy.TaxBrackets
+            : PayrollStatutoryPolicy.MaldivesDefaultTaxBrackets;
+
+        decimal employeeTax = CalculateProgressiveTax(taxableBase, brackets);
+        if (employeeTax > 0)
         {
-            decimal taxableExcess = taxableBase - taxThreshold;
-            employeeTax = decimal.Round(taxableExcess * taxRate, 2, MidpointRounding.AwayFromZero);
+            decimal effectiveRate = taxableBase > 0 ? decimal.Round(employeeTax / taxableBase, 4, MidpointRounding.AwayFromZero) : 0m;
             lines.Add(new PayrollLineDto(
                 0,
                 0,
                 "TAX_WHT",
-                $"Withholding Tax ({taxRate:P0})",
+                "Employee Withholding Tax (MIRA Progressive EWT)",
                 SalaryComponentType.EmployeeTax,
-                taxRate,
+                effectiveRate,
                 1.0m,
                 employeeTax,
                 IsTaxable: false,
                 IsPensionable: false,
-                $"Taxable Excess: {taxableExcess:F2}"
+                $"Taxable Base: {taxableBase:F2}"
             ));
         }
 
@@ -387,6 +416,22 @@ public sealed class PayrollCalculationEngine : IPayrollCalculationEngine
             warnings.Add($"Net take-home pay is below 20% of basic salary ({netSalary:C2} / {basicSalary:C2}).");
         }
 
+        if (policy.MinimumWageMonthly > 0 && workedDays == daysInMonth && basicSalary > 0 && (basicSalary + totalAllowances) < policy.MinimumWageMonthly)
+        {
+            warnings.Add($"Fixed monthly remuneration ({basicSalary + totalAllowances:F2} {policy.DefaultCurrencyCode}) is below the configured minimum wage ({policy.MinimumWageMonthly:F2} {policy.DefaultCurrencyCode}).");
+        }
+
+        decimal nonStatutoryDeductions = totalAgreementDeductions + totalDeductionAdjustments;
+        if (policy.MaxDeductionPercentage > 0 && grossEarnings > 0 && (nonStatutoryDeductions / grossEarnings) * 100m > policy.MaxDeductionPercentage)
+        {
+            warnings.Add($"Non-statutory deductions ({nonStatutoryDeductions:F2}) exceed {policy.MaxDeductionPercentage:F0}% of gross earnings ({grossEarnings:F2}).");
+        }
+
+        if (policy.RequireBankAccountForPayment && netSalary > 0 && string.IsNullOrWhiteSpace(input.BankAccountNumber))
+        {
+            warnings.Add("Missing bank account number. Payment batch preparation will be blocked until verified bank details are added.");
+        }
+
         return new PayrollCalculationOutcome(
             BaseSalary: proratedBasic,
             GrossEarnings: grossEarnings,
@@ -397,5 +442,23 @@ public sealed class PayrollCalculationEngine : IPayrollCalculationEngine
             Warnings: warnings,
             Errors: errors
         );
+    }
+
+    public static decimal CalculateProgressiveTax(decimal taxableIncome, IReadOnlyList<HRM.Application.Contracts.Pages.PayrollTaxBracketDto> brackets)
+    {
+        if (taxableIncome <= 0 || brackets.Count == 0) return 0m;
+
+        decimal totalTax = 0m;
+        foreach (var bracket in brackets.OrderBy(b => b.MinAmount))
+        {
+            if (taxableIncome <= bracket.MinAmount) break;
+            decimal upper = bracket.MaxAmount.HasValue ? Math.Min(taxableIncome, bracket.MaxAmount.Value) : taxableIncome;
+            decimal slice = upper - bracket.MinAmount;
+            if (slice > 0 && bracket.RatePercentage > 0)
+            {
+                totalTax += slice * (bracket.RatePercentage / 100m);
+            }
+        }
+        return decimal.Round(totalTax, 2, MidpointRounding.AwayFromZero);
     }
 }

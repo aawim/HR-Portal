@@ -217,10 +217,9 @@ public sealed class PayrollProcessor : IPayrollProcessor
             .Where(r => r.OrganisationId == run.OrganisationId && r.IsActive)
             .ToListAsync(cancellationToken);
 
-        var eePensionRule = rules.FirstOrDefault(r => r.RuleCode == "PENSION_EE");
-        var erPensionRule = rules.FirstOrDefault(r => r.RuleCode == "PENSION_ER");
-        decimal eePensionRate = eePensionRule != null && eePensionRule.PercentageValue >= 0 ? eePensionRule.PercentageValue / 100m : 0.07m;
-        decimal erPensionRate = erPensionRule != null && erPensionRule.PercentageValue >= 0 ? erPensionRule.PercentageValue / 100m : 0.07m;
+        var statutoryPolicy = PayrollStatutoryPolicyLoader.FromRules(rules);
+        decimal eePensionRate = statutoryPolicy.EmployeePensionRate;
+        decimal erPensionRate = statutoryPolicy.EmployerPensionRate;
 
         try
         {
@@ -237,7 +236,8 @@ public sealed class PayrollProcessor : IPayrollProcessor
                     run.PayrollPeriod!.PeriodStartDate,
                     run.PayrollPeriod.PeriodEndDate,
                     employeePensionRate: eePensionRate,
-                    employerPensionRate: erPensionRate
+                    employerPensionRate: erPensionRate,
+                    statutoryPolicy: statutoryPolicy
                 );
 
                 var empEntity = new PayrollEmployee

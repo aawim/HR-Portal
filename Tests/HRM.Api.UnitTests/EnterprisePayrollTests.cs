@@ -136,15 +136,15 @@ public sealed class EnterprisePayrollTests
         Assert.Equal(25000.00m, outcome.BaseSalary);
         Assert.Equal(31400.00m, outcome.GrossEarnings);
 
-        // Pensionable base: Basic (25,000) + Duty Allowance (5,000) = 30,000
-        // Employee pension (7% of 30,000) = 2,100.00
         // Unpaid leave deduction (25,000 / 30 * 2) = 1,666.67
+        // Pensionable base: Basic (25,000 - 1,666.67 unpaid leave) + Duty Allowance (5,000) = 28,333.33
+        // Employee pension (7% of 28,333.33) = 1,983.33
         // Loan deduction: 1,500.00
-        // Total deductions = 2,100 + 1,666.67 + 1,500 = 5,266.67
-        Assert.Equal(5266.67m, outcome.TotalDeductions);
+        // Total deductions = 1,983.33 + 1,666.67 + 1,500 = 5,150.00
+        Assert.Equal(5150.00m, outcome.TotalDeductions);
 
-        // Net salary: 31,400.00 - 5,266.67 = 26,133.33
-        Assert.Equal(26133.33m, outcome.NetSalary);
+        // Net salary: 31,400.00 - 5,150.00 = 26,250.00
+        Assert.Equal(26250.00m, outcome.NetSalary);
         Assert.Empty(outcome.Errors);
     }
 
@@ -318,6 +318,47 @@ public sealed class EnterprisePayrollTests
         var rejectEx = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             service.RejectPayrollAsync(orgId, 1, approverUserId, "Reject finalised"));
         Assert.Contains("Cannot reject finalised", rejectEx.Message);
+    }
+
+    [Fact]
+    public void Maldives_Statutory_Progressive_EWT_And_Ramadan_Exemption_Work_Correctly()
+    {
+        var engine = new PayrollCalculationEngine();
+        // Basic 120,000 + Ramadan Allowance 3,000 (tax-exempt, non-pensionable)
+        // Pension = 7% of 120,000 = 8,400
+        // Taxable base = 120,000 - 8,400 = 111,600 (Ramadan 3,000 excluded)
+        // MIRA EWT: 0-60k @ 0% = 0; 60k-100k (40k) @ 5.5% = 2,200; 100k-111.6k (11.6k) @ 8% = 928 => Total 3,128.00
+        var input = BasicInput() with
+        {
+            BasicSalary = 120000m,
+            Adjustments = [new InputAdjustmentItem(1, "RAMADAN_ALLOWANCE", "Ramadan Allowance", 3000m, IsAddition: true, IsTaxable: false)]
+        };
+
+        var outcome = engine.CalculateEmployee(input, new DateOnly(2026, 3, 1), new DateOnly(2026, 3, 31));
+        var taxLine = outcome.Lines.Single(l => l.ComponentCode == "TAX_WHT");
+        var penLine = outcome.Lines.Single(l => l.ComponentCode == "PEN_EMP");
+
+        Assert.Equal(8400m, penLine.CalculatedAmount);
+        Assert.Equal(3128.00m, taxLine.CalculatedAmount);
+    }
+
+    [Fact]
+    public void Maldives_MRPS_Exempts_Expatriates_And_Warns_On_MinWage_And_Missing_Bank()
+    {
+        var engine = new PayrollCalculationEngine();
+        var expat = BasicInput() with
+        {
+            BasicSalary = 5000m,
+            BankAccountNumber = "",
+            IsMaldivianCitizen = false
+        };
+
+        var outcome = engine.CalculateEmployee(expat, new DateOnly(2026, 11, 1), new DateOnly(2026, 11, 30));
+
+        Assert.DoesNotContain(outcome.Lines, l => l.ComponentCode == "PEN_EMP");
+        Assert.Equal(0m, outcome.EmployerContributions);
+        Assert.Contains(outcome.Warnings, w => w.Contains("minimum wage", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(outcome.Warnings, w => w.Contains("Missing bank account", StringComparison.OrdinalIgnoreCase));
     }
 
     private static EmployeePayrollInputItem BasicInput(List<InputAllowanceItem>? allowances = null) => new(
