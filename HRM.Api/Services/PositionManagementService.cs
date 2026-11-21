@@ -28,7 +28,7 @@ public sealed partial class PositionManagementService(IDbContextFactory<HrmTeCon
         {
             var count=await db.JobPositions.Where(x=>x.PositionId==p.PositionId&&x.Job.OrganisationID==actor.Org&&x.JobPositionStateId==4&&x.FromDate<=today&&(!x.ToDate.HasValue||x.ToDate>today)&&x.Job.JobStateId==4&&x.Job.JoinedDate<=today&&(!x.Job.TerminatedDate.HasValue||x.Job.TerminatedDate>today)).Select(x=>x.Job.IndividualID).Distinct().CountAsync();
             int? jmId=p.PositionMatrixId.HasValue&&matrixJobMap.TryGetValue(p.PositionMatrixId.Value,out var resolvedJm)?resolvedJm:null;
-            positions.Add(new(p.PositionId,p.Name,p.DhivehiName,p.Descriptions,p.IsActive!=false,p.IsGlobal,p.PositionFrameworkId,p.PositionMatrixId,frameworks.FirstOrDefault(x=>x.Id==p.PositionFrameworkId)?.Name??"Unclassified existing position",count,actor.Manage&&(p.OrganisationId==actor.Org&&!p.IsGlobal||actor.Super&&p.IsGlobal)){JobMatrixId=jmId,TypeId=p.PositionTypeId,RankId=p.PositionRankId,ClassificationId=p.PositionClassificationId,Salaries=p.PositionBasicSalaries.Where(x=>x.IsValid).OrderByDescending(x=>x.EffectiveDate).Select(x=>new PositionSalaryRow((decimal)x.Amount,x.EffectiveDate)).ToList()});
+            positions.Add(new(p.PositionId,p.Name,p.DhivehiName,p.Descriptions,p.IsActive!=false,p.IsGlobal,p.PositionFrameworkId,p.PositionMatrixId,frameworks.FirstOrDefault(x=>x.Id==p.PositionFrameworkId)?.Name??"Unclassified existing position",count,count==0&&actor.Manage&&(p.OrganisationId==actor.Org&&!p.IsGlobal||actor.Super&&p.IsGlobal)){JobMatrixId=jmId,TypeId=p.PositionTypeId,RankId=p.PositionRankId,ClassificationId=p.PositionClassificationId,Salaries=p.PositionBasicSalaries.Where(x=>x.IsValid).OrderByDescending(x=>x.EffectiveDate).Select(x=>new PositionSalaryRow((decimal)x.Amount,x.EffectiveDate)).ToList()});
         }
         var matrices=rawMatrices.Select(m=>{
             var linked=positions.Where(p=>p.MatrixId==m.PositionMatrixId&&p.Active).ToList();
@@ -61,6 +61,12 @@ public sealed partial class PositionManagementService(IDbContextFactory<HrmTeCon
         else if(input.MatrixId.HasValue)return ServiceResult.Fail("CSC legacy and custom positions do not use a government matrix link.");
         var p=input.Id==0?new Position{OrganisationId=actor.Org}:await db.Positions.SingleOrDefaultAsync(x=>x.PositionId==input.Id)??throw new UnauthorizedAccessException();
         if(input.Id!=0&&!(p.OrganisationId==actor.Org&&!p.IsGlobal||actor.Super&&p.IsGlobal))throw new UnauthorizedAccessException("Position unavailable for editing in this organisation.");
+        if(input.Id!=0)
+        {
+            var todayDate=DateTime.UtcNow.AddHours(5).Date;
+            var isAssignedToStaff=await db.JobPositions.AnyAsync(x=>x.PositionId==p.PositionId&&x.JobPositionStateId==4&&x.FromDate<=todayDate&&(!x.ToDate.HasValue||x.ToDate>todayDate)&&x.Job.JobStateId==4&&x.Job.JoinedDate<=todayDate&&(!x.Job.TerminatedDate.HasValue||x.Job.TerminatedDate>todayDate));
+            if(isAssignedToStaff)return ServiceResult.Fail("This position is currently assigned to an active staff member and cannot be modified. Change or end the staff assignment through the approval flow first.");
+        }
         if(input.Id!=0&&p.PositionMatrixId.HasValue&&p.PositionMatrixId!=input.MatrixId)return ServiceResult.Fail("A staffing slot cannot be detached from its position matrix.");
         if(input.Id!=0&&(p.IsGlobal!=input.Global||p.PositionFrameworkId!=input.FrameworkId||p.PositionMatrixId!=input.MatrixId||p.PositionTypeId!=input.TypeId||p.PositionRankId!=input.RankId||p.PositionClassificationId!=input.ClassificationId)&&await db.JobPositions.AnyAsync(x=>x.PositionId==p.PositionId))return ServiceResult.Fail("This position has employment history. Create a new position to change its framework, classification, rank, type, matrix or global scope.");
         if(input.MatrixId.HasValue&&(input.Id==0||p.PositionMatrixId!=input.MatrixId))return ServiceResult.Fail("Create matrix positions through Create position matrix. Existing positions cannot be moved into another matrix.");

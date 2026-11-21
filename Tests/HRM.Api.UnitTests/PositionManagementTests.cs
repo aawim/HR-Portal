@@ -42,6 +42,23 @@ public sealed class PositionManagementTests
         Assert.False((await Service.SaveAsync(new(1,"Changed",null,null,true,false,2,1))).Success);
         Assert.True((await Service.SaveAsync(new(1,"Renamed",null,null,false,false,1,null))).Success);
     }
+    [Fact]public async Task Position_assigned_to_active_staff_cannot_be_edited_or_deactivated()
+    {
+        await Seed();
+        await using(var db=factory.CreateDbContext())
+        {
+            db.Jobs.Add(new(){JobId=9,OrganisationID=10,IndividualID=109,JobStateId=4,JoinedDate=DateTime.UtcNow.AddDays(-30)});
+            db.JobPositions.Add(new(){JobPositionId=9,JobId=9,PositionId=1,FromDate=DateTime.UtcNow.AddDays(-10),JobPositionStateId=4});
+            await db.SaveChangesAsync();
+        }
+        var loaded=await Service.LoadAsync();
+        var pos=loaded.Positions.Single(x=>x.Id==1);
+        Assert.Equal(1,pos.CurrentStaff);
+        Assert.False(pos.CanEdit);
+        var save=await Service.SaveAsync(new(1,"Renamed while assigned",null,null,false,false,1,null));
+        Assert.False(save.Success);
+        Assert.Contains("approval flow",save.Message,StringComparison.OrdinalIgnoreCase);
+    }
     [Theory]
     [InlineData(1)]
     [InlineData(3)]
