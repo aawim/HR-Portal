@@ -39,6 +39,7 @@ public partial class PermissionSettingsService
 
     private static readonly CanonicalPermissionSpec[] CanonicalPermissions =
     [
+        new("Communication.Manage", "Manage Communication Hub", "Manage communication integrations, destinations, automation and delivery within the current tenant. Approved Admin Portal access is also required.", "Admin", "Settings"),
         // Individual & Identity
         new("Individual.View", "View Individual Registry", "View individual personal records and registry profiles.", "Admin", "HR"),
         new("Individual.Create", "Create Individual", "Register new individuals in the central registry.", "Admin", "HR"),
@@ -557,6 +558,8 @@ public partial class PermissionSettingsService
                     [
                         new("admin-settings-user-accounts", "User -> Manage Account, Admin Portal Access & Manage Permissions", "/admin/settings/user/manage-account", "Edit user accounts, approve/revoke Admin Portal access grants, and assign user roles/direct permissions.",
                             ["User.Manage", "Users.Edit", "UserOrganisations.Admin.View", "Users.Roles.View", "Users.Roles.Edit", "Admin"]),
+                        new("admin-settings-communications", "Communication Hub", "/admin/settings/communications", "Manage tenant integrations, destinations, automation and delivery. Approved Admin Portal access is mandatory.",
+                            ["Communication.Manage", "Admin"]),
                         new("admin-settings-org-workspace", "Organisation -> Manage, Document Centre, Structure Types, Calendar, Locations, Types & Organisation Permissions", "/admin/settings/org/manage", "Configure organisation profile, structure hierarchy, calendars, locations, and tenant permission ceiling.",
                             ["Organisation.Edit", "UserOrganisations.View", "UserOrganisations.Roles.Edit", "Document.Configure", "Super.Admin.Manage"])
                     ]),

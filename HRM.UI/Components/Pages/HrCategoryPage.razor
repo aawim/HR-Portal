@@ -19,7 +19,7 @@
 @inject IUserAccessService UserAccess
 @rendermode RenderMode.InteractiveServer
 
-<PageTitle>@(CategoryName.Equals("requests", StringComparison.OrdinalIgnoreCase) ? "Received Requests - HR Portal" : "HR Portal")</PageTitle>
+<PageTitle>@(CategoryName.Equals("requests", StringComparison.OrdinalIgnoreCase) ? "Received Requests - HR Portal" : CategoryName.Equals("supervisors", StringComparison.OrdinalIgnoreCase) ? "Supervisors Workspace - HR Portal" : "HR Portal")</PageTitle>
 
 <AuthorizeView>
     <Authorized>
@@ -32,6 +32,68 @@
             <div class="m-4 rounded-xl border border-amber-200 bg-amber-50 p-6 text-sm text-amber-900">
                 You do not have permission to access this HR section.
             </div>
+        }
+        else if (CategoryName.Equals("supervisors", StringComparison.OrdinalIgnoreCase))
+        {
+            <section class="org-workspace-page w-full min-w-0 p-2 flex flex-col gap-2 bg-slate-50/50 text-slate-900 transition-all duration-300">
+                <div class="org-workspace-header flex flex-col gap-2 p-2">
+                    <div class="flex items-center justify-between flex-wrap gap-2">
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <h1 class="text-xl md:text-2xl font-bold tracking-tight text-slate-900">Supervisors Workspace</h1>
+                                <span class="rounded-full bg-teal-100 px-2.5 py-0.5 text-xs font-semibold text-teal-800">
+                                    HR Supervisors
+                                </span>
+                            </div>
+                            <p class="text-xs text-slate-500 mt-0.5">
+                                Assign department and team supervisors, manage team membership and reporting lines.
+                            </p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <a href="/admin/hr"
+                               class="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition">
+                                <span>←</span>
+                                <span>Back to HR</span>
+                            </a>
+                            <button type="button"
+                                    class="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition"
+                                    @onclick="() => StateHasChanged()">
+                                <i class="bi bi-arrow-clockwise" aria-hidden="true"></i>
+                                <span>Refresh</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="org-workspace-tabs my-workspace-tabs w-full border-b-2 border-teal-700 dark:border-teal-600 overflow-x-auto">
+                    <nav class="flex items-end gap-1 min-w-max pb-0" aria-label="Supervisors Workspace Sections">
+                        @foreach (var item in GetSubItems(CategoryName).Where(x => x.ComponentType != null))
+                        {
+                            var isActive = activeItem?.Title == item.Title;
+                            <button type="button"
+                                    aria-current="@(isActive ? "page" : null)"
+                                    class="rounded-t-xl px-4 py-2 font-bold text-xs md:text-sm transition-all border-t border-l border-r flex items-center gap-2 @(isActive ? "bg-teal-700 dark:bg-teal-600 text-white border-teal-700 dark:border-teal-600 shadow-sm" : "bg-[#86b0be]/30 text-slate-700 hover:text-slate-900 hover:bg-[#86b0be]/50 dark:bg-slate-800/90 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-700 border-slate-300 dark:border-slate-700")"
+                                    @onclick="() => SelectItem(item)">
+                                <span>@item.Icon</span>
+                                <span>@item.Title</span>
+                            </button>
+                        }
+                    </nav>
+                </div>
+
+                <div class="w-full min-w-0 bg-white rounded-b-2xl rounded-tr-2xl border border-slate-200 p-2 shadow-xs">
+                    @if (activeItem?.ComponentType != null)
+                    {
+                        <DynamicComponent @key="(CategoryName, Section)" Type="@activeItem.ComponentType" Parameters="SelectedParameters" />
+                    }
+                    else
+                    {
+                        <div class="bg-slate-50 border border-slate-100 rounded-xl p-4 text-center text-xs text-slate-500">
+                            Select an item from the tabs above to view data.
+                        </div>
+                    }
+                </div>
+            </section>
         }
         else
         {

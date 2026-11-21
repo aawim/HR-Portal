@@ -118,9 +118,15 @@ public sealed partial class CommunicationHubService(IDbContextFactory<HrmTeConte
     private async Task<int> RequireAdminAsync()
     {
         var context = await access.RequireContextAsync();
-        if (!context.IsOrganisationAdmin && !await access.HasPermissionAsync("Admin")) throw new UnauthorizedAccessException("Communication Hub administration is not permitted.");
         var org = await access.GetCurrentOrganisationIdAsync();
         if (org <= 0 || !await access.HasOrganisationAccessAsync(org)) throw new UnauthorizedAccessException("An authorised organisation context is required.");
+        await using var db = await factory.CreateDbContextAsync();
+        var admitted = await db.Users.AsNoTracking().AnyAsync(u => u.UserId == context.UserId && u.IsActive && u.LocalUserStateId == 1 &&
+            u.AdminPortalAccessEnabled && u.UserOrganisationId != null && u.AdminPortalAccessOrganisationId == u.UserOrganisationId &&
+            u.UserOrganisation!.BusinessEntityID == org);
+        if (!admitted) throw new UnauthorizedAccessException("Approved Admin Portal access for the current tenant is required.");
+        if (!context.IsOrganisationAdmin && !await access.HasPermissionAsync("Admin") && !await access.HasPermissionAsync("Communication.Manage"))
+            throw new UnauthorizedAccessException("Tenant Administrator authority or Communication.Manage permission is required.");
         return org;
     }
 

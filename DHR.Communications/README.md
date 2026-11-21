@@ -4,6 +4,8 @@ The projects belong to `HRM.sln`. Telegram, Facebook Pages, Teams Workflows and 
 
 ## Database placement
 
+Administration at `/admin/settings/communications` requires active, approved Admin Portal admission bound to the account's current tenant. This applies to Tenant Administrators too. Within that tenant, the account must have Tenant Administrator authority (`Admin` permission or organisation-admin authority) or the explicit `Communication.Manage` permission. Platform administrator status alone does not bypass these checks. The permission is registered in the Roles & Permissions canonical catalog and Communication Hub area map; open permission definitions after deploying to materialize it, enable it in the tenant's permission ceiling, then assign it to delegated accounts/roles. No accounts or tenants are automatically granted this permission. Workflow reviewers continue using their assigned-reviewer authorization on `/online/communication-approvals`.
+
 Use the same HRM SQL Server database and `HrmTeContext` as the API. Communication data uses `CM_` physical tables with normal foreign keys to HRM organisations, requests and jobs. This keeps business events and approval-driven delivery release within the same transaction. The worker remains independently deployable. The separate `HRMCommunications` database is not used by this implementation. A future database split will require a durable event bridge and changes to those relationships; changing only the worker connection string is not sufficient.
 
 ## Worker configuration

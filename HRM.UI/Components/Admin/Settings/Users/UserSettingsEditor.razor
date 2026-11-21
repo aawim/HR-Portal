@@ -6,108 +6,233 @@
 @inject ToastService Toast
 @inject ILogger<UserSettingsEditor> Logger
 
-<div class="w-full">
-    @if (error != null) { <p role="alert" class="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">@error</p> }
-    @if (loading) { <p class="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-500">Loading @Title.ToLowerInvariant()…</p> }
+<section class="w-full min-w-0 p-2 flex flex-col gap-2">
+    <!-- Section Header matching OrganisationResources -->
+    <div class="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-800 flex-wrap gap-2">
+        <div>
+            <h2 class="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                <span>@Title</span>
+                @if (data != null)
+                {
+                    <span class="rounded-full bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-400 border border-teal-200 dark:border-teal-800/40 px-2 py-0.5 text-[10px] font-semibold">
+                        @FilteredRows.Count() records
+                    </span>
+                }
+            </h2>
+            <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">@(data?.OrganisationName ?? "Organisation user administration")</p>
+        </div>
+        <div class="flex items-center gap-2">
+            @if (Tab is UserSettingsTab.Staff or UserSettingsTab.Enrollment)
+            {
+                <button type="button"
+                        @onclick="NewItem"
+                        disabled="@busy"
+                        class="inline-flex items-center gap-1.5 rounded-lg bg-teal-700 hover:bg-teal-800 dark:bg-teal-600 dark:hover:bg-teal-500 text-white px-3 py-1.5 text-xs font-semibold shadow-xs disabled:opacity-50 transition">
+                    <span>+ Add @ListTitle</span>
+                </button>
+            }
+            <button type="button"
+                    @onclick="ReloadAsync"
+                    disabled="@(busy || loading)"
+                    class="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200 shadow-2xs hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 transition">
+                <span>↻</span>
+                <span>Refresh</span>
+            </button>
+        </div>
+    </div>
+
+    @if (error != null)
+    {
+        <div role="alert" class="rounded-lg border border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/40 p-2 text-xs text-rose-800 dark:text-rose-300">
+            @error
+        </div>
+    }
+
+    @if (loading)
+    {
+        <div class="py-10 text-center text-xs text-slate-500 dark:text-slate-400">
+            <div class="w-6 h-6 border-2 border-teal-600 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+            Loading @Title.ToLowerInvariant()…
+        </div>
+    }
     else if (data != null)
     {
-        <fieldset disabled="@busy">
-            <div class="grid grid-cols-1 gap-6 xl:grid-cols-12">
-                <section class="min-w-0 xl:col-span-8">
-                    <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-                        <div class="flex items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
-                            <div class="flex items-center gap-3"><div class="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-blue-600"><AppIcon Name="@Icon" /></div>
-                                <div><h2 class="text-sm font-semibold text-slate-900">@Title</h2><p class="mt-0.5 text-xs text-slate-500">@data.OrganisationName</p></div></div>
-                            <button type="button" class="rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-600" @onclick="ReloadAsync">Refresh</button>
+        <fieldset disabled="@busy" class="w-full min-w-0">
+            <div class="grid grid-cols-1 gap-2 xl:grid-cols-12 items-start">
+                <!-- Left: Details / Editor Card -->
+                <div class="min-w-0 xl:col-span-8 flex flex-col gap-2">
+                    <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs overflow-hidden">
+                        <div class="flex items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 p-2">
+                            <div class="flex items-center gap-2 min-w-0">
+                                <span class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300">
+                                    <AppIcon Name="@Icon" />
+                                </span>
+                                <div class="min-w-0">
+                                    <h3 class="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">
+                                        @(user != null ? $"{user.Name} ({user.Username})" : Title)
+                                    </h3>
+                                </div>
+                            </div>
+                            @if (SelectedId > 0)
+                            {
+                                <span class="rounded bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800/40 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-300 shrink-0">
+                                    Editing #@SelectedId
+                                </span>
+                            }
                         </div>
-                        <div class="space-y-5 p-5">
+
+                        <div class="p-2 flex flex-col gap-2">
                             @if (Tab is UserSettingsTab.Accounts or UserSettingsTab.Permissions)
                             {
-                                @if (user == null) { <p class="py-8 text-center text-sm text-slate-500">Select an account from the list to manage it.</p> }
+                                @if (user == null)
+                                {
+                                    <div class="rounded-xl border border-teal-200/70 dark:border-teal-800/40 bg-teal-50/50 dark:bg-teal-950/30 p-2 text-xs text-teal-900 dark:text-teal-200">
+                                        Select an account from the list on the right to manage it.
+                                    </div>
+                                }
                                 else if (Tab == UserSettingsTab.Accounts)
                                 {
-                                    <div class="grid grid-cols-1 gap-5 md:grid-cols-2">
+                                    <div class="grid grid-cols-1 gap-2 md:grid-cols-2">
                                         <label class="@LabelClass">Username<input readonly class="@InputClass" value="@user.Username" /></label>
                                         <label class="@LabelClass">Full name<input class="@InputClass" maxlength="255" @bind="user.Name" /></label>
                                         <label class="@LabelClass">Email<input type="email" class="@InputClass" maxlength="128" @bind="user.Email" /></label>
                                         <label class="@LabelClass">Mobile<input class="@InputClass" maxlength="20" @bind="user.Mobile" /></label>
                                         <label class="@LabelClass">Account state<select class="@InputClass" @bind="user.StateId">@foreach (var option in data.AccountStates) { <option value="@option.Id">@option.Name</option> }</select></label>
-                                        <div class="rounded-lg border border-slate-100 bg-slate-50 p-4 text-sm text-slate-600">Sign-in provider status: @user.SsoStatus</div>
-                                        <label class="rounded-lg border border-slate-100 bg-slate-50 p-4 text-sm"><input type="checkbox" @bind="user.Active" /> Active account</label>
-                                        <label class="rounded-lg border border-slate-100 bg-slate-50 p-4 text-sm"><input type="checkbox" @bind="user.Approved" /> Approved account</label>
+                                        <div class="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 p-2 text-xs text-slate-600 dark:text-slate-300 flex items-center">
+                                            Sign-in provider status: <strong class="ml-1 text-slate-800 dark:text-slate-100">@user.SsoStatus</strong>
+                                        </div>
+                                        <label class="flex items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 p-2 text-xs font-medium text-slate-700 dark:text-slate-200 cursor-pointer">
+                                            <input type="checkbox" class="accent-teal-700" @bind="user.Active" /> Active account
+                                        </label>
+                                        <label class="flex items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 p-2 text-xs font-medium text-slate-700 dark:text-slate-200 cursor-pointer">
+                                            <input type="checkbox" class="accent-teal-700" @bind="user.Approved" /> Approved account
+                                        </label>
                                     </div>
                                 }
                                 else
                                 {
-                                    <h3 class="text-sm font-semibold text-slate-800">@user.Name <span class="font-normal text-slate-500">(@user.Username)</span></h3>
-                                    <section class="rounded-xl border border-slate-200 p-4 space-y-3">
-                                        <h4 class="text-sm font-semibold text-slate-800">Assigned roles</h4>
+                                    <section class="rounded-xl border border-slate-200 dark:border-slate-800 p-2 flex flex-col gap-2">
+                                        <h4 class="text-xs font-bold text-slate-800 dark:text-slate-100">Assigned roles</h4>
                                         <div class="grid max-h-60 grid-cols-1 gap-2 overflow-y-auto md:grid-cols-2">
                                             @foreach (var role in data.Roles)
                                             {
-                                                <label class="flex items-start gap-2 rounded-lg bg-slate-50 p-3 text-sm"><input type="checkbox" class="mt-1" checked="@user.RoleIds.Contains(role.Id)" @onchange="e => ToggleRole(role.Id, e.Value is true)" /><span>@role.Name<span class="block text-xs text-slate-500">@role.PermissionIds.Count permissions</span></span></label>
+                                                <label class="flex items-start gap-2 rounded-lg border border-slate-200/80 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 p-2 text-xs cursor-pointer hover:border-teal-400 transition">
+                                                    <input type="checkbox" class="mt-0.5 accent-teal-700" checked="@user.RoleIds.Contains(role.Id)" @onchange="e => ToggleRole(role.Id, e.Value is true)" />
+                                                    <span class="min-w-0">
+                                                        <span class="block font-semibold text-slate-800 dark:text-slate-100">@role.Name</span>
+                                                        <span class="block text-[11px] text-slate-500 dark:text-slate-400">@role.PermissionIds.Count permissions</span>
+                                                    </span>
+                                                </label>
                                             }
-                                            @if (data.Roles.Count == 0) { <p class="text-sm text-slate-500">No roles are configured for this organisation.</p> }
+                                            @if (data.Roles.Count == 0)
+                                            {
+                                                <p class="text-xs text-slate-500 dark:text-slate-400">No roles are configured for this organisation.</p>
+                                            }
                                         </div>
                                     </section>
-                                    <h4 class="text-sm font-semibold text-slate-800">Direct permissions</h4>
-                                    <p class="text-xs text-slate-500">Direct and User Group permissions are limited to permissions enabled for the organisation.</p>
-                                    <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
+
+                                    <div class="rounded-xl border border-teal-200/70 dark:border-teal-800/40 bg-teal-50/50 dark:bg-teal-950/30 p-2 text-xs text-teal-900 dark:text-teal-200">
+                                        <strong class="font-semibold">Direct permissions:</strong> Direct and User Group permissions are limited to permissions enabled for the organisation.
+                                    </div>
+
+                                    <div class="grid grid-cols-1 gap-2 lg:grid-cols-2">
                                         <PermissionAssignmentColumn @key="(user.Id, true)" Assigned="true" Permissions="data.Permissions.Where(p => user.DirectPermissionIds.Contains(p.Id)).ToList()" OnMove="id => ToggleDirect(id, false)" OnMoveGroup="ids => MoveDirect(ids, false)" />
                                         <PermissionAssignmentColumn @key="(user.Id, false)" Permissions="data.Permissions.Where(p => !user.DirectPermissionIds.Contains(p.Id)).ToList()" OnMove="id => ToggleDirect(id, true)" OnMoveGroup="ids => MoveDirect(ids, true)" />
                                     </div>
-                                    <details class="rounded-xl border border-slate-200 p-4"><summary class="cursor-pointer text-sm font-semibold text-slate-800">Inherited permissions (@InheritedIds.Count)</summary>
-                                        <div class="mt-3 max-h-60 space-y-2 overflow-y-auto">@foreach (var permission in data.Permissions.Where(p => InheritedIds.Contains(p.Id))) { <p class="text-xs text-slate-600">@permission.Key</p> }</div>
+
+                                    <details class="rounded-xl border border-slate-200 dark:border-slate-800 p-2">
+                                        <summary class="cursor-pointer text-xs font-bold text-slate-800 dark:text-slate-100">Inherited permissions (@InheritedIds.Count)</summary>
+                                        <div class="mt-2 max-h-60 flex flex-col gap-1 overflow-y-auto">
+                                            @foreach (var permission in data.Permissions.Where(p => InheritedIds.Contains(p.Id)))
+                                            {
+                                                <p class="text-[11px] font-mono text-slate-600 dark:text-slate-300">@permission.Key</p>
+                                            }
+                                        </div>
                                     </details>
                                 }
                             }
                             else if (Tab == UserSettingsTab.Staff)
                             {
-                                <label class="@LabelClass">Individual<select class="@InputClass" disabled="@existingStaff" @bind="staff.IndividualId"><option value="0">Select individual</option>@foreach (var person in data.People) { <option value="@person.IndividualId">@person.Name (#@person.IndividualId)</option> }</select></label>
-                                <label class="@LabelClass">Employee number<input class="@InputClass" maxlength="50" @bind="staff.EmployeeNumber" /></label>
-                                <p class="text-xs text-slate-500">Add a staff record for an individual already associated with this organisation. Employment and job details are managed in the staff workspace.</p>
+                                <div class="grid grid-cols-1 gap-2 md:grid-cols-2">
+                                    <label class="@LabelClass">Individual<select class="@InputClass" disabled="@existingStaff" @bind="staff.IndividualId"><option value="0">Select individual</option>@foreach (var person in data.People) { <option value="@person.IndividualId">@person.Name (#@person.IndividualId)</option> }</select></label>
+                                    <label class="@LabelClass">Employee number<input class="@InputClass" maxlength="50" @bind="staff.EmployeeNumber" /></label>
+                                </div>
+                                <p class="text-[11px] text-slate-500 dark:text-slate-400">Add a staff record for an individual already associated with this organisation. Employment and job details are managed in the staff workspace.</p>
                             }
                             else if (Tab == UserSettingsTab.Enrollment)
                             {
-                                <label class="@LabelClass">Staff member<select class="@InputClass" disabled="@(enrollment.Id > 0)" @bind="enrollment.IndividualId"><option value="0">Select staff</option>@foreach (var person in data.Staff) { <option value="@person.IndividualId">@person.Name</option> }</select></label>
-                                <label class="@LabelClass">Enrollment number<input class="@InputClass" maxlength="10" @bind="enrollment.Number" /></label>
+                                <div class="grid grid-cols-1 gap-2 md:grid-cols-2">
+                                    <label class="@LabelClass">Staff member<select class="@InputClass" disabled="@(enrollment.Id > 0)" @bind="enrollment.IndividualId"><option value="0">Select staff</option>@foreach (var person in data.Staff) { <option value="@person.IndividualId">@person.Name</option> }</select></label>
+                                    <label class="@LabelClass">Enrollment number<input class="@InputClass" maxlength="10" @bind="enrollment.Number" /></label>
+                                </div>
                             }
                             else
                             {
-                                <p class="rounded-xl bg-blue-50 p-4 text-sm text-blue-800">These permissions limit which resources accounts in @data.OrganisationName can be granted. Each account still needs direct or User Group permissions.</p>
-                                <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                                <div class="rounded-xl border border-teal-200/70 dark:border-teal-800/40 bg-teal-50/50 dark:bg-teal-950/30 p-2 text-xs text-teal-900 dark:text-teal-200">
+                                    These permissions limit which resources accounts in @data.OrganisationName can be granted. Each account still needs direct or User Group permissions.
+                                </div>
+                                <div class="grid grid-cols-1 gap-2 lg:grid-cols-2">
                                     <PermissionAssignmentColumn Assigned="true" Permissions="data.Permissions.Where(p => organisationPermissions.Contains(p.Id)).ToList()" OnMove="id => ToggleOrganisation(id, false)" OnMoveGroup="ids => MoveOrganisation(ids, false)" />
                                     <PermissionAssignmentColumn Permissions="data.Permissions.Where(p => !organisationPermissions.Contains(p.Id)).ToList()" OnMove="id => ToggleOrganisation(id, true)" OnMoveGroup="ids => MoveOrganisation(ids, true)" />
                                 </div>
                             }
                         </div>
+
                         @if (user != null || Tab is UserSettingsTab.Staff or UserSettingsTab.Enrollment or UserSettingsTab.Organisation)
                         {
-                            <div class="flex gap-3 border-t border-slate-100 bg-slate-50/50 px-5 py-4">
-                                <button type="button" class="rounded-lg border border-slate-200 px-4 py-2.5 text-sm text-slate-600" @onclick="CancelAsync">Cancel</button>
-                                <button type="button" class="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700" @onclick="SaveAsync">@(busy ? "Saving…" : "Save changes")</button>
+                            <div class="flex flex-wrap items-center gap-2 border-t border-slate-100 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40 p-2">
+                                <button type="button"
+                                        class="inline-flex items-center gap-1.5 rounded-lg bg-teal-700 hover:bg-teal-800 dark:bg-teal-600 dark:hover:bg-teal-500 text-white px-3 py-1.5 text-xs font-semibold shadow-xs disabled:opacity-50 transition"
+                                        @onclick="SaveAsync">
+                                    @(busy ? "Saving…" : "Save Changes")
+                                </button>
+                                <button type="button"
+                                        class="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 transition"
+                                        @onclick="CancelAsync">
+                                    Cancel
+                                </button>
                             </div>
                         }
                     </div>
-                </section>
-                <aside class="min-w-0 xl:col-span-4">
-                    <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-                        <div class="border-b border-slate-200 px-5 py-4">
-                            <div class="flex items-center justify-between gap-3"><div><h2 class="text-sm font-semibold text-slate-900">@ListTitle</h2><p class="mt-1 text-xs text-slate-500">@Rows.Count() records</p></div>
-                                @if (Tab is UserSettingsTab.Staff or UserSettingsTab.Enrollment) { <button type="button" class="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-600 text-white" title="Add @ListTitle" aria-label="Add @ListTitle" @onclick="NewItem"><AppIcon Name="add" /></button> }</div>
-                            <input type="search" class="mt-4 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm" aria-label="Search @ListTitle" placeholder="Search name or number…" @bind="search" @bind:event="oninput" />
+                </div>
+
+                <!-- Right: Account / Record List Card -->
+                <aside class="min-w-0 xl:col-span-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs overflow-hidden">
+                    <div class="flex flex-col gap-2 border-b border-slate-100 dark:border-slate-800 p-2">
+                        <div class="flex items-center justify-between gap-2">
+                            <h3 class="text-xs font-bold text-slate-900 dark:text-slate-100">@ListTitle</h3>
+                            <span class="rounded-full bg-slate-100 dark:bg-slate-800 px-2 py-0.5 text-[10px] font-semibold text-slate-600 dark:text-slate-300">
+                                @FilteredRows.Count() / @Rows.Count()
+                            </span>
                         </div>
-                        <div class="divide-y divide-slate-100 overflow-y-auto" style="max-height: 680px; scrollbar-gutter: stable;" tabindex="0">
-                            @foreach (var row in FilteredRows)
-                            { <button type="button" class="block w-full border-l-4 px-5 py-4 text-left @(SelectedId == row.Id ? "border-blue-600 bg-blue-50" : "border-transparent hover:bg-slate-50")" @onclick="() => Select(row.Id)"><span class="block text-sm font-semibold text-slate-800">@row.Name</span><span class="mt-1 block break-all text-xs text-slate-500">@row.Detail</span></button> }
-                            @if (!FilteredRows.Any()) { <p class="px-5 py-12 text-center text-sm text-slate-500">No records found.</p> }
-                        </div>
+                        <input type="search"
+                               class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs text-slate-800 dark:text-slate-100 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                               aria-label="Search @ListTitle"
+                               placeholder="Search name or number…"
+                               @bind="search"
+                               @bind:event="oninput" />
+                    </div>
+                    <div class="divide-y divide-slate-100 dark:divide-slate-800 overflow-y-auto" style="max-height: 680px; scrollbar-gutter: stable;" tabindex="0">
+                        @foreach (var row in FilteredRows)
+                        {
+                            var isSelected = SelectedId == row.Id;
+                            <button type="button"
+                                    class="block w-full border-l-4 p-2 text-left transition @(isSelected ? "border-teal-700 bg-teal-50/70 dark:bg-teal-950/40" : "border-transparent hover:bg-slate-50 dark:hover:bg-slate-800/60")"
+                                    @onclick="() => Select(row.Id)">
+                                <span class="block text-xs font-semibold text-slate-800 dark:text-slate-100 truncate">@row.Name</span>
+                                <span class="mt-0.5 block break-all text-[11px] text-slate-500 dark:text-slate-400">@row.Detail</span>
+                            </button>
+                        }
+                        @if (!FilteredRows.Any())
+                        {
+                            <p class="p-4 text-center text-xs text-slate-500 dark:text-slate-400">No records found.</p>
+                        }
                     </div>
                 </aside>
             </div>
         </fieldset>
     }
-</div>
+</section>
 
 @code {
     [Parameter] public UserSettingsTab Tab { get; set; }
@@ -120,8 +245,8 @@
     private string search = "";
     private string? error;
     private bool busy, loading, existingStaff;
-    private const string LabelClass = "block text-xs font-bold uppercase tracking-wide text-slate-700";
-    private const string InputClass = "mt-2 w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-normal normal-case outline-none focus:border-indigo-400 focus:ring-2 focus:ring-blue-100 read-only:bg-slate-50";
+    private const string LabelClass = "block text-[11px] font-semibold text-slate-600 dark:text-slate-400";
+    private const string InputClass = "mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs text-slate-800 dark:text-slate-100 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500 read-only:bg-slate-50 dark:read-only:bg-slate-800/50";
     private string Title => Tab switch { UserSettingsTab.Accounts => "Manage Account", UserSettingsTab.Permissions => "Account Roles & Permissions", UserSettingsTab.Staff => "Manage Staff", UserSettingsTab.Enrollment => "Staff Enrollment Numbers", _ => "User Organisation Permissions" };
     private string Icon => Tab switch { UserSettingsTab.Accounts => "manage_accounts", UserSettingsTab.Permissions => "admin_panel_settings", UserSettingsTab.Staff => "groups", UserSettingsTab.Enrollment => "badge", _ => "corporate_fare" };
     private string ListTitle => Tab switch { UserSettingsTab.Staff => "Staff", UserSettingsTab.Enrollment => "Enrollments", UserSettingsTab.Organisation => "Organisation", _ => "Accounts" };
