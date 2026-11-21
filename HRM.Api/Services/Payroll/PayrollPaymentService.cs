@@ -160,7 +160,34 @@ public sealed class PayrollPaymentService : IPayrollPaymentService
         var statutoryPolicy = await PayrollStatutoryPolicyLoader.LoadAsync(db, organisationId);
         string currency = statutoryPolicy.DefaultCurrencyCode;
         var sb = new StringBuilder();
-        if (string.Equals(batch.FormatCode, "BML_BULK", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(batch.FormatCode, "MMA_FAVARA_XML", StringComparison.OrdinalIgnoreCase))
+        {
+            sb.AppendLine("<?xml version=\"1.0\" encoding=\"UTF-8\"?>");
+            sb.AppendLine("<Document xmlns=\"urn:iso:std:iso:20022:tech:xsd:pain.001.001.03\">");
+            sb.AppendLine("  <CstmrCdtTrfInitn>");
+            sb.AppendLine("    <GrpHdr>");
+            sb.AppendLine($"      <MsgId>{System.Security.SecurityElement.Escape(batch.BatchReference)}</MsgId>");
+            sb.AppendLine($"      <CreDtTm>{DateTime.UtcNow:yyyy-MM-ddTHH:mm:ssZ}</CreDtTm>");
+            sb.AppendLine($"      <NbOfTxs>{batch.Transactions.Count}</NbOfTxs>");
+            sb.AppendLine($"      <CtrlSum>{batch.TotalAmount:F2}</CtrlSum>");
+            sb.AppendLine("    </GrpHdr>");
+            sb.AppendLine("    <PmtInf>");
+            sb.AppendLine($"      <PmtInfId>{System.Security.SecurityElement.Escape(batch.BatchReference)}</PmtInfId>");
+            sb.AppendLine("      <PmtMtd>TRF</PmtMtd>");
+            foreach (var tx in batch.Transactions)
+            {
+                sb.AppendLine("      <CdtTrfTxInf>");
+                sb.AppendLine($"        <PmtId><EndToEndId>{System.Security.SecurityElement.Escape(tx.PaymentReference)}</EndToEndId></PmtId>");
+                sb.AppendLine($"        <Amt><InstdAmt Ccy=\"{System.Security.SecurityElement.Escape(currency)}\">{tx.Amount:F2}</InstdAmt></Amt>");
+                sb.AppendLine($"        <Cdtr><Nm>{System.Security.SecurityElement.Escape(tx.EmployeeName)}</Nm></Cdtr>");
+                sb.AppendLine($"        <CdtrAcct><Id><Othr><Id>{System.Security.SecurityElement.Escape(tx.BankAccountNumber)}</Id></Othr></Id></CdtrAcct>");
+                sb.AppendLine("      </CdtTrfTxInf>");
+            }
+            sb.AppendLine("    </PmtInf>");
+            sb.AppendLine("  </CstmrCdtTrfInitn>");
+            sb.AppendLine("</Document>");
+        }
+        else if (string.Equals(batch.FormatCode, "BML_BULK", StringComparison.OrdinalIgnoreCase))
         {
             sb.AppendLine("BeneficiaryAccount,BeneficiaryName,Amount,Currency,Reference,BankBranch");
             foreach (var tx in batch.Transactions)

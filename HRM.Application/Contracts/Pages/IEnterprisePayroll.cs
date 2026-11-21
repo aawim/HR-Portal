@@ -225,6 +225,15 @@ public sealed record UpdatePayrollPeriodInput(
     DateOnly PaymentDate
 );
 
+public sealed record PayrollAdjustmentInput(
+    int PayrollRunId,
+    int JobId,
+    string ComponentCode,
+    string Description,
+    decimal Amount,
+    bool IsAddition
+);
+
 public interface IEnterprisePayroll
 {
     Task<PayrollConfigurationDto> GetConfigurationAsync();
@@ -250,4 +259,7 @@ public interface IEnterprisePayroll
     Task<ServiceResult> ReconcilePaymentBatchAsync(int paymentBatchId, string reference);
     Task<List<PayslipRow>> GetMyPayslipsAsync();
     Task<PayslipRow> GetPayslipDetailAsync(int payrollEmployeeId);
+    Task<string> ExportStatutoryReportAsync(int runId, string reportType);
+    Task<ServiceResult> GenerateRamadanAllowanceAsync(int runId);
+    Task<ServiceResult> AddAdjustmentAsync(PayrollAdjustmentInput input);
 }

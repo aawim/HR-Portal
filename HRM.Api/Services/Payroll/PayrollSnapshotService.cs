@@ -102,7 +102,7 @@ public sealed class PayrollSnapshotService : IPayrollSnapshotService
             .Where(t => t.OrganisationId == organisationId)
             .ToDictionaryAsync(t => t.Id, t => t.Name);
 
-        var statutoryPolicy = await PayrollStatutoryPolicyLoader.LoadAsync(db, organisationId);
+        var statutoryPolicy = await PayrollStatutoryPolicyLoader.LoadAsync(db, organisationId, periodEnd);
         decimal overtimeMultiplier = statutoryPolicy.NormalOvertimeMultiplier;
         decimal holidayOvertimeMultiplier = statutoryPolicy.HolidayOvertimeMultiplier;
         decimal overtimeHourlyDivisor = statutoryPolicy.OvertimeHourlyDivisor;

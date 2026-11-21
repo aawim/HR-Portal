@@ -16,11 +16,20 @@ internal static class PayrollStatutoryPolicyLoader
 {
     public const string StatutoryRuleCode = "STATUTORY_POLICY";
 
-    public static async Task<PayrollStatutoryPolicy> LoadAsync(HrmTeContext db, int organisationId, CancellationToken ct = default)
+    public static async Task<PayrollStatutoryPolicy> LoadAsync(HrmTeContext db, int organisationId, DateOnly? asOfDate = null, CancellationToken ct = default)
     {
-        var rules = await db.CalculationRules
+        var query = db.CalculationRules
             .AsNoTracking()
-            .Where(r => r.OrganisationId == organisationId && r.IsActive)
+            .Where(r => r.OrganisationId == organisationId && r.IsActive);
+
+        if (asOfDate.HasValue)
+        {
+            var effectiveDate = asOfDate.Value;
+            query = query.Where(r => r.EffectiveFrom <= effectiveDate && (!r.EffectiveTo.HasValue || r.EffectiveTo.Value >= effectiveDate));
+        }
+
+        var rules = await query
+            .OrderByDescending(r => r.EffectiveFrom)
             .ToListAsync(ct);
 
         return FromRules(rules);

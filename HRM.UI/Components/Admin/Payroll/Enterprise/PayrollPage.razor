@@ -323,11 +323,49 @@
                         <!-- 5. Prepare Payment Batch -->
                         @if (selectedRun.Status == (int)PayrollRunStatus.Finalised)
                         {
+                            <div class="space-y-1.5">
+                                <label class="block text-[11px] font-semibold text-slate-600">
+                                    Bank / MMA Format
+                                    <select class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-800" @bind="selectedBankFormat">
+                                        <option value="BML_BULK">Bank of Maldives (BML Bulk CSV)</option>
+                                        <option value="MIB_BULK">Maldives Islamic Bank (MIB Bulk CSV)</option>
+                                        <option value="MMA_FAVARA_XML">MMA Favara (ISO 20022 pain.001 XML)</option>
+                                        <option value="STANDARD_CSV">Standard Payroll CSV</option>
+                                    </select>
+                                </label>
+                                <button type="button"
+                                        class="w-full inline-flex items-center justify-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white shadow-xs hover:bg-indigo-700 transition-colors"
+                                        @onclick="PreparePaymentBatchAsync">
+                                    <span>Prepare Bank Payment Instructions</span>
+                                </button>
+                            </div>
+                        }
+
+                        <!-- 6. Statutory Actions & Reports (MPAO / MIRA / Ramadan) -->
+                        @if (selectedRun.Status is (int)PayrollRunStatus.Draft or (int)PayrollRunStatus.Calculated or (int)PayrollRunStatus.ValidationFailed)
+                        {
                             <button type="button"
-                                    class="w-full inline-flex items-center justify-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white shadow-xs hover:bg-indigo-700 transition-colors"
-                                    @onclick="PreparePaymentBatchAsync">
-                                <span>Prepare Bank Payment Instructions</span>
+                                    class="w-full inline-flex items-center justify-center gap-1.5 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800 hover:bg-emerald-100 transition-colors"
+                                    @onclick="GenerateRamadanAllowanceAsync">
+                                <span>Generate Statutory Ramadan Allowance</span>
                             </button>
+                        }
+                        @if (selectedRun.ProcessedEmployees > 0)
+                        {
+                            <div class="rounded-lg border border-slate-200 bg-slate-50/80 p-2.5 space-y-1.5">
+                                <p class="text-[11px] font-bold uppercase tracking-wide text-slate-600">Maldives Statutory Exports</p>
+                                <div class="grid grid-cols-1 gap-1.5">
+                                    <button type="button" class="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100" @onclick='() => ExportStatutoryAsync("MPAO_KOSHAARU")'>
+                                        MPAO Koshaaru Pension CSV
+                                    </button>
+                                    <button type="button" class="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100" @onclick='() => ExportStatutoryAsync("MIRA_601_EWT")'>
+                                        MIRA 601 Income Tax (EWT) CSV
+                                    </button>
+                                    <button type="button" class="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100" @onclick='() => ExportStatutoryAsync("PAYROLL_REGISTER_CSV")'>
+                                        Full Payroll Register CSV
+                                    </button>
+                                </div>
+                            </div>
                         }
                     </div>
 
@@ -1352,12 +1390,20 @@
         paymentBatches = await Payroll.GetPaymentBatchesAsync(selectedRun?.PayrollRunId);
     }
 
+    private string selectedBankFormat = "BML_BULK";
+
     private async Task PreparePaymentBatchAsync()
     {
         if (selectedRun == null) return;
         try
         {
-            var batch = await Payroll.PreparePaymentBatchAsync(selectedRun.PayrollRunId, "BML", "CSV");
+            var bankCode = selectedBankFormat switch
+            {
+                "MIB_BULK" => "MIB",
+                "MMA_FAVARA_XML" => "MMA_FAVARA",
+                _ => "BML"
+            };
+            var batch = await Payroll.PreparePaymentBatchAsync(selectedRun.PayrollRunId, bankCode, selectedBankFormat);
             Toasts.Success($"Payment batch {batch.BatchReference} prepared for {batch.TotalCount} staff.");
             await LoadPaymentBatchesAsync();
         }
@@ -1367,15 +1413,50 @@
         }
     }
 
+    private async Task GenerateRamadanAllowanceAsync()
+    {
+        if (selectedRun == null) return;
+        try
+        {
+            var res = await Payroll.GenerateRamadanAllowanceAsync(selectedRun.PayrollRunId);
+            if (res.Success) Toasts.Success(res.Message);
+            else Toasts.Error(res.Message);
+        }
+        catch (Exception ex)
+        {
+            Toasts.Error($"Ramadan allowance generation failed: {ex.Message}");
+        }
+    }
+
+    private async Task ExportStatutoryAsync(string reportType)
+    {
+        if (selectedRun == null) return;
+        try
+        {
+            string csv = await Payroll.ExportStatutoryReportAsync(selectedRun.PayrollRunId, reportType);
+            var base64 = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(csv));
+            var fileName = $"{reportType}_Run{selectedRun.PayrollRunId}_{DateTime.UtcNow:yyyyMMdd_HHmmss}.csv";
+            await JS.InvokeVoidAsync("eval", $"(function(){{ const a = document.createElement('a'); a.href = 'data:text/csv;charset=utf-8;base64,{base64}'; a.download = '{fileName}'; document.body.appendChild(a); a.click(); a.remove(); }})()");
+            Toasts.Success($"Exported {fileName}");
+        }
+        catch (Exception ex)
+        {
+            Toasts.Error($"Statutory export failed: {ex.Message}");
+        }
+    }
+
     private async Task DownloadBankExportAsync(int batchId)
     {
         try
         {
-            string csv = await Payroll.ExportPaymentFileAsync(batchId);
-            var base64 = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(csv));
-            var fileName = $"Bank_Payment_Batch_{batchId}_{DateTime.UtcNow:yyyyMMdd_HHmmss}.csv";
-            await JS.InvokeVoidAsync("eval", $"(function(){{ const a = document.createElement('a'); a.href = 'data:text/csv;charset=utf-8;base64,{base64}'; a.download = '{fileName}'; document.body.appendChild(a); a.click(); a.remove(); }})()");
-            Toasts.Success($"Bank CSV downloaded: {fileName}");
+            string content = await Payroll.ExportPaymentFileAsync(batchId);
+            bool isXml = content.TrimStart().StartsWith("<?xml", StringComparison.OrdinalIgnoreCase);
+            var base64 = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(content));
+            var ext = isXml ? "xml" : "csv";
+            var mime = isXml ? "application/xml" : "text/csv";
+            var fileName = $"Bank_Payment_Batch_{batchId}_{DateTime.UtcNow:yyyyMMdd_HHmmss}.{ext}";
+            await JS.InvokeVoidAsync("eval", $"(function(){{ const a = document.createElement('a'); a.href = 'data:{mime};charset=utf-8;base64,{base64}'; a.download = '{fileName}'; document.body.appendChild(a); a.click(); a.remove(); }})()");
+            Toasts.Success($"Bank file downloaded: {fileName}");
         }
         catch (Exception ex)
         {

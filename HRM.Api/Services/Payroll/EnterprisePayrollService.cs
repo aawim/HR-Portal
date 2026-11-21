@@ -899,4 +899,204 @@ public sealed class EnterprisePayrollService : IEnterprisePayroll
             p.EmployerItems.Select(l => new PayrollLineItemRow(l.PayrollLineId, l.PayrollEmployeeId, l.ComponentCode, l.ComponentName, (int)l.ComponentType, l.Rate, l.Units, l.CalculatedAmount, l.IsTaxable, l.IsPensionable, l.SourceReference)).ToList()
         );
     }
+
+    public async Task<string> ExportStatutoryReportAsync(int runId, string reportType)
+    {
+        var (orgId, userId, _, _) = await RequireOrgScopeAsync();
+        await using var db = await _factory.CreateDbContextAsync();
+
+        var run = await db.PayrollRuns
+            .AsNoTracking()
+            .Include(r => r.PayrollPeriod)
+            .Include(r => r.Employees)
+                .ThenInclude(e => e.Lines)
+            .SingleOrDefaultAsync(r => r.PayrollRunId == runId && r.OrganisationId == orgId);
+
+        if (run == null) throw new InvalidOperationException("Payroll run not found.");
+
+        var individualIds = run.Employees.Select(e => e.IndividualId).Distinct().ToList();
+        var idCards = individualIds.Count == 0
+            ? new Dictionary<int, string>()
+            : await db.Idcards.AsNoTracking()
+                .Where(c => individualIds.Contains(c.BusinessEntityId))
+                .GroupBy(c => c.BusinessEntityId)
+                .Select(g => new { g.Key, Number = g.Select(x => x.IdcardNumber).FirstOrDefault() ?? "" })
+                .ToDictionaryAsync(x => x.Key, x => x.Number);
+
+        var sb = new System.Text.StringBuilder();
+        var type = (reportType ?? "").Trim().ToUpperInvariant();
+        if (type == "MPAO_KOSHAARU")
+        {
+            sb.AppendLine("NationalId,EmployeeNumber,EmployeeName,Period,PensionableBasicWage,EmployeePension7Pct,EmployerPension7Pct,TotalMRPSContribution");
+            foreach (var emp in run.Employees.OrderBy(e => e.EmployeeNumber))
+            {
+                decimal eePen = emp.Lines.Where(l => l.ComponentCode == "PEN_EMP").Sum(l => l.CalculatedAmount);
+                decimal erPen = emp.Lines.Where(l => l.ComponentCode == "PEN_EMPR").Sum(l => l.CalculatedAmount);
+                if (eePen <= 0 && erPen <= 0) continue;
+                string nid = idCards.GetValueOrDefault(emp.IndividualId, "");
+                string period = run.PayrollPeriod != null ? $"{run.PayrollPeriod.PeriodYear:D4}-{run.PayrollPeriod.PeriodMonth:D2}" : "";
+                sb.AppendLine($"\"{nid}\",\"{emp.EmployeeNumber}\",\"{emp.EmployeeName}\",\"{period}\",{emp.BaseSalary:F2},{eePen:F2},{erPen:F2},{(eePen + erPen):F2}");
+            }
+        }
+        else if (type == "MIRA_601_EWT")
+        {
+            sb.AppendLine("NationalId,EmployeeNumber,EmployeeName,Period,GrossEarnings,EmployeePension,EWTWithheld");
+            foreach (var emp in run.Employees.OrderBy(e => e.EmployeeNumber))
+            {
+                decimal eePen = emp.Lines.Where(l => l.ComponentCode == "PEN_EMP").Sum(l => l.CalculatedAmount);
+                decimal tax = emp.Lines.Where(l => l.ComponentCode == "TAX_WHT").Sum(l => l.CalculatedAmount);
+                string nid = idCards.GetValueOrDefault(emp.IndividualId, "");
+                string period = run.PayrollPeriod != null ? $"{run.PayrollPeriod.PeriodYear:D4}-{run.PayrollPeriod.PeriodMonth:D2}" : "";
+                sb.AppendLine($"\"{nid}\",\"{emp.EmployeeNumber}\",\"{emp.EmployeeName}\",\"{period}\",{emp.GrossEarnings:F2},{eePen:F2},{tax:F2}");
+            }
+        }
+        else
+        {
+            sb.AppendLine("EmployeeNumber,NationalId,EmployeeName,Department,Position,BaseSalary,GrossEarnings,TotalDeductions,EmployerPension,NetSalary");
+            foreach (var emp in run.Employees.OrderBy(e => e.EmployeeNumber))
+            {
+                string nid = idCards.GetValueOrDefault(emp.IndividualId, "");
+                sb.AppendLine($"\"{emp.EmployeeNumber}\",\"{nid}\",\"{emp.EmployeeName}\",\"{emp.DepartmentName}\",\"{emp.PositionTitle}\",{emp.BaseSalary:F2},{emp.GrossEarnings:F2},{emp.TotalDeductions:F2},{emp.EmployerContributions:F2},{emp.NetSalary:F2}");
+            }
+        }
+
+        db.PayrollAuditEvents.Add(new PayrollAuditEvent
+        {
+            OrganisationId = orgId,
+            PayrollRunId = runId,
+            UserId = userId,
+            ActionType = "EXPORT_STATUTORY_REPORT",
+            Description = $"Exported statutory payroll report ({type}) for run #{runId}.",
+            TimestampUtc = DateTime.UtcNow
+        });
+        await db.SaveChangesAsync();
+        return sb.ToString();
+    }
+
+    public async Task<ServiceResult> GenerateRamadanAllowanceAsync(int runId)
+    {
+        var (orgId, userId, _, _) = await RequireOrgScopeAsync();
+        await using var db = await _factory.CreateDbContextAsync();
+
+        var run = await db.PayrollRuns
+            .Include(r => r.PayrollPeriod)
+            .SingleOrDefaultAsync(r => r.PayrollRunId == runId && r.OrganisationId == orgId);
+        if (run == null) return ServiceResult.Fail("Payroll run not found.");
+        if (run.Status is PayrollRunStatus.Approved or PayrollRunStatus.Finalised or PayrollRunStatus.PaymentPrepared or PayrollRunStatus.Paid)
+            return ServiceResult.Fail("Cannot generate Ramadan Allowance for an approved or finalised payroll run.");
+
+        var asOf = run.PayrollPeriod?.PeriodEndDate ?? DateOnly.FromDateTime(DateTime.UtcNow);
+        var policy = await PayrollStatutoryPolicyLoader.LoadAsync(db, orgId, asOf);
+        if (policy.RamadanAllowanceAmount <= 0)
+            return ServiceResult.Fail("Ramadan Allowance amount is set to 0 in Payroll Settings.");
+
+        var periodStartDt = (run.PayrollPeriod?.PeriodStartDate ?? asOf).ToDateTime(TimeOnly.MinValue);
+        var periodEndDt = asOf.ToDateTime(TimeOnly.MaxValue);
+
+        var activeJobs = await db.Jobs
+            .AsNoTracking()
+            .Include(j => j.Individual)
+            .ThenInclude(i => i!.Country)
+            .Where(j => j.OrganisationID == orgId && j.JobStateId == 4 &&
+                        j.JoinedDate <= periodEndDt &&
+                        (!j.TerminatedDate.HasValue || j.TerminatedDate.Value >= periodStartDt))
+            .ToListAsync();
+
+        var existingJobIds = (await db.PayrollAdjustments
+            .AsNoTracking()
+            .Where(a => a.OrganisationId == orgId && a.PayrollRunId == runId && a.ComponentCode == "RAMADAN_ALLOWANCE")
+            .Select(a => a.JobId)
+            .ToListAsync()).ToHashSet();
+
+        int added = 0;
+        foreach (var group in activeJobs.GroupBy(j => j.IndividualID))
+        {
+            var job = group.OrderByDescending(j => j.JoinedDate).ThenByDescending(j => j.JobId).First();
+            if (existingJobIds.Contains(job.JobId)) continue;
+
+            bool isMaldivian = job.Individual?.Country == null ||
+                string.Equals(job.Individual.Country.Isoalpha2Code, "MV", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(job.Individual.Country.NameEnglish, "Maldives", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(job.Individual.Country.NationalityEnglish, "Maldivian", StringComparison.OrdinalIgnoreCase);
+            if (!isMaldivian) continue;
+
+            db.PayrollAdjustments.Add(new PayrollAdjustment
+            {
+                OrganisationId = orgId,
+                JobId = job.JobId,
+                IndividualId = job.IndividualID,
+                PayrollRunId = runId,
+                ComponentCode = "RAMADAN_ALLOWANCE",
+                Description = $"Statutory Ramadan Allowance ({asOf.Year})",
+                Amount = policy.RamadanAllowanceAmount,
+                IsAddition = true,
+                ApprovedByUserId = userId,
+                ApprovedAtUtc = DateTime.UtcNow,
+                CreatedAtUtc = DateTime.UtcNow
+            });
+            added++;
+        }
+
+        if (added > 0)
+        {
+            db.PayrollAuditEvents.Add(new PayrollAuditEvent
+            {
+                OrganisationId = orgId,
+                PayrollRunId = runId,
+                UserId = userId,
+                ActionType = "GENERATE_RAMADAN_ALLOWANCE",
+                Description = $"Generated tax-exempt Ramadan Allowance ({policy.RamadanAllowanceAmount:F2} {policy.DefaultCurrencyCode}) for {added} eligible staff.",
+                TimestampUtc = DateTime.UtcNow
+            });
+            await db.SaveChangesAsync();
+        }
+
+        return ServiceResult.Ok(added > 0
+            ? $"Generated Ramadan Allowance ({policy.RamadanAllowanceAmount:F2} {policy.DefaultCurrencyCode}) for {added} eligible staff. Recalculate the run to include it."
+            : "All eligible staff already have Ramadan Allowance assigned for this run.");
+    }
+
+    public async Task<ServiceResult> AddAdjustmentAsync(PayrollAdjustmentInput input)
+    {
+        var (orgId, userId, _, _) = await RequireOrgScopeAsync();
+        if (input.JobId <= 0 || input.Amount <= 0 || string.IsNullOrWhiteSpace(input.ComponentCode) || string.IsNullOrWhiteSpace(input.Description))
+            return ServiceResult.Fail("Valid Job ID, component code, description, and positive amount are required.");
+
+        await using var db = await _factory.CreateDbContextAsync();
+        var run = await db.PayrollRuns.SingleOrDefaultAsync(r => r.PayrollRunId == input.PayrollRunId && r.OrganisationId == orgId);
+        if (run == null) return ServiceResult.Fail("Payroll run not found.");
+        if (run.Status is PayrollRunStatus.Approved or PayrollRunStatus.Finalised or PayrollRunStatus.PaymentPrepared or PayrollRunStatus.Paid)
+            return ServiceResult.Fail("Cannot add adjustments to an approved or finalised payroll run.");
+
+        var job = await db.Jobs.AsNoTracking().SingleOrDefaultAsync(j => j.JobId == input.JobId && j.OrganisationID == orgId);
+        if (job == null) return ServiceResult.Fail("Employee job not found in your organisation.");
+
+        db.PayrollAdjustments.Add(new PayrollAdjustment
+        {
+            OrganisationId = orgId,
+            JobId = job.JobId,
+            IndividualId = job.IndividualID,
+            PayrollRunId = run.PayrollRunId,
+            ComponentCode = input.ComponentCode.Trim().ToUpperInvariant(),
+            Description = input.Description.Trim(),
+            Amount = decimal.Round(input.Amount, 2, MidpointRounding.AwayFromZero),
+            IsAddition = input.IsAddition,
+            ApprovedByUserId = userId,
+            ApprovedAtUtc = DateTime.UtcNow,
+            CreatedAtUtc = DateTime.UtcNow
+        });
+
+        db.PayrollAuditEvents.Add(new PayrollAuditEvent
+        {
+            OrganisationId = orgId,
+            PayrollRunId = run.PayrollRunId,
+            UserId = userId,
+            ActionType = "ADD_ADJUSTMENT",
+            Description = $"Added {(input.IsAddition ? "addition" : "deduction")} {input.ComponentCode.Trim().ToUpperInvariant()} ({input.Amount:F2}) for Job #{job.JobId}.",
+            TimestampUtc = DateTime.UtcNow
+        });
+
+        await db.SaveChangesAsync();
+        return ServiceResult.Ok("Payroll adjustment added. Recalculate the run to apply.");
+    }
 }

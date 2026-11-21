@@ -211,13 +211,8 @@ public sealed class PayrollProcessor : IPayrollProcessor
             .Select(g => g.First())
             .ToList();
 
-        // Load active organization calculation rules (Pension %, Overtime Multiplier, etc.)
-        var rules = await db.CalculationRules
-            .AsNoTracking()
-            .Where(r => r.OrganisationId == run.OrganisationId && r.IsActive)
-            .ToListAsync(cancellationToken);
-
-        var statutoryPolicy = PayrollStatutoryPolicyLoader.FromRules(rules);
+        var periodEndDate = run.PayrollPeriod!.PeriodEndDate;
+        var statutoryPolicy = await PayrollStatutoryPolicyLoader.LoadAsync(db, run.OrganisationId, periodEndDate, cancellationToken);
         decimal eePensionRate = statutoryPolicy.EmployeePensionRate;
         decimal erPensionRate = statutoryPolicy.EmployerPensionRate;
 
