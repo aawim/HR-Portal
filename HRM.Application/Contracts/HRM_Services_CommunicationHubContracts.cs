@@ -12,5 +12,8 @@ public abstract class CommunicationHubContracts
         Task RetryDeliveryAsync(long id);
         Task<CommunicationConnectionValidationDto> ValidateTelegramDestinationAsync(long id);
         Task QueueTelegramTestAsync(long id);
+        Task SubmitAnnouncementAsync(long id);
+        Task<List<CommunicationApprovalReviewDto>> LoadApprovalsAsync(int requestId = 0);
+        Task ActOnAnnouncementAsync(CommunicationApprovalActionDto model);
     }
 }

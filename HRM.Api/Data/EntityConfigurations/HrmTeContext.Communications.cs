@@ -19,6 +19,13 @@ public sealed class CommunicationMessageMapping : IEntityTypeConfiguration<Commu
     public void Configure(EntityTypeBuilder<CommunicationMessage> b)
     {
         b.ToTable("CM_Messages"); b.HasKey(x => x.CommunicationMessageId);
+        b.Property(x => x.ApprovalStatus).HasMaxLength(24).HasDefaultValue("NotRequired").IsRequired();
+        b.Property(x => x.DestinationExternalId).HasMaxLength(256);
+        b.Property(x => x.DestinationDisplayName).HasMaxLength(160);
+        b.HasOne<Request>().WithMany().HasForeignKey(x => x.ApprovalRequestId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<Job>().WithMany().HasForeignKey(x => x.ApprovalJobId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<CommunicationDestination>().WithMany().HasForeignKey(x => x.CommunicationDestinationId).OnDelete(DeleteBehavior.Restrict);
+        b.HasIndex(x => x.ApprovalRequestId).IsUnique().HasFilter("[ApprovalRequestId] IS NOT NULL").HasDatabaseName("UX_CM_Messages_ApprovalRequest");
         b.Property(x => x.Subject).HasMaxLength(300).IsRequired(); b.Property(x => x.RenderedBody).HasMaxLength(4000).IsRequired();
         b.HasIndex(x => new { x.CommunicationOutboxId, x.CommunicationAutomationRuleId }).IsUnique().HasDatabaseName("UX_CM_Messages_Outbox_Rule");
     }

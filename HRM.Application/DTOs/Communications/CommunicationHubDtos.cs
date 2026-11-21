@@ -14,6 +14,16 @@ public sealed class CommunicationHubConfigurationDto
     public List<TelegramDestinationDto> TelegramDestinations { get; set; } = [];
     public List<CommunicationRuleDto> Rules { get; set; } = [];
     public List<CommunicationDeliveryHistoryDto> RecentDeliveries { get; set; } = [];
+    public List<CommunicationApprovalPreviewDto> PendingApprovals { get; set; } = [];
+}
+public sealed record CommunicationApprovalPreviewDto(long Id, string Subject, string Body, DateTime CreatedAtUtc, int? RequestId = null);
+public sealed record CommunicationApprovalReviewDto(long Id, int RequestId, int ExpectedState, string Subject, string Body, string Destination, string Status, string Stage, bool CanApprove, bool CanCancel);
+public sealed class CommunicationApprovalActionDto
+{
+    public long Id { get; set; }
+    public int ExpectedState { get; set; }
+    public string Action { get; set; } = "";
+    public string? Comment { get; set; }
 }
 public sealed record CommunicationPlatformDto(string Code, string Name, string Purpose, bool CanConfigure);
 public sealed record CommunicationConnectionValidationDto(bool Succeeded, string? ErrorCode);

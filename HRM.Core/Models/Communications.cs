@@ -54,6 +54,13 @@ public sealed class CommunicationAutomationRule
 
 public sealed class CommunicationMessage
 {
+    public long? DestinationConnectionId { get; set; }
+    public string? DestinationExternalId { get; set; }
+    public string? DestinationDisplayName { get; set; }
+    public int? ApprovalRequestId { get; set; }
+    public int? ApprovalJobId { get; set; }
+    public long? CommunicationDestinationId { get; set; }
+    public string ApprovalStatus { get; set; } = "NotRequired";
     public long? CommunicationAutomationRuleId { get; set; }
     public long CommunicationMessageId { get; set; }
     public long CommunicationOutboxId { get; set; }

@@ -16,6 +16,10 @@ public sealed class CommunicationHubController(HRM.Services.Contracts.Communicat
     public sealed class SaveRuleRequest { public CommunicationRuleDto model { get; set; } = new(); }
     [HttpPost("validate-telegram")] public async Task<ActionResult<CommunicationConnectionValidationDto>> ValidateTelegram([FromBody] ValidateRequest request) => Ok(await service.ValidateTelegramConnectionAsync(request.id));
     public sealed class ValidateRequest { public long id { get; set; } }
+    [HttpGet("approvals")] public async Task<ActionResult<List<CommunicationApprovalReviewDto>>> Approvals([FromQuery] int requestId = 0) => Ok(await service.LoadApprovalsAsync(requestId));
+    [HttpPost("act-on-announcement")] public async Task<IActionResult> ActOnAnnouncement([FromBody] ApprovalActionRequest request) { await service.ActOnAnnouncementAsync(request.model); return NoContent(); }
+    public sealed class ApprovalActionRequest { public CommunicationApprovalActionDto model { get; set; } = new(); }
+    [HttpPost("submit-announcement")] public async Task<IActionResult> SubmitAnnouncement([FromBody] ValidateRequest request) { await service.SubmitAnnouncementAsync(request.id); return NoContent(); }
     [HttpPost("queue-telegram-test")] public async Task<IActionResult> QueueTelegramTest([FromBody] ValidateRequest request) { await service.QueueTelegramTestAsync(request.id); return NoContent(); }
     [HttpPost("validate-destination")] public async Task<ActionResult<CommunicationConnectionValidationDto>> ValidateDestination([FromBody] ValidateRequest request) => Ok(await service.ValidateTelegramDestinationAsync(request.id));
     [HttpPost("retry-delivery")] public async Task<IActionResult> RetryDelivery([FromBody] ValidateRequest request) { await service.RetryDeliveryAsync(request.id); return NoContent(); }

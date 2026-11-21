@@ -88,7 +88,7 @@ internal sealed class CommunicationWorker(IDbContextFactory<HrmTeContext> contex
         }
 
         var rules = await db.CommunicationAutomationRules.AsNoTracking().Where(x => x.OrganisationBusinessEntityId == item.OrganisationBusinessEntityId &&
-            x.EventCode == item.EventCode && x.IsEnabled && !x.RequiresApproval && x.CommunicationDestinationId != null).OrderBy(x => x.CommunicationAutomationRuleId).ToListAsync(token);
+            x.EventCode == item.EventCode && x.IsEnabled && x.CommunicationDestinationId != null).OrderBy(x => x.CommunicationAutomationRuleId).ToListAsync(token);
         if (rules.Count == 0)
         {
             await CompleteOutboxAsync(db, item.CommunicationOutboxId, token);
@@ -106,10 +106,17 @@ internal sealed class CommunicationWorker(IDbContextFactory<HrmTeContext> contex
                 .ExecuteUpdateAsync(s => s.SetProperty(x => x.Status, "Failed"), token);
             return;
         }
-        var message = new CommunicationMessage { CommunicationAutomationRuleId = rule.CommunicationAutomationRuleId, CommunicationOutboxId = item.CommunicationOutboxId, OrganisationBusinessEntityId = item.OrganisationBusinessEntityId,
+        var snapshot = await (from d in db.CommunicationDestinations
+            join c in db.CommunicationProviderConnections on d.CommunicationProviderConnectionId equals c.CommunicationProviderConnectionId
+            where d.CommunicationDestinationId == rule.CommunicationDestinationId && d.OrganisationBusinessEntityId == item.OrganisationBusinessEntityId && c.OrganisationBusinessEntityId == item.OrganisationBusinessEntityId && c.ProviderCode == "TELEGRAM"
+            select d).SingleOrDefaultAsync(token);
+        if (snapshot is null) continue;
+        var message = new CommunicationMessage { DestinationConnectionId = snapshot.CommunicationProviderConnectionId, DestinationExternalId = snapshot.ExternalDestinationId, DestinationDisplayName = snapshot.DisplayName,
+            CommunicationDestinationId = rule.CommunicationDestinationId, ApprovalStatus = rule.RequiresApproval ? "Pending" : "NotRequired", CommunicationAutomationRuleId = rule.CommunicationAutomationRuleId, CommunicationOutboxId = item.CommunicationOutboxId, OrganisationBusinessEntityId = item.OrganisationBusinessEntityId,
             Subject = values.GetValueOrDefault("Title") ?? "Organisation announcement", RenderedBody = body, CreatedAtUtc = DateTime.UtcNow };
         db.CommunicationMessages.Add(message);
         await db.SaveChangesAsync(token);
+        if (rule.RequiresApproval) continue; // Only the existing workflow may release this snapshot later.
 
         var destinations = await (from destination in db.CommunicationDestinations
                                   join connection in db.CommunicationProviderConnections on destination.CommunicationProviderConnectionId equals connection.CommunicationProviderConnectionId
@@ -156,6 +163,8 @@ internal sealed class CommunicationWorker(IDbContextFactory<HrmTeContext> contex
         var result = !configuration.GetValue<bool>("Communications:OutboundEnabled") ? new ProviderSendResult(false, ErrorCode: "OutboundDisabled") :
             !audienceAllowed ? new ProviderSendResult(false, ErrorCode: "SourceNoLongerEligible") :
             message is null ? new ProviderSendResult(false, ErrorCode: "MessageUnavailable") :
+            message.DestinationExternalId != null && (destination?.ExternalDestinationId != message.DestinationExternalId || destination?.CommunicationProviderConnectionId != message.DestinationConnectionId) ? new ProviderSendResult(false, ErrorCode: "DestinationChangedSinceCreation") :
+            !CommunicationApprovalPolicy.CanDispatch(message.ApprovalStatus) ? new ProviderSendResult(false, ErrorCode: "MessageApprovalRequired") :
             connection is null ? new ProviderSendResult(false, ErrorCode: "ConnectionDisabledOrUnavailable") :
             destination is null ? new ProviderSendResult(false, ErrorCode: "DestinationDisabledOrUnavailable") :
             provider is null ? new ProviderSendResult(false, ErrorCode: "ProviderNotRegistered") :

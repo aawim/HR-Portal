@@ -5,8 +5,41 @@ using Microsoft.EntityFrameworkCore;
 
 namespace HRM.Services.Communications;
 
-public sealed class CommunicationHubService(IDbContextFactory<HrmTeContext> factory, IUserAccessService access, HRM.Communications.Contracts.ICommunicationConnectionValidator validator, IConfiguration configuration, ILogger<CommunicationHubService> logger) : HRM.Services.Contracts.CommunicationHubContracts.IOperations
+public sealed partial class CommunicationHubService(IDbContextFactory<HrmTeContext> factory, IUserAccessService access, HRM.Communications.Contracts.ICommunicationConnectionValidator validator, IConfiguration configuration, ILogger<CommunicationHubService> logger, HRM.Services.Interfaces.AppovalWF.IWorkflowEngine workflow, IOperationLogService logs, HRM.Services.Interfaces.AppovalWF.IWorkflowApproverResolver approvers, HRM.Services.Interfaces.AppovalWF.IWorkflowRequestContextResolver workflowContexts) : HRM.Services.Contracts.CommunicationHubContracts.IOperations
 {
+    public async Task SubmitAnnouncementAsync(long id)
+    {
+        var org = await RequireAdminAsync();
+        var actor = await access.RequireContextAsync();
+        await using var db = await factory.CreateDbContextAsync();
+        await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
+        var message = await db.CommunicationMessages.SingleOrDefaultAsync(x => x.CommunicationMessageId == id && x.OrganisationBusinessEntityId == org)
+            ?? throw new InvalidOperationException("Announcement is not available in this organisation.");
+        if (message.ApprovalStatus != "Pending" || message.ApprovalRequestId.HasValue)
+            throw new InvalidOperationException("This announcement has already been submitted or is no longer pending.");
+        if (!message.CommunicationDestinationId.HasValue)
+            throw new InvalidOperationException("This older announcement has no saved destination. Create a new announcement before submission.");
+        await ValidateAnnouncementReleaseAsync(db, message);
+        var today = DateTime.UtcNow.AddHours(5).Date;
+        var job = await db.Jobs.Where(j => j.IndividualID == actor.IndividualId && j.OrganisationID == org && j.JobStateId == 4 &&
+            j.JoinedDate <= today && (j.TerminatedDate == null || j.TerminatedDate > today) && db.JobPositions.Any(p => p.JobId == j.JobId &&
+                p.JobPositionStateId == 4 && p.FromDate <= today && (p.ToDate == null || p.ToDate > today)))
+            .OrderByDescending(j => j.JoinedDate).FirstOrDefaultAsync()
+            ?? throw new InvalidOperationException("Active approved employment is required to submit an announcement.");
+        var type = await db.RequestTypes.SingleOrDefaultAsync(x => x.TypeName == "Communication Announcement")
+            ?? throw new InvalidOperationException("Configure the Communication Announcement request type and its organisation approval flow first.");
+        var audit = await logs.CreateAsync(db, HRM.Components.Shared.SharedConfig.OperationLogActionTypes.REQUESTS_CREATE, $"Submitted Communication Hub message {id} for approval.");
+        var request = new Request { RequestTypeId = type.RequestTypeId, RequestStateId = 1, ApplicantBusinessEntityId = actor.IndividualId,
+            OrganisationBusinessEntityID = org, ApplicationDate = today, RequestEffectiveDate = today,
+            OperationLogId = audit.OperationLogId, LastStateChangedByUserId = actor.UserId, LastStateChangedDate = DateTime.UtcNow };
+        db.Requests.Add(request);
+        await db.SaveChangesAsync();
+        request.ReferenceNumber = $"CM-{org}-{request.RequestId}";
+        message.ApprovalRequestId = request.RequestId; message.ApprovalJobId = job.JobId;
+        await db.SaveChangesAsync();
+        await workflow.StartAsync(db, request.RequestId, job.JobId);
+        await transaction.CommitAsync();
+    }
     public async Task QueueTelegramTestAsync(long id)
     {
         var org = await RequireAdminAsync();
@@ -97,6 +130,9 @@ public sealed class CommunicationHubService(IDbContextFactory<HrmTeContext> fact
         var connections = await db.CommunicationProviderConnections.AsNoTracking().Where(x => x.OrganisationBusinessEntityId == org && x.ProviderCode == "TELEGRAM").OrderBy(x => x.ConnectionName).ToListAsync();
         var result = new CommunicationHubConfigurationDto
         {
+            PendingApprovals = await db.CommunicationMessages.AsNoTracking().Where(x => x.OrganisationBusinessEntityId == org && x.ApprovalStatus == "Pending")
+                .OrderByDescending(x => x.CreatedAtUtc).Take(50)
+                .Select(x => new CommunicationApprovalPreviewDto(x.CommunicationMessageId, x.Subject, x.RenderedBody, x.CreatedAtUtc, x.ApprovalRequestId)).ToListAsync(),
             TelegramConnections = connections.Select(x => new TelegramConnectionDto { Id = x.CommunicationProviderConnectionId, Name = x.ConnectionName, CredentialReference = x.CredentialReference, IsEnabled = x.IsEnabled }).ToList(),
             TelegramDestinations = await db.CommunicationDestinations.AsNoTracking().Where(x => x.OrganisationBusinessEntityId == org).OrderBy(x => x.DisplayName).Select(x => new TelegramDestinationDto { Id = x.CommunicationDestinationId, ConnectionId = x.CommunicationProviderConnectionId, DisplayName = x.DisplayName, ChatId = x.ExternalDestinationId, IsActive = x.IsActive }).ToListAsync(),
             Rules = await db.CommunicationAutomationRules.AsNoTracking().Where(x => x.OrganisationBusinessEntityId == org).OrderBy(x => x.RuleName).Select(x => new CommunicationRuleDto { Id = x.CommunicationAutomationRuleId, DestinationId = x.CommunicationDestinationId, Name = x.RuleName, EventCode = x.EventCode, TemplateBody = x.TemplateBody, RequiresApproval = x.RequiresApproval, IsEnabled = x.IsEnabled }).ToListAsync(),
