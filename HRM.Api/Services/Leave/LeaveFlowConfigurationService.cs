@@ -117,9 +117,10 @@ public sealed class LeaveFlowConfigurationService(IDbContextFactory<HrmTeContext
             return ServiceResult.Fail("Extensions require the applicant's supervisor followed by HR. Early returns require one HR stage.");
         await using var db = await factory.CreateDbContextAsync();
         var groupIds = stages.Where(x => !x.ApproverType.Equals("LeadershipPermission", StringComparison.OrdinalIgnoreCase)).Select(x => x.UserGroupId).Distinct().ToList();
+        var leadershipRoleIds = stages.Where(s => s.ApproverType.Equals("LeadershipPermission", StringComparison.OrdinalIgnoreCase)).Select(s => s.PermissionRoleId).Distinct().ToList();
         if (!await db.JobTypes.AnyAsync(x => x.JobTypeId == model.JobTypeId && x.IsActive != false) ||
-            await db.UserGroups.CountAsync(x => groupIds.Contains(x.UserGroupId) && (x.IsGlobal || x.UserOrganisation.BusinessEntityID == org)) != groupIds.Count ||
-            await db.Roles.CountAsync(x => stages.Where(s => s.ApproverType.Equals("LeadershipPermission", StringComparison.OrdinalIgnoreCase)).Select(s => s.PermissionRoleId).Contains(x.RoleID)) != stages.Count(s => s.ApproverType.Equals("LeadershipPermission", StringComparison.OrdinalIgnoreCase)))
+            (groupIds.Count > 0 && await db.UserGroups.CountAsync(x => groupIds.Contains(x.UserGroupId) && (x.IsGlobal || x.UserOrganisation.BusinessEntityID == org)) != groupIds.Count) ||
+            (leadershipRoleIds.Count > 0 && await db.Roles.CountAsync(x => leadershipRoleIds.Contains(x.RoleID)) != leadershipRoleIds.Count))
             return ServiceResult.Fail("Choose an active Job Type and valid User Groups for this organisation at every stage.");
         var stateIds = stages.Select(x => x.StateId).ToList();
         if (await db.RequestStates.CountAsync(x => stateIds.Contains(x.RequestStateId) && x.IsProcessingState && !x.IsFinalState && x.RequestStateId != 1) != stages.Count)

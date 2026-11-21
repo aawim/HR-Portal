@@ -1,5 +1,99 @@
 @using HRM.WorkPlanning.Abstractions
 @inject HRM.UI.Services.WorkPlanning.IWorkforceScheduleApiClient ScheduleApi
 
-<div class="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-xs"><div class="flex items-center justify-between"><div><h2 class="font-bold text-slate-800">Session and ledger review</h2><p class="text-xs text-slate-500">Review evaluated sessions and payroll-finalization state.</p></div><button class="app-button app-button-secondary app-button-sm" @onclick="LoadAsync">Refresh</button></div><div class="overflow-x-auto"><table class="w-full text-left text-xs"><thead class="border-b border-slate-200 text-slate-500"><tr><th class="p-2">Session</th><th class="p-2">Status</th><th class="p-2">Minutes</th><th class="p-2">Evaluated</th></tr></thead><tbody>@foreach(var row in sessions){<tr class="border-b border-slate-100"><td class="p-2">#@row.Id / segment @row.WorkPlanSegmentId</td><td class="p-2">@row.Status</td><td class="p-2">@row.CreditedMinutes</td><td class="p-2">@row.EvaluatedAtUtc.ToLocalTime()</td></tr>}</tbody></table></div><div class="overflow-x-auto"><table class="w-full text-left text-xs"><thead class="border-b border-slate-200 text-slate-500"><tr><th class="p-2">Ledger</th><th class="p-2">Staff</th><th class="p-2">Category</th><th class="p-2">Status</th><th class="p-2">Export</th></tr></thead><tbody>@foreach(var row in ledger){<tr class="border-b border-slate-100"><td class="p-2">#@row.Id</td><td class="p-2">@row.IndividualId / @row.JobId</td><td class="p-2">@row.TimeCategory (@row.CreditedMinutes)</td><td class="p-2">@row.Status</td><td class="p-2">@(row.PayrollExportReference ?? "Not exported")</td></tr>}</tbody></table></div></div>
-@code { IReadOnlyList<WorkforceSessionReviewRow> sessions=[];IReadOnlyList<WorkforceLedgerReviewRow> ledger=[];protected override Task OnInitializedAsync()=>LoadAsync();async Task LoadAsync(){sessions=await ScheduleApi.GetSessionsAsync();ledger=await ScheduleApi.GetLedgerAsync();}}
+<div class="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
+    <div class="flex flex-wrap items-center justify-between gap-2">
+        <div>
+            <h2 class="text-sm font-bold text-slate-900">Session &amp; Ledger Review</h2>
+            <p class="mt-0.5 text-xs text-slate-500">Review evaluated attendance sessions and payroll-finalization ledger entries.</p>
+        </div>
+        <button type="button" class="inline-flex items-center justify-center rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50" @onclick="LoadAsync">
+            Refresh
+        </button>
+    </div>
+
+    <div class="space-y-2">
+        <h3 class="text-xs font-bold uppercase tracking-wide text-slate-600">Evaluated Sessions (@sessions.Count)</h3>
+        <div class="overflow-x-auto rounded-xl border border-slate-200">
+            <table class="w-full text-left text-xs">
+                <thead class="border-b border-slate-200 bg-slate-50 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+                    <tr>
+                        <th class="p-2.5">Session</th>
+                        <th class="p-2.5">Status</th>
+                        <th class="p-2.5">Credited Minutes</th>
+                        <th class="p-2.5">Evaluated</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    @if (sessions.Count == 0)
+                    {
+                        <tr>
+                            <td colspan="4" class="p-6 text-center text-slate-500">No evaluated sessions found.</td>
+                        </tr>
+                    }
+                    else
+                    {
+                        @foreach (var row in sessions)
+                        {
+                            <tr class="hover:bg-slate-50/70">
+                                <td class="p-2.5 font-mono text-[11px] font-semibold text-blue-700">#@row.Id / segment @row.WorkPlanSegmentId</td>
+                                <td class="p-2.5"><span class="rounded-full bg-blue-100 px-2.5 py-0.5 text-[11px] font-semibold text-blue-800">@row.Status</span></td>
+                                <td class="p-2.5 font-semibold text-slate-800">@row.CreditedMinutes</td>
+                                <td class="p-2.5 text-slate-600">@row.EvaluatedAtUtc.ToLocalTime().ToString("dd MMM yyyy HH:mm")</td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="space-y-2">
+        <h3 class="text-xs font-bold uppercase tracking-wide text-slate-600">Payroll Ledger (@ledger.Count)</h3>
+        <div class="overflow-x-auto rounded-xl border border-slate-200">
+            <table class="w-full text-left text-xs">
+                <thead class="border-b border-slate-200 bg-slate-50 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+                    <tr>
+                        <th class="p-2.5">Ledger</th>
+                        <th class="p-2.5">Staff / Job</th>
+                        <th class="p-2.5">Category</th>
+                        <th class="p-2.5">Status</th>
+                        <th class="p-2.5">Export Reference</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    @if (ledger.Count == 0)
+                    {
+                        <tr>
+                            <td colspan="5" class="p-6 text-center text-slate-500">No ledger entries found.</td>
+                        </tr>
+                    }
+                    else
+                    {
+                        @foreach (var row in ledger)
+                        {
+                            <tr class="hover:bg-slate-50/70">
+                                <td class="p-2.5 font-mono text-[11px] font-semibold text-blue-700">#@row.Id</td>
+                                <td class="p-2.5 text-slate-700">@row.IndividualId / @row.JobId</td>
+                                <td class="p-2.5 font-medium text-slate-800">@row.TimeCategory (@row.CreditedMinutes min)</td>
+                                <td class="p-2.5"><span class="rounded-full bg-emerald-100 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-800">@row.Status</span></td>
+                                <td class="p-2.5 text-slate-600">@(row.PayrollExportReference ?? "Not exported")</td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+@code {
+    IReadOnlyList<WorkforceSessionReviewRow> sessions = [];
+    IReadOnlyList<WorkforceLedgerReviewRow> ledger = [];
+    protected override Task OnInitializedAsync() => LoadAsync();
+    async Task LoadAsync()
+    {
+        sessions = await ScheduleApi.GetSessionsAsync();
+        ledger = await ScheduleApi.GetLedgerAsync();
+    }
+}

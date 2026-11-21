@@ -451,6 +451,7 @@ static async Task TestRefresh(Type clockType)
         .AddLogging()
         .AddSingleton(attendance).AddSingleton(access).AddSingleton(plans)
         .AddSingleton(Proxy.For<IAttendanceResolver>((name, _) => throw new Exception(name)))
+        .AddSingleton(Proxy.For<HRM.Services.Calendar.Contracts.OrganisationCalendarServiceContracts.IOperations>((method, _) => method == "ResolveEffectiveWorkdayAsync" ? Task.FromResult(new HRM.DTOs.Calendar.EffectiveWorkdayResolutionDto { IsWorkingDay = true, AttendanceRequired = true }) : throw new Exception(method)))
         .AddSingleton(Proxy.For<HRM.Services.Interfaces.IWorkTypeService>((method, _) => method == "CanClockAsync" ? Task.FromResult(true) : throw new Exception(method)))
         .AddSingleton(new AttendanceLogService(db, processor,
             Proxy.For<IOperationLogService>((name, _) => name == "CreateAsync" ? Task.FromResult(new OperationLog { OperationLogId = 1 }) : throw new Exception(name)),
@@ -464,6 +465,7 @@ static async Task TestRefresh(Type clockType)
     SetProperty(page, "AttendanceService", attendance);
     SetProperty(page, "_access", access);
     SetProperty(page, "AttendancePlanService", plans);
+    SetProperty(page, "PortalContext", new HRM.Services.PortalContext());
     SetField(page, "loading", false);
     SetField(page, "allowTestClock", true);
     await renderer.Dispatcher.InvokeAsync(async () =>
@@ -800,7 +802,7 @@ sealed class TestContext(DbContextOptions<HrmTeContext> options) : HrmTeContext(
     {
         var types = new[] { typeof(Job), typeof(AttendanceLog), typeof(Leaf), typeof(LeaveType), typeof(AttendanceLogResolution),
             typeof(HRM.Models.WorkPlanning.JobWorkTemplateAssignment), typeof(JobWorkTemplate), typeof(HRM.Models.WorkPlanning.WorkPlan), typeof(HRM.Models.WorkPlanning.WorkAssignment),
-            typeof(HRM.Models.Archives.AssignedWorkType), typeof(HRM.Models.Archives.WorkType) }.Concat(ScheduleTestModel.EligibilityTypes).Distinct().ToArray();
+            typeof(HRM.Models.Archives.AssignedWorkType), typeof(HRM.Models.Archives.WorkType), typeof(HRM.Models.OrganisationCalendarException), typeof(HRM.Models.OrganisationEvent) }.Concat(ScheduleTestModel.EligibilityTypes).Distinct().ToArray();
         foreach (var type in builder.Model.GetEntityTypes().Select(x => x.ClrType).ToArray())
             if (!types.Contains(type)) builder.Ignore(type);
         foreach (var type in types)
@@ -823,6 +825,8 @@ sealed class TestContext(DbContextOptions<HrmTeContext> options) : HrmTeContext(
         builder.Entity<AttendanceLogResolution>().HasOne(x => x.AttendanceLog).WithMany(x => x.AttendanceLogResolutions).HasForeignKey(x => x.AttendanceLogId);
         builder.Entity<HRM.Models.Archives.AssignedWorkType>().HasKey(x => x.AssignedWorkTypeId);
         builder.Entity<HRM.Models.Archives.WorkType>().HasKey(x => x.WorkTypeId);
+        builder.Entity<HRM.Models.OrganisationCalendarException>().HasKey(x => x.OrganisationCalendarExceptionId);
+        builder.Entity<HRM.Models.OrganisationEvent>().HasKey(x => x.OrganisationEventId);
         ScheduleTestModel.Configure(builder);
     }
 }
