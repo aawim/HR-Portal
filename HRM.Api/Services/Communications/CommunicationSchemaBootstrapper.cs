@@ -36,7 +36,7 @@ public static class CommunicationSchemaBootstrapper
                     """, cancellationToken);
                 lockAcquired = true;
                 var assembly = typeof(CommunicationSchemaBootstrapper).Assembly;
-                foreach (var resource in new[] { "HRM.Database.Scripts.20261121_CommunicationHub.sql", "HRM.Database.Scripts.20261121_CommunicationDeliveries.sql", "HRM.Database.Scripts.20261121_CommunicationRouting.sql" })
+                foreach (var resource in new[] { "HRM.Database.Scripts.20261121_CommunicationHub.sql", "HRM.Database.Scripts.20261121_CommunicationDeliveries.sql", "HRM.Database.Scripts.20261121_CommunicationRouting.sql", "HRM.Database.Scripts.20261121_CommunicationPlatforms.sql" })
                 {
                     using var stream = assembly.GetManifestResourceStream(resource);
                     if (stream is null) throw new InvalidOperationException($"Missing Communication Hub database resource: {resource}");

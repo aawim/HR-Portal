@@ -1,5 +1,12 @@
 namespace HRM.Models;
 
+public sealed class CommunicationWorkerHeartbeat
+{
+    public string InstanceId { get; set; } = "";
+    public DateTime LastSuccessfulCycleUtc { get; set; }
+    public bool OutboundEnabled { get; set; }
+}
+
 public sealed class CommunicationOutbox
 {
     public long CommunicationOutboxId { get; set; }
@@ -31,6 +38,8 @@ public sealed class CommunicationProviderConnection
 
 public sealed class CommunicationDestination
 {
+    public int? IndividualId { get; set; }
+    public string LanguageCode { get; set; } = "en";
     public long CommunicationDestinationId { get; set; }
     public long CommunicationProviderConnectionId { get; set; }
     public int OrganisationBusinessEntityId { get; set; }
@@ -42,6 +51,8 @@ public sealed class CommunicationDestination
 
 public sealed class CommunicationAutomationRule
 {
+    public string? DhivehiTemplateBody { get; set; }
+    public int TemplateVersion { get; set; } = 1;
     public long? CommunicationDestinationId { get; set; }
     public long CommunicationAutomationRuleId { get; set; }
     public int OrganisationBusinessEntityId { get; set; }
@@ -54,6 +65,8 @@ public sealed class CommunicationAutomationRule
 
 public sealed class CommunicationMessage
 {
+    public int TemplateVersion { get; set; } = 1;
+    public string? ProviderConfigurationJson { get; set; }
     public long? DestinationConnectionId { get; set; }
     public string? DestinationExternalId { get; set; }
     public string? DestinationDisplayName { get; set; }
@@ -68,6 +81,19 @@ public sealed class CommunicationMessage
     public string Subject { get; set; } = "";
     public string RenderedBody { get; set; } = "";
     public DateTime CreatedAtUtc { get; set; }
+}
+
+public sealed class CommunicationConsent
+{
+    public long CommunicationConsentId { get; set; }
+    public int OrganisationBusinessEntityId { get; set; }
+    public long CommunicationDestinationId { get; set; }
+    public int IndividualId { get; set; }
+    public string Purpose { get; set; } = "ScheduleUpdates";
+    public string Source { get; set; } = "";
+    public DateTime ConsentedAtUtc { get; set; }
+    public DateTime? RevokedAtUtc { get; set; }
+    public int RecordedByUserId { get; set; }
 }
 
 public sealed class CommunicationDelivery

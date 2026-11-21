@@ -79,7 +79,7 @@ public sealed partial class CommunicationHubService(IDbContextFactory<HrmTeConte
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
         try
         {
-            var result = await validator.ValidateDestinationAsync(target.CredentialReference, target.ExternalDestinationId, timeout.Token);
+            var result = await validator.ValidateDestinationAsync(target.CredentialReference, target.ExternalDestinationId, timeout.Token, org);
             return new(result.Succeeded, result.ErrorCode);
         }
         catch (OperationCanceledException) { return new(false, "Telegram_ValidationTimeout"); }
@@ -110,7 +110,7 @@ public sealed partial class CommunicationHubService(IDbContextFactory<HrmTeConte
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
         try
         {
-            var result = await validator.ValidateAsync(connection.CredentialReference, timeout.Token);
+            var result = await validator.ValidateAsync(connection.CredentialReference, timeout.Token, org);
             return new(result.Succeeded, result.ErrorCode);
         }
         catch (OperationCanceledException) { return new(false, "Telegram_ValidationTimeout"); }
@@ -134,8 +134,8 @@ public sealed partial class CommunicationHubService(IDbContextFactory<HrmTeConte
                 .OrderByDescending(x => x.CreatedAtUtc).Take(50)
                 .Select(x => new CommunicationApprovalPreviewDto(x.CommunicationMessageId, x.Subject, x.RenderedBody, x.CreatedAtUtc, x.ApprovalRequestId)).ToListAsync(),
             TelegramConnections = connections.Select(x => new TelegramConnectionDto { Id = x.CommunicationProviderConnectionId, Name = x.ConnectionName, CredentialReference = x.CredentialReference, IsEnabled = x.IsEnabled }).ToList(),
-            TelegramDestinations = await db.CommunicationDestinations.AsNoTracking().Where(x => x.OrganisationBusinessEntityId == org).OrderBy(x => x.DisplayName).Select(x => new TelegramDestinationDto { Id = x.CommunicationDestinationId, ConnectionId = x.CommunicationProviderConnectionId, DisplayName = x.DisplayName, ChatId = x.ExternalDestinationId, IsActive = x.IsActive }).ToListAsync(),
-            Rules = await db.CommunicationAutomationRules.AsNoTracking().Where(x => x.OrganisationBusinessEntityId == org).OrderBy(x => x.RuleName).Select(x => new CommunicationRuleDto { Id = x.CommunicationAutomationRuleId, DestinationId = x.CommunicationDestinationId, Name = x.RuleName, EventCode = x.EventCode, TemplateBody = x.TemplateBody, RequiresApproval = x.RequiresApproval, IsEnabled = x.IsEnabled }).ToListAsync(),
+            TelegramDestinations = await db.CommunicationDestinations.AsNoTracking().Where(x => x.OrganisationBusinessEntityId == org).OrderBy(x => x.DisplayName).Select(x => new TelegramDestinationDto { Id = x.CommunicationDestinationId, ConnectionId = x.CommunicationProviderConnectionId, DisplayName = x.DisplayName, ChatId = x.ExternalDestinationId, LanguageCode = x.LanguageCode, IsActive = x.IsActive }).ToListAsync(),
+            Rules = await db.CommunicationAutomationRules.AsNoTracking().Where(x => x.OrganisationBusinessEntityId == org).OrderBy(x => x.RuleName).Select(x => new CommunicationRuleDto { Id = x.CommunicationAutomationRuleId, DestinationId = x.CommunicationDestinationId, Name = x.RuleName, EventCode = x.EventCode, TemplateBody = x.TemplateBody, DhivehiTemplateBody = x.DhivehiTemplateBody, TemplateVersion = x.TemplateVersion, RequiresApproval = x.RequiresApproval, IsEnabled = x.IsEnabled }).ToListAsync(),
             RecentDeliveries = await (from delivery in db.CommunicationDeliveries.AsNoTracking()
                                       join destination in db.CommunicationDestinations.AsNoTracking() on delivery.CommunicationDestinationId equals destination.CommunicationDestinationId
                                       join connection in db.CommunicationProviderConnections.AsNoTracking() on delivery.CommunicationProviderConnectionId equals connection.CommunicationProviderConnectionId
@@ -147,6 +147,8 @@ public sealed partial class CommunicationHubService(IDbContextFactory<HrmTeConte
         var maxAge = configuration.GetValue<int?>("Communications:DeliveryMaxAgeHours") ?? 24;
         foreach (var item in result.RecentDeliveries)
             item.CanRetry = HRM.Communications.CommunicationRetryPolicy.CanRetry(item.Status, item.ErrorCode, item.Attempts, item.CreatedAtUtc, now, maxAge);
+        await LoadPlatformConfigurationAsync(db, org, result);
+        result.TelegramDestinations = result.TelegramDestinations.Where(x => result.Destinations.Any(d => d.Id == x.Id && d.ProviderCode == "TELEGRAM")).ToList();
         return result;
     }
 
@@ -168,22 +170,34 @@ public sealed partial class CommunicationHubService(IDbContextFactory<HrmTeConte
             throw new InvalidOperationException("Select a connection and enter a destination name up to 160 characters and chat ID up to 256 characters.");
         await using var db = await factory.CreateDbContextAsync(); await CommunicationSchemaBootstrapper.EnsureSchemaAsync(db);
         if (!await db.CommunicationProviderConnections.AnyAsync(x => x.CommunicationProviderConnectionId == model.ConnectionId && x.OrganisationBusinessEntityId == org && x.ProviderCode == "TELEGRAM")) throw new InvalidOperationException("Select a Telegram connection in this organisation.");
+        if (model.LanguageCode is not ("en" or "dv")) throw new InvalidOperationException("Select English or Dhivehi.");
         var row = model.Id == 0 ? new CommunicationDestination { OrganisationBusinessEntityId = org, CommunicationProviderConnectionId = model.ConnectionId, DestinationType = "TelegramChat" } : await db.CommunicationDestinations.SingleAsync(x => x.CommunicationDestinationId == model.Id && x.OrganisationBusinessEntityId == org);
+        if (model.Id != 0 && !await db.CommunicationProviderConnections.AnyAsync(c => c.CommunicationProviderConnectionId == row.CommunicationProviderConnectionId && c.OrganisationBusinessEntityId == org && c.ProviderCode == "TELEGRAM")) throw new InvalidOperationException("Create a new destination when changing platforms.");
+        row.LanguageCode = model.LanguageCode;
         row.CommunicationProviderConnectionId = model.ConnectionId; row.DisplayName = model.DisplayName.Trim(); row.ExternalDestinationId = model.ChatId.Trim(); row.IsActive = model.IsActive; if (model.Id == 0) db.CommunicationDestinations.Add(row); await db.SaveChangesAsync();
     }
 
     public async Task SaveRuleAsync(CommunicationRuleDto model)
     {
-        var org = await RequireAdminAsync(); if (string.IsNullOrWhiteSpace(model.Name) || string.IsNullOrWhiteSpace(model.TemplateBody) || model.EventCode is not ("organisation-event.published.v1" or "organisation-event.cancelled.v1")) throw new InvalidOperationException("Enter a name, template, and supported organisation-event trigger.");
+        var org = await RequireAdminAsync(); if (string.IsNullOrWhiteSpace(model.Name) || string.IsNullOrWhiteSpace(model.TemplateBody) || model.EventCode is not ("organisation-event.published.v1" or "organisation-event.cancelled.v1" or "employee.schedule-changed.v1")) throw new InvalidOperationException("Enter a name, template, and supported event trigger.");
         if (model.Id < 0 || model.Name.Trim().Length > 160) throw new InvalidOperationException("Enter a rule name of up to 160 characters.");
         HRM.Communications.CommunicationMessageRenderer.Validate(model.TemplateBody);
+        if (!string.IsNullOrWhiteSpace(model.DhivehiTemplateBody)) HRM.Communications.CommunicationMessageRenderer.Validate(model.DhivehiTemplateBody);
         await using var db = await factory.CreateDbContextAsync(); await CommunicationSchemaBootstrapper.EnsureSchemaAsync(db);
-        if (model.DestinationId.HasValue && !await (from d in db.CommunicationDestinations
+        var selected = await (from d in db.CommunicationDestinations
             join c in db.CommunicationProviderConnections on d.CommunicationProviderConnectionId equals c.CommunicationProviderConnectionId
-            where d.CommunicationDestinationId == model.DestinationId && d.OrganisationBusinessEntityId == org && c.OrganisationBusinessEntityId == org && c.ProviderCode == "TELEGRAM"
-            select d).AnyAsync()) throw new InvalidOperationException("Select a Telegram destination in this organisation.");
+            where d.CommunicationDestinationId == model.DestinationId && d.OrganisationBusinessEntityId == org && c.OrganisationBusinessEntityId == org
+            select new { Destination = d, c.ProviderCode }).SingleOrDefaultAsync();
+        if (model.DestinationId.HasValue && selected is null) throw new InvalidOperationException("Select a destination in this organisation.");
+        if (selected?.ProviderCode == "FACEBOOK_PAGE" && !model.RequiresApproval) throw new InvalidOperationException("Public Facebook posts require manual approval.");
+        if (selected?.ProviderCode == "WHATSAPP" && model.EventCode != HRM.Communications.Contracts.CommunicationEventCodes.EmployeeScheduleChanged)
+            throw new InvalidOperationException("WhatsApp currently supports consented employee schedule notifications only.");
+        if (model.EventCode == HRM.Communications.Contracts.CommunicationEventCodes.EmployeeScheduleChanged && selected?.Destination.IndividualId is null)
+            throw new InvalidOperationException("Private employee updates require an employee-specific destination.");
         if (model.IsEnabled && !model.DestinationId.HasValue) throw new InvalidOperationException("Select a destination before enabling this rule.");
         var row = model.Id == 0 ? new CommunicationAutomationRule { OrganisationBusinessEntityId = org } : await db.CommunicationAutomationRules.SingleAsync(x => x.CommunicationAutomationRuleId == model.Id && x.OrganisationBusinessEntityId == org);
+        if (model.Id != 0 && (row.TemplateBody != model.TemplateBody.Trim() || row.DhivehiTemplateBody != model.DhivehiTemplateBody?.Trim())) row.TemplateVersion++;
+        row.DhivehiTemplateBody = model.DhivehiTemplateBody?.Trim();
         row.CommunicationDestinationId = model.DestinationId;
         row.RuleName = model.Name.Trim(); row.EventCode = model.EventCode; row.TemplateBody = model.TemplateBody.Trim(); row.RequiresApproval = model.RequiresApproval; row.IsEnabled = model.IsEnabled; if (model.Id == 0) db.CommunicationAutomationRules.Add(row); await db.SaveChangesAsync();
     }

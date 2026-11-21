@@ -6,7 +6,7 @@ public static class CommunicationMessageRenderer
 {
     private static readonly Regex Variables = new(@"\{\{([A-Za-z][A-Za-z0-9]*)\}\}", RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
     private static readonly HashSet<string> AllowedVariables = new(StringComparer.Ordinal)
-    { "OrganisationEventId", "Title", "Description", "Category", "StartDateTime", "EndDateTime", "TimeZoneId" };
+    { "OrganisationEventId", "Title", "Description", "Category", "StartDateTime", "EndDateTime", "TimeZoneId", "EmployeeName", "EffectiveDate", "JobId", "IndividualId" };
 
     public static void Validate(string template)
     {

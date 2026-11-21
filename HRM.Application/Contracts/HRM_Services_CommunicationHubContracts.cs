@@ -15,5 +15,7 @@ public abstract class CommunicationHubContracts
         Task SubmitAnnouncementAsync(long id);
         Task<List<CommunicationApprovalReviewDto>> LoadApprovalsAsync(int requestId = 0);
         Task ActOnAnnouncementAsync(CommunicationApprovalActionDto model);
+        Task SaveIntegrationAsync(CommunicationIntegrationDto model);
+        Task SaveDestinationAsync(CommunicationDestinationDto model);
     }
 }

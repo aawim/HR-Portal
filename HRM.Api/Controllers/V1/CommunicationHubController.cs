@@ -14,6 +14,10 @@ public sealed class CommunicationHubController(HRM.Services.Contracts.Communicat
     public sealed class SaveConnectionRequest { public TelegramConnectionDto model { get; set; } = new(); }
     public sealed class SaveDestinationRequest { public TelegramDestinationDto model { get; set; } = new(); }
     public sealed class SaveRuleRequest { public CommunicationRuleDto model { get; set; } = new(); }
+    [HttpPost("integration")] public async Task<IActionResult> SaveIntegration([FromBody] IntegrationRequest request) { await service.SaveIntegrationAsync(request.model); return NoContent(); }
+    [HttpPost("destination")] public async Task<IActionResult> SaveDestination([FromBody] DestinationRequest request) { await service.SaveDestinationAsync(request.model); return NoContent(); }
+    public sealed class IntegrationRequest { public CommunicationIntegrationDto model { get; set; } = new(); }
+    public sealed class DestinationRequest { public CommunicationDestinationDto model { get; set; } = new(); }
     [HttpPost("validate-telegram")] public async Task<ActionResult<CommunicationConnectionValidationDto>> ValidateTelegram([FromBody] ValidateRequest request) => Ok(await service.ValidateTelegramConnectionAsync(request.id));
     public sealed class ValidateRequest { public long id { get; set; } }
     [HttpGet("approvals")] public async Task<ActionResult<List<CommunicationApprovalReviewDto>>> Approvals([FromQuery] int requestId = 0) => Ok(await service.LoadApprovalsAsync(requestId));

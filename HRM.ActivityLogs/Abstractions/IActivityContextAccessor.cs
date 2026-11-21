@@ -44,6 +44,7 @@ public sealed record ActivityActorContext
 public interface IActivityContextAccessor
 {
     Task<ActivityActorContext> GetCurrentContextAsync(CancellationToken cancellationToken = default);
+    void MarkActivityRecorded() { }
 }
 
 public interface IActivityClock

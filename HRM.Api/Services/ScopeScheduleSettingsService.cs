@@ -22,6 +22,7 @@ public sealed partial class ScopeScheduleSettingsService(IDbContextFactory<HrmTe
             throw new UnauthorizedAccessException("Schedule.Attach permission and access to the selected organisation are required. Only Super Admin can manage another organisation's schedules here.");
         await using var db=await factory.CreateDbContextAsync();
         if(!await db.Organisations.AnyAsync(o=>o.BusinessEntityID==org)) throw new UnauthorizedAccessException("The selected organisation is unavailable.");
+        await HRM.Services.Communications.CommunicationSchemaBootstrapper.EnsureSchemaAsync(db);
         return org;
     }
     public async Task<ScopeScheduleSettingsData> LoadAsync(int? organisationId=null)
@@ -173,5 +174,22 @@ public sealed partial class ScopeScheduleSettingsService(IDbContextFactory<HrmTe
         foreach(var plan in plans) {plan.IsValid=false;foreach(var s in plan.WorkPlanSegments)s.IsValid=false;foreach(var a in plan.WorkAssignments){a.IsValid=false;foreach(var s in a.WorkAssignmentSegments)s.IsValid=false;foreach(var owner in a.WorkAssignmentOwners)owner.IsValid=false;}}
         var users=await db.Users.Where(u=>u.IsActive && u.LocalUserStateId==1 && db.Jobs.Any(j=>affected.Contains(j.JobId) && j.IndividualID==u.BusinessEntityID && j.OrganisationID==org && j.JobStateId==4 && !j.TerminatedDate.HasValue)).Select(u=>new{u.UserId,u.BusinessEntityID}).ToListAsync();
         foreach(var user in users)db.StaffNotifications.Add(new(){UserId=user.UserId,IndividualId=user.BusinessEntityID,OrganisationId=org,Kind="Schedule assignment",Message=message,Url="/online",CreatedAtUtc=DateTime.UtcNow});
+        // This method runs inside the schedule mutation transaction. Keep private notifications employee-targeted.
+        var recipients = await db.Jobs.AsNoTracking().Where(j => affected.Contains(j.JobId) && j.OrganisationID == org && j.JobStateId == 4)
+            .Select(j => new { j.JobId, j.IndividualID }).ToListAsync();
+        foreach (var recipient in recipients)
+        {
+            var aggregate = $"scope:{scope.Id}:job:{recipient.JobId}";
+            var pending = await db.CommunicationOutbox.SingleOrDefaultAsync(x => x.OrganisationBusinessEntityId == org && x.AggregateType == "EmployeeSchedule" && x.AggregateId == aggregate && x.Status == "Pending");
+            if (pending is null)
+            {
+                pending = new CommunicationOutbox { EventId = Guid.NewGuid(), OrganisationBusinessEntityId = org, EventCode = HRM.Communications.Contracts.CommunicationEventCodes.EmployeeScheduleChanged,
+                    AggregateType = "EmployeeSchedule", AggregateId = aggregate };
+                db.CommunicationOutbox.Add(pending);
+            }
+            pending.PayloadJson = System.Text.Json.JsonSerializer.Serialize(new { ScopeScheduleAssignmentId = scope.Id, ScopeVersion = scope.Version, recipient.JobId, IndividualId = recipient.IndividualID,
+                Title = "Work schedule updated", Description = message, EffectiveDate = from.ToString("yyyy-MM-dd"), EmployeeName = "Employee" });
+            pending.OccurredAtUtc = DateTime.UtcNow; pending.AvailableAtUtc = DateTime.UtcNow.AddMinutes(2);
+        }
     }
 }

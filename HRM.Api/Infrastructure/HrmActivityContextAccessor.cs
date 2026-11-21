@@ -12,6 +12,14 @@ public sealed class HrmActivityContextAccessor(
     IHttpContextAccessor httpContextAccessor,
     IServiceProvider serviceProvider) : IActivityContextAccessor
 {
+    public const string ExplicitActivityRecordedItemKey = "HRM.ActivityLogs.ExplicitRecorded";
+
+    public void MarkActivityRecorded()
+    {
+        var http = httpContextAccessor.HttpContext;
+        if (http is not null)
+            http.Items[ExplicitActivityRecordedItemKey] = true;
+    }
     public async Task<ActivityActorContext> GetCurrentContextAsync(CancellationToken cancellationToken = default)
     {
         var http = httpContextAccessor.HttpContext;

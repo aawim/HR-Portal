@@ -5,6 +5,7 @@ namespace HRM.Models;
 
 public partial class HrmTeContext
 {
+    public DbSet<CommunicationWorkerHeartbeat> CommunicationWorkerHeartbeats => Set<CommunicationWorkerHeartbeat>();
     public DbSet<CommunicationOutbox> CommunicationOutbox => Set<CommunicationOutbox>();
     public DbSet<CommunicationProviderConnection> CommunicationProviderConnections => Set<CommunicationProviderConnection>();
     public DbSet<CommunicationDestination> CommunicationDestinations => Set<CommunicationDestination>();
@@ -12,6 +13,16 @@ public partial class HrmTeContext
     public DbSet<CommunicationMessage> CommunicationMessages => Set<CommunicationMessage>();
     public DbSet<CommunicationDelivery> CommunicationDeliveries => Set<CommunicationDelivery>();
     public DbSet<CommunicationDeliveryAttempt> CommunicationDeliveryAttempts => Set<CommunicationDeliveryAttempt>();
+    public DbSet<CommunicationConsent> CommunicationConsents => Set<CommunicationConsent>();
+}
+
+public sealed class CommunicationWorkerHeartbeatMapping : IEntityTypeConfiguration<CommunicationWorkerHeartbeat>
+{
+    public void Configure(EntityTypeBuilder<CommunicationWorkerHeartbeat> b)
+    {
+        b.ToTable("CM_WorkerHeartbeats"); b.HasKey(x => x.InstanceId);
+        b.Property(x => x.InstanceId).HasMaxLength(100);
+    }
 }
 
 public sealed class CommunicationMessageMapping : IEntityTypeConfiguration<CommunicationMessage>
@@ -76,6 +87,7 @@ public sealed class CommunicationDestinationMapping : IEntityTypeConfiguration<C
     public void Configure(EntityTypeBuilder<CommunicationDestination> b)
     {
         b.ToTable("CM_Destinations"); b.HasKey(x => x.CommunicationDestinationId);
+        b.Property(x => x.LanguageCode).HasMaxLength(12).HasDefaultValue("en");
         b.Property(x => x.DestinationType).HasMaxLength(32).IsRequired(); b.Property(x => x.ExternalDestinationId).HasMaxLength(256).IsRequired(); b.Property(x => x.DisplayName).HasMaxLength(160).IsRequired();
         b.HasIndex(x => new { x.CommunicationProviderConnectionId, x.ExternalDestinationId }).IsUnique();
     }
@@ -86,6 +98,8 @@ public sealed class CommunicationAutomationRuleMapping : IEntityTypeConfiguratio
     public void Configure(EntityTypeBuilder<CommunicationAutomationRule> b)
     {
         b.ToTable("CM_AutomationRules"); b.HasKey(x => x.CommunicationAutomationRuleId);
+        b.Property(x => x.DhivehiTemplateBody).HasMaxLength(4000);
+        b.Property(x => x.TemplateVersion).HasDefaultValue(1);
         b.HasOne<CommunicationDestination>().WithMany().HasForeignKey(x => x.CommunicationDestinationId).OnDelete(DeleteBehavior.Restrict);
         b.Property(x => x.EventCode).HasMaxLength(120).IsRequired(); b.Property(x => x.RuleName).HasMaxLength(160).IsRequired(); b.Property(x => x.TemplateBody).HasMaxLength(4000).IsRequired();
         b.HasIndex(x => new { x.OrganisationBusinessEntityId, x.EventCode, x.IsEnabled });

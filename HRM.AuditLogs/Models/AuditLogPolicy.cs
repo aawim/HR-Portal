@@ -18,7 +18,7 @@ public sealed class AuditLogPolicy
     /// When true, only entities listed in AuditedEntities are automatically captured by the interceptor.
     /// When false, all entities except ExcludedEntities are captured.
     /// </summary>
-    public bool AuditConfiguredEntitiesOnly { get; set; } = true;
+    public bool AuditConfiguredEntitiesOnly { get; set; } = false;
 
     public Dictionary<string, AuditEntityRule> AuditedEntities { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 
@@ -28,7 +28,16 @@ public sealed class AuditLogPolicy
         nameof(AuditLogDetail),
         "OperationLog",
         "ErrorLog",
-        "AuditEntry"
+        "AuditEntry",
+        "ActivityLog",
+        "ActivityOutboxMessage",
+        "WorkspaceRecentSearch",
+        "StaffNotification",
+        "StaffChatMessage",
+        "StaffChatReadReceipt",
+        "StaffGroupChatMessage",
+        "StaffGroupChatReadReceipt",
+        "AttendanceConnectorHeartbeat"
     };
 
     public HashSet<string> GlobalExcludedProperties { get; set; } = new(StringComparer.OrdinalIgnoreCase)
@@ -143,10 +152,15 @@ public sealed class AuditLogPolicy
 
         // 5 & 6 & 7. Permissions, roles, organisation access
         Add("User", "AccessManagement", "UserOrganisationId");
+        Add("Role", "AccessManagement");
         Add("UserRole", "AccessManagement");
         Add("UserPermission", "AccessManagement");
         Add("RolePermission", "AccessManagement");
+        Add("UserOrganisation", "AccessManagement", "BusinessEntityID");
+        Add("UserOrganisationRole", "AccessManagement");
         Add("UserOrganisationAccess", "AccessManagement", "OrganisationId");
+        Add("UserGroup", "AccessManagement");
+        Add("UserGroupRole", "AccessManagement");
         Add("UserGroupMember", "AccessManagement");
         Add("AdminAccessGrantRequest", "AccessManagement", "OrganisationId");
 
@@ -160,6 +174,7 @@ public sealed class AuditLogPolicy
 
         // 10. Important configuration
         Add("JobTypeOvertimeRule", "Configuration", "OrganisationId");
+        Add("JobTypeLeaveAccrualRule", "Configuration", "OrganisationId");
         Add("OrganisationCalendarException", "Configuration", "OrganisationId");
         Add("GoodsLoan", "GoodsLoans", "OrganisationBusinessEntityID");
         Add("GoodsLoanDeductionPolicy", "GoodsLoans", "OrganisationBusinessEntityID");

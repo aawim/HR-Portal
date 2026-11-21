@@ -11,9 +11,9 @@ public sealed class TelegramCommunicationProvider(HttpClient client, IConfigurat
 {
     public string ProviderCode => "TELEGRAM";
 
-    public async Task<ProviderValidationResult> ValidateDestinationAsync(string credentialReference, string destination, CancellationToken cancellationToken)
+    public async Task<ProviderValidationResult> ValidateDestinationAsync(string credentialReference, string destination, CancellationToken cancellationToken, int organisationId = 0)
     {
-        var token = configuration[$"Communications:Credentials:{credentialReference}"];
+        var token = CommunicationCredentials.Read(configuration, organisationId, credentialReference);
         if (string.IsNullOrWhiteSpace(token)) return new(false, "CredentialNotConfigured");
         try
         {
@@ -51,9 +51,9 @@ public sealed class TelegramCommunicationProvider(HttpClient client, IConfigurat
         return result;
     }
 
-    public async Task<ProviderValidationResult> ValidateAsync(string credentialReference, CancellationToken cancellationToken)
+    public async Task<ProviderValidationResult> ValidateAsync(string credentialReference, CancellationToken cancellationToken, int organisationId = 0)
     {
-        var token = configuration[$"Communications:Credentials:{credentialReference}"];
+        var token = CommunicationCredentials.Read(configuration, organisationId, credentialReference);
         if (string.IsNullOrWhiteSpace(token)) return new(false, "CredentialNotConfigured");
         try
         {
@@ -71,7 +71,7 @@ public sealed class TelegramCommunicationProvider(HttpClient client, IConfigurat
 
     public async Task<ProviderSendResult> SendAsync(CommunicationSendRequest request, CancellationToken cancellationToken)
     {
-        var token = configuration[$"Communications:Credentials:{request.CredentialReference}"];
+        var token = CommunicationCredentials.Read(configuration, request.OrganisationId, request.CredentialReference);
         if (string.IsNullOrWhiteSpace(token)) return new(false, ErrorCode: "CredentialNotConfigured");
 
         try

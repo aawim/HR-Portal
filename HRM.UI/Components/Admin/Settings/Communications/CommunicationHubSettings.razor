@@ -8,7 +8,7 @@
 <PageTitle>Communication Hub</PageTitle>
 <section class="w-full min-w-0 p-2 space-y-4">
   <header class="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur-xs px-3 py-3 shadow-xs rounded-xl flex flex-wrap items-center justify-between gap-3">
-    <div><h1 class="text-lg font-bold text-slate-900">Communication Hub</h1><p class="mt-0.5 text-xs text-slate-500">Configure optional Telegram announcements. Connections remain inactive until explicitly enabled.</p></div>
+    <div><h1 class="text-lg font-bold text-slate-900">Communication Hub</h1><p class="mt-0.5 text-xs text-slate-500">Configure communication platforms and approved announcements. Connections remain inactive until explicitly enabled.</p></div>
     <div class="flex flex-wrap items-center gap-2"><button class="app-button app-button-secondary app-button-sm" @onclick="ToggleWidth">@(full ? "Shrink View" : "Full Width")</button><button class="app-button app-button-secondary app-button-sm" @onclick="LoadAsync">Refresh</button></div>
   </header>
   <div class="mx-auto w-full min-w-0 space-y-4 @(full ? "max-w-none" : "max-w-7xl")">
@@ -16,10 +16,15 @@
     @if (loading) { <div class="rounded-xl border border-slate-200 bg-white p-6 text-xs text-slate-500">Loading communication configuration…</div> }
     else {
       <div class="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <div class="rounded-xl border border-slate-200 bg-white p-3 shadow-xs"><div class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Enabled connections</div><div class="mt-1 text-xl font-bold text-slate-900">@data.TelegramConnections.Count(x => x.IsEnabled)</div></div>
-        <div class="rounded-xl border border-slate-200 bg-white p-3 shadow-xs"><div class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Active destinations</div><div class="mt-1 text-xl font-bold text-blue-700">@data.TelegramDestinations.Count(x => x.IsActive)</div></div>
+        <div class="rounded-xl border border-slate-200 bg-white p-3 shadow-xs"><div class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Enabled connections</div><div class="mt-1 text-xl font-bold text-slate-900">@data.Integrations.Count(x => x.IsEnabled)</div></div>
+        <div class="rounded-xl border border-slate-200 bg-white p-3 shadow-xs"><div class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Active destinations</div><div class="mt-1 text-xl font-bold text-blue-700">@data.Destinations.Count(x => x.IsActive)</div></div>
         <div class="rounded-xl border border-slate-200 bg-white p-3 shadow-xs"><div class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Sent recently</div><div class="mt-1 text-xl font-bold text-emerald-700">@data.RecentDeliveries.Count(x => x.Status == "Sent")</div></div>
         <div class="rounded-xl border border-slate-200 bg-white p-3 shadow-xs"><div class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Failed recently</div><div class="mt-1 text-xl font-bold text-rose-700">@data.RecentDeliveries.Count(x => x.Status == "Failed")</div></div>
+      </div>
+      <div class="app-surface rounded-xl border border-slate-200 p-3 text-xs space-y-1" role="status">
+        <p><strong>Queue:</strong> @data.QueuedDeliveryCount pending/sending · @data.FailedDeliveryCount failed</p>
+        <p><strong>Worker:</strong> @(data.LastWorkerCycleUtc is null ? "No heartbeat received" : data.LastWorkerCycleUtc < DateTime.UtcNow.AddMinutes(-2) ? "Heartbeat is stale — check worker logs" : "Running") · Outbound @(data.WorkerOutboundEnabled ? "enabled" : "disabled")</p>
+        @if (data.LastWorkerCycleUtc is { } cycle) { <p>Last successful cycle: @cycle.ToString("dd MMM yyyy HH:mm:ss") UTC</p> }
       </div>
       <section class="app-surface rounded-2xl border border-slate-200 p-4 shadow-xs space-y-3">
         <label class="block text-xs font-medium text-slate-700 p-1" for="communication-platform">Platform</label>
@@ -38,6 +43,10 @@
           }
         }
       </section>
+      @if (selectedPlatform is "MSTEAMS" or "FACEBOOK_PAGE" or "WHATSAPP")
+      {
+        <CommunicationProviderSetup ProviderCode="@selectedPlatform" Data="@data" Saved="LoadAsync" />
+      }
       @if (selectedPlatform == "TELEGRAM")
       {
       <section class="app-surface rounded-2xl border border-slate-200 p-4 shadow-xs space-y-3">
@@ -60,7 +69,7 @@
           </div>
           <div class="space-y-2">
             <h3 class="p-1 text-xs font-semibold">Rules</h3>
-            @foreach (var item in data.Rules)
+            @foreach (var item in data.Rules.Where(x => data.TelegramDestinations.Any(d => d.Id == x.DestinationId)))
             {
               <div class="flex items-center justify-between gap-2 rounded-xl border border-slate-200 p-2.5 text-xs"><span>@item.Name — @(item.IsEnabled ? "Enabled" : "Disabled")</span><button type="button" class="app-button app-button-secondary app-button-sm" @onclick="() => EditRule(item)">Edit</button></div>
             }
@@ -89,6 +98,7 @@
           <label class="block text-xs font-medium text-slate-700 p-1">Connection<select class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1 text-xs" @bind="destination.ConnectionId"><option value="0">Select connection</option>@foreach(var item in data.TelegramConnections){<option value="@item.Id">@item.Name</option>}</select></label>
           <label class="block text-xs font-medium text-slate-700 p-1">Display name<input class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1 text-xs" @bind="destination.DisplayName" /></label>
           <label class="block text-xs font-medium text-slate-700 p-1">Chat ID<input class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1 text-xs" @bind="destination.ChatId" /></label>
+          <label class="block text-xs font-medium text-slate-700 p-1">Language<select class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100" @bind="destination.LanguageCode"><option value="en">English</option><option value="dv">Dhivehi</option></select></label>
           <label class="flex items-center gap-2 text-xs text-slate-700"><input type="checkbox" @bind="destination.IsActive" /> Activate destination</label><button class="app-button app-button-primary app-button-sm" type="submit">Save destination</button>
         </form>
       </div>
@@ -102,6 +112,7 @@
           </select>
         </label>
         <label class="block text-xs font-medium text-slate-700 p-1">Telegram message<textarea class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1 text-xs" rows="4" @bind="rule.TemplateBody"></textarea></label>
+        <label class="block text-xs font-medium text-slate-700 p-1">Dhivehi message (optional)<textarea dir="rtl" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100" rows="4" @bind="rule.DhivehiTemplateBody"></textarea></label>
         <div class="flex flex-wrap items-center gap-4"><label class="flex items-center gap-2 text-xs text-slate-700"><input type="checkbox" @bind="rule.RequiresApproval" /> Requires Communication Hub approval</label><label class="flex items-center gap-2 text-xs text-slate-700"><input type="checkbox" @bind="rule.IsEnabled" /> Enable rule</label><button class="app-button app-button-primary app-button-sm" type="submit">Save rule</button></div>
       </form>
       }
@@ -123,7 +134,7 @@
           </article>
         }
         @if (data.PendingApprovals.Count == 0) { <p class="text-xs text-slate-500">No messages are awaiting approval.</p> }
-        <div><h2 class="font-bold text-slate-800 p-1">Recent delivery history</h2><p class="text-xs text-slate-500">The latest 50 Telegram delivery attempts for this organisation. Credential values are never displayed.</p></div>
+        <div><h2 class="font-bold text-slate-800 p-1">Recent delivery history</h2><p class="text-xs text-slate-500">The latest 50 deliveries across platforms for this organisation. Sent means accepted by the provider. Credential values are never displayed.</p></div>
         <div class="flex flex-wrap gap-2">
           @foreach (var retryable in data.RecentDeliveries.Where(x => x.CanRetry))
           {
@@ -186,8 +197,8 @@
   private string selectedPlatform = "TELEGRAM";
   private string editingStatus = "Creating new settings.";
   private void EditConnection(TelegramConnectionDto item) { connection = new() { Id = item.Id, Name = item.Name, CredentialReference = item.CredentialReference, IsEnabled = item.IsEnabled }; editingStatus = $"Editing connection: {item.Name}"; }
-  private void EditDestination(TelegramDestinationDto item) { destination = new() { Id = item.Id, ConnectionId = item.ConnectionId, DisplayName = item.DisplayName, ChatId = item.ChatId, IsActive = item.IsActive }; editingStatus = $"Editing destination: {item.DisplayName}"; }
-  private void EditRule(CommunicationRuleDto item) { rule = new() { Id = item.Id, DestinationId = item.DestinationId, Name = item.Name, EventCode = item.EventCode, TemplateBody = item.TemplateBody, RequiresApproval = item.RequiresApproval, IsEnabled = item.IsEnabled }; editingStatus = $"Editing rule: {item.Name}"; }
+  private void EditDestination(TelegramDestinationDto item) { destination = new() { Id = item.Id, ConnectionId = item.ConnectionId, DisplayName = item.DisplayName, ChatId = item.ChatId, LanguageCode = item.LanguageCode, IsActive = item.IsActive }; editingStatus = $"Editing destination: {item.DisplayName}"; }
+  private void EditRule(CommunicationRuleDto item) { rule = new() { Id = item.Id, DestinationId = item.DestinationId, Name = item.Name, EventCode = item.EventCode, TemplateBody = item.TemplateBody, DhivehiTemplateBody = item.DhivehiTemplateBody, TemplateVersion = item.TemplateVersion, RequiresApproval = item.RequiresApproval, IsEnabled = item.IsEnabled }; editingStatus = $"Editing rule: {item.Name}"; }
   private void ResetEditors() { connection = new(); destination = new(); rule = new(); editingStatus = "Creating new settings."; }
   private CommunicationHubConfigurationDto data = new(); private TelegramConnectionDto connection = new(); private TelegramDestinationDto destination = new(); private CommunicationRuleDto rule = new(); private bool loading = true, full; private string? error;
   protected override async Task OnInitializedAsync() => await LoadAsync();

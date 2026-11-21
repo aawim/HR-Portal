@@ -81,19 +81,15 @@ public sealed partial class CommunicationHubService
         if (message.CreatedAtUtc < DateTime.UtcNow.AddHours(-maxAge)) throw new InvalidOperationException("This announcement has expired. Create a new announcement.");
         if (!message.CommunicationDestinationId.HasValue || !message.DestinationConnectionId.HasValue || string.IsNullOrWhiteSpace(message.DestinationExternalId))
             throw new InvalidOperationException("A complete destination snapshot is required. Create a new announcement.");
-        if (!await (from d in db.CommunicationDestinations
+        var target = await (from d in db.CommunicationDestinations
             join c in db.CommunicationProviderConnections on d.CommunicationProviderConnectionId equals c.CommunicationProviderConnectionId
             where d.CommunicationDestinationId == message.CommunicationDestinationId && d.CommunicationProviderConnectionId == message.DestinationConnectionId &&
                 d.ExternalDestinationId == message.DestinationExternalId && d.OrganisationBusinessEntityId == org && c.OrganisationBusinessEntityId == org &&
-                d.IsActive && c.IsEnabled && c.ProviderCode == "TELEGRAM"
-            select d).AnyAsync()) throw new InvalidOperationException("The saved destination has changed or is disabled. Restore it or create a new announcement.");
+                d.IsActive && c.IsEnabled
+            select new { Destination = d, c.ProviderCode }).SingleOrDefaultAsync();
+        if (target is null) throw new InvalidOperationException("The saved destination has changed or is disabled. Restore it or create a new announcement.");
         var source = await db.CommunicationOutbox.AsNoTracking().SingleOrDefaultAsync(x => x.CommunicationOutboxId == message.CommunicationOutboxId && x.OrganisationBusinessEntityId == org);
-        if (source is null || source.AggregateType != "OrganisationEvent" || !int.TryParse(source.AggregateId, out var id)) throw new InvalidOperationException("The announcement source is unavailable.");
-        using var payload = JsonDocument.Parse(source.PayloadJson);
-        var requiredStatus = source.EventCode switch { CommunicationEventCodes.OrganisationEventPublished => "Published", CommunicationEventCodes.OrganisationEventCancelled => "Cancelled", _ => null };
-        if (requiredStatus is null || !payload.RootElement.TryGetProperty("OrganisationWideAudience", out var audience) || audience.ValueKind != JsonValueKind.True ||
-            !await db.OrganisationEvents.AnyAsync(e => e.OrganisationEventId == id && e.OrganisationBusinessEntityId == org && e.IsValid && e.Status == requiredStatus &&
-                e.Audiences.Any() && !e.Audiences.Any(a => !a.IsIncluded || a.AudienceType != "Organisation")))
-            throw new InvalidOperationException("The source event is cancelled, changed, or no longer eligible for an organisation-wide announcement.");
+        if (source is null || !await CommunicationEligibility.CanDeliverToAsync(db, source, target.Destination, target.ProviderCode))
+            throw new InvalidOperationException("The source, recipient consent or audience is no longer eligible for delivery.");
     }
 }

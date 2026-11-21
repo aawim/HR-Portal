@@ -6,7 +6,7 @@ namespace HRM.Api.UnitTests;
 public sealed class CommunicationTemplateTests
 {
     [Theory]
-    [InlineData("{{EmployeeName}}")]
+    [InlineData("{{UnsupportedVariable}}")]
     [InlineData("{{ Title }}")]
     [InlineData("{{Title}")]
     [InlineData(" ")]
@@ -34,4 +34,8 @@ public sealed class CommunicationTemplateTests
         var values = new Dictionary<string, string?> { ["Title"] = "ސަލާމް" };
         Assert.Equal("ސަލާމް / ސަލާމް", CommunicationMessageRenderer.Render("{{Title}} / {{Title}}", values));
     }
+
+    [Fact]
+    public void EmployeeScheduleVariablesAreRendered() => Assert.Equal("Employee: 2026-11-21",
+        CommunicationMessageRenderer.Render("{{EmployeeName}}: {{EffectiveDate}}", new Dictionary<string, string?> { ["EmployeeName"] = "Employee", ["EffectiveDate"] = "2026-11-21" }));
 }

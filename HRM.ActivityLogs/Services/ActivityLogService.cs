@@ -30,6 +30,7 @@ public sealed class ActivityLogService(
             return;
 
         var actor = await contextAccessor.GetCurrentContextAsync(cancellationToken);
+        contextAccessor.MarkActivityRecorded();
         var entry = BuildEntity(request, actor);
 
         if (request.RequireGuaranteedDelivery)
@@ -53,6 +54,7 @@ public sealed class ActivityLogService(
             return;
 
         var actor = await contextAccessor.GetCurrentContextAsync(cancellationToken);
+        contextAccessor.MarkActivityRecorded();
         var entry = BuildEntity(request, actor);
         await queue.EnqueueAsync(entry, cancellationToken);
     }
@@ -66,6 +68,7 @@ public sealed class ActivityLogService(
             return;
 
         var actor = await contextAccessor.GetCurrentContextAsync(cancellationToken);
+        contextAccessor.MarkActivityRecorded();
         var entry = BuildEntity(request, actor);
 
         await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);

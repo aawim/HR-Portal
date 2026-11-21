@@ -10,8 +10,13 @@ using Microsoft.EntityFrameworkCore;
 
 namespace HRM.Services;
 
-public sealed class OrganisationPermissionService(IDbContextFactory<HrmTeContext> factory, IUserAccessService access,
-    IOperationLogService logs, IUserContextService contexts)
+public sealed class OrganisationPermissionService(
+    IDbContextFactory<HrmTeContext> factory,
+    IUserAccessService access,
+    IOperationLogService logs,
+    IUserContextService contexts,
+    HRM.AuditLogs.Abstractions.IAuditLogService? auditLogs = null,
+    HRM.ActivityLogs.Abstractions.IActivityLogService? activityLogs = null)
 :global::HRM.Services.Contracts.OrganisationPermissionServiceContracts,global::HRM.Services.Contracts.OrganisationPermissionServiceContracts.IOperations{
     // Platform permission management must remain recoverable after a tenant ceiling is reduced.
     // This checks an explicit assignment; organisation-default permissions cannot confer platform authority.
@@ -76,6 +81,39 @@ public sealed class OrganisationPermissionService(IDbContextFactory<HrmTeContext
         var users = await db.Users.Where(u => u.UserOrganisationId == entity.UserOrganisationID).Select(u => u.UserId).ToListAsync();
         await db.SaveChangesAsync(); await tx.CommitAsync();
         foreach (var id in users) await contexts.InvalidateAsync(id);
+
+        if (auditLogs is not null)
+        {
+            await auditLogs.RecordPermissionChangeAsync(
+                action: "UPDATE_ORG_PERMISSIONS",
+                entityType: "OrganisationPermissions",
+                entityId: org.ToString(),
+                description: $"Updated organisation {org} permission limits: added [{added}]; removed [{removed}].",
+                changes:
+                [
+                    new("AddedRoleIds", null, added),
+                    new("RemovedRoleIds", null, removed)
+                ],
+                reason: reason.Trim(),
+                organisationId: org);
+        }
+
+        if (activityLogs is not null)
+        {
+            await activityLogs.RecordAsync(new HRM.ActivityLogs.Models.ActivityLogRequest
+            {
+                Category = HRM.ActivityLogs.Models.ActivityCategory.Administration,
+                ActivityType = HRM.ActivityLogs.Models.ActivityTypes.AdministrativeAction,
+                Module = "AccessManagement",
+                Action = "UPDATE_ORG_PERMISSIONS",
+                Description = $"Updated organisation permission limits (added: {(string.IsNullOrEmpty(added) ? "none" : added)}; removed: {(string.IsNullOrEmpty(removed) ? "none" : removed)}).",
+                TargetEntityType = "Organisation",
+                TargetEntityId = org.ToString(),
+                TargetDisplayName = $"Organisation #{org}",
+                OrganisationId = org
+            });
+        }
+
         return ServiceResult.Ok("Organisation permissions saved. Direct and User Group access is limited to these permissions.");
     }
 }

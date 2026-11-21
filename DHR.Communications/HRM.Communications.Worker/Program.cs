@@ -15,6 +15,12 @@ builder.Services.AddDbContextFactory<HrmTeContext>(options => options.UseSqlServ
 builder.Services.AddHttpClient<TelegramCommunicationProvider>(client => client.BaseAddress = new Uri("https://api.telegram.org/"))
     .RemoveAllLoggers(); // Telegram embeds the credential in the request URL.
 builder.Services.AddScoped<ICommunicationProvider>(provider => provider.GetRequiredService<TelegramCommunicationProvider>());
+builder.Services.AddHttpClient<FacebookPageCommunicationProvider>().ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false }).RemoveAllLoggers();
+builder.Services.AddHttpClient<WhatsAppCommunicationProvider>().ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false }).RemoveAllLoggers();
+builder.Services.AddHttpClient<MicrosoftTeamsCommunicationProvider>().ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false }).RemoveAllLoggers();
+builder.Services.AddScoped<ICommunicationProvider>(p => p.GetRequiredService<FacebookPageCommunicationProvider>());
+builder.Services.AddScoped<ICommunicationProvider>(p => p.GetRequiredService<WhatsAppCommunicationProvider>());
+builder.Services.AddScoped<ICommunicationProvider>(p => p.GetRequiredService<MicrosoftTeamsCommunicationProvider>());
 builder.Services.AddHostedService<CommunicationWorker>();
 
 await builder.Build().RunAsync();
@@ -33,6 +39,13 @@ internal sealed class CommunicationWorker(IDbContextFactory<HrmTeContext> contex
                 await CreateDeliveriesAsync(db, stoppingToken);
                 if (configuration.GetValue<bool>("Communications:OutboundEnabled"))
                     await SendPendingDeliveriesAsync(db, stoppingToken);
+                var instance = configuration["Communications:WorkerInstanceId"] ?? Environment.MachineName;
+                if (string.IsNullOrWhiteSpace(instance) || instance.Length > 100) throw new InvalidOperationException("WorkerInstanceId must contain 1 to 100 characters.");
+                // One configured instance ID per supervised worker. A stale heartbeat exposes failed cycles/database outages.
+                await db.Database.ExecuteSqlInterpolatedAsync($@"MERGE dbo.CM_WorkerHeartbeats WITH (HOLDLOCK) AS target
+                    USING (SELECT {instance} AS InstanceId) AS source ON target.InstanceId=source.InstanceId
+                    WHEN MATCHED THEN UPDATE SET LastSuccessfulCycleUtc={DateTime.UtcNow}, OutboundEnabled={configuration.GetValue<bool>("Communications:OutboundEnabled")}
+                    WHEN NOT MATCHED THEN INSERT (InstanceId,LastSuccessfulCycleUtc,OutboundEnabled) VALUES ({instance},{DateTime.UtcNow},{configuration.GetValue<bool>("Communications:OutboundEnabled")});", stoppingToken);
             }
             catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
             {
@@ -65,7 +78,7 @@ internal sealed class CommunicationWorker(IDbContextFactory<HrmTeContext> contex
         if (claimed != 1) return;
         db.ChangeTracker.Clear();
 
-        if (!await CanBroadcastAsync(db, item, token))
+        if (!await CommunicationEligibility.SourceIsEligibleAsync(db, item, token))
         {
             await CompleteOutboxAsync(db, item.CommunicationOutboxId, token);
             return;
@@ -74,8 +87,11 @@ internal sealed class CommunicationWorker(IDbContextFactory<HrmTeContext> contex
         if (item.AggregateType == "CommunicationTest")
         {
             var destinationId = long.Parse(item.AggregateId, System.Globalization.CultureInfo.InvariantCulture);
-            var target = await db.CommunicationDestinations.SingleAsync(x => x.CommunicationDestinationId == destinationId && x.OrganisationBusinessEntityId == item.OrganisationBusinessEntityId, token);
+            var target = await db.CommunicationDestinations.SingleOrDefaultAsync(x => x.CommunicationDestinationId == destinationId && x.OrganisationBusinessEntityId == item.OrganisationBusinessEntityId, token);
+            if (target is null) { await CompleteOutboxAsync(db, item.CommunicationOutboxId, token); return; }
             var test = new CommunicationMessage { CommunicationOutboxId = item.CommunicationOutboxId, OrganisationBusinessEntityId = item.OrganisationBusinessEntityId,
+                CommunicationDestinationId = target.CommunicationDestinationId, DestinationConnectionId = target.CommunicationProviderConnectionId,
+                DestinationExternalId = target.ExternalDestinationId, DestinationDisplayName = target.DisplayName,
                 Subject = "Telegram delivery test", RenderedBody = CommunicationEventCodes.TelegramTestBody, CreatedAtUtc = DateTime.UtcNow };
             db.CommunicationMessages.Add(test);
             await db.SaveChangesAsync(token);
@@ -108,21 +124,33 @@ internal sealed class CommunicationWorker(IDbContextFactory<HrmTeContext> contex
         }
         var snapshot = await (from d in db.CommunicationDestinations
             join c in db.CommunicationProviderConnections on d.CommunicationProviderConnectionId equals c.CommunicationProviderConnectionId
-            where d.CommunicationDestinationId == rule.CommunicationDestinationId && d.OrganisationBusinessEntityId == item.OrganisationBusinessEntityId && c.OrganisationBusinessEntityId == item.OrganisationBusinessEntityId && c.ProviderCode == "TELEGRAM"
-            select d).SingleOrDefaultAsync(token);
-        if (snapshot is null) continue;
-        var message = new CommunicationMessage { DestinationConnectionId = snapshot.CommunicationProviderConnectionId, DestinationExternalId = snapshot.ExternalDestinationId, DestinationDisplayName = snapshot.DisplayName,
-            CommunicationDestinationId = rule.CommunicationDestinationId, ApprovalStatus = rule.RequiresApproval ? "Pending" : "NotRequired", CommunicationAutomationRuleId = rule.CommunicationAutomationRuleId, CommunicationOutboxId = item.CommunicationOutboxId, OrganisationBusinessEntityId = item.OrganisationBusinessEntityId,
+            where d.CommunicationDestinationId == rule.CommunicationDestinationId && d.OrganisationBusinessEntityId == item.OrganisationBusinessEntityId && c.OrganisationBusinessEntityId == item.OrganisationBusinessEntityId && d.IsActive && c.IsEnabled
+            select new { Destination = d, Connection = c }).SingleOrDefaultAsync(token);
+        if (snapshot is null || !await CommunicationEligibility.CanDeliverToAsync(db, item, snapshot.Destination, snapshot.Connection.ProviderCode, token)) continue;
+        if (snapshot.Destination.LanguageCode == "dv" && !string.IsNullOrWhiteSpace(rule.DhivehiTemplateBody))
+        {
+            try { body = CommunicationMessageRenderer.Render(rule.DhivehiTemplateBody, values); }
+            catch (InvalidOperationException)
+            {
+                await db.CommunicationOutbox.Where(x => x.CommunicationOutboxId == item.CommunicationOutboxId)
+                    .ExecuteUpdateAsync(s => s.SetProperty(x => x.Status, "Failed"), token);
+                return;
+            }
+        }
+        var requiresApproval = rule.RequiresApproval || snapshot.Connection.ProviderCode == "FACEBOOK_PAGE";
+        var message = new CommunicationMessage { TemplateVersion = rule.TemplateVersion, ProviderConfigurationJson = snapshot.Connection.ConfigurationJson,
+            DestinationConnectionId = snapshot.Destination.CommunicationProviderConnectionId, DestinationExternalId = snapshot.Destination.ExternalDestinationId, DestinationDisplayName = snapshot.Destination.DisplayName,
+            CommunicationDestinationId = rule.CommunicationDestinationId, ApprovalStatus = requiresApproval ? "Pending" : "NotRequired", CommunicationAutomationRuleId = rule.CommunicationAutomationRuleId, CommunicationOutboxId = item.CommunicationOutboxId, OrganisationBusinessEntityId = item.OrganisationBusinessEntityId,
             Subject = values.GetValueOrDefault("Title") ?? "Organisation announcement", RenderedBody = body, CreatedAtUtc = DateTime.UtcNow };
         db.CommunicationMessages.Add(message);
         await db.SaveChangesAsync(token);
-        if (rule.RequiresApproval) continue; // Only the existing workflow may release this snapshot later.
+        if (requiresApproval) continue; // Only the existing workflow may release this snapshot later.
 
         var destinations = await (from destination in db.CommunicationDestinations
                                   join connection in db.CommunicationProviderConnections on destination.CommunicationProviderConnectionId equals connection.CommunicationProviderConnectionId
                                   where destination.CommunicationDestinationId == rule.CommunicationDestinationId &&
                                         destination.OrganisationBusinessEntityId == item.OrganisationBusinessEntityId && destination.IsActive &&
-                                        connection.OrganisationBusinessEntityId == item.OrganisationBusinessEntityId && connection.IsEnabled && connection.ProviderCode == "TELEGRAM"
+                                        connection.OrganisationBusinessEntityId == item.OrganisationBusinessEntityId && connection.IsEnabled
                                   select new { destination, connection }).ToListAsync(token);
         foreach (var target in destinations)
         {
@@ -159,7 +187,7 @@ internal sealed class CommunicationWorker(IDbContextFactory<HrmTeContext> contex
         var started = DateTime.UtcNow;
         var source = message is null ? null : await db.CommunicationOutbox.AsNoTracking()
             .SingleOrDefaultAsync(x => x.CommunicationOutboxId == message.CommunicationOutboxId && x.OrganisationBusinessEntityId == delivery.OrganisationBusinessEntityId, token);
-        var audienceAllowed = source is not null && await CanBroadcastAsync(db, source, token);
+        var audienceAllowed = source is not null && destination is not null && connection is not null && await CommunicationEligibility.CanDeliverToAsync(db, source, destination, connection.ProviderCode, token);
         var result = !configuration.GetValue<bool>("Communications:OutboundEnabled") ? new ProviderSendResult(false, ErrorCode: "OutboundDisabled") :
             !audienceAllowed ? new ProviderSendResult(false, ErrorCode: "SourceNoLongerEligible") :
             message is null ? new ProviderSendResult(false, ErrorCode: "MessageUnavailable") :
@@ -168,7 +196,7 @@ internal sealed class CommunicationWorker(IDbContextFactory<HrmTeContext> contex
             connection is null ? new ProviderSendResult(false, ErrorCode: "ConnectionDisabledOrUnavailable") :
             destination is null ? new ProviderSendResult(false, ErrorCode: "DestinationDisabledOrUnavailable") :
             provider is null ? new ProviderSendResult(false, ErrorCode: "ProviderNotRegistered") :
-            await provider.SendAsync(new CommunicationSendRequest(delivery.IdempotencyKey, connection.CredentialReference, destination.ExternalDestinationId, message.Subject, message.RenderedBody), token);
+            await provider.SendAsync(new CommunicationSendRequest(delivery.IdempotencyKey, connection.CredentialReference, destination.ExternalDestinationId, message.Subject, message.RenderedBody, message.ProviderConfigurationJson, delivery.OrganisationBusinessEntityId), token);
 
         db.CommunicationDeliveryAttempts.Add(new CommunicationDeliveryAttempt { CommunicationDeliveryId = delivery.CommunicationDeliveryId, AttemptNumber = delivery.AttemptCount + 1,
             StartedAtUtc = started, CompletedAtUtc = DateTime.UtcNow, ResultStatus = result.Succeeded ? "Sent" : "Failed", SanitizedErrorCode = result.ErrorCode });
@@ -192,32 +220,6 @@ internal sealed class CommunicationWorker(IDbContextFactory<HrmTeContext> contex
         // Telegram cannot reconcile an accepted request after a process crash. Never resend automatically.
         await db.CommunicationDeliveries.Where(x => x.Status == "Sending" && (x.NextRetryAtUtc == null || x.NextRetryAtUtc < now))
             .ExecuteUpdateAsync(s => s.SetProperty(x => x.Status, "Failed").SetProperty(x => x.LastErrorCode, "IndeterminateWorkerInterruption").SetProperty(x => x.NextRetryAtUtc, (DateTime?)null), token);
-    }
-
-    private static async Task<bool> CanBroadcastAsync(HrmTeContext db, CommunicationOutbox source, CancellationToken token)
-    {
-        if (source.AggregateType == "CommunicationTest" && source.EventCode == CommunicationEventCodes.TelegramTestRequested && long.TryParse(source.AggregateId, out var destinationId))
-        {
-            if (source.OccurredAtUtc < DateTime.UtcNow.AddMinutes(-10)) return false;
-            return await (from d in db.CommunicationDestinations
-                join c in db.CommunicationProviderConnections on d.CommunicationProviderConnectionId equals c.CommunicationProviderConnectionId
-                where d.CommunicationDestinationId == destinationId && d.OrganisationBusinessEntityId == source.OrganisationBusinessEntityId &&
-                    c.OrganisationBusinessEntityId == source.OrganisationBusinessEntityId && d.IsActive && c.IsEnabled && c.ProviderCode == "TELEGRAM"
-                select d).AnyAsync(token);
-        }
-        if (source.AggregateType != "OrganisationEvent" || !int.TryParse(source.AggregateId, out var id)) return false;
-        using var payload = JsonDocument.Parse(source.PayloadJson);
-        if (!payload.RootElement.TryGetProperty("OrganisationWideAudience", out var audience) || audience.ValueKind != JsonValueKind.True) return false;
-        var requiredStatus = source.EventCode switch
-        {
-            CommunicationEventCodes.OrganisationEventPublished => "Published",
-            CommunicationEventCodes.OrganisationEventCancelled => "Cancelled",
-            _ => null
-        };
-        if (requiredStatus is null) return false;
-        return await db.OrganisationEvents.AsNoTracking().AnyAsync(e => e.OrganisationEventId == id &&
-            e.OrganisationBusinessEntityId == source.OrganisationBusinessEntityId && e.IsValid && e.Status == requiredStatus &&
-            e.Audiences.Any() && !e.Audiences.Any(a => !a.IsIncluded || a.AudienceType != "Organisation"), token);
     }
 
     private static IReadOnlyDictionary<string, string?> ReadTemplateValues(string payload)

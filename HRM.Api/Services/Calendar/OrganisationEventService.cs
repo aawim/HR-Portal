@@ -74,7 +74,7 @@ public sealed class OrganisationEventService(IDbContextFactory<HrmTeContext> fac
         {
             EventId = Guid.NewGuid(), OrganisationBusinessEntityId = e.OrganisationBusinessEntityId,
             EventCode = eventCode, AggregateType = "OrganisationEvent", AggregateId = e.OrganisationEventId.ToString(),
-            PayloadJson = JsonSerializer.Serialize(new { e.OrganisationEventId, e.Title, e.Description, e.Category, e.StartDateTime, e.EndDateTime, e.TimeZoneId,
+            PayloadJson = JsonSerializer.Serialize(new { e.OrganisationEventId, e.Title, e.Description, e.Category, e.StartDateTime, e.EndDateTime, e.TimeZoneId, PublicAnnouncement = e.Visibility == "Public",
                 OrganisationWideAudience = e.Audiences.Count > 0 && e.Audiences.All(a => a.IsIncluded && a.AudienceType == "Organisation") }),
             OccurredAtUtc = now, AvailableAtUtc = now
         });

@@ -165,7 +165,11 @@ public static class ApiEndpointRegistration
                     return Task.CompletedTask;
                 };
             });
-        services.AddControllersWithViews().AddApplicationPart(typeof(HrmApiController).Assembly).AddJsonOptions(options =>
+        services.AddScoped<GlobalActivityLoggingFilter>();
+        services.AddControllersWithViews(options =>
+        {
+            options.Filters.AddService<GlobalActivityLoggingFilter>();
+        }).AddApplicationPart(typeof(HrmApiController).Assembly).AddJsonOptions(options =>
         {
             options.JsonSerializerOptions.IncludeFields = true;
             options.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;

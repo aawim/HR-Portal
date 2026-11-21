@@ -63,7 +63,7 @@ public sealed class CommunicationSqlIntegrationTests
                     """);
 
                 await ApplyScriptAsync(db, "20261121_CommunicationRouting.sql");
-                foreach (var script in new[] { "20261121_CommunicationHub.sql", "20261121_CommunicationDeliveries.sql", "20261121_CommunicationRouting.sql" })
+                foreach (var script in new[] { "20261121_CommunicationHub.sql", "20261121_CommunicationDeliveries.sql", "20261121_CommunicationRouting.sql", "20261121_CommunicationPlatforms.sql" })
                     await ApplyScriptAsync(db, script);
                 var options = new DbContextOptionsBuilder<HrmTeContext>().UseSqlServer(testBuilder.ConnectionString).Options;
                 await using (var firstStartup = new HrmTeContext(options))
@@ -79,6 +79,17 @@ public sealed class CommunicationSqlIntegrationTests
                 }
                 Assert.Equal("Original saved body", await ScalarAsync(db, "SELECT RenderedBody FROM dbo.CM_Messages WHERE CommunicationMessageId=1"));
                 Assert.Equal("NotRequired", await ScalarAsync(db, "SELECT ApprovalStatus FROM dbo.CM_Messages WHERE CommunicationMessageId=1"));
+                Assert.Equal("1", await ScalarAsync(db, "SELECT CONVERT(nvarchar(10),TemplateVersion) FROM dbo.CM_Messages WHERE CommunicationMessageId=1"));
+                Assert.Equal("en", await ScalarAsync(db, "SELECT LanguageCode FROM dbo.CM_Destinations WHERE CommunicationDestinationId=1"));
+                await ExecuteAsync(db, """
+                    INSERT dbo.CM_CommunicationConsents(OrganisationBusinessEntityId,CommunicationDestinationId,IndividualId,Purpose,Source,ConsentedAtUtc,RecordedByUserId)
+                    VALUES(1,1,100,'ScheduleUpdates','Signed opt-in',SYSUTCDATETIME(),1);
+                    UPDATE dbo.CM_CommunicationConsents SET RevokedAtUtc=SYSUTCDATETIME() WHERE CommunicationDestinationId=1;
+                    INSERT dbo.CM_WorkerHeartbeats(InstanceId,LastSuccessfulCycleUtc,OutboundEnabled) VALUES('test-worker',SYSUTCDATETIME(),0);
+                    """);
+                await ApplyScriptAsync(db, "20261121_CommunicationPlatforms.sql");
+                Assert.Equal("Signed opt-in", await ScalarAsync(db, "SELECT Source FROM dbo.CM_CommunicationConsents WHERE RevokedAtUtc IS NOT NULL"));
+                Assert.Equal("test-worker", await ScalarAsync(db, "SELECT InstanceId FROM dbo.CM_WorkerHeartbeats"));
 
                 var duplicateEvent = await Assert.ThrowsAsync<SqlException>(() => ExecuteAsync(db, """
                     INSERT dbo.CM_CommunicationOutbox(EventId,OrganisationBusinessEntityId,EventCode,AggregateType,AggregateId,PayloadJson,OccurredAtUtc,AvailableAtUtc,Status)

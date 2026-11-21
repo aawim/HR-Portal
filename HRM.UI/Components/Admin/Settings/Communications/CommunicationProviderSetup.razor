@@ -1,0 +1,91 @@
+@using HRM.DTOs.Communications
+@inject HRM.Services.Contracts.CommunicationHubContracts.IOperations Hub
+
+<section class="w-full min-w-0 p-2 space-y-4">
+  @if (error is not null) { <p role="alert" class="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">@error</p> }
+  @if (notice is not null) { <p role="status" class="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800">@notice</p> }
+  <div class="grid gap-4 lg:grid-cols-2">
+    <form @onsubmit="SaveConnectionAsync" @onsubmit:preventDefault="true" class="app-surface rounded-2xl border border-slate-200 p-4 shadow-xs space-y-3">
+      <h2 class="p-1 font-bold text-slate-800 dark:text-slate-100">@ProviderName connection</h2>
+      <p class="text-xs text-slate-500">@(ProviderCode == "MSTEAMS" ? "Store the Teams Workflow URL securely on the server and enter its reference here." : "Store the provider access token securely on the server and enter its reference here.")</p>
+      <label class="block p-1 text-xs font-medium text-slate-700 dark:text-slate-200">Name<input class="@Input" maxlength="120" @bind="connection.Name" /></label>
+      <label class="block p-1 text-xs font-medium text-slate-700 dark:text-slate-200">Credential reference<input class="@Input" maxlength="256" @bind="connection.CredentialReference" /></label>
+      @if (ProviderCode == "WHATSAPP")
+      {
+        <label class="block p-1 text-xs font-medium text-slate-700 dark:text-slate-200">Meta phone-number ID<input class="@Input" @bind="connection.PhoneNumberId" /></label>
+        <label class="block p-1 text-xs font-medium text-slate-700 dark:text-slate-200">Approved template name<input class="@Input" @bind="connection.TemplateName" /></label>
+        <label class="block p-1 text-xs font-medium text-slate-700 dark:text-slate-200">Approved template language<input class="@Input" @bind="connection.TemplateLanguage" placeholder="en_US" /></label>
+        <p class="text-xs text-slate-500">Use an approved template with one text body parameter for the notification. Provider charges may apply.</p>
+      }
+      <label class="flex items-center gap-2 text-xs"><input type="checkbox" @bind="connection.IsEnabled" />Enable connection</label>
+      <div class="flex gap-2"><button type="submit" disabled="@busy" class="app-button app-button-primary app-button-sm">Save connection</button><button type="button" class="app-button app-button-neutral app-button-sm" @onclick="NewConnection">New</button></div>
+      @foreach (var item in Connections) { <button type="button" class="app-button app-button-secondary app-button-sm" @onclick="() => connection = Copy(item)">Edit @item.Name (@(item.IsEnabled ? "enabled" : "disabled"))</button> }
+    </form>
+    <form @onsubmit="SaveDestinationAsync" @onsubmit:preventDefault="true" class="app-surface rounded-2xl border border-slate-200 p-4 shadow-xs space-y-3">
+      <h2 class="p-1 font-bold text-slate-800 dark:text-slate-100">Destination</h2>
+      <label class="block p-1 text-xs font-medium text-slate-700 dark:text-slate-200">Connection<select class="@Input" @bind="destination.ConnectionId"><option value="0">Select connection</option>@foreach (var item in Connections) { <option value="@item.Id">@item.Name</option> }</select></label>
+      <label class="block p-1 text-xs font-medium text-slate-700 dark:text-slate-200">Display name<input class="@Input" maxlength="160" @bind="destination.DisplayName" /></label>
+      <label class="block p-1 text-xs font-medium text-slate-700 dark:text-slate-200">@(ProviderCode == "FACEBOOK_PAGE" ? "Numeric Facebook Page ID" : ProviderCode == "WHATSAPP" ? "Employee phone number (international format)" : "Destination identifier: workflow")<input class="@Input" @bind="destination.ExternalId" /></label>
+      <label class="block p-1 text-xs font-medium text-slate-700 dark:text-slate-200">Message language<select class="@Input" @bind="destination.LanguageCode"><option value="en">English</option><option value="dv">Dhivehi</option></select></label>
+      @if (ProviderCode == "WHATSAPP")
+      {
+        <label class="block p-1 text-xs font-medium text-slate-700 dark:text-slate-200">Employee individual ID<input type="number" min="1" class="@Input" @bind="destination.IndividualId" /></label>
+        <label class="flex items-center gap-2 text-xs"><input type="checkbox" @bind="destination.ConsentConfirmed" />Employee consent for schedule notifications is recorded</label>
+        <label class="block p-1 text-xs font-medium text-slate-700 dark:text-slate-200">Opt-in source / evidence reference<input class="@Input" maxlength="400" @bind="destination.ConsentSource" /></label>
+        <p class="text-xs text-slate-500">Clearing consent disables this destination and blocks queued schedule notifications.</p>
+      }
+      <label class="flex items-center gap-2 text-xs"><input type="checkbox" @bind="destination.IsActive" />Activate destination</label>
+      <div class="flex gap-2"><button type="submit" disabled="@busy" class="app-button app-button-primary app-button-sm">Save destination</button><button type="button" class="app-button app-button-neutral app-button-sm" @onclick="NewDestination">New</button></div>
+      @foreach (var item in Destinations) { <button type="button" class="app-button app-button-secondary app-button-sm" @onclick="() => destination = Copy(item)">Edit @item.DisplayName</button> }
+    </form>
+  </div>
+  <form @onsubmit="SaveRuleAsync" @onsubmit:preventDefault="true" class="app-surface rounded-2xl border border-slate-200 p-4 shadow-xs space-y-3">
+    <h2 class="p-1 font-bold text-slate-800 dark:text-slate-100">Automation rule · template version @rule.TemplateVersion</h2>
+    <label class="block p-1 text-xs font-medium text-slate-700 dark:text-slate-200">Name<input class="@Input" @bind="rule.Name" /></label>
+    <label class="block p-1 text-xs font-medium text-slate-700 dark:text-slate-200">Destination<select class="@Input" @bind="rule.DestinationId"><option value="">Select destination</option>@foreach (var item in Destinations) { <option value="@item.Id">@item.DisplayName</option> }</select></label>
+    <label class="block p-1 text-xs font-medium text-slate-700 dark:text-slate-200">Trigger<select class="@Input" @bind="rule.EventCode">
+      @if (ProviderCode == "WHATSAPP") { <option value="employee.schedule-changed.v1">Employee schedule changed</option> }
+      else { <option value="organisation-event.published.v1">Organisation event published</option><option value="organisation-event.cancelled.v1">Organisation event cancelled</option> }
+    </select></label>
+    @if (ProviderCode == "FACEBOOK_PAGE") { <p class="text-xs text-amber-800">Only events explicitly marked Public can be posted to Facebook. Manual approval is required.</p> }
+    <label class="block p-1 text-xs font-medium text-slate-700 dark:text-slate-200">English template<textarea rows="3" class="@Input" @bind="rule.TemplateBody"></textarea></label>
+    <label class="block p-1 text-xs font-medium text-slate-700 dark:text-slate-200">Dhivehi template (optional)<textarea rows="3" dir="rtl" class="@Input" @bind="rule.DhivehiTemplateBody"></textarea></label>
+    <p class="text-xs text-slate-500">Use variables such as <code>@("{{Title}}")</code>, <code>@("{{Description}}")</code> and <code>@("{{EffectiveDate}}")</code>. The selected destination determines message language.</p>
+    <label class="flex items-center gap-2 text-xs"><input type="checkbox" disabled="@(ProviderCode == "FACEBOOK_PAGE")" @bind="rule.RequiresApproval" />Require approval</label>
+    <label class="flex items-center gap-2 text-xs"><input type="checkbox" @bind="rule.IsEnabled" />Enable rule</label>
+    <div class="flex gap-2"><button type="submit" disabled="@busy" class="app-button app-button-primary app-button-sm">Save rule</button><button type="button" class="app-button app-button-neutral app-button-sm" @onclick="NewRule">New</button></div>
+    @foreach (var item in Rules) { <button type="button" class="app-button app-button-secondary app-button-sm" @onclick="() => rule = Copy(item)">Edit @item.Name · v@item.TemplateVersion</button> }
+  </form>
+</section>
+
+@code {
+    [Parameter] public string ProviderCode { get; set; } = "";
+    [Parameter] public CommunicationHubConfigurationDto Data { get; set; } = new();
+    [Parameter] public EventCallback Saved { get; set; }
+    private string lastPlatform = "";
+    private bool busy;
+    private string? error, notice;
+    private CommunicationIntegrationDto connection = new();
+    private CommunicationDestinationDto destination = new();
+    private CommunicationRuleDto rule = new();
+    private const string Input = "mt-1 w-full rounded-lg border border-slate-300 bg-white p-1 text-xs text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100";
+    private string ProviderName => Data.Platforms.FirstOrDefault(x => x.Code == ProviderCode)?.Name ?? ProviderCode;
+    private IEnumerable<CommunicationIntegrationDto> Connections => Data.Integrations.Where(x => x.ProviderCode == ProviderCode);
+    private IEnumerable<CommunicationDestinationDto> Destinations => Data.Destinations.Where(x => x.ProviderCode == ProviderCode);
+    private IEnumerable<CommunicationRuleDto> Rules => Data.Rules.Where(x => Destinations.Any(d => d.Id == x.DestinationId));
+    protected override void OnParametersSet() { if (lastPlatform == ProviderCode) return; lastPlatform = ProviderCode; NewConnection(); NewDestination(); NewRule(); error = notice = null; }
+    private void NewConnection() => connection = new() { ProviderCode = ProviderCode };
+    private void NewDestination() => destination = new() { ProviderCode = ProviderCode, ExternalId = ProviderCode == "MSTEAMS" ? "workflow" : "" };
+    private void NewRule() => rule = new() { EventCode = ProviderCode == "WHATSAPP" ? "employee.schedule-changed.v1" : "organisation-event.published.v1", TemplateBody = "{{Title}}\n{{Description}}", RequiresApproval = true };
+    private static T Copy<T>(T item) => System.Text.Json.JsonSerializer.Deserialize<T>(System.Text.Json.JsonSerializer.Serialize(item))!;
+    private Task SaveConnectionAsync() => SaveAsync(async () => { await Hub.SaveIntegrationAsync(connection); NewConnection(); });
+    private Task SaveDestinationAsync() => SaveAsync(async () => { await Hub.SaveDestinationAsync(destination); NewDestination(); });
+    private Task SaveRuleAsync() => SaveAsync(async () => { await Hub.SaveRuleAsync(rule); NewRule(); });
+    private async Task SaveAsync(Func<Task> action)
+    {
+        if (busy) return; busy = true; error = notice = null;
+        try { await action(); await Saved.InvokeAsync(); notice = "Configuration saved."; }
+        catch (Exception ex) { error = ex is InvalidOperationException or UnauthorizedAccessException ? ex.Message : "Configuration could not be saved. Refresh and try again."; }
+        finally { busy = false; }
+    }
+}
