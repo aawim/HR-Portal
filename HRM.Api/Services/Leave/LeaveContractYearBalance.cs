@@ -7,11 +7,17 @@ public static class LeaveContractYearBalance
 {
     public static async Task<string?> ValidateSpendAsync(HrmTeContext db, JobLeaveType balance, DateTime leaveThrough)
     {
-        var job = await db.Jobs.AsNoTracking().SingleAsync(x => x.JobId == balance.JobId);
+        var job = await db.Jobs.AsNoTracking().SingleOrDefaultAsync(x => x.JobId == balance.JobId);
+        if (job == null) return null;
         var rule = await db.JobTypeLeaveAccrualRules.AsNoTracking().SingleOrDefaultAsync(x => x.OrganisationId == job.OrganisationID &&
-            x.JobTypeId == job.JobTypeId && x.LeaveTypeId == balance.LeaveTypeId && x.IsEnabled);
+            x.JobTypeId == job.JobTypeId && x.LeaveTypeId == balance.LeaveTypeId && x.IsEnabled && x.CarryForwardMode != "Unspecified");
         if (rule == null) return null;
-        foreach (var boundary in LeaveAccrualCalculator.DueDates(rule, job.JoinedDate, leaveThrough).Where(x => x.Renewal))
+
+        // Only block on anniversary boundaries that have already been reached (<= Today),
+        // so advance leave applications crossing a future anniversary are not blocked before HR can process carry-forward.
+        var today = LeaveAccrualCalculator.Today;
+        var checkThrough = leaveThrough.Date < today ? leaveThrough.Date : today;
+        foreach (var boundary in LeaveAccrualCalculator.DueDates(rule, job.JoinedDate, checkThrough).Where(x => x.Renewal))
         {
             if (balance.RenewedDate?.Date > boundary.Date) continue;
             if (await db.LeaveCarryForwards.AnyAsync(x => x.RuleId == rule.Id && x.JobId == job.JobId && x.RenewalDate == boundary.Date)) continue;
