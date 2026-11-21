@@ -6,8 +6,8 @@
 ## Architecture
 - **No circular dependencies:** `HRM.AuditLogs` does not reference `HRM.Api`, `HRM.UI`, or `HRM.Core`.
 - **Host adapter:** `HRM.Api/Infrastructure/HrmAuditContextAccessor.cs` implements `IAuditContextAccessor` using `IUserAccessService`, `IHttpContextAccessor`, and `OrganisationalAccessScopeResolver`. Tenant and organisation context is always resolved server-side.
-- **Dedicated DbContext:** `HRM.AuditLogs.Persistence.AuditDbContext` targets the `audit` schema (`audit.AuditLogs` and `audit.AuditLogDetails`) with its own migration history table `[audit].[__EFMigrationsHistory_AuditLogs]`.
-- **Atomic transaction sharing:** `AuditSaveChangesInterceptor` shares the active SQL Server `DbConnection` and `DbTransaction` with `HrmTeContext` so mandatory business writes and audit writes commit or roll back atomically.
+- **Dedicated Database & DbContext:** `HRM.AuditLogs.Persistence.AuditDbContext` targets the dedicated **`HRMAuditLogs`** database (`ConnectionStrings:AuditLogsConnection`, defaulting automatically to `InitialCatalog = HRMAuditLogs` on the same SQL Server as `DefaultConnection`) with schema `audit` (`audit.AuditLogs` and `audit.AuditLogDetails`) and migration history table `[audit].[__EFMigrationsHistory_AuditLogs]`.
+- **Transaction safety:** When sharing the same database, `AuditSaveChangesInterceptor` enlists in the same SQL Server `DbTransaction`; when targeting the dedicated `HRMAuditLogs` database, mandatory audit failures propagate and roll back the business `HrmTeContext` transaction so protected business writes never silently commit without their audit trail.
 
 ## Configuration (`appsettings.json`)
 ```json

@@ -117,43 +117,52 @@ public sealed class AuditLogService(
         var actor = await contextAccessor.GetCurrentContextAsync(cancellationToken);
         var entities = list.Select(r => BuildAuditLogEntity(r, r.EventId ?? Guid.NewGuid(), actor)).ToList();
 
-        if (businessContext.Database.IsRelational())
+        if (businessContext.Database.IsSqlServer())
         {
             var connection = businessContext.Database.GetDbConnection();
-            var currentTx = businessContext.Database.CurrentTransaction;
-            var optsBuilder = new DbContextOptionsBuilder<AuditDbContext>();
-            if (businessContext.Database.IsSqlServer())
+            var sameDatabase = false;
+            try
             {
-                optsBuilder.UseSqlServer(connection);
+                if (!string.IsNullOrWhiteSpace(_options.ConnectionString))
+                {
+                    var auditCsb = new SqlConnectionStringBuilder(_options.ConnectionString);
+                    sameDatabase = string.Equals(connection.Database, auditCsb.InitialCatalog, StringComparison.OrdinalIgnoreCase);
+                }
             }
-            else
+            catch
             {
-                // Fallback for non-SQLServer relational providers (e.g. SQLite in tests): use factory
-                return await RecordBatchAsync(list, cancellationToken);
-            }
-
-            await using var sharedAuditDb = new AuditDbContext(optsBuilder.Options);
-            if (currentTx is not null)
-            {
-                await sharedAuditDb.Database.UseTransactionAsync(currentTx.GetDbTransaction(), cancellationToken);
+                sameDatabase = false;
             }
 
-            var eventIds = entities.Select(e => e.EventId).ToList();
-            var existing = (await sharedAuditDb.AuditLogs.AsNoTracking()
-                .Where(x => eventIds.Contains(x.EventId))
-                .Select(x => x.EventId)
-                .ToListAsync(cancellationToken)).ToHashSet();
-
-            var toInsert = entities.Where(e => !existing.Contains(e.EventId)).ToList();
-            if (toInsert.Count > 0)
+            if (sameDatabase)
             {
-                sharedAuditDb.AuditLogs.AddRange(toInsert);
-                await sharedAuditDb.SaveChangesAsync(cancellationToken);
-            }
+                var currentTx = businessContext.Database.CurrentTransaction;
+                var optsBuilder = new DbContextOptionsBuilder<AuditDbContext>().UseSqlServer(connection);
+                await using var sharedAuditDb = new AuditDbContext(optsBuilder.Options);
+                if (currentTx is not null)
+                {
+                    await sharedAuditDb.Database.UseTransactionAsync(currentTx.GetDbTransaction(), cancellationToken);
+                }
 
-            return AuditLogResult.Success(entities[0].AuditLogId, entities[0].EventId, duplicate: toInsert.Count == 0);
+                var eventIds = entities.Select(e => e.EventId).ToList();
+                var existing = (await sharedAuditDb.AuditLogs.AsNoTracking()
+                    .Where(x => eventIds.Contains(x.EventId))
+                    .Select(x => x.EventId)
+                    .ToListAsync(cancellationToken)).ToHashSet();
+
+                var toInsert = entities.Where(e => !existing.Contains(e.EventId)).ToList();
+                if (toInsert.Count > 0)
+                {
+                    sharedAuditDb.AuditLogs.AddRange(toInsert);
+                    await sharedAuditDb.SaveChangesAsync(cancellationToken);
+                }
+
+                return AuditLogResult.Success(entities[0].AuditLogId, entities[0].EventId, duplicate: toInsert.Count == 0);
+            }
         }
 
+        // Separate audit database (e.g. HRMAuditLogs) or non-SQLServer provider:
+        // Persist via dedicated AuditDbContext; mandatory failures propagate to roll back the business transaction.
         return await RecordBatchAsync(list, cancellationToken);
     }
 

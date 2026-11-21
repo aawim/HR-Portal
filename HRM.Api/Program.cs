@@ -42,10 +42,18 @@ if (string.IsNullOrWhiteSpace(configuredErrorLogsConnection))
 }
 var errorLogsConnection = HRM.Helpers.DatabaseConnectionPolicy.Validate(
     configuredErrorLogsConnection, builder.Environment.IsDevelopment(), "ConnectionStrings:ErrorLogsConnection");
+var configuredAuditLogsConnection = builder.Configuration.GetConnectionString("AuditLogsConnection");
+if (string.IsNullOrWhiteSpace(configuredAuditLogsConnection))
+{
+    var csb = new Microsoft.Data.SqlClient.SqlConnectionStringBuilder(mainConnection) { InitialCatalog = "HRMAuditLogs" };
+    configuredAuditLogsConnection = csb.ConnectionString;
+}
+var auditLogsConnection = HRM.Helpers.DatabaseConnectionPolicy.Validate(
+    configuredAuditLogsConnection, builder.Environment.IsDevelopment(), "ConnectionStrings:AuditLogsConnection");
 builder.Services.AddSingleton<IAuditContextAccessor, HrmAuditContextAccessor>();
 builder.Services.AddAuditLogs(builder.Configuration, opt =>
 {
-    opt.ConnectionString = mainConnection;
+    opt.ConnectionString = auditLogsConnection;
 });
 
 builder.Services.AddDbContextFactory<HrmTeContext>((sp, options) =>

@@ -1,7 +1,15 @@
 -- Enterprise Audit Logs Schema (HRM.AuditLogs)
+-- Dedicated database: [HRMAuditLogs]
 -- Dedicated schema: [audit]
 -- Tables: [audit].[AuditLogs], [audit].[AuditLogDetails]
 -- Append-only immutability enforced via INSTEAD OF UPDATE, DELETE triggers.
+
+IF DB_ID('HRMAuditLogs') IS NULL
+    CREATE DATABASE [HRMAuditLogs];
+GO
+
+USE [HRMAuditLogs];
+GO
 
 IF NOT EXISTS (SELECT 1 FROM sys.schemas WHERE name = 'audit')
     EXEC('CREATE SCHEMA [audit]');

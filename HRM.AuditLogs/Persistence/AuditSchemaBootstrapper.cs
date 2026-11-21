@@ -1,3 +1,4 @@
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -15,6 +16,24 @@ public static class AuditSchemaBootstrapper
 
             await using var db = await factory.CreateDbContextAsync(cancellationToken);
             if (!db.Database.IsSqlServer()) return;
+
+            // Ensure target database (e.g. HRMAuditLogs) exists before running DDL
+            var connStr = db.Database.GetConnectionString();
+            if (!string.IsNullOrWhiteSpace(connStr))
+            {
+                var targetBuilder = new SqlConnectionStringBuilder(connStr);
+                var targetDbName = targetBuilder.InitialCatalog;
+                if (!string.IsNullOrWhiteSpace(targetDbName) && !targetDbName.Equals("master", StringComparison.OrdinalIgnoreCase))
+                {
+                    var masterBuilder = new SqlConnectionStringBuilder(connStr) { InitialCatalog = "master" };
+                    await using var masterConn = new SqlConnection(masterBuilder.ConnectionString);
+                    await masterConn.OpenAsync(cancellationToken);
+                    await using var cmd = masterConn.CreateCommand();
+                    cmd.CommandText = "IF DB_ID(@dbName) IS NULL EXEC('CREATE DATABASE [' + REPLACE(@dbName, ']', ']]') + ']');";
+                    cmd.Parameters.AddWithValue("@dbName", targetDbName);
+                    await cmd.ExecuteNonQueryAsync(cancellationToken);
+                }
+            }
 
             await db.Database.ExecuteSqlRawAsync(@"
 IF NOT EXISTS (SELECT 1 FROM sys.schemas WHERE name = 'audit')
@@ -72,6 +91,58 @@ BEGIN
     );
     CREATE INDEX [IX_AuditLogDetails_AuditLogId] ON [audit].[AuditLogDetails]([AuditLogId]);
     CREATE INDEX [IX_AuditLogDetails_AuditLogId_PropertyName] ON [audit].[AuditLogDetails]([AuditLogId], [PropertyName]);
+END;
+", cancellationToken);
+
+            await db.Database.ExecuteSqlRawAsync(@"
+CREATE OR ALTER TRIGGER [audit].[TR_AuditLogs_AppendOnly]
+ON [audit].[AuditLogs]
+INSTEAD OF UPDATE, DELETE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    IF EXISTS (SELECT 1 FROM deleted) AND NOT EXISTS (SELECT 1 FROM inserted)
+    BEGIN
+        THROW 51001, 'Audit log records are append-only and cannot be deleted.', 1;
+    END
+
+    IF EXISTS (
+        SELECT 1
+        FROM inserted i
+        JOIN deleted d ON i.AuditLogId = d.AuditLogId
+        WHERE i.EventId <> d.EventId
+           OR ISNULL(i.TenantId, -1) <> ISNULL(d.TenantId, -1)
+           OR ISNULL(i.OrganisationId, -1) <> ISNULL(d.OrganisationId, -1)
+           OR ISNULL(i.UserId, -1) <> ISNULL(d.UserId, -1)
+           OR i.Action <> d.Action
+           OR i.Outcome <> d.Outcome
+           OR i.Module <> d.Module
+           OR i.EntityType <> d.EntityType
+           OR i.EntityId <> d.EntityId
+           OR i.Description <> d.Description
+           OR i.OccurredAtUtc <> d.OccurredAtUtc
+    )
+    BEGIN
+        THROW 51002, 'Audit log records are immutable and cannot be modified.', 1;
+    END
+
+    UPDATE t
+    SET t.IsLegalHold = i.IsLegalHold,
+        t.ArchivedAtUtc = i.ArchivedAtUtc,
+        t.RetentionUntilUtc = i.RetentionUntilUtc
+    FROM [audit].[AuditLogs] t
+    JOIN inserted i ON t.AuditLogId = i.AuditLogId;
+END;
+", cancellationToken);
+
+            await db.Database.ExecuteSqlRawAsync(@"
+CREATE OR ALTER TRIGGER [audit].[TR_AuditLogDetails_AppendOnly]
+ON [audit].[AuditLogDetails]
+INSTEAD OF UPDATE, DELETE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    THROW 51003, 'Audit log detail records are immutable and append-only.', 1;
 END;
 ", cancellationToken);
         }
