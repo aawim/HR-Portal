@@ -187,6 +187,7 @@ public sealed class AuditLogsController(
     }
 
     [HttpGet("export")]
+    [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting(HrmRateLimitPolicies.Export)]
     public async Task<IActionResult> ExportCsv(
         [FromQuery] int? organisationId = null,
         [FromQuery] int? divisionId = null,

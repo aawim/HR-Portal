@@ -8,6 +8,7 @@ namespace HRM.Controllers
 {
    
         [Route("Online/Auth")]
+        [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting(HRM.Api.Infrastructure.HrmRateLimitPolicies.Auth)]
         public class LogoutController : Controller
         {
             // Interactive components obtain the token over HTTP so the browser

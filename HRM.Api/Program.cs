@@ -100,15 +100,22 @@ builder.Services.Configure<Microsoft.AspNetCore.ResponseCompression.GzipCompress
     options => options.Level = System.IO.Compression.CompressionLevel.Fastest);
 
 builder.Services.AddEfaasAuthentication(builder.Configuration, builder.Environment);
+builder.Services.AddHrmRateLimiting(builder.Configuration);
+builder.Services.AddHrmHealthChecks(mainConnection, auditLogsConnection, activityLogsConnection);
 
 var app = builder.Build();
-_ = Task.Run(async () =>
+var runStartupBootstrap = builder.Configuration.GetValue<bool?>("Database:RunStartupSchemaBootstrap")
+                          ?? app.Environment.IsDevelopment();
+if (runStartupBootstrap)
 {
-    await HRM.Services.Attendance.Reconciliation.AttendanceReconciliationSchemaBootstrapper.EnsureSchemaAsync(app.Services);
-    await HRM.Helpers.OrganisationalAccessScopeResolver.EnsureSchemaAsync(app.Services);
-    await AuditSchemaBootstrapper.EnsureSchemaAsync(app.Services);
-    await ActivitySchemaBootstrapper.EnsureSchemaAsync(app.Services);
-});
+    _ = Task.Run(async () =>
+    {
+        await HRM.Services.Attendance.Reconciliation.AttendanceReconciliationSchemaBootstrapper.EnsureSchemaAsync(app.Services);
+        await HRM.Helpers.OrganisationalAccessScopeResolver.EnsureSchemaAsync(app.Services);
+        await AuditSchemaBootstrapper.EnsureSchemaAsync(app.Services);
+        await ActivitySchemaBootstrapper.EnsureSchemaAsync(app.Services);
+    });
+}
 app.UseResponseCompression();
 if (builder.Environment.IsDevelopment() && CredentialExposure.IsExposed(builder.Configuration["Authentication:OpenIdConnect:ClientSecret"]))
     app.Logger.LogWarning("The development eFaas client secret matches a credential exposed in Git history. Rotate it at the provider and update the development secret store.");
@@ -132,7 +139,7 @@ app.MapGet("/Online/Auth/login", () =>
         new AuthenticationProperties { RedirectUri = "/" },
         new[] { OpenIdConnectDefaults.AuthenticationScheme }
     );
-}).AllowAnonymous();
+}).AllowAnonymous().RequireRateLimiting(HrmRateLimitPolicies.Auth);
 
 app.UseHttpsRedirection();
 
@@ -155,8 +162,9 @@ app.UseRouting();
 // 5. Add Authentication Middleware (MUST be before Antiforgery and Routing)
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseRateLimiter();
 
- 
+app.MapHrmHealthEndpoints();
 app.MapControllers();
 app.UseAntiforgery();
 
