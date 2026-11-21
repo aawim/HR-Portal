@@ -38,6 +38,9 @@ namespace HRM.Services
 
         public async Task<(AttendanceLogDto? checkIn, AttendanceLogDto? checkOut)> GetTodayStatusAsync(int individualId)
         {
+            await using var db = await _dbFactory.CreateDbContextAsync();
+            await HRM.Helpers.StaffDataAccess.RequireIndividualAsync(db, _userAccessService, individualId);
+
             var today = DateTime.UtcNow.AddHours(5).Date;
 
             var checkIn = await _loader.GetEarliestCheckInAsync(individualId, today);
@@ -63,6 +66,8 @@ namespace HRM.Services
  
             await using var db =
                 await _dbFactory.CreateDbContextAsync();
+
+            await HRM.Helpers.StaffDataAccess.RequireIndividualAsync(db, _userAccessService, individualId);
 
             var today = DateTime.UtcNow.AddHours(5).Date;
 
@@ -454,13 +459,18 @@ namespace HRM.Services
                 await _dbFactory.CreateDbContextAsync(
                     cancellationToken);
 
+            var scopedOrg = await HRM.Helpers.StaffDataAccess.RequireIndividualAsync(db, _userAccessService, individualId);
+
             var date =
                 checkTime.Date;
 
             var nextDate =
                 date.AddDays(1);
 
-            var organisation = await db.Jobs.Where(j => j.JobId == jobId && j.IndividualID == individualId).Select(j => (int?)j.OrganisationID).SingleOrDefaultAsync(cancellationToken);
+            var organisation = await db.Jobs
+                .Where(j => j.JobId == jobId && j.IndividualID == individualId && (!scopedOrg.HasValue || j.OrganisationID == scopedOrg.Value))
+                .Select(j => (int?)j.OrganisationID)
+                .SingleOrDefaultAsync(cancellationToken);
             if (!organisation.HasValue) return [];
             var rawLogEntities = await db.AttendanceLogs.AsNoTracking()
                 .Where(log =>
@@ -589,6 +599,15 @@ namespace HRM.Services
             DateTime workDate,
             CancellationToken cancellationToken = default)
         {
+            await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
+            var scopedOrg = await HRM.Helpers.StaffDataAccess.RequireIndividualAsync(db, _userAccessService, individualId);
+            if (scopedOrg.HasValue && scopedOrg.Value != organisationBusinessEntityId)
+                throw new UnauthorizedAccessException("Attendance evaluation is outside the current organisation.");
+            if (!await db.Jobs.AsNoTracking().AnyAsync(
+                j => j.JobId == jobId && j.IndividualID == individualId && j.OrganisationID == organisationBusinessEntityId,
+                cancellationToken))
+                throw new UnauthorizedAccessException("Employment record is unavailable.");
+
             return await _attendanceEvaluationService.EvaluateAsync(
                 individualId,
                 jobId,

@@ -374,7 +374,7 @@ namespace HRM.Services.Attendance.Abstraction.Services
 
                 return AttendanceProcessingResult.Failed(
                     attendanceLogId,
-                    exception.Message);
+                    "This attendance event was already processed or conflicted with an existing resolution.");
             }
             catch (Exception exception)
             {
@@ -385,7 +385,7 @@ namespace HRM.Services.Attendance.Abstraction.Services
 
                 return AttendanceProcessingResult.Failed(
                     attendanceLogId,
-                    exception.ToString());
+                    "An unexpected error occurred while processing the attendance event.");
             }
         }
 

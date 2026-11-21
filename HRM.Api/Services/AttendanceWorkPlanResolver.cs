@@ -250,6 +250,8 @@ namespace HRM.Services
                     ? AttendanceClockType.CheckOut
                     : AttendanceClockType.CheckIn;
 
+                var breakLogicalType = FormatPairedBreakLogicalType(pairedBreakSegment.WorkSegmentTypeCode, lunchClockType);
+
                 return new AttendancePlanResolutionResult
                 {
                     WorkPlanId = workPlanId,
@@ -258,7 +260,7 @@ namespace HRM.Services
                     SchedulePurpose = "Official",
                     SegmentName = pairedBreakSegment.Name,
                     ClockType = lunchClockType,
-                    LogicalEventType = lunchClockType == AttendanceClockType.CheckOut ? "OfficialBreakOut" : "OfficialBreakIn",
+                    LogicalEventType = breakLogicalType,
                     MatchMethod = "OfficialBreakWindow",
                     MatchReason = lunchClockType == AttendanceClockType.CheckOut
                         ? $"Checked out for '{pairedBreakSegment.Name}'."
@@ -338,6 +340,54 @@ namespace HRM.Services
                                 WindowStart = windowStart,
                                 WindowEnd = windowEnd,
                                 DistanceMinutes = Math.Abs((clockTime - expectedTime).TotalMinutes)
+                            });
+                    }
+                }
+
+                if (IsPairedWorkSegment(code))
+                {
+                    var groupKey = scheduleGroupKeys[segment.WorkPlanSegmentId];
+                    var hasOpen = openScheduleGroups.Contains(groupKey);
+                    var inWindowStart = segment.StartDateTime.AddMinutes(-EarlyCheckInResolutionMinutes);
+                    var inWindowEnd = segment.EndDateTime > segment.StartDateTime ? segment.EndDateTime : segment.StartDateTime;
+                    if (!hasOpen && clockTime >= inWindowStart && clockTime <= inWindowEnd)
+                    {
+                        candidates.Add(
+                            new BoundaryCandidate
+                            {
+                                WorkPlanSegmentId = segment.WorkPlanSegmentId,
+                                SegmentName = segment.Name,
+                                SchedulePurpose = segment.SchedulePurpose,
+                                IsMandatory = segment.IsMandatory,
+                                GroupKey = groupKey,
+                                HasOpenCheckIn = false,
+                                ClockType = AttendanceClockType.CheckIn,
+                                BoundaryTime = segment.StartDateTime,
+                                WindowStart = inWindowStart,
+                                WindowEnd = inWindowEnd,
+                                ExtendedWindowEnd = inWindowEnd,
+                                DistanceMinutes = Math.Abs((clockTime - segment.StartDateTime).TotalMinutes)
+                            });
+                    }
+
+                    var outWindowStart = segment.EndDateTime.AddMinutes(-segment.GraceBeforeMinutes);
+                    if (clockTime >= outWindowStart.AddMinutes(-EarlyCheckOutResolutionMinutes) &&
+                        clockTime <= segment.EndDateTime.AddMinutes(LateCheckOutResolutionMinutes))
+                    {
+                        candidates.Add(
+                            new BoundaryCandidate
+                            {
+                                WorkPlanSegmentId = segment.WorkPlanSegmentId,
+                                SegmentName = segment.Name,
+                                SchedulePurpose = segment.SchedulePurpose,
+                                IsMandatory = segment.IsMandatory,
+                                GroupKey = groupKey,
+                                HasOpenCheckIn = hasOpen,
+                                ClockType = AttendanceClockType.CheckOut,
+                                BoundaryTime = segment.EndDateTime,
+                                WindowStart = outWindowStart,
+                                WindowEnd = segment.EndDateTime,
+                                DistanceMinutes = Math.Abs((clockTime - segment.EndDateTime).TotalMinutes)
                             });
                     }
                 }
@@ -495,6 +545,40 @@ namespace HRM.Services
             return code.Trim().ToUpperInvariant() switch
             {
                 "LUNCH" => true,
+                "BREAK" => true,
+                "REST_BREAK" => true,
+                "MEAL_BREAK" => true,
+                "PRAYER" => true,
+                "PRAYER_BREAK" => true,
+                "OFFICIAL_EXIT" => true,
+                "OUT_OF_OFFICE" => true,
+                _ => false
+            };
+        }
+
+        private static string FormatPairedBreakLogicalType(string? code, AttendanceClockType clockType)
+        {
+            var normalized = code?.Trim().ToUpperInvariant() ?? "";
+            if (normalized is "PRAYER" or "PRAYER_BREAK")
+                return clockType == AttendanceClockType.CheckOut ? "OfficialPrayerOut" : "OfficialPrayerIn";
+            if (normalized is "OFFICIAL_EXIT" or "OUT_OF_OFFICE")
+                return clockType == AttendanceClockType.CheckOut ? "OfficialExitOut" : "OfficialExitIn";
+            return clockType == AttendanceClockType.CheckOut ? "OfficialBreakOut" : "OfficialBreakIn";
+        }
+
+        private static bool IsPairedWorkSegment(string? code)
+        {
+            if (string.IsNullOrWhiteSpace(code))
+                return false;
+
+            return code.Trim().ToUpperInvariant() switch
+            {
+                "WORK" => true,
+                "SHIFT" => true,
+                "DUTY" => true,
+                "OVERTIME" => true,
+                "FIELD_WORK" => true,
+                "REMOTE_WORK" => true,
                 _ => false
             };
         }
@@ -509,6 +593,15 @@ namespace HRM.Services
                 "CHECK_IN" => true,
                 "DUTY_CHECK_IN" => true,
                 "BREAK_END" => true,
+                "SHIFT_IN" => true,
+                "SHIFT_START" => true,
+                "OT_CHECK_IN" => true,
+                "OVERTIME_IN" => true,
+                "OVERTIME_START" => true,
+                "PRAYER_END" => true,
+                "PRAYER_IN" => true,
+                "FIELD_IN" => true,
+                "REMOTE_IN" => true,
                 _ => false
             };
         }
@@ -523,6 +616,15 @@ namespace HRM.Services
                 "CHECK_OUT" => true,
                 "DUTY_CHECK_OUT" => true,
                 "BREAK_START" => true,
+                "SHIFT_OUT" => true,
+                "SHIFT_END" => true,
+                "OT_CHECK_OUT" => true,
+                "OVERTIME_OUT" => true,
+                "OVERTIME_END" => true,
+                "PRAYER_START" => true,
+                "PRAYER_OUT" => true,
+                "FIELD_OUT" => true,
+                "REMOTE_OUT" => true,
                 _ => false
             };
         }

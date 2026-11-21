@@ -99,8 +99,8 @@ namespace HRM.Services.Attendance.Abstraction.Services
                     };
 
                 var code = segment.WorkSegmentTypeCode?.Trim().ToUpperInvariant() ?? "";
-                var isCheckInOnly = code is "CHECK_IN" or "DUTY_CHECK_IN" or "BREAK_END";
-                var isCheckOutOnly = code is "CHECK_OUT" or "DUTY_CHECK_OUT" or "BREAK_START";
+                var isCheckInOnly = code is "CHECK_IN" or "DUTY_CHECK_IN" or "BREAK_END" or "SHIFT_IN" or "SHIFT_START" or "OT_CHECK_IN" or "OVERTIME_IN" or "OVERTIME_START" or "PRAYER_END" or "PRAYER_IN" or "FIELD_IN" or "REMOTE_IN";
+                var isCheckOutOnly = code is "CHECK_OUT" or "DUTY_CHECK_OUT" or "BREAK_START" or "SHIFT_OUT" or "SHIFT_END" or "OT_CHECK_OUT" or "OVERTIME_OUT" or "OVERTIME_END" or "PRAYER_START" or "PRAYER_OUT" or "FIELD_OUT" or "REMOTE_OUT";
 
                 if (!isCheckOutOnly)
                 {

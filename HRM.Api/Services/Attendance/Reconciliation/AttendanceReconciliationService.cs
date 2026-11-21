@@ -39,6 +39,19 @@ public sealed class AttendanceReconciliationService : IAttendanceReconciliationS
         CancellationToken cancellationToken = default)
     {
         await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
+        int? actorUserId = null;
+        if (_access is not null)
+        {
+            var actor = await _access.RequireContextAsync();
+            actorUserId = actor.UserId;
+            var scopedOrg = await StaffDataAccess.RequireIndividualAsync(db, _access, individualId);
+            if (scopedOrg.HasValue && scopedOrg.Value != organisationId)
+                throw new UnauthorizedAccessException("Attendance reconciliation is outside the current organisation.");
+            if (!await db.Jobs.AsNoTracking().AnyAsync(
+                j => j.JobId == jobId && j.IndividualID == individualId && j.OrganisationID == organisationId,
+                cancellationToken))
+                throw new UnauthorizedAccessException("Employment record is unavailable.");
+        }
         return await ReconcileInternalAsync(
             db,
             individualId,
@@ -46,9 +59,9 @@ public sealed class AttendanceReconciliationService : IAttendanceReconciliationS
             organisationId,
             workDate,
             persistChanges: true,
-            allowFinalizedOverride: true,
+            allowFinalizedOverride: false,
             triggerSource: "DailyReconciliation",
-            initiatedByUserId: null,
+            initiatedByUserId: actorUserId,
             operationLogId: null,
             cancellationToken: cancellationToken);
     }
@@ -61,17 +74,25 @@ public sealed class AttendanceReconciliationService : IAttendanceReconciliationS
         if (request.ToDate < request.FromDate)
             throw new ArgumentException("ToDate must be greater than or equal to FromDate.", nameof(request));
 
+        var daySpan = request.ToDate.DayNumber - request.FromDate.DayNumber + 1;
+        var maxSpan = request.IndividualId.HasValue && request.IndividualId.Value > 0 ? 366 : 93;
+        if (daySpan > maxSpan)
+            throw new ArgumentOutOfRangeException(nameof(request), $"Reconciliation date range cannot exceed {maxSpan} days.");
+
         int? actorUserId = null;
         int organisationId = request.OrganisationId;
         if (_access is not null)
         {
-            var actor = await _access.GetContextAsync();
-            if (actor is not null)
-            {
-                actorUserId = actor.UserId;
-                if (organisationId <= 0)
-                    organisationId = await _access.GetCurrentOrganisationIdAsync();
-            }
+            var actor = await _access.RequireContextAsync();
+            actorUserId = actor.UserId;
+            var currentOrg = await _access.GetCurrentOrganisationIdAsync();
+            if (organisationId <= 0)
+                organisationId = currentOrg;
+
+            var canManage = actor.IsSuperAdministrator || actor.IsHRStaff || actor.IsHRHead || actor.IsHRManager ||
+                actor.IsOrganisationAdmin || await _access.HasPermissionAsync("Attendance.Manage") || await _access.HasPermissionAsync("Admin");
+            if (!canManage || organisationId <= 0 || !await _access.HasOrganisationAccessAsync(organisationId))
+                throw new UnauthorizedAccessException("HR or Attendance management access in the selected organisation is required.");
         }
 
         await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
@@ -267,16 +288,26 @@ public sealed class AttendanceReconciliationService : IAttendanceReconciliationS
         int organisationId = request.OrganisationId;
         if (_access is not null)
         {
-            var actor = await _access.GetContextAsync();
-            if (actor is not null)
-            {
-                actorUserId = actor.UserId;
-                if (organisationId <= 0)
-                    organisationId = await _access.GetCurrentOrganisationIdAsync();
-            }
+            var actor = await _access.RequireContextAsync();
+            actorUserId = actor.UserId;
+            if (organisationId <= 0)
+                organisationId = await _access.GetCurrentOrganisationIdAsync();
+
+            var canManage = actor.IsSuperAdministrator || actor.IsHRStaff || actor.IsHRHead || actor.IsHRManager ||
+                actor.IsOrganisationAdmin || await _access.HasPermissionAsync("Attendance.Manage") || await _access.HasPermissionAsync("Admin");
+            if (!canManage || organisationId <= 0 || !await _access.HasOrganisationAccessAsync(organisationId))
+                throw new UnauthorizedAccessException("HR or Attendance management access in the selected organisation is required for manual overrides.");
+
+            if (request.AllowFinalizedPlanOverride &&
+                !(actor.IsSuperAdministrator || actor.IsHRHead || actor.IsHRManager || actor.IsOrganisationAdmin))
+                throw new UnauthorizedAccessException("Only HR leadership or administrators can override finalized work plans.");
         }
 
         await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
+        if (_access is not null && !await db.Jobs.AsNoTracking().AnyAsync(
+            j => j.JobId == request.JobId && j.IndividualID == request.IndividualId && j.OrganisationID == organisationId,
+            cancellationToken))
+            throw new UnauthorizedAccessException("Employment record is outside the selected organisation.");
         var workDateTime = request.WorkDate.ToDateTime(TimeOnly.MinValue);
 
         var workPlan = await db.WorkPlans.AsNoTracking()
