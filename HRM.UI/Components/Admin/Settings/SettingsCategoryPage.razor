@@ -234,6 +234,8 @@
         ? new Dictionary<string, object> { ["InitialOrganisationId"] = (object?)(OrganisationId ?? QueryOrganisationId)!, ["InitialKind"] = TeamSection == "departments" ? "Department" : "Team" }
         : activeItem?.ComponentType == typeof(HRM.Components.Admin.Settings.Organisations.OrganisationSettingsEditor)
             ? new Dictionary<string, object> { ["InitialOrganisationId"] = (object?)OrganisationId!, ["InitialSection"] = OrganisationSection! }
+        : activeItem?.ComponentType == typeof(HRM.Components.Admin.Settings.Organisations.OrganisationPermissions)
+            ? new Dictionary<string, object> { ["InitialOrganisationId"] = (object?)(OrganisationId ?? QueryOrganisationId)!, ["HideHeader"] = true }
         : activeItem?.ComponentType == typeof(HRM.Components.Admin.Hr.Documents.DocumentCentreAdminPanel)
             ? new Dictionary<string, object> { ["InitialSection"] = "types" }
         : activeItem?.ComponentType == typeof(HRM.Components.Admin.Settings.Roles.AccessRolesGrid)
@@ -312,6 +314,8 @@
         },
         "org" => new() {
             new("Manage", "bi-building-gear", "Manage organisation details, addresses, contacts, teams and supervisors.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationSettingsEditor)),
+            new("Roles", "bi-shield-check", "Manage organisation user groups and assigned role permissions.", typeof(HRM.Components.Admin.Settings.Roles.AccessRolesGrid)),
+            new("Permissions", "bi-key", "Control which permissions are enabled for each organisation.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationPermissions)),
             new("Document Types", "bi-folder2-open", "Configure organisation document classifications and types.", typeof(HRM.Components.Admin.Hr.Documents.DocumentCentreAdminPanel)),
             new("Manage type", "bi-diagram-3", "Manage Organisation Structure Types, such as departments and divisions.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationResources)),
             new("Calendar", "bi-calendar3", "View and assign organisation calendars.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationResources)),
@@ -448,11 +452,6 @@
         if (TeamSection != null) { CategoryName = "org"; Section = "teams"; }
         if (CategoryName.Equals("org", StringComparison.OrdinalIgnoreCase) && Section == "organisations") Section = "manage";
         if (CategoryName.Equals("org", StringComparison.OrdinalIgnoreCase) && Section == "requests") Section = "structure-request-types";
-        if (CategoryName.Equals("org", StringComparison.OrdinalIgnoreCase) && Section == "permissions")
-        {
-            Navigation.NavigateTo($"/admin/my/workspace/organisation/{currentOrgId}/permissions", replace: true);
-            return;
-        }
         if (CategoryName.Equals("org", StringComparison.OrdinalIgnoreCase) && Section == "teams")
         {
             var current = new Uri(Navigation.Uri);
