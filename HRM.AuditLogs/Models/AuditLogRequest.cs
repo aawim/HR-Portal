@@ -16,6 +16,7 @@ public sealed class AuditLogRequest
     public int? OrganisationId { get; set; }
     public int? DivisionId { get; set; }
     public int? UserId { get; set; }
+    public string? UserName { get; set; }
     public string? ActorType { get; set; }
     public string Action { get; set; } = string.Empty;
     public string Outcome { get; set; } = AuditOutcomes.Committed;
@@ -28,6 +29,7 @@ public sealed class AuditLogRequest
     public string? Source { get; set; }
     public string? Reason { get; set; }
     public string? IpAddress { get; set; }
+    public string? Url { get; set; }
     public DateTime? OccurredAtUtc { get; set; }
     public object? Metadata { get; set; }
     public string? MetadataJson { get; set; }

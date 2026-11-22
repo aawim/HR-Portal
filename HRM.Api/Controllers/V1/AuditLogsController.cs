@@ -1,7 +1,9 @@
 using HRM.Api.Infrastructure;
 using HRM.AuditLogs.Abstractions;
 using HRM.AuditLogs.Models;
+using HRM.Models;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace HRM.Api.Controllers.V1;
 
@@ -9,7 +11,8 @@ namespace HRM.Api.Controllers.V1;
 public sealed class AuditLogsController(
     IAuditLogQueryService queryService,
     IAuditContextAccessor contextAccessor,
-    IAuditLogService auditWriter) : HrmApiController
+    IAuditLogService auditWriter,
+    IDbContextFactory<HrmTeContext> hrmDbFactory) : HrmApiController
 {
     [HttpGet]
     public async Task<ActionResult<AuditLogPageResult>> Search(
@@ -56,7 +59,9 @@ public sealed class AuditLogsController(
 
         try
         {
-            return Ok(await queryService.SearchAsync(filter, actor, ct));
+            var result = await queryService.SearchAsync(filter, actor, ct);
+            await EnrichUserNamesAsync(result.Items, ct);
+            return Ok(result);
         }
         catch (UnauthorizedAccessException ex)
         {
@@ -74,7 +79,9 @@ public sealed class AuditLogsController(
         try
         {
             var record = await queryService.GetByIdAsync(id, actor, ct);
-            return record is null ? NotFound() : Ok(record);
+            if (record is null) return NotFound();
+            await EnrichUserNamesAsync([record], ct);
+            return Ok(record);
         }
         catch (UnauthorizedAccessException ex)
         {
@@ -103,6 +110,7 @@ public sealed class AuditLogsController(
                 new AuditLogFilter { OrganisationId = organisationId, Page = page, PageSize = pageSize, IncludeDetails = true },
                 actor,
                 ct);
+            await EnrichUserNamesAsync(result.Items, ct);
             return Ok(result);
         }
         catch (UnauthorizedAccessException ex)
@@ -130,6 +138,7 @@ public sealed class AuditLogsController(
                 new AuditLogFilter { OrganisationId = organisationId, Page = page, PageSize = pageSize },
                 actor,
                 ct);
+            await EnrichUserNamesAsync(result.Items, ct);
             return Ok(result);
         }
         catch (UnauthorizedAccessException ex)
@@ -156,6 +165,7 @@ public sealed class AuditLogsController(
                 new AuditLogFilter { OrganisationId = organisationId, Page = page, PageSize = pageSize },
                 actor,
                 ct);
+            await EnrichUserNamesAsync(result.Items, ct);
             return Ok(result);
         }
         catch (UnauthorizedAccessException ex)
@@ -175,7 +185,9 @@ public sealed class AuditLogsController(
         var actor = await contextAccessor.GetCurrentContextAsync(ct);
         try
         {
-            return Ok(await queryService.GetByCorrelationIdAsync(correlationId, actor, ct));
+            var items = await queryService.GetByCorrelationIdAsync(correlationId, actor, ct);
+            await EnrichUserNamesAsync(items, ct);
+            return Ok(items);
         }
         catch (UnauthorizedAccessException ex)
         {
@@ -231,6 +243,35 @@ public sealed class AuditLogsController(
                 "AUDIT_EXPORT_DENIED", AuditOutcomes.Denied, "AuditLogs", "AuditLog",
                 organisationId?.ToString() ?? "EXPORT", ex.Message, cancellationToken: ct);
             return Forbid();
+        }
+    }
+
+    private async Task EnrichUserNamesAsync(IEnumerable<AuditLogRecordDto> items, CancellationToken ct)
+    {
+        var missing = items
+            .Where(x => string.IsNullOrWhiteSpace(x.UserName) && x.UserId.HasValue && x.UserId.Value > 0)
+            .ToList();
+        if (missing.Count == 0) return;
+
+        var userIds = missing.Select(x => x.UserId!.Value).Distinct().ToList();
+        try
+        {
+            await using var db = await hrmDbFactory.CreateDbContextAsync(ct);
+            var lookup = await db.Users
+                .AsNoTracking()
+                .Where(u => userIds.Contains(u.UserId))
+                .Select(u => new { u.UserId, Name = !string.IsNullOrWhiteSpace(u.FullName) ? u.FullName : u.Username })
+                .ToDictionaryAsync(u => u.UserId, u => u.Name, ct);
+
+            foreach (var item in missing)
+            {
+                if (lookup.TryGetValue(item.UserId!.Value, out var name) && !string.IsNullOrWhiteSpace(name))
+                    item.UserName = name;
+            }
+        }
+        catch
+        {
+            // Keep audit log queries resilient if user lookup is temporarily unavailable.
         }
     }
 }

@@ -47,6 +47,20 @@
                         </div>
                         <span class="font-mono text-[11px] text-slate-500">@item.OccurredAtUtc.ToString("dd MMM yyyy HH:mm") UTC</span>
                     </div>
+                    <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500">
+                        <span>
+                            <strong class="text-slate-700">User:</strong>
+                            @(!string.IsNullOrWhiteSpace(item.UserName) ? item.UserName : (item.UserId.HasValue ? $"{item.ActorType} #{item.UserId}" : item.ActorType))
+                        </span>
+                        @if (!string.IsNullOrWhiteSpace(item.IpAddress))
+                        {
+                            <span><strong class="text-slate-700">IP:</strong> <span class="font-mono">@item.IpAddress</span></span>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(item.Url))
+                        {
+                            <span class="truncate max-w-xs" title="@item.Url"><strong class="text-slate-700">URL:</strong> <span class="font-mono">@item.Url</span></span>
+                        }
+                    </div>
                     @if (!string.IsNullOrWhiteSpace(item.Reason))
                     {
                         <p class="text-[11px] text-slate-600"><strong>Reason:</strong> @item.Reason</p>

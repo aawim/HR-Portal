@@ -204,6 +204,18 @@ public sealed class ActivityLogService(
         // Authoritative server-side context takes precedence for ordinary users (no client impersonation).
         var isTrustedSystem = actor.ActorType == ActivityActorTypes.System || actor.IsSuperAdministrator;
         var userId = isTrustedSystem ? (request.UserId ?? actor.UserId) : actor.UserId;
+        var userName = ActivitySanitizer.Truncate(
+            isTrustedSystem
+                ? (!string.IsNullOrWhiteSpace(request.UserName) ? request.UserName.Trim() : actor.UserName?.Trim())
+                : actor.UserName?.Trim(),
+            200);
+        var ipAddress = _options.CaptureIpAddress
+            ? ActivitySanitizer.Truncate(
+                isTrustedSystem
+                    ? (!string.IsNullOrWhiteSpace(request.IpAddress) ? request.IpAddress.Trim() : actor.IpAddress?.Trim())
+                    : actor.IpAddress?.Trim(),
+                64)
+            : null;
         var orgId = isTrustedSystem ? (request.OrganisationId ?? actor.OrganisationId) : (actor.OrganisationId ?? request.OrganisationId);
         var tenantId = actor.TenantId ?? orgId ?? request.TenantId;
         var divId = request.DivisionId ?? actor.DivisionId;
@@ -217,7 +229,12 @@ public sealed class ActivityLogService(
             DivisionId = divId,
             TeamId = teamId,
             UserId = userId,
+            UserName = userName,
             ActorType = string.IsNullOrWhiteSpace(request.ActorType) ? actor.ActorType : request.ActorType.Trim(),
+            IpAddress = ipAddress,
+            Url = ActivitySanitizer.Truncate(
+                !string.IsNullOrWhiteSpace(request.Url) ? request.Url.Trim() : actor.Url?.Trim(),
+                500),
             ActivityCategory = request.Category.ToString(),
             ActivityType = ActivitySanitizer.Truncate(string.IsNullOrWhiteSpace(request.ActivityType) ? request.Action : request.ActivityType.Trim(), 100) ?? "Activity",
             Module = ActivitySanitizer.Truncate(string.IsNullOrWhiteSpace(request.Module) ? request.Category.ToString() : request.Module.Trim(), 64) ?? "General",

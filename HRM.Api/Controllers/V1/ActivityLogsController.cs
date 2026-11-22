@@ -1,14 +1,17 @@
 using HRM.ActivityLogs.Abstractions;
 using HRM.ActivityLogs.Models;
 using HRM.Api.Infrastructure;
+using HRM.Models;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace HRM.Api.Controllers.V1;
 
 [Route("api/v1/activity-logs")]
 public sealed class ActivityLogsController(
     IActivityLogQueryService queryService,
-    IActivityContextAccessor contextAccessor) : HrmApiController
+    IActivityContextAccessor contextAccessor,
+    IDbContextFactory<HrmTeContext> hrmDbFactory) : HrmApiController
 {
     [HttpGet("my")]
     public async Task<ActionResult<ActivityLogPageResult>> GetMyRecent(
@@ -19,7 +22,9 @@ public sealed class ActivityLogsController(
         var actor = await contextAccessor.GetCurrentContextAsync(ct);
         try
         {
-            return Ok(await queryService.GetMyRecentAsync(new ActivityLogFilter { Page = page, PageSize = pageSize }, actor, ct));
+            var result = await queryService.GetMyRecentAsync(new ActivityLogFilter { Page = page, PageSize = pageSize }, actor, ct);
+            await EnrichUserNamesAsync(result.Items, ct);
+            return Ok(result);
         }
         catch (UnauthorizedAccessException ex)
         {
@@ -74,7 +79,9 @@ public sealed class ActivityLogsController(
 
         try
         {
-            return Ok(await queryService.SearchAsync(filter, actor, ct));
+            var result = await queryService.SearchAsync(filter, actor, ct);
+            await EnrichUserNamesAsync(result.Items, ct);
+            return Ok(result);
         }
         catch (UnauthorizedAccessException ex)
         {
@@ -93,6 +100,7 @@ public sealed class ActivityLogsController(
             var entry = await queryService.GetByIdAsync(activityLogId, actor, ct);
             if (entry is null)
                 return NotFound();
+            await EnrichUserNamesAsync([entry], ct);
             return Ok(entry);
         }
         catch (UnauthorizedAccessException ex)
@@ -111,7 +119,9 @@ public sealed class ActivityLogsController(
         var actor = await contextAccessor.GetCurrentContextAsync(ct);
         try
         {
-            return Ok(await queryService.GetEmployeeTimelineAsync(userId, new ActivityLogFilter { Page = page, PageSize = pageSize }, actor, ct));
+            var result = await queryService.GetEmployeeTimelineAsync(userId, new ActivityLogFilter { Page = page, PageSize = pageSize }, actor, ct);
+            await EnrichUserNamesAsync(result.Items, ct);
+            return Ok(result);
         }
         catch (UnauthorizedAccessException ex)
         {
@@ -129,7 +139,9 @@ public sealed class ActivityLogsController(
         var actor = await contextAccessor.GetCurrentContextAsync(ct);
         try
         {
-            return Ok(await queryService.GetOrganisationActivitiesAsync(organisationId, new ActivityLogFilter { Page = page, PageSize = pageSize }, actor, ct));
+            var result = await queryService.GetOrganisationActivitiesAsync(organisationId, new ActivityLogFilter { Page = page, PageSize = pageSize }, actor, ct);
+            await EnrichUserNamesAsync(result.Items, ct);
+            return Ok(result);
         }
         catch (UnauthorizedAccessException ex)
         {
@@ -147,7 +159,9 @@ public sealed class ActivityLogsController(
         var actor = await contextAccessor.GetCurrentContextAsync(ct);
         try
         {
-            return Ok(await queryService.GetTeamActivitiesAsync(teamId, new ActivityLogFilter { Page = page, PageSize = pageSize }, actor, ct));
+            var result = await queryService.GetTeamActivitiesAsync(teamId, new ActivityLogFilter { Page = page, PageSize = pageSize }, actor, ct);
+            await EnrichUserNamesAsync(result.Items, ct);
+            return Ok(result);
         }
         catch (UnauthorizedAccessException ex)
         {
@@ -166,7 +180,9 @@ public sealed class ActivityLogsController(
         var actor = await contextAccessor.GetCurrentContextAsync(ct);
         try
         {
-            return Ok(await queryService.GetEntityActivitiesAsync(entityType, entityId, new ActivityLogFilter { Page = page, PageSize = pageSize }, actor, ct));
+            var result = await queryService.GetEntityActivitiesAsync(entityType, entityId, new ActivityLogFilter { Page = page, PageSize = pageSize }, actor, ct);
+            await EnrichUserNamesAsync(result.Items, ct);
+            return Ok(result);
         }
         catch (UnauthorizedAccessException ex)
         {
@@ -220,6 +236,35 @@ public sealed class ActivityLogsController(
         catch (UnauthorizedAccessException ex)
         {
             return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
+        }
+    }
+
+    private async Task EnrichUserNamesAsync(IEnumerable<ActivityLogDto> items, CancellationToken ct)
+    {
+        var missing = items
+            .Where(x => string.IsNullOrWhiteSpace(x.UserName) && x.UserId.HasValue && x.UserId.Value > 0)
+            .ToList();
+        if (missing.Count == 0) return;
+
+        var userIds = missing.Select(x => x.UserId!.Value).Distinct().ToList();
+        try
+        {
+            await using var db = await hrmDbFactory.CreateDbContextAsync(ct);
+            var lookup = await db.Users
+                .AsNoTracking()
+                .Where(u => userIds.Contains(u.UserId))
+                .Select(u => new { u.UserId, Name = !string.IsNullOrWhiteSpace(u.FullName) ? u.FullName : u.Username })
+                .ToDictionaryAsync(u => u.UserId, u => u.Name, ct);
+
+            foreach (var item in missing)
+            {
+                if (lookup.TryGetValue(item.UserId!.Value, out var name) && !string.IsNullOrWhiteSpace(name))
+                    item.UserName = name;
+            }
+        }
+        catch
+        {
+            // Keep activity log queries resilient if user lookup is temporarily unavailable.
         }
     }
 }

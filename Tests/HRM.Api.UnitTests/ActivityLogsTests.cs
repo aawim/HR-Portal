@@ -431,4 +431,54 @@ public sealed class ActivityLogsTests
         Assert.Equal("activity", outboxEntity!.GetSchema());
         Assert.Equal("ActivityOutbox", outboxEntity.GetTableName());
     }
+
+    [Fact]
+    public async Task RecordAndQuery_PersistsSearchesAndExportsUserNameAndIpAddress()
+    {
+        var actor = new ActivityActorContext
+        {
+            TenantId = 10,
+            OrganisationId = 10,
+            UserId = 42,
+            UserName = "Ibrahim Rasheed",
+            IpAddress = "192.168.10.25",
+            Url = "https://hrm.example.gov/api/v1/employees/42",
+            ActorType = ActivityActorTypes.User,
+            CanViewOrganisationActivity = true,
+            CanExportActivity = true,
+            AuthorizedOrganisationIds = [10]
+        };
+
+        var (_, _, service, query, _) = CreateHarness(actor);
+
+        await service.RecordAsync(new ActivityLogRequest
+        {
+            Category = ActivityCategory.EmployeeManagement,
+            ActivityType = "Employees.Update",
+            Module = "Employees",
+            Action = "UPDATE",
+            Description = "Updated employee contact details."
+        });
+
+        var byName = await query.SearchAsync(new ActivityLogFilter { SearchText = "Ibrahim" }, actor);
+        Assert.Single(byName.Items);
+        Assert.Equal("Ibrahim Rasheed", byName.Items[0].UserName);
+        Assert.Equal("192.168.10.25", byName.Items[0].IpAddress);
+        Assert.Equal("https://hrm.example.gov/api/v1/employees/42", byName.Items[0].Url);
+
+        var byIp = await query.SearchAsync(new ActivityLogFilter { SearchText = "192.168.10.25" }, actor);
+        Assert.Single(byIp.Items);
+
+        var byUrl = await query.SearchAsync(new ActivityLogFilter { SearchText = "/api/v1/employees/42" }, actor);
+        Assert.Single(byUrl.Items);
+
+        var export = await query.ExportCsvAsync(new ActivityLogFilter(), actor);
+        var csv = System.Text.Encoding.UTF8.GetString(export.Content);
+        Assert.Contains("UserName", csv);
+        Assert.Contains("IpAddress", csv);
+        Assert.Contains("Url", csv);
+        Assert.Contains("Ibrahim Rasheed", csv);
+        Assert.Contains("192.168.10.25", csv);
+        Assert.Contains("https://hrm.example.gov/api/v1/employees/42", csv);
+    }
 }

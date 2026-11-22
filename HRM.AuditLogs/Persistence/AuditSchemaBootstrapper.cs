@@ -48,6 +48,7 @@ BEGIN
         [OrganisationId] INT NULL,
         [DivisionId] INT NULL,
         [UserId] INT NULL,
+        [UserName] NVARCHAR(200) NULL,
         [ActorType] NVARCHAR(32) NOT NULL,
         [Action] NVARCHAR(64) NOT NULL,
         [Outcome] NVARCHAR(32) NOT NULL CONSTRAINT [DF_AuditLogs_Outcome] DEFAULT ('Committed'),
@@ -60,6 +61,7 @@ BEGIN
         [Source] NVARCHAR(64) NOT NULL,
         [Reason] NVARCHAR(1000) NULL,
         [IpAddress] NVARCHAR(64) NULL,
+        [Url] NVARCHAR(500) NULL,
         [OccurredAtUtc] DATETIME2 NOT NULL,
         [MetadataJson] NVARCHAR(MAX) NULL,
         [SchemaVersion] INT NOT NULL CONSTRAINT [DF_AuditLogs_SchemaVersion] DEFAULT (1),
@@ -76,6 +78,11 @@ BEGIN
     CREATE INDEX [IX_AuditLogs_CorrelationId] ON [audit].[AuditLogs]([CorrelationId]);
     CREATE INDEX [IX_AuditLogs_OccurredAtUtc] ON [audit].[AuditLogs]([OccurredAtUtc]);
 END;
+
+IF COL_LENGTH('[audit].[AuditLogs]', 'UserName') IS NULL
+    ALTER TABLE [audit].[AuditLogs] ADD [UserName] NVARCHAR(200) NULL;
+IF COL_LENGTH('[audit].[AuditLogs]', 'Url') IS NULL
+    ALTER TABLE [audit].[AuditLogs] ADD [Url] NVARCHAR(500) NULL;
 
 IF OBJECT_ID('[audit].[AuditLogDetails]', 'U') IS NULL
 BEGIN

@@ -60,6 +60,11 @@ public sealed class ActivityLogOptions
     public int MaxMetadataLength { get; set; } = 4000;
 
     /// <summary>
+    /// Whether to capture IP addresses when available on the actor context.
+    /// </summary>
+    public bool CaptureIpAddress { get; set; } = true;
+
+    /// <summary>
     /// Categories disabled here will not be recorded.
     /// </summary>
     public HashSet<string> DisabledCategories { get; set; } = new(StringComparer.OrdinalIgnoreCase);

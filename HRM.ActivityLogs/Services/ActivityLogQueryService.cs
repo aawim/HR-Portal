@@ -143,7 +143,7 @@ public sealed class ActivityLogQueryService(
             .ToListAsync(cancellationToken);
 
         var sb = new StringBuilder();
-        sb.AppendLine("ActivityLogId,EventId,OccurredAtUtc,OrganisationId,DivisionId,TeamId,UserId,ActorType,Category,ActivityType,Module,Action,Description,TargetEntityType,TargetEntityId,TargetDisplayName,CorrelationId,Source");
+        sb.AppendLine("ActivityLogId,EventId,OccurredAtUtc,OrganisationId,DivisionId,TeamId,UserId,UserName,ActorType,IpAddress,Url,Category,ActivityType,Module,Action,Description,TargetEntityType,TargetEntityId,TargetDisplayName,CorrelationId,Source");
 
         foreach (var r in rows)
         {
@@ -155,7 +155,10 @@ public sealed class ActivityLogQueryService(
                 Csv(r.DivisionId?.ToString(CultureInfo.InvariantCulture)),
                 Csv(r.TeamId?.ToString(CultureInfo.InvariantCulture)),
                 Csv(r.UserId?.ToString(CultureInfo.InvariantCulture)),
+                Csv(r.UserName),
                 Csv(r.ActorType),
+                Csv(r.IpAddress),
+                Csv(r.Url),
                 Csv(r.ActivityCategory),
                 Csv(r.ActivityType),
                 Csv(r.Module),
@@ -283,6 +286,9 @@ public sealed class ActivityLogQueryService(
                 x.Description.Contains(term) ||
                 x.ActivityType.Contains(term) ||
                 x.Module.Contains(term) ||
+                (x.UserName != null && x.UserName.Contains(term)) ||
+                (x.IpAddress != null && x.IpAddress.Contains(term)) ||
+                (x.Url != null && x.Url.Contains(term)) ||
                 (x.TargetDisplayName != null && x.TargetDisplayName.Contains(term)) ||
                 (x.TargetEntityId != null && x.TargetEntityId.Contains(term)) ||
                 (x.CorrelationId != null && x.CorrelationId.Contains(term)));
@@ -309,7 +315,10 @@ public sealed class ActivityLogQueryService(
         DivisionId = x.DivisionId,
         TeamId = x.TeamId,
         UserId = x.UserId,
+        UserName = x.UserName,
         ActorType = x.ActorType,
+        IpAddress = x.IpAddress,
+        Url = x.Url,
         ActivityCategory = x.ActivityCategory,
         ActivityType = x.ActivityType,
         Module = x.Module,

@@ -15,7 +15,10 @@ public sealed record ActivityActorContext
     public int? DivisionId { get; init; }
     public int? TeamId { get; init; }
     public int? UserId { get; init; }
+    public string? UserName { get; init; }
     public string ActorType { get; init; } = ActivityActorTypes.User;
+    public string? IpAddress { get; init; }
+    public string? Url { get; init; }
     public string? CorrelationId { get; init; }
     public string? OpaqueSessionId { get; init; }
     public string Source { get; init; } = "HRM.Api";

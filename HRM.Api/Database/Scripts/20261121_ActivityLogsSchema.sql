@@ -30,7 +30,10 @@ BEGIN
         [DivisionId]        INT              NULL,
         [TeamId]            INT              NULL,
         [UserId]            INT              NULL,
+        [UserName]          NVARCHAR(200)    NULL,
         [ActorType]         NVARCHAR(32)     NOT NULL,
+        [IpAddress]         NVARCHAR(64)     NULL,
+        [Url]               NVARCHAR(500)    NULL,
         [ActivityCategory]  NVARCHAR(64)     NOT NULL,
         [ActivityType]      NVARCHAR(128)    NOT NULL,
         [Module]            NVARCHAR(64)     NOT NULL,
@@ -48,6 +51,18 @@ BEGIN
         CONSTRAINT [PK_ActivityLogs] PRIMARY KEY CLUSTERED ([ActivityLogId] ASC)
     );
 END
+GO
+
+IF COL_LENGTH(N'[activity].[ActivityLogs]', N'UserName') IS NULL
+    ALTER TABLE [activity].[ActivityLogs] ADD [UserName] NVARCHAR(200) NULL;
+GO
+
+IF COL_LENGTH(N'[activity].[ActivityLogs]', N'IpAddress') IS NULL
+    ALTER TABLE [activity].[ActivityLogs] ADD [IpAddress] NVARCHAR(64) NULL;
+GO
+
+IF COL_LENGTH(N'[activity].[ActivityLogs]', N'Url') IS NULL
+    ALTER TABLE [activity].[ActivityLogs] ADD [Url] NVARCHAR(500) NULL;
 GO
 
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'UX_ActivityLogs_EventId' AND object_id = OBJECT_ID(N'[activity].[ActivityLogs]'))

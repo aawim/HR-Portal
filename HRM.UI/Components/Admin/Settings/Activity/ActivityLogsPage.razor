@@ -40,7 +40,7 @@
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
             <div>
                 <label class="block text-xs font-medium text-slate-600 mb-1">Search</label>
-                <input type="text" @bind="searchText" @bind:event="oninput" placeholder="Description, target, user..."
+                <input type="text" @bind="searchText" @bind:event="oninput" placeholder="Description, target, user, IP, URL..."
                        class="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500" />
             </div>
             <div>
@@ -117,7 +117,9 @@
                     <thead class="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
                         <tr>
                             <th class="px-4 py-3">Timestamp (UTC)</th>
-                            <th class="px-4 py-3">Actor</th>
+                            <th class="px-4 py-3">User</th>
+                            <th class="px-4 py-3">IP Address</th>
+                            <th class="px-4 py-3">URL</th>
                             <th class="px-4 py-3">Category / Type</th>
                             <th class="px-4 py-3">Module / Action</th>
                             <th class="px-4 py-3">Target</th>
@@ -133,8 +135,14 @@
                                     @item.OccurredAtUtc.ToString("yyyy-MM-dd HH:mm:ss")
                                 </td>
                                 <td class="px-4 py-3 whitespace-nowrap">
-                                    <div class="text-xs font-medium text-slate-900">@(item.UserId.HasValue ? $"User #{item.UserId}" : "System")</div>
-                                    <div class="text-[11px] text-slate-500">@item.ActorType</div>
+                                    <div class="text-xs font-medium text-slate-900">@FormatUserLabel(item)</div>
+                                    <div class="text-[11px] text-slate-500">@item.ActorType@(item.UserId.HasValue ? $" · #{item.UserId}" : "")</div>
+                                </td>
+                                <td class="px-4 py-3 whitespace-nowrap font-mono text-xs text-slate-600">
+                                    @(string.IsNullOrWhiteSpace(item.IpAddress) ? "—" : item.IpAddress)
+                                </td>
+                                <td class="px-4 py-3 max-w-[12rem] truncate font-mono text-xs text-slate-600" title="@item.Url">
+                                    @(string.IsNullOrWhiteSpace(item.Url) ? "—" : item.Url)
                                 </td>
                                 <td class="px-4 py-3 whitespace-nowrap">
                                     <span class="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium bg-indigo-50 text-indigo-700 ring-1 ring-inset ring-indigo-600/20">
@@ -219,8 +227,16 @@
                         <dd class="font-mono text-slate-900">@selected.OccurredAtUtc.ToString("yyyy-MM-dd HH:mm:ss.fff")</dd>
                     </div>
                     <div>
-                        <dt class="text-slate-500">Actor</dt>
-                        <dd class="text-slate-900 font-medium">@(selected.UserId.HasValue ? $"User #{selected.UserId}" : "System") (@selected.ActorType)</dd>
+                        <dt class="text-slate-500">User</dt>
+                        <dd class="text-slate-900 font-medium">@FormatUserLabel(selected) (@selected.ActorType@(selected.UserId.HasValue ? $" · #{selected.UserId}" : ""))</dd>
+                    </div>
+                    <div>
+                        <dt class="text-slate-500">IP Address</dt>
+                        <dd class="font-mono text-slate-900">@(string.IsNullOrWhiteSpace(selected.IpAddress) ? "—" : selected.IpAddress)</dd>
+                    </div>
+                    <div class="col-span-2">
+                        <dt class="text-slate-500">URL</dt>
+                        <dd class="font-mono text-slate-900 break-all">@(string.IsNullOrWhiteSpace(selected.Url) ? "—" : selected.Url)</dd>
                     </div>
                     <div>
                         <dt class="text-slate-500">Category</dt>
@@ -377,4 +393,9 @@
             loading = false;
         }
     }
+
+    private static string FormatUserLabel(ActivityLogDto item)
+        => !string.IsNullOrWhiteSpace(item.UserName)
+            ? item.UserName
+            : (item.UserId.HasValue ? $"User #{item.UserId}" : "System");
 }

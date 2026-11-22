@@ -9,7 +9,10 @@ public sealed class ActivityLog
     public int? DivisionId { get; set; }
     public int? TeamId { get; set; }
     public int? UserId { get; set; }
+    public string? UserName { get; set; }
     public string ActorType { get; set; } = "User";
+    public string? IpAddress { get; set; }
+    public string? Url { get; set; }
     public string ActivityCategory { get; set; } = Models.ActivityCategory.Administration.ToString();
     public string ActivityType { get; set; } = string.Empty;
     public string Module { get; set; } = string.Empty;

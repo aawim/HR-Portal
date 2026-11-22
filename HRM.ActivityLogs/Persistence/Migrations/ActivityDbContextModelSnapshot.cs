@@ -32,6 +32,7 @@ partial class ActivityDbContextModelSnapshot : ModelSnapshot
             b.Property<string>("Description").IsRequired().HasMaxLength(1000).HasColumnType("nvarchar(1000)");
             b.Property<int?>("DivisionId").HasColumnType("int");
             b.Property<Guid>("EventId").HasColumnType("uniqueidentifier");
+            b.Property<string>("IpAddress").HasMaxLength(64).HasColumnType("nvarchar(64)");
             b.Property<string>("MetadataJson").HasColumnType("nvarchar(max)");
             b.Property<string>("Module").IsRequired().HasMaxLength(64).HasColumnType("nvarchar(64)");
             b.Property<DateTime>("OccurredAtUtc").HasColumnType("datetime2");
@@ -43,7 +44,9 @@ partial class ActivityDbContextModelSnapshot : ModelSnapshot
             b.Property<string>("TargetEntityType").HasMaxLength(128).HasColumnType("nvarchar(128)");
             b.Property<int?>("TeamId").HasColumnType("int");
             b.Property<int?>("TenantId").HasColumnType("int");
+            b.Property<string>("Url").HasMaxLength(500).HasColumnType("nvarchar(500)");
             b.Property<int?>("UserId").HasColumnType("int");
+            b.Property<string>("UserName").HasMaxLength(200).HasColumnType("nvarchar(200)");
 
             b.HasKey("ActivityLogId");
             b.HasIndex("CorrelationId").HasDatabaseName("IX_ActivityLogs_CorrelationId");

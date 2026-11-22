@@ -8,7 +8,10 @@ public sealed class ActivityLogRequest
     public int? DivisionId { get; set; }
     public int? TeamId { get; set; }
     public int? UserId { get; set; }
+    public string? UserName { get; set; }
     public string? ActorType { get; set; }
+    public string? IpAddress { get; set; }
+    public string? Url { get; set; }
     public ActivityCategory Category { get; set; } = ActivityCategory.Administration;
     public string ActivityType { get; set; } = string.Empty;
     public string Module { get; set; } = string.Empty;
@@ -55,7 +58,10 @@ public sealed class ActivityLogDto
     public int? DivisionId { get; set; }
     public int? TeamId { get; set; }
     public int? UserId { get; set; }
+    public string? UserName { get; set; }
     public string ActorType { get; set; } = string.Empty;
+    public string? IpAddress { get; set; }
+    public string? Url { get; set; }
     public string ActivityCategory { get; set; } = string.Empty;
     public string ActivityType { get; set; } = string.Empty;
     public string Module { get; set; } = string.Empty;

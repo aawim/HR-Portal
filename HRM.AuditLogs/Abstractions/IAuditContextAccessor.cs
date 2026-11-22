@@ -27,6 +27,7 @@ public sealed record AuditActorContext
     public string? RequestId { get; init; }
     public string Source { get; init; } = "HRM.Api";
     public string? IpAddress { get; init; }
+    public string? Url { get; init; }
     public bool IsSuperAdministrator { get; init; }
     public bool CanViewAuditLogs { get; init; }
     public bool CanViewConfidentialValues { get; init; }

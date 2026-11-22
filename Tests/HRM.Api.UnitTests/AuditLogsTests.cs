@@ -395,4 +395,64 @@ public sealed class AuditLogsTests
         var fk = detailEntity.GetForeignKeys().Single();
         Assert.Equal(DeleteBehavior.Restrict, fk.DeleteBehavior);
     }
+
+    [Fact]
+    public async Task RecordAndQuery_PersistsAndExportsUserNameAndIpAddress()
+    {
+        var auditDbName = $"audit-user-ip-{Guid.NewGuid():N}";
+        var auditFactory = new InMemoryAuditDbFactory(auditDbName);
+        var opts = Options.Create(CreateTestOptions());
+        var actor = new AuditActorContext
+        {
+            TenantId = 1,
+            OrganisationId = 1,
+            UserId = 88,
+            Username = "Aishath Mohamed",
+            IpAddress = "10.20.30.40",
+            Url = "https://hrm.example.gov/api/v1/staff/501",
+            ActorType = AuditActorTypes.User,
+            CanViewAuditLogs = true,
+            CanExportAuditLogs = true,
+            AuthorizedOrganisationIds = [1]
+        };
+
+        var writer = new AuditLogService(
+            auditFactory,
+            new FixedAuditContextAccessor(actor),
+            new FixedAuditClock(new DateTime(2026, 11, 22, 4, 0, 0, DateTimeKind.Utc)),
+            opts,
+            NullLogger<AuditLogService>.Instance);
+        var query = new AuditLogQueryService(auditFactory, writer, opts);
+
+        var res = await writer.RecordAsync(new AuditLogRequest
+        {
+            Action = "UPDATE",
+            Module = "Employees",
+            EntityType = "Staff",
+            EntityId = "501",
+            Description = "Updated staff profile."
+        });
+        Assert.True(res.Succeeded);
+
+        var byUser = await query.SearchAsync(new AuditLogFilter { SearchText = "Aishath" }, actor);
+        Assert.Single(byUser.Items);
+        Assert.Equal("Aishath Mohamed", byUser.Items[0].UserName);
+        Assert.Equal("10.20.30.40", byUser.Items[0].IpAddress);
+        Assert.Equal("https://hrm.example.gov/api/v1/staff/501", byUser.Items[0].Url);
+
+        var byIp = await query.SearchAsync(new AuditLogFilter { SearchText = "10.20.30.40" }, actor);
+        Assert.Single(byIp.Items);
+
+        var byUrl = await query.SearchAsync(new AuditLogFilter { SearchText = "/api/v1/staff/501" }, actor);
+        Assert.Single(byUrl.Items);
+
+        var export = await query.ExportCsvAsync(new AuditLogFilter(), actor);
+        var csv = System.Text.Encoding.UTF8.GetString(export.Content);
+        Assert.Contains("UserName", csv);
+        Assert.Contains("IpAddress", csv);
+        Assert.Contains("Url", csv);
+        Assert.Contains("Aishath Mohamed", csv);
+        Assert.Contains("10.20.30.40", csv);
+        Assert.Contains("https://hrm.example.gov/api/v1/staff/501", csv);
+    }
 }

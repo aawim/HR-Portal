@@ -36,6 +36,7 @@ public sealed class AuditLogQueryService(
                 EntityId = scope.RequestedOrganisationId?.ToString(CultureInfo.InvariantCulture) ?? "ALL",
                 OrganisationId = scope.RequestedOrganisationId ?? actor.OrganisationId,
                 UserId = actor.UserId,
+                UserName = actor.Username,
                 ActorType = actor.ActorType,
                 Description = $"Cross-organisation audit search executed for Organisation {(scope.RequestedOrganisationId?.ToString() ?? "ALL")}.",
                 IsGlobalSystemEvent = !scope.RequestedOrganisationId.HasValue && actor.IsSuperAdministrator,
@@ -170,7 +171,7 @@ public sealed class AuditLogQueryService(
             .ToListAsync(cancellationToken);
 
         var sb = new StringBuilder();
-        sb.AppendLine("AuditLogId,EventId,OccurredAtUtc,OrganisationId,DivisionId,UserId,ActorType,Action,Outcome,Module,EntityType,EntityId,Description,Reason,CorrelationId,Source,ChangedProperties");
+        sb.AppendLine("AuditLogId,EventId,OccurredAtUtc,OrganisationId,DivisionId,UserId,UserName,ActorType,IpAddress,Url,Action,Outcome,Module,EntityType,EntityId,Description,Reason,CorrelationId,Source,ChangedProperties");
 
         foreach (var row in rows)
         {
@@ -183,7 +184,10 @@ public sealed class AuditLogQueryService(
                 Csv(dto.OrganisationId?.ToString(CultureInfo.InvariantCulture)),
                 Csv(dto.DivisionId?.ToString(CultureInfo.InvariantCulture)),
                 Csv(dto.UserId?.ToString(CultureInfo.InvariantCulture)),
+                Csv(dto.UserName),
                 Csv(dto.ActorType),
+                Csv(dto.IpAddress),
+                Csv(dto.Url),
                 Csv(dto.Action),
                 Csv(dto.Outcome),
                 Csv(dto.Module),
@@ -205,6 +209,7 @@ public sealed class AuditLogQueryService(
             EntityId = scope.RequestedOrganisationId?.ToString(CultureInfo.InvariantCulture) ?? actor.OrganisationId?.ToString(CultureInfo.InvariantCulture) ?? "GLOBAL",
             OrganisationId = scope.RequestedOrganisationId ?? actor.OrganisationId,
             UserId = actor.UserId,
+            UserName = actor.Username,
             ActorType = actor.ActorType,
             Description = $"Exported {rows.Count} audit log record(s) to CSV.",
             IsGlobalSystemEvent = !scope.RequestedOrganisationId.HasValue && !actor.OrganisationId.HasValue && actor.IsSuperAdministrator,
@@ -294,6 +299,9 @@ public sealed class AuditLogQueryService(
                 x.EntityId.Contains(term) ||
                 x.Module.Contains(term) ||
                 x.Action.Contains(term) ||
+                (x.UserName != null && x.UserName.Contains(term)) ||
+                (x.IpAddress != null && x.IpAddress.Contains(term)) ||
+                (x.Url != null && x.Url.Contains(term)) ||
                 (x.Reason != null && x.Reason.Contains(term)) ||
                 (x.CorrelationId != null && x.CorrelationId.Contains(term)));
         }
@@ -342,6 +350,7 @@ public sealed class AuditLogQueryService(
             OrganisationId = row.OrganisationId,
             DivisionId = row.DivisionId,
             UserId = row.UserId,
+            UserName = row.UserName,
             ActorType = row.ActorType,
             Action = row.Action,
             Outcome = row.Outcome,
@@ -354,6 +363,7 @@ public sealed class AuditLogQueryService(
             Source = row.Source,
             Reason = row.Reason,
             IpAddress = row.IpAddress,
+            Url = row.Url,
             OccurredAtUtc = row.OccurredAtUtc,
             MetadataJson = canSeeConfidential ? row.MetadataJson : null,
             SchemaVersion = row.SchemaVersion,

@@ -14,6 +14,7 @@ public sealed class AuditLogConfiguration : IEntityTypeConfiguration<AuditLog>
         builder.Property(x => x.AuditLogId).ValueGeneratedOnAdd();
 
         builder.Property(x => x.EventId).IsRequired();
+        builder.Property(x => x.UserName).HasMaxLength(200);
         builder.Property(x => x.ActorType).HasMaxLength(32).IsRequired();
         builder.Property(x => x.Action).HasMaxLength(64).IsRequired();
         builder.Property(x => x.Outcome).HasMaxLength(32).IsRequired().HasDefaultValue("Committed");
@@ -26,6 +27,7 @@ public sealed class AuditLogConfiguration : IEntityTypeConfiguration<AuditLog>
         builder.Property(x => x.Source).HasMaxLength(64).IsRequired();
         builder.Property(x => x.Reason).HasMaxLength(1000);
         builder.Property(x => x.IpAddress).HasMaxLength(64);
+        builder.Property(x => x.Url).HasMaxLength(500);
         builder.Property(x => x.OccurredAtUtc).IsRequired();
         builder.Property(x => x.SchemaVersion).IsRequired().HasDefaultValue(1);
         builder.Property(x => x.IsLegalHold).IsRequired().HasDefaultValue(false);

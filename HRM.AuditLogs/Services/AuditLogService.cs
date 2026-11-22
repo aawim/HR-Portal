@@ -340,6 +340,7 @@ public sealed class AuditLogService(
         var tenantId = request.TenantId ?? actor.TenantId ?? orgId;
         var divisionId = request.DivisionId ?? actor.DivisionId;
         var userId = request.UserId ?? actor.UserId;
+        var userName = AuditDataRedaction.Truncate(string.IsNullOrWhiteSpace(request.UserName) ? actor.Username?.Trim() : request.UserName.Trim(), 200);
         var actorType = string.IsNullOrWhiteSpace(request.ActorType) ? actor.ActorType : request.ActorType.Trim();
 
         if (!request.IsGlobalSystemEvent && !tenantId.HasValue && !orgId.HasValue && actorType == AuditActorTypes.User)
@@ -357,6 +358,7 @@ public sealed class AuditLogService(
             OrganisationId = orgId,
             DivisionId = divisionId,
             UserId = userId,
+            UserName = userName,
             ActorType = string.IsNullOrWhiteSpace(actorType) ? AuditActorTypes.User : actorType,
             Action = string.IsNullOrWhiteSpace(request.Action) ? "EVENT" : request.Action.Trim().ToUpperInvariant(),
             Outcome = string.IsNullOrWhiteSpace(request.Outcome) ? AuditOutcomes.Committed : request.Outcome.Trim(),
@@ -369,6 +371,7 @@ public sealed class AuditLogService(
             Source = AuditDataRedaction.Truncate(request.Source ?? actor.Source ?? _options.DefaultSource, 64)!,
             Reason = AuditDataRedaction.Truncate(request.Reason?.Trim(), 1000),
             IpAddress = _options.CaptureIpAddress ? AuditDataRedaction.Truncate(request.IpAddress ?? actor.IpAddress, 64) : null,
+            Url = AuditDataRedaction.Truncate(string.IsNullOrWhiteSpace(request.Url) ? actor.Url?.Trim() : request.Url.Trim(), 500),
             OccurredAtUtc = nowUtc,
             MetadataJson = AuditValueSerializer.SerializeMetadata(request.Metadata, request.MetadataJson, _options.MaxMetadataLength),
             SchemaVersion = 1,

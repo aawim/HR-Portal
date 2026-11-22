@@ -28,6 +28,8 @@ public sealed class HrmActivityContextAccessor(
 
         var correlationId = ResolveCorrelationId(http);
         var opaqueSessionId = ResolveOpaqueSessionId(http);
+        var ipAddress = ResolveClientIpAddress(http);
+        var url = ResolveRequestUrl(http);
 
         var access = http.RequestServices.GetService<IUserAccessService>()
                      ?? serviceProvider.GetService<IUserAccessService>();
@@ -38,7 +40,9 @@ public sealed class HrmActivityContextAccessor(
                 ActorType = ActivityActorTypes.System,
                 Source = "HRM.Api",
                 CorrelationId = correlationId,
-                OpaqueSessionId = opaqueSessionId
+                OpaqueSessionId = opaqueSessionId,
+                IpAddress = ipAddress,
+                Url = url
             };
         }
 
@@ -50,7 +54,9 @@ public sealed class HrmActivityContextAccessor(
                 ActorType = ActivityActorTypes.System,
                 Source = "HRM.Api",
                 CorrelationId = correlationId,
-                OpaqueSessionId = opaqueSessionId
+                OpaqueSessionId = opaqueSessionId,
+                IpAddress = ipAddress,
+                Url = url
             };
         }
 
@@ -120,7 +126,10 @@ public sealed class HrmActivityContextAccessor(
             DivisionId = userCtx.ActiveJob?.OrganisationStructureId,
             TeamId = authorizedTeams.Count == 1 ? authorizedTeams.First() : null,
             UserId = userCtx.UserId,
+            UserName = !string.IsNullOrWhiteSpace(userCtx.FullName) ? userCtx.FullName.Trim() : userCtx.Username?.Trim(),
             ActorType = isDelegated ? ActivityActorTypes.Delegated : ActivityActorTypes.User,
+            IpAddress = ipAddress,
+            Url = url,
             CorrelationId = correlationId,
             OpaqueSessionId = opaqueSessionId,
             Source = "HRM.Api",
@@ -140,6 +149,37 @@ public sealed class HrmActivityContextAccessor(
         if (http.Request.Headers.TryGetValue("X-Correlation-ID", out var header) && !string.IsNullOrWhiteSpace(header))
             return header.ToString().Trim();
         return http.TraceIdentifier;
+    }
+
+    private static string? ResolveClientIpAddress(HttpContext http)
+    {
+        if (http.Request.Headers.TryGetValue("X-Forwarded-For", out var forwarded) && !string.IsNullOrWhiteSpace(forwarded))
+        {
+            var first = forwarded.ToString().Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).FirstOrDefault();
+            if (!string.IsNullOrWhiteSpace(first))
+                return first;
+        }
+
+        if (http.Request.Headers.TryGetValue("X-Real-IP", out var realIp) && !string.IsNullOrWhiteSpace(realIp))
+            return realIp.ToString().Trim();
+
+        return http.Connection.RemoteIpAddress?.ToString();
+    }
+
+    private static string? ResolveRequestUrl(HttpContext http)
+    {
+        if (http.Request.Headers.TryGetValue("X-Client-Url", out var clientUrl) && !string.IsNullOrWhiteSpace(clientUrl))
+        {
+            var raw = clientUrl.ToString().Trim();
+            var qIdx = raw.IndexOf('?');
+            return qIdx >= 0 ? raw[..qIdx] : raw;
+        }
+
+        var path = $"{http.Request.PathBase}{http.Request.Path}";
+        if (string.IsNullOrWhiteSpace(path)) return null;
+        return http.Request.Host.HasValue
+            ? $"{http.Request.Scheme}://{http.Request.Host}{path}"
+            : path;
     }
 
     private static string? ResolveOpaqueSessionId(HttpContext http)

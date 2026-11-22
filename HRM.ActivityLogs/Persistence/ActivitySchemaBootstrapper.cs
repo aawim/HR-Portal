@@ -35,6 +35,18 @@ public static class ActivitySchemaBootstrapper
             }
 
             await db.Database.MigrateAsync(cancellationToken);
+
+            // Idempotent safeguard in case the table was provisioned via SQL script without EF migration history
+            await db.Database.ExecuteSqlRawAsync(@"
+IF OBJECT_ID('[activity].[ActivityLogs]', 'U') IS NOT NULL
+BEGIN
+    IF COL_LENGTH('[activity].[ActivityLogs]', 'UserName') IS NULL
+        ALTER TABLE [activity].[ActivityLogs] ADD [UserName] NVARCHAR(200) NULL;
+    IF COL_LENGTH('[activity].[ActivityLogs]', 'IpAddress') IS NULL
+        ALTER TABLE [activity].[ActivityLogs] ADD [IpAddress] NVARCHAR(64) NULL;
+    IF COL_LENGTH('[activity].[ActivityLogs]', 'Url') IS NULL
+        ALTER TABLE [activity].[ActivityLogs] ADD [Url] NVARCHAR(500) NULL;
+END;", cancellationToken);
         }
         catch (Exception ex)
         {

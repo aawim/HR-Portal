@@ -45,7 +45,9 @@ partial class AuditDbContextModelSnapshot : ModelSnapshot
             b.Property<int>("SchemaVersion").ValueGeneratedOnAdd().HasColumnType("int").HasDefaultValue(1);
             b.Property<string>("Source").IsRequired().HasMaxLength(64).HasColumnType("nvarchar(64)");
             b.Property<int?>("TenantId").HasColumnType("int");
+            b.Property<string>("Url").HasMaxLength(500).HasColumnType("nvarchar(500)");
             b.Property<int?>("UserId").HasColumnType("int");
+            b.Property<string>("UserName").HasMaxLength(200).HasColumnType("nvarchar(200)");
 
             b.HasKey("AuditLogId");
             b.HasIndex("CorrelationId").HasDatabaseName("IX_AuditLogs_CorrelationId");

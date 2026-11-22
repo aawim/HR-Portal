@@ -17,7 +17,8 @@ public sealed class HrmAuditContextAccessor(
             return AuditActorContext.System("HRM.Api");
 
         var correlationId = ResolveCorrelationId(http);
-        var ipAddress = http.Connection.RemoteIpAddress?.ToString();
+        var ipAddress = ResolveClientIpAddress(http);
+        var url = ResolveRequestUrl(http);
 
         var access = http.RequestServices.GetService<IUserAccessService>();
         if (access is null)
@@ -28,7 +29,8 @@ public sealed class HrmAuditContextAccessor(
                 Source = "HRM.Api",
                 CorrelationId = correlationId,
                 RequestId = http.TraceIdentifier,
-                IpAddress = ipAddress
+                IpAddress = ipAddress,
+                Url = url
             };
         }
 
@@ -45,7 +47,8 @@ public sealed class HrmAuditContextAccessor(
                 Source = "HRM.Api",
                 CorrelationId = correlationId,
                 RequestId = http.TraceIdentifier,
-                IpAddress = ipAddress
+                IpAddress = ipAddress,
+                Url = url
             };
         }
     }
@@ -66,7 +69,8 @@ public sealed class HrmAuditContextAccessor(
                 Source = "HRM.Api",
                 CorrelationId = ResolveCorrelationId(http),
                 RequestId = http.TraceIdentifier,
-                IpAddress = http.Connection.RemoteIpAddress?.ToString()
+                IpAddress = ResolveClientIpAddress(http),
+                Url = ResolveRequestUrl(http)
             };
         }
 
@@ -79,7 +83,8 @@ public sealed class HrmAuditContextAccessor(
         CancellationToken cancellationToken)
     {
         var correlationId = ResolveCorrelationId(http);
-        var ipAddress = http.Connection.RemoteIpAddress?.ToString();
+        var ipAddress = ResolveClientIpAddress(http);
+        var url = ResolveRequestUrl(http);
         var userCtx = await access.GetContextAsync();
         if (userCtx is null || userCtx.UserId <= 0)
         {
@@ -89,7 +94,8 @@ public sealed class HrmAuditContextAccessor(
                 Source = "HRM.Api",
                 CorrelationId = correlationId,
                 RequestId = http.TraceIdentifier,
-                IpAddress = ipAddress
+                IpAddress = ipAddress,
+                Url = url
             };
         }
 
@@ -139,11 +145,12 @@ public sealed class HrmAuditContextAccessor(
             DivisionId = userCtx.ActiveJob?.OrganisationStructureId,
             UserId = userCtx.UserId,
             ActorType = isDelegated ? AuditActorTypes.Delegated : AuditActorTypes.User,
-            Username = userCtx.Username,
+            Username = !string.IsNullOrWhiteSpace(userCtx.FullName) ? userCtx.FullName.Trim() : userCtx.Username?.Trim(),
             CorrelationId = correlationId,
             RequestId = http.TraceIdentifier,
             Source = "HRM.Api",
             IpAddress = ipAddress,
+            Url = url,
             IsSuperAdministrator = userCtx.IsSuperAdministrator,
             CanViewAuditLogs = canViewAudit,
             CanViewConfidentialValues = canViewConfidential,
@@ -159,5 +166,36 @@ public sealed class HrmAuditContextAccessor(
         if (http.Request.Headers.TryGetValue("X-Correlation-ID", out var header) && !string.IsNullOrWhiteSpace(header))
             return header.ToString().Trim();
         return http.TraceIdentifier;
+    }
+
+    private static string? ResolveClientIpAddress(HttpContext http)
+    {
+        if (http.Request.Headers.TryGetValue("X-Forwarded-For", out var forwarded) && !string.IsNullOrWhiteSpace(forwarded))
+        {
+            var first = forwarded.ToString().Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).FirstOrDefault();
+            if (!string.IsNullOrWhiteSpace(first))
+                return first;
+        }
+
+        if (http.Request.Headers.TryGetValue("X-Real-IP", out var realIp) && !string.IsNullOrWhiteSpace(realIp))
+            return realIp.ToString().Trim();
+
+        return http.Connection.RemoteIpAddress?.ToString();
+    }
+
+    private static string? ResolveRequestUrl(HttpContext http)
+    {
+        if (http.Request.Headers.TryGetValue("X-Client-Url", out var clientUrl) && !string.IsNullOrWhiteSpace(clientUrl))
+        {
+            var raw = clientUrl.ToString().Trim();
+            var qIdx = raw.IndexOf('?');
+            return qIdx >= 0 ? raw[..qIdx] : raw;
+        }
+
+        var path = $"{http.Request.PathBase}{http.Request.Path}";
+        if (string.IsNullOrWhiteSpace(path)) return null;
+        return http.Request.Host.HasValue
+            ? $"{http.Request.Scheme}://{http.Request.Host}{path}"
+            : path;
     }
 }

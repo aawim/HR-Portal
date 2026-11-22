@@ -233,6 +233,7 @@ public sealed class AuditSaveChangesInterceptor(
                     OrganisationId = item.OrganisationId,
                     DivisionId = item.DivisionId,
                     UserId = item.Actor.UserId,
+                    UserName = item.Actor.Username,
                     ActorType = item.Actor.ActorType,
                     Action = item.Action,
                     Outcome = AuditOutcomes.Committed,
@@ -244,6 +245,7 @@ public sealed class AuditSaveChangesInterceptor(
                     RequestId = item.Actor.RequestId,
                     Source = item.Actor.Source,
                     IpAddress = item.Actor.IpAddress,
+                    Url = item.Actor.Url,
                     OccurredAtUtc = item.OccurredAtUtc,
                     IsMandatory = item.IsMandatory,
                     Changes = finalChanges

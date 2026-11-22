@@ -46,12 +46,21 @@
                                 </span>
                                 <span class="text-xs font-medium text-slate-900">@item.Module</span>
                                 <span class="text-xs text-slate-400">·</span>
-                                <span class="text-xs text-slate-600">@(item.UserId.HasValue ? $"User #{item.UserId}" : "System")</span>
+                                <span class="text-xs text-slate-600">@(!string.IsNullOrWhiteSpace(item.UserName) ? item.UserName : (item.UserId.HasValue ? $"User #{item.UserId}" : "System"))</span>
+                                @if (!string.IsNullOrWhiteSpace(item.IpAddress))
+                                {
+                                    <span class="text-xs text-slate-400">·</span>
+                                    <span class="font-mono text-[11px] text-slate-500">@item.IpAddress</span>
+                                }
                             </div>
                             <p class="mt-1 text-xs text-slate-700">@item.Description</p>
                             @if (!string.IsNullOrWhiteSpace(item.TargetDisplayName))
                             {
                                 <p class="mt-0.5 text-[11px] text-slate-500">Target: @item.TargetDisplayName</p>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(item.Url))
+                            {
+                                <p class="mt-0.5 truncate font-mono text-[11px] text-slate-500" title="@item.Url">URL: @item.Url</p>
                             }
                         </div>
                         <time class="shrink-0 font-mono text-[11px] text-slate-400">

@@ -14,7 +14,10 @@ public sealed class ActivityLogConfiguration : IEntityTypeConfiguration<Activity
         builder.Property(x => x.ActivityLogId).ValueGeneratedOnAdd();
 
         builder.Property(x => x.EventId).IsRequired();
+        builder.Property(x => x.UserName).HasMaxLength(200);
         builder.Property(x => x.ActorType).HasMaxLength(32).IsRequired();
+        builder.Property(x => x.IpAddress).HasMaxLength(64);
+        builder.Property(x => x.Url).HasMaxLength(500);
         builder.Property(x => x.ActivityCategory).HasMaxLength(64).IsRequired();
         builder.Property(x => x.ActivityType).HasMaxLength(100).IsRequired();
         builder.Property(x => x.Module).HasMaxLength(64).IsRequired();
