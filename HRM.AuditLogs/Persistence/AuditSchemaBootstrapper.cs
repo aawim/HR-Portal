@@ -29,7 +29,12 @@ public static class AuditSchemaBootstrapper
                     await using var masterConn = new SqlConnection(masterBuilder.ConnectionString);
                     await masterConn.OpenAsync(cancellationToken);
                     await using var cmd = masterConn.CreateCommand();
-                    cmd.CommandText = "IF DB_ID(@dbName) IS NULL EXEC('CREATE DATABASE [' + REPLACE(@dbName, ']', ']]') + ']');";
+                    cmd.CommandText = @"
+IF DB_ID(@dbName) IS NULL
+BEGIN
+    DECLARE @sql NVARCHAR(MAX) = N'CREATE DATABASE ' + QUOTENAME(@dbName) + N';';
+    EXEC sp_executesql @sql;
+END";
                     cmd.Parameters.AddWithValue("@dbName", targetDbName);
                     await cmd.ExecuteNonQueryAsync(cancellationToken);
                 }
