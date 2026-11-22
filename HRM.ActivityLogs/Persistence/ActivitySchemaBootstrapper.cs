@@ -34,9 +34,17 @@ public static class ActivitySchemaBootstrapper
                 }
             }
 
-            await db.Database.MigrateAsync(cancellationToken);
+            try
+            {
+                await db.Database.MigrateAsync(cancellationToken);
+            }
+            catch (Exception migrateEx)
+            {
+                var logger = services.GetService<ILoggerFactory>()?.CreateLogger("HRM.ActivityLogs.Bootstrap");
+                logger?.LogWarning(migrateEx, "Activity EF migration skipped or failed; applying idempotent column checks.");
+            }
 
-            // Idempotent safeguard in case the table was provisioned via SQL script without EF migration history
+            // Always ensure additive columns exist (covers databases provisioned via SQL script without EF migration history)
             await db.Database.ExecuteSqlRawAsync(@"
 IF OBJECT_ID('[activity].[ActivityLogs]', 'U') IS NOT NULL
 BEGIN
