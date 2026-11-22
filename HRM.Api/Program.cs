@@ -106,14 +106,17 @@ builder.Services.AddHrmHealthChecks(mainConnection, auditLogsConnection, activit
 var app = builder.Build();
 var runStartupBootstrap = builder.Configuration.GetValue<bool?>("Database:RunStartupSchemaBootstrap")
                           ?? app.Environment.IsDevelopment();
+if (runStartupBootstrap || app.Environment.IsDevelopment())
+{
+    await AuditSchemaBootstrapper.EnsureSchemaAsync(app.Services);
+    await ActivitySchemaBootstrapper.EnsureSchemaAsync(app.Services);
+}
 if (runStartupBootstrap)
 {
     _ = Task.Run(async () =>
     {
         await HRM.Services.Attendance.Reconciliation.AttendanceReconciliationSchemaBootstrapper.EnsureSchemaAsync(app.Services);
         await HRM.Helpers.OrganisationalAccessScopeResolver.EnsureSchemaAsync(app.Services);
-        await AuditSchemaBootstrapper.EnsureSchemaAsync(app.Services);
-        await ActivitySchemaBootstrapper.EnsureSchemaAsync(app.Services);
     });
 }
 app.UseResponseCompression();
