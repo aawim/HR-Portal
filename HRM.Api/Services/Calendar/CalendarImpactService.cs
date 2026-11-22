@@ -9,8 +9,7 @@ namespace HRM.Services.Calendar;
 
 public sealed class CalendarImpactService(
     IDbContextFactory<HrmTeContext> factory,
-    IUserAccessService access,
-    IOrganisationCalendarResolver resolver)
+    IUserAccessService access)
     : global::HRM.Services.Calendar.Contracts.CalendarImpactServiceContracts.IOperations
 {
     private static string FormatName(Individual? ind, int id)

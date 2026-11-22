@@ -21,7 +21,7 @@ public sealed partial class CommunicationHubService
         var row = model.Id == 0 ? new CommunicationProviderConnection { OrganisationBusinessEntityId = org, ProviderCode = model.ProviderCode, CreatedAtUtc = DateTime.UtcNow } :
             await db.CommunicationProviderConnections.SingleOrDefaultAsync(x => x.CommunicationProviderConnectionId == model.Id && x.OrganisationBusinessEntityId == org && x.ProviderCode == model.ProviderCode)
             ?? throw new UnauthorizedAccessException("Integration is unavailable in this organisation.");
-        row.ConnectionName = model.Name.Trim(); row.CredentialReference = model.CredentialReference; row.IsEnabled = model.IsEnabled;
+        row.ConnectionName = model.Name.Trim(); row.CredentialReference = model.CredentialReference ?? string.Empty; row.IsEnabled = model.IsEnabled;
         row.ConfigurationJson = model.ProviderCode == "WHATSAPP" ? JsonSerializer.Serialize(new WhatsAppTemplateConfiguration(model.PhoneNumberId, model.TemplateName, model.TemplateLanguage)) : null;
         if (model.Id == 0) db.CommunicationProviderConnections.Add(row);
         await logs.CreateAsync(db, HRM.Components.Shared.SharedConfig.OperationLogActionTypes.REQUESTS_UPDATE, $"Configured communication integration {row.ProviderCode} in organisation {org}.");

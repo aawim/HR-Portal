@@ -125,7 +125,7 @@ namespace HRM.WorkPlanning
                 foreach (var assignment in plan.WorkAssignments.Where(a => a.IsValid && a.AssignmentSource == WorkAssignmentSource.Roster))
                 {
                     var desired = selections.Where(s => s.RosterAssignmentId == assignment.SourceReferenceId).ToList();
-                    if (desired.Count == 1 && desired[0].Start.HasValue && assignment.StartDateTime == date.Add(desired[0].Start.Value.ToTimeSpan()) && assignment.EndDateTime == desired[0].OccurrenceEnd) continue;
+                    if (desired.Count == 1 && desired[0].Start is TimeOnly rosterStart && assignment.StartDateTime == date.Add(rosterStart.ToTimeSpan()) && assignment.EndDateTime == desired[0].OccurrenceEnd) continue;
                     InvalidateAssignment(plan, assignment);
                 }
             }

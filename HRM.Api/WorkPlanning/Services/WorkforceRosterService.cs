@@ -68,7 +68,8 @@ public sealed class WorkforceRosterService(IDbContextFactory<HrmTeContext> facto
         foreach (var staffDuties in assignedDuties.GroupBy(x => x.IndividualId))
         {
             var ordered = staffDuties.OrderBy(x => x.StartAt).ToList();
-            var prior = ordered.FirstOrDefault();
+            if (ordered.Count < 2) continue;
+            var prior = ordered[0];
             for (var index = 1; index < ordered.Count; index++)
             {
                 if (ordered[index].StartAt < prior.EndAt)
