@@ -79,7 +79,7 @@ public partial class OrganisationWorkspaceService(IDbContextFactory<HrmTeContext
             if (search.Length > 0) people = people.Where(x => (x.FirstNameEnglish + " " + (x.MiddleNameEnglish ?? "") + " " + (x.LastNameEnglish ?? "")).Contains(search));
             var totalIndividuals = await people.CountAsync();
             var pageIndividuals = await people.OrderBy(x => x.FirstNameEnglish).ThenBy(x => x.BusinessEntityId).Skip(Math.Max(0, page) * 20).Take(20)
-                .Select(x => new OrganisationWorkspaceStaff(x.BusinessEntityId, (x.FirstNameEnglish + " " + (x.MiddleNameEnglish ?? "") + " " + (x.LastNameEnglish ?? "")).Trim(), "Not assigned to an organisation", null, null, DateTime.MinValue)).ToListAsync();
+                .Select(x => new OrganisationWorkspaceStaff(x.BusinessEntityId, (x.FirstNameEnglish + " " + (x.MiddleNameEnglish ?? "") + " " + (x.LastNameEnglish ?? "")).Trim(), "Not assigned to an organisation", null, null, DateTime.MinValue, "—")).ToListAsync();
             return (pageIndividuals, totalIndividuals);
         }
         var query = db.Jobs.AsNoTracking().Where(x => x.OrganisationID == organisationId && x.JobStateId == SharedConfig.JobStates.APPROVED && x.TerminatedDate == null && x.JoinedDate <= today);
@@ -96,11 +96,12 @@ public partial class OrganisationWorkspaceService(IDbContextFactory<HrmTeContext
         {
             Id = x.IndividualID,
             Name = (x.Individual.FirstNameEnglish + " " + (x.Individual.MiddleNameEnglish ?? "") + " " + (x.Individual.LastNameEnglish ?? "")).Trim(),
-            Department = x.OrganisationStructure.Name, EmployeeNumber = x.Staff.EmployeeNumber, SapNumber = x.Sapnumber, Joined = x.JoinedDate
+            Department = x.OrganisationStructure.Name, EmployeeNumber = x.Staff.EmployeeNumber, SapNumber = x.Sapnumber, Joined = x.JoinedDate,
+            Position = x.JobPositions.Where(p => p.JobPositionStateId == SharedConfig.JobPositionStates.APPROVED && p.FromDate <= today && (p.ToDate == null || p.ToDate >= today)).OrderByDescending(p => p.FromDate).Select(p => p.Position.Name).FirstOrDefault() ?? "—"
         }).Distinct();
         var total = await rows.CountAsync();
         var pageRows = await rows.OrderBy(x => x.Name).ThenBy(x => x.Id).ThenBy(x => x.Joined).Skip(Math.Max(0, page) * 20).Take(20).ToListAsync();
-        return (pageRows.Select(x => new OrganisationWorkspaceStaff(x.Id, x.Name, x.Department, x.EmployeeNumber, x.SapNumber, x.Joined)).ToList(), total);
+        return (pageRows.Select(x => new OrganisationWorkspaceStaff(x.Id, x.Name, x.Department, x.EmployeeNumber, x.SapNumber, x.Joined, x.Position)).ToList(), total);
     }
     public async Task<(List<OrganisationWorkspaceDocument> Rows, int Total)> DocumentsAsync(int organisationId, int page)
     {

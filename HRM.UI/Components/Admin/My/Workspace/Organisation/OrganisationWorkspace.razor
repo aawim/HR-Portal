@@ -4,6 +4,7 @@
 @inject HRM.Services.Contracts.OrganisationWorkspaceServiceContracts.IOperations WorkspaceService
 @inject IUserAccessService UserAccess
 @inject ILogger<OrganisationWorkspace> Logger
+@inject IJSRuntime JS
 
 <div class="min-w-0 space-y-2">
     @if (loading)
@@ -200,7 +201,7 @@
                     <div class="flex rounded-lg border border-slate-300 p-0.5 bg-slate-50 text-xs">
                         @foreach (var option in new[] { ("active", "Active Staff"), ("former", "Former Staff"), ("individuals", "Individuals") })
                         {
-                            <button type="button" class="rounded-md px-2.5 py-1 font-semibold @(staffScope == option.Item1 ? "bg-white text-teal-700 shadow-xs" : "text-slate-600")" @onclick="() => SetStaffScopeAsync(option.Item1)">@option.Item2</button>
+                            <button type="button" disabled="@staffRefreshing" class="rounded-md px-2.5 py-1 font-semibold disabled:opacity-60 @(staffScope == option.Item1 ? "bg-white text-teal-700 shadow-xs" : "text-slate-600")" @onclick="() => SetStaffScopeAsync(option.Item1)">@option.Item2</button>
                         }
                     </div>
                     <label class="min-w-0 flex-1 text-[11px] font-semibold text-slate-600 dark:text-slate-400">
@@ -221,7 +222,8 @@
                             }
                         </select>
                     </label>
-                    <button type="button" class="inline-flex items-center gap-1.5 rounded-lg bg-teal-700 hover:bg-teal-800 dark:bg-teal-600 dark:hover:bg-teal-500 px-3 py-1.5 text-xs font-semibold text-white shadow-xs transition" @onclick="FilterAsync">Search</button>
+                    <button type="button" disabled="@staffRefreshing" class="inline-flex items-center gap-1.5 rounded-lg bg-teal-700 hover:bg-teal-800 dark:bg-teal-600 dark:hover:bg-teal-500 px-3 py-1.5 text-xs font-semibold text-white shadow-xs transition disabled:opacity-60" @onclick="FilterAsync">@(staffRefreshing ? "Updating…" : "Search")</button>
+                    <button type="button" disabled="@(staffRefreshing || staff.Count == 0)" class="app-button app-button-secondary app-button-sm" @onclick="ExportStaffAsync"><AppIcon Name="download" /> Export Excel</button>
                 </div>
                 @if (staff.Count == 0)
                 {
@@ -237,9 +239,12 @@
                                 <tr>
                                     <th class="px-3 py-2.5">Name</th>
                                     <th class="px-3 py-2.5">Department</th>
+                                    <th class="px-3 py-2.5">Active Position</th>
                                     <th class="px-3 py-2.5">Employee No.</th>
                                     <th class="px-3 py-2.5">SAP No.</th>
                                     <th class="px-3 py-2.5">Joined</th>
+                                    <th class="px-3 py-2.5">Service</th>
+                                    <th class="px-3 py-2.5 text-right">Actions</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
@@ -252,17 +257,47 @@
                                             </button>
                                         </td>
                                         <td class="px-3 py-2.5 text-slate-700 dark:text-slate-300">@person.Department</td>
+                                        <td class="px-3 py-2.5 text-slate-700 dark:text-slate-300">@person.Position</td>
                                         <td class="px-3 py-2.5 text-slate-500 dark:text-slate-400 font-mono">@(person.EmployeeNumber ?? "—")</td>
                                         <td class="px-3 py-2.5 text-slate-500 dark:text-slate-400 font-mono">@(person.SapNumber ?? "—")</td>
-                                        <td class="whitespace-nowrap px-3 py-2.5 text-slate-600 dark:text-slate-400">@person.Joined.ToString("dd MMM yyyy")</td>
+                                        <td class="whitespace-nowrap px-3 py-2.5 text-slate-600 dark:text-slate-400">@(person.Joined == DateTime.MinValue ? "—" : person.Joined.ToString("dd MMM yyyy"))</td>
+                                        <td class="whitespace-nowrap px-3 py-2.5 text-slate-600 dark:text-slate-400">@ServiceLength(person.Joined)</td>
+                                        <td class="px-3 py-2.5 text-right">
+                                            <button type="button" class="app-button app-button-ghost app-button-sm" title="Quick staff history" @onclick="() => OpenQuickHistory(person)">
+                                                <AppIcon Name="history" /> History
+                                            </button>
+                                        </td>
                                     </tr>
                                 }
                             </tbody>
                         </table>
                     </div>
                 }
-                @Pagination
+                <div class="flex items-center justify-between gap-2 border-t border-slate-100 dark:border-slate-800 px-4 py-3 text-xs text-slate-500 dark:text-slate-400">
+                    <span>@total results · Page @(page + 1) of @Math.Max(1, (int)Math.Ceiling(total / 20m))</span>
+                    <div class="flex gap-2">
+                        <button type="button" disabled="@(staffRefreshing || page == 0)" class="rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-slate-700 dark:text-slate-200 disabled:opacity-40 hover:bg-slate-50 dark:hover:bg-slate-700 transition" @onclick="() => MoveAsync(-1)">Previous</button>
+                        <button type="button" disabled="@(staffRefreshing || (page + 1) * 20 >= total)" class="rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-slate-700 dark:text-slate-200 disabled:opacity-40 hover:bg-slate-50 dark:hover:bg-slate-700 transition" @onclick="() => MoveAsync(1)">Next</button>
+                    </div>
+                </div>
             </section>
+            @if (historyPerson != null)
+            {
+                <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4" role="dialog" aria-modal="true" aria-label="Quick staff history">
+                    <div class="w-full max-w-2xl rounded-2xl border border-slate-200 bg-white shadow-xl">
+                        <div class="flex items-start justify-between gap-3 border-b border-slate-200 p-4">
+                            <div><h3 class="text-base font-bold text-slate-900">@historyPerson.Name</h3><p class="mt-0.5 text-xs text-slate-500">Quick history</p></div>
+                            <button type="button" class="app-button app-button-ghost app-button-icon app-button-sm" aria-label="Close" title="Close" @onclick="CloseQuickHistory"><AppIcon Name="close" /></button>
+                        </div>
+                        <div class="grid gap-3 p-4 sm:grid-cols-3">
+                            <section class="rounded-xl border border-slate-200 bg-slate-50 p-3"><h4 class="text-xs font-bold text-slate-800">Position</h4><p class="mt-1 text-xs text-slate-600">@historyPerson.Position</p><p class="mt-1 text-[11px] text-slate-500">Active assignment</p></section>
+                            <section class="rounded-xl border border-slate-200 bg-slate-50 p-3"><h4 class="text-xs font-bold text-slate-800">Contact</h4><p class="mt-1 text-xs text-slate-500">View the staff workspace for contact history.</p></section>
+                            <section class="rounded-xl border border-slate-200 bg-slate-50 p-3"><h4 class="text-xs font-bold text-slate-800">Address</h4><p class="mt-1 text-xs text-slate-500">View the staff workspace for address history.</p></section>
+                        </div>
+                        <div class="flex justify-end gap-2 border-t border-slate-200 bg-slate-50 p-3"><button type="button" class="app-button app-button-secondary app-button-sm" @onclick="OpenHistoryStaffAsync">Open full staff workspace</button></div>
+                    </div>
+                </div>
+            }
         }
         else if (ActiveTab == WorkspaceTab.Teams)
         {
@@ -370,8 +405,9 @@
     private string ResourceDescription => ActiveTab switch { WorkspaceTab.Teams => "Active teams, supervisors and members", WorkspaceTab.AssignedRoles => "Organisation roles, assigned accounts and role permissions", WorkspaceTab.Permissions => "Permissions enabled for this organisation", _ => "Configured leave types and current staff assignments" };
     private OrganisationWorkspaceData? data;
     private List<OrganisationWorkspaceStaff> staff = [];
+    private OrganisationWorkspaceStaff? historyPerson;
     private List<OrganisationWorkspaceDocument> documents = [];
-    private bool loading;
+    private bool loading, staffRefreshing;
     private string? error;
     private string search = "", staffScope = "active";
     private int department, page, total, loadedId;
@@ -450,9 +486,45 @@
         finally { if (version == loadVersion) loading = false; }
     }
 
-    private async Task FilterAsync() { page = 0; await LoadAsync(); }
-    private async Task SetStaffScopeAsync(string scope) { if (staffScope == scope) return; staffScope = scope; page = 0; department = 0; await LoadAsync(); }
-    private async Task MoveAsync(int change) { page += change; await LoadAsync(); }
+    private async Task ReloadStaffAsync()
+    {
+        var version = ++loadVersion;
+        staffRefreshing = true;
+        error = null;
+        try
+        {
+            var result = await WorkspaceService.StaffAsync(OrganisationId, search, staffScope == "individuals" ? 0 : department, page, staffScope);
+            if (version != loadVersion) return;
+            staff = result.Rows;
+            total = result.Total;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Could not load organisation staff for {OrganisationId}", OrganisationId);
+            if (version == loadVersion) error = "The staff list could not be refreshed. Please retry.";
+        }
+        finally { if (version == loadVersion) staffRefreshing = false; }
+    }
+
+    private async Task FilterAsync() { page = 0; await ReloadStaffAsync(); }
+    private async Task SetStaffScopeAsync(string scope) { if (staffScope == scope) return; staffScope = scope; page = 0; department = 0; await ReloadStaffAsync(); }
+    private async Task MoveAsync(int change) { page += change; await ReloadStaffAsync(); }
+    private static string ServiceLength(DateTime joined) { if (joined == DateTime.MinValue) return "—"; var days = Math.Max(0, (DateTime.UtcNow.Date - joined.Date).Days); return $"{days / 365}y {(days % 365) / 30}m"; }
+    private static string CsvValue(string? value)
+    {
+        var quote = ((char)34).ToString();
+        return quote + (value ?? string.Empty).Replace(quote, quote + quote) + quote;
+    }
+    private async Task ExportStaffAsync()
+    {
+        var rows = new[] { "Name,Department,Active Position,Employee No.,SAP No.,Joined,Service" }.Concat(staff.Select(p => string.Join(",", CsvValue(p.Name), CsvValue(p.Department), CsvValue(p.Position), CsvValue(p.EmployeeNumber), CsvValue(p.SapNumber), CsvValue(p.Joined == DateTime.MinValue ? "" : p.Joined.ToString("yyyy-MM-dd")), CsvValue(ServiceLength(p.Joined)))));
+        var bytes = System.Text.Encoding.UTF8.GetBytes(string.Join("\r\n", rows));
+        await using var stream = new MemoryStream(bytes);
+        using var reference = new DotNetStreamReference(stream);
+        var module = await JS.InvokeAsync<IJSObjectReference>("import", "./organisationStaffExport.js");
+        await module.InvokeVoidAsync("download", $"organisation-{staffScope}-staff.csv", "text/csv;charset=utf-8", reference);
+        await module.DisposeAsync();
+    }
 
     private Task OpenStaffAsync(OrganisationWorkspaceStaff person) => OnStaffSelected.InvokeAsync(new WorkspaceSearchResult
     {
@@ -463,12 +535,14 @@
         Description = person.Department,
         EntityType = WorkspaceEntityType.Staff
     });
+    private void OpenQuickHistory(OrganisationWorkspaceStaff person) => historyPerson = person;
+    private void CloseQuickHistory() => historyPerson = null;
+    private async Task OpenHistoryStaffAsync()
+    {
+        var person = historyPerson;
+        if (person == null) return;
+        historyPerson = null;
+        await OpenStaffAsync(person);
+    }
 
-    private RenderFragment Pagination => @<div class="flex items-center justify-between gap-2 border-t border-slate-100 dark:border-slate-800 px-4 py-3 text-xs text-slate-500 dark:text-slate-400">
-        <span>@total results · Page @(page + 1) of @Math.Max(1, (int)Math.Ceiling(total / 20m))</span>
-        <div class="flex gap-2">
-            <button type="button" disabled="@(loading || page == 0)" class="rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-slate-700 dark:text-slate-200 disabled:opacity-40 hover:bg-slate-50 dark:hover:bg-slate-700 transition" @onclick="() => MoveAsync(-1)">Previous</button>
-            <button type="button" disabled="@(loading || (page + 1) * 20 >= total)" class="rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-slate-700 dark:text-slate-200 disabled:opacity-40 hover:bg-slate-50 dark:hover:bg-slate-700 transition" @onclick="() => MoveAsync(1)">Next</button>
-        </div>
-    </div>;
 }

@@ -35,8 +35,8 @@
             {
                 <div class="mb-5 flex items-center gap-3 px-1"><span class="text-teal-600 dark:text-teal-400"><OrganisationIcon /></span><h1 class="text-xl font-semibold text-slate-900 dark:text-slate-100">@(data.Organisations.FirstOrDefault(x => x.Id == model.Id)?.Name ?? model.Name)</h1></div>
             }
-            <div class="grid grid-cols-1 gap-6 xl:grid-cols-12">
-                <section class="min-w-0 space-y-6 @(activeSection == "Structure" ? "xl:col-span-12" : activeSection == "Schedules" ? "xl:col-span-10" : "xl:col-span-8")">
+            <div class="grid w-full grid-cols-1 gap-6 xl:grid-cols-12">
+                <section class="min-w-0 w-full space-y-6 @(activeSection == "Structure" || activeSection == "Edit" || activeSection == "Contact" || activeSection == "Staff" || activeSection == "Teams" || activeSection == "Groups" || activeSection == "Locations" || activeSection == "Address" || activeSection == "Schedules" ? "col-span-full xl:col-span-12" : "xl:col-span-8")">
                     @if (model.Id == 0 || activeSection == "Edit")
                     {
                     <div class="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs">
@@ -167,14 +167,14 @@
                     }
                     @if (model.Id > 0 && activeSection == "Groups")
                     {
-                        <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><OrganisationGroupsTab Org="SelectedOrganisation" @key="model.Id" /></div>
+                        <OrganisationGroupsTab Org="SelectedOrganisation" @key="model.Id" />
                     }
                     @if (model.Id > 0 && activeSection == "Schedules")
                     {
                         <HRM.Components.Admin.Settings.Workplan.ScopeScheduleSettings OrganisationId="model.Id" OrganisationOnly="true" @key="model.Id" />
                     }
                 </section>
-                @if (activeSection != "Structure")
+                @if (activeSection != "Structure" && activeSection != "Edit" && activeSection != "Contact" && activeSection != "Staff" && activeSection != "Teams" && activeSection != "Groups" && activeSection != "Locations" && activeSection != "Address" && activeSection != "Schedules")
                 {
                 <aside class="min-w-0 @(activeSection == "Schedules" ? "xl:col-span-2" : "xl:col-span-4")">
                     <div class="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs">
