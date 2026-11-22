@@ -11,21 +11,11 @@ public partial class AddAuditLogUserName : Migration
 {
     protected override void Up(MigrationBuilder migrationBuilder)
     {
-        migrationBuilder.AddColumn<string>(
-            name: "UserName",
-            schema: "audit",
-            table: "AuditLogs",
-            type: "nvarchar(200)",
-            maxLength: 200,
-            nullable: true);
-
-        migrationBuilder.AddColumn<string>(
-            name: "Url",
-            schema: "audit",
-            table: "AuditLogs",
-            type: "nvarchar(500)",
-            maxLength: 500,
-            nullable: true);
+        migrationBuilder.Sql(@"
+IF COL_LENGTH(N'[audit].[AuditLogs]', N'UserName') IS NULL
+    ALTER TABLE [audit].[AuditLogs] ADD [UserName] nvarchar(200) NULL;
+IF COL_LENGTH(N'[audit].[AuditLogs]', N'Url') IS NULL
+    ALTER TABLE [audit].[AuditLogs] ADD [Url] nvarchar(500) NULL;");
     }
 
     protected override void Down(MigrationBuilder migrationBuilder)

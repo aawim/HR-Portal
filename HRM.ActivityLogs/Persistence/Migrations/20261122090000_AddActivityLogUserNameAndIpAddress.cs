@@ -11,29 +11,13 @@ public partial class AddActivityLogUserNameAndIpAddress : Migration
 {
     protected override void Up(MigrationBuilder migrationBuilder)
     {
-        migrationBuilder.AddColumn<string>(
-            name: "UserName",
-            schema: "activity",
-            table: "ActivityLogs",
-            type: "nvarchar(200)",
-            maxLength: 200,
-            nullable: true);
-
-        migrationBuilder.AddColumn<string>(
-            name: "IpAddress",
-            schema: "activity",
-            table: "ActivityLogs",
-            type: "nvarchar(64)",
-            maxLength: 64,
-            nullable: true);
-
-        migrationBuilder.AddColumn<string>(
-            name: "Url",
-            schema: "activity",
-            table: "ActivityLogs",
-            type: "nvarchar(500)",
-            maxLength: 500,
-            nullable: true);
+        migrationBuilder.Sql(@"
+IF COL_LENGTH(N'[activity].[ActivityLogs]', N'UserName') IS NULL
+    ALTER TABLE [activity].[ActivityLogs] ADD [UserName] nvarchar(200) NULL;
+IF COL_LENGTH(N'[activity].[ActivityLogs]', N'IpAddress') IS NULL
+    ALTER TABLE [activity].[ActivityLogs] ADD [IpAddress] nvarchar(64) NULL;
+IF COL_LENGTH(N'[activity].[ActivityLogs]', N'Url') IS NULL
+    ALTER TABLE [activity].[ActivityLogs] ADD [Url] nvarchar(500) NULL;");
     }
 
     protected override void Down(MigrationBuilder migrationBuilder)
