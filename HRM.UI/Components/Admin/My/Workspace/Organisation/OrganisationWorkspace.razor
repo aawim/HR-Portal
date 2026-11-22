@@ -258,7 +258,11 @@
                 @Pagination
             </section>
         }
-        else if (ActiveTab is WorkspaceTab.Teams or WorkspaceTab.AssignedRoles or WorkspaceTab.Permissions or WorkspaceTab.LeaveType)
+        else if (ActiveTab == WorkspaceTab.Teams)
+        {
+            <OrganisationTeamsDirectoryPanel OrganisationId="OrganisationId" OnStaffSelected="OnStaffSelected" />
+        }
+        else if (ActiveTab is WorkspaceTab.AssignedRoles or WorkspaceTab.Permissions or WorkspaceTab.LeaveType)
         {
             <section class="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs">
                 <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 p-4">
@@ -465,7 +469,7 @@
                 if (version != loadVersion) return;
                 staff = result.Rows; total = result.Total;
             }
-            else if (tab is WorkspaceTab.Teams or WorkspaceTab.AssignedRoles or WorkspaceTab.Permissions or WorkspaceTab.LeaveType)
+            else if (tab is WorkspaceTab.AssignedRoles or WorkspaceTab.Permissions or WorkspaceTab.LeaveType)
             {
                 var result = await WorkspaceService.ResourcesAsync(org, tab);
                 if (version != loadVersion) return;
