@@ -24,12 +24,21 @@ public sealed class OrganisationEventService(IDbContextFactory<HrmTeContext> fac
     private async Task<(int Org, int Actor, bool CanPublish)> RequireManagerAsync()
     {
         var ctx = await access.RequireContextAsync();
-        var admin = ctx.IsOrganisationAdmin || await access.HasPermissionAsync("Admin");
+        var admin = ctx.IsSuperAdministrator || ctx.IsOrganisationAdmin || await access.HasPermissionAsync("Admin");
         if (!admin && !await access.HasPermissionAsync("OrganisationEvent.Manage"))
             throw new UnauthorizedAccessException("You are not allowed to manage organisation events.");
         var org = await access.GetCurrentOrganisationIdAsync();
         if (org <= 0) throw new InvalidOperationException("An organisation context is required.");
         return (org, ctx.IndividualId, admin || await access.HasPermissionAsync("OrganisationEvent.Publish"));
+    }
+
+    private async Task<int> RequireViewerOrganisationAsync()
+    {
+        var ctx = await access.RequireContextAsync();
+        var org = await access.GetCurrentOrganisationIdAsync();
+        if (org <= 0) org = ctx.ActiveJob?.OrganisationId ?? 0;
+        if (org <= 0) throw new InvalidOperationException("An organisation context is required.");
+        return org;
     }
 
     private static string Summarise(IEnumerable<OrganisationEventAudience> audiences)
@@ -104,7 +113,10 @@ public sealed class OrganisationEventService(IDbContextFactory<HrmTeContext> fac
 
     public async Task<List<OrganisationEventDto>> ListAsync(DateTime? from, DateTime? to, string? category, string? status, string? impact, int? structureId, bool? upcomingOnly)
     {
-        var (org, _, _) = await RequireManagerAsync();
+        var publishedOnly = string.Equals(status, "Published", StringComparison.OrdinalIgnoreCase);
+        var org = publishedOnly
+            ? await RequireViewerOrganisationAsync()
+            : (await RequireManagerAsync()).Org;
         var start = (from ?? DateTime.Today.AddMonths(-1)).Date;
         var end = (to ?? start.AddMonths(13)).Date.AddDays(1);
         if ((end - start).TotalDays > 800) throw new InvalidOperationException("Choose a date range of at most about two years.");
