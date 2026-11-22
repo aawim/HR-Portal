@@ -8,6 +8,7 @@
 @using HRM.Components.Admin.Settings.Roles
 @using HRM.Components.Admin.Settings.Users
 @using HRM.Components.Admin.Settings.Workplan
+@using HRM.Components.Admin.Hr.Group
 @using HRM.Components.Leave
 @using HRM.Components.Leave.Policy
 @using HRM.Components.Shared
@@ -238,6 +239,8 @@
             ? new Dictionary<string, object> { ["InitialOrganisationId"] = (object?)(OrganisationId ?? QueryOrganisationId)!, ["HideHeader"] = true }
         : activeItem?.ComponentType == typeof(HRM.Components.Admin.Hr.Documents.DocumentCentreAdminPanel)
             ? new Dictionary<string, object> { ["InitialSection"] = "types" }
+        : activeItem?.ComponentType == typeof(ManageGroupsGrid)
+            ? new Dictionary<string, object> { ["RequestedTab"] = "types" }
         : activeItem?.ComponentType == typeof(HRM.Components.Admin.Settings.Roles.AccessRolesGrid)
             ? new Dictionary<string, object> { ["InitialView"] = activeItem.Title == "Area Map" ? "area-map" : "editor" }
         : activeItem?.ComponentType == typeof(HRM.Components.Admin.Settings.Organisations.OrganisationResources)
@@ -269,6 +272,7 @@
         "Leave Carry Forward" => "carry-forward",
         "Projects & Tasks" => "projects",
         "Project & Task Management" => "projects",
+        "Group Types" => "group-types",
         _ => HRM.Helpers.SectionRoutes.Slug(item.Title)
     };
 
@@ -318,6 +322,7 @@
             new("Permissions", "bi-key", "Control which permissions are enabled for each organisation.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationPermissions)),
             new("Document Types", "bi-folder2-open", "Configure organisation document classifications and types.", typeof(HRM.Components.Admin.Hr.Documents.DocumentCentreAdminPanel)),
             new("Manage type", "bi-diagram-3", "Manage Organisation Structure Types, such as departments and divisions.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationResources)),
+            new("Group Types", "bi-people", "Define operational group categories.", typeof(ManageGroupsGrid)),
             new("Calendar", "bi-calendar3", "View and assign organisation calendars.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationResources)),
             new("Location Types", "bi-tags", "Manage the shared location type catalogue.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationResources)),
             new("Organisation Types", "bi-buildings", "Manage organisation classifications.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationResources)),

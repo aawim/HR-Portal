@@ -144,10 +144,6 @@
                             </div>
                         </section>
                     }
-                    @if (model.Id > 0 && activeSection == "Summary")
-                    {
-                        <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><OrganisationSummaryTab Org="SelectedOrganisation" @key="model.Id" /></div>
-                    }
                     @if (model.Id > 0 && activeSection == "Structure")
                     {
                         <OrganisationStructureTab OrganisationId="model.Id" @key="model.Id" />
@@ -217,7 +213,7 @@
     private bool deletingOrganisation;
     private string activeSection = "Edit";
     private static readonly (string Name, string Icon)[] OrganisationSections =
-    [ ("Summary", "dashboard"), ("Structure", "account_tree"), ("Edit", "edit"), ("Contact", "contact_phone"),
+    [ ("Structure", "account_tree"), ("Edit", "edit"), ("Contact", "contact_phone"),
       ("Locations", "location_on"), ("Address", "location_on"), ("Schedules", "calendar_month"), ("Groups", "group_work") ];
     private OrganisationResultDto SelectedOrganisation => new()
     {
@@ -243,7 +239,7 @@
         var orgChanged = model.Id != item.Id;
         if (orgChanged) await SelectAsync(item, false);
         if (orgChanged || !string.IsNullOrWhiteSpace(InitialSection))
-            activeSection = HRM.Helpers.SectionRoutes.Tab(OrganisationSections.Select(s => s.Name), InitialSection, "Summary");
+            activeSection = HRM.Helpers.SectionRoutes.Tab(OrganisationSections.Select(s => s.Name), InitialSection, "Edit");
     }
     private const string Danger = "inline-flex items-center gap-1 rounded-lg border border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/40 px-2.5 py-1.5 text-xs font-semibold text-rose-700 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-900/50 transition";
     private const string Label = "block text-[11px] font-semibold text-slate-600 dark:text-slate-400";

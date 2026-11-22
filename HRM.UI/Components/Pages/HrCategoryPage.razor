@@ -195,7 +195,7 @@
     [Parameter] public string? Section { get; set; }
     [SupplyParameterFromQuery(Name = "organisationId")] public int? QueryOrganisationId { get; set; }
     private IDictionary<string, object>? SelectedParameters => activeItem?.ComponentType == typeof(HRM.Components.Admin.Settings.Organisations.OrganisationTeamSettings)
-        ? new Dictionary<string, object> { ["InitialOrganisationId"] = (object?)QueryOrganisationId! } : activeItem?.ComponentType == typeof(ManageGroupsGrid) ? new Dictionary<string, object> { ["RequestedTab"] = activeItem.Title == "Group Type" ? "types" : "groups" } : null;
+        ? new Dictionary<string, object> { ["InitialOrganisationId"] = (object?)QueryOrganisationId! } : activeItem?.ComponentType == typeof(ManageGroupsGrid) ? new Dictionary<string, object> { ["RequestedTab"] = "groups" } : null;
     protected override void OnParametersSet()
     {
         if(CategoryName.Equals("individuals",StringComparison.OrdinalIgnoreCase) || CategoryName.Equals("staff",StringComparison.OrdinalIgnoreCase) && Section is "add-individual" or "search-individuals" or "staff-onboarding")
@@ -233,11 +233,15 @@
             };
             Navigation.NavigateTo(target,replace:true);return;
         }
-        if(CategoryName.Equals("groups",StringComparison.OrdinalIgnoreCase) && Section is not ("management" or "group-type"))
+        if(CategoryName.Equals("groups",StringComparison.OrdinalIgnoreCase) && Section == "group-type")
+        {
+            Navigation.NavigateTo("/admin/settings/org/group-types"+new Uri(Navigation.Uri).Query,replace:true);return;
+        }
+        if(CategoryName.Equals("groups",StringComparison.OrdinalIgnoreCase) && Section is not "management")
         {
             var current=new Uri(Navigation.Uri);
             var target="/admin/hr/groups/management"+current.Query;
-            if(Section is "group-types" or "manage-group-types")target="/admin/hr/groups/group-type"+current.Query;
+            if(Section is "group-types" or "manage-group-types")target="/admin/settings/org/group-types"+current.Query;
             Navigation.NavigateTo(target+current.Fragment,replace:true);return;
         }
         activeItem = string.IsNullOrWhiteSpace(Section) ? GetSubItems(CategoryName).FirstOrDefault() :
@@ -255,7 +259,6 @@
         "Received Requests" => "received",
         "Supervisors Management" => "management",
         "Groups Management" => "management",
-        "Group Type" => "group-type",
         "Staff Enrollment" => "enrollment",
         _ => HRM.Helpers.SectionRoutes.Slug(item.Title)
     };
@@ -294,8 +297,7 @@
             new("Supervisors Management", "👥", "Assign department and team supervisors.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationTeamSettings)),
         },
         "groups" => new() {
-            new("Groups Management", "👥", "Manage operational groups, group types and related information.", typeof(ManageGroupsGrid)),
-            new("Group Type", "🏷️", "Define categories and manage operational group types.", typeof(ManageGroupsGrid)),
+            new("Groups Management", "👥", "Manage operational groups and related information.", typeof(ManageGroupsGrid)),
         },
 
         "items" => new() {

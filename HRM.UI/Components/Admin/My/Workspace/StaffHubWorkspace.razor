@@ -486,9 +486,6 @@
                             case "manage":
                                 <HRM.Components.Admin.Settings.Organisations.OrganisationSettingsEditor @key="inspectedOrgId.Value" InitialOrganisationId="inspectedOrgId.Value" HideHeader="true" />
                                 break;
-                            case "structure-types":
-                                <HRM.Components.Admin.Settings.Organisations.OrganisationResources @key="inspectedOrgSettingsTab" Kind="HRM.DTOs.Organisation.OrganisationResourceKind.StructureTypes" />
-                                break;
                             case "calendar":
                                 <HRM.Components.Admin.Settings.Organisations.OrganisationResources @key="inspectedOrgSettingsTab" Kind="HRM.DTOs.Organisation.OrganisationResourceKind.Calendar" />
                                 break;
@@ -3839,11 +3836,15 @@
                     inspectedOrgName = $"Organisation #{id.Value}";
                 }
                 var orgSection = ActiveSection?.Trim().ToLowerInvariant();
+                if (orgSection is "structure-types" or "types")
+                {
+                    Navigation.NavigateTo("/admin/settings/org/types", replace: true);
+                    return;
+                }
                 var matchedSettingsTab = orgSection switch
                 {
                     "manage" or "organisations" => "manage",
                     "document-types" or "document-centre" or "document-center" => "document-types",
-                    "structure-types" or "types" => "structure-types",
                     "calendar" => "calendar",
                     _ => null
                 };
@@ -4561,7 +4562,6 @@
     private static readonly (string Key, string Label)[] OrgSettingsTabs =
     [
         ("manage", "Manage"),
-        ("structure-types", "Structure Types"),
         ("calendar", "Calendar"),
     ];
 
