@@ -26,7 +26,7 @@ public sealed class OrganisationWorkspaceController(global::HRM.Services.Contrac
     [HttpPost("staff")]
     public async Task<ActionResult<global::System.ValueTuple<global::System.Collections.Generic.List<global::HRM.DTOs.OrganisationWorkspaceStaff>, global::System.Int32>>> Staff([FromBody] OrganisationWorkspaceStaffRequest request)
     {
-        return Ok(await service.StaffAsync(request.organisationId, request.search, request.departmentId, request.page));
+        return Ok(await service.StaffAsync(request.organisationId, request.search, request.departmentId, request.page, request.scope));
     }
 
     public sealed class OrganisationWorkspaceStaffRequest
@@ -35,6 +35,7 @@ public sealed class OrganisationWorkspaceController(global::HRM.Services.Contrac
         public global::System.String search { get; set; } = default!;
         public global::System.Int32 departmentId { get; set; }
         public global::System.Int32 page { get; set; }
+        public global::System.String scope { get; set; } = "active";
     }
 
     [HttpPost("documents")]

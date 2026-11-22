@@ -10,7 +10,7 @@
 
 <PageTitle>Organisation permissions</PageTitle>
 
-<section class="w-full min-w-0 @(HideHeader ? "space-y-4" : "p-2 space-y-4")">
+<section class="w-full min-w-0 @(HideHeader ? "space-y-2" : "p-2 space-y-2")">
     @if (!HideHeader)
     {
         <header class="sticky top-0 z-30 m-0 flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xs px-3 py-3 shadow-xs rounded-2xl">
@@ -46,7 +46,7 @@
         </header>
     }
 
-    <div class="mx-auto w-full min-w-0 space-y-4 @(HideHeader || isFullWidth ? "max-w-none" : "max-w-7xl")">
+    <div class="mx-auto w-full min-w-0 space-y-2 @(HideHeader || isFullWidth ? "max-w-none" : "max-w-7xl")">
         @if (!string.IsNullOrEmpty(error))
         {
             <div class="flex items-center justify-between gap-3 rounded-xl border border-rose-200 dark:border-rose-900/60 bg-rose-50 dark:bg-rose-950/40 p-3 text-xs text-rose-800 dark:text-rose-200" role="alert">
@@ -68,12 +68,11 @@
 
         @if (data != null)
         {
-            <!-- 2-Column Layout: Form & Controls (Left) | Permissions Catalog (Right) -->
+            <!-- Workspace layout: scope and staged changes on the left, permission detail on the right. -->
             <div class="org-perm-panels">
-                <!-- LEFT COLUMN: Organisation, Stats, Filters, and Review & Save Form -->
-                <aside class="min-w-0 lg:sticky lg:top-4 space-y-4">
-                    <!-- Organisation & KPI Card -->
-                    <section class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-xs space-y-3">
+                <!-- LEFT COLUMN: organisation scope and pending changes -->
+                <aside class="min-w-0 lg:sticky lg:top-2 space-y-2 self-start">
+                    <section class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 shadow-xs space-y-2">
                         <div class="flex items-start justify-between gap-2">
                             <div class="min-w-0 flex-1">
                                 @if (data.IsSuperAdmin)
@@ -107,25 +106,14 @@
                             }
                         </div>
 
-                        <!-- Compact 2x2 KPI Strip -->
-                        <div class="grid grid-cols-2 gap-2">
-                            <div class="rounded-xl border border-emerald-200/80 dark:border-emerald-900/50 bg-emerald-50/50 dark:bg-emerald-950/30 px-3 py-2">
-                                <div class="text-[11px] font-medium text-emerald-700 dark:text-emerald-300">Enabled</div>
+                        <div class="grid grid-cols-2 gap-1.5">
+                            <div class="rounded-xl border border-emerald-200/80 dark:border-emerald-900/50 bg-emerald-50/50 dark:bg-emerald-950/30 px-2.5 py-2">
+                                <div class="text-[10px] font-medium text-emerald-700 dark:text-emerald-300">Enabled</div>
                                 <div class="mt-0.5 text-base font-bold text-emerald-900 dark:text-emerald-100">@selected.Count</div>
                             </div>
-                            <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/50 px-3 py-2">
-                                <div class="text-[11px] font-medium text-slate-500 dark:text-slate-400">Unavailable</div>
-                                <div class="mt-0.5 text-base font-bold text-slate-800 dark:text-slate-100">@(data.Permissions.Count - selected.Count)</div>
-                            </div>
-                            <div class="rounded-xl border border-blue-200/80 dark:border-blue-900/50 bg-blue-50/50 dark:bg-blue-950/30 px-3 py-2">
-                                <div class="text-[11px] font-medium text-blue-700 dark:text-blue-300">Accounts</div>
-                                <div class="mt-0.5 text-base font-bold text-blue-900 dark:text-blue-100">@data.AccountCount</div>
-                            </div>
-                            <div class="rounded-xl border px-3 py-2 @(Dirty ? "border-amber-200 dark:border-amber-800 bg-amber-50/60 dark:bg-amber-950/30" : "border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/50")" role="status">
-                                <div class="text-[11px] font-medium @(Dirty ? "text-amber-700 dark:text-amber-300" : "text-slate-500 dark:text-slate-400")">Status</div>
-                                <div class="mt-0.5 text-xs font-bold @(Dirty ? "text-amber-900 dark:text-amber-100" : "text-emerald-700 dark:text-emerald-300")">
-                                    @(Dirty ? $"+{Added.Count} / -{Removed.Count}" : "Saved")
-                                </div>
+                            <div class="rounded-xl border px-2.5 py-2 @(Dirty ? "border-amber-200 dark:border-amber-800 bg-amber-50/60 dark:bg-amber-950/30" : "border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/50")" role="status">
+                                <div class="text-[10px] font-medium @(Dirty ? "text-amber-700 dark:text-amber-300" : "text-slate-500 dark:text-slate-400")">Changes</div>
+                                <div class="mt-0.5 text-xs font-bold @(Dirty ? "text-amber-900 dark:text-amber-100" : "text-emerald-700 dark:text-emerald-300")">@(Dirty ? $"+{Added.Count} / -{Removed.Count}" : "Saved")</div>
                             </div>
                         </div>
 
@@ -149,7 +137,7 @@
                     <!-- Review & Save Form Card -->
                     @if (data.CanEdit)
                     {
-                        <section class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-xs space-y-3">
+                        <section class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 shadow-xs space-y-2">
                             <div class="flex items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-2.5">
                                 <div>
                                     <h3 class="text-sm font-bold text-slate-900 dark:text-slate-100">Review &amp; Save</h3>
@@ -214,8 +202,8 @@
                     }
                 </aside>
 
-                <!-- RIGHT COLUMN: Filters & Grouped Permissions Catalog -->
-                <div class="min-w-0 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-xs space-y-4">
+                <!-- RIGHT COLUMN: permission catalogue -->
+                <div class="min-w-0 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 shadow-xs space-y-3">
                     <!-- Filter Controls -->
                     <div class="grid gap-3 sm:grid-cols-3">
                         <div>
@@ -390,7 +378,7 @@
 
     @@media (min-width: 1024px) {
         .org-perm-panels {
-            grid-template-columns: minmax(0, 4fr) minmax(0, 8fr);
+            grid-template-columns: minmax(15rem, 3fr) minmax(0, 9fr);
         }
     }
 </style>

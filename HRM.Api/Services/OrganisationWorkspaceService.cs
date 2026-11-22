@@ -67,18 +67,29 @@ public partial class OrganisationWorkspaceService(IDbContextFactory<HrmTeContext
                     .Select(m => m.StaffId).Distinct().Count())).ToListAsync();
         return data;
     }
-    public async Task<(List<OrganisationWorkspaceStaff> Rows, int Total)> StaffAsync(int organisationId, string search, int departmentId, int page)
+    public async Task<(List<OrganisationWorkspaceStaff> Rows, int Total)> StaffAsync(int organisationId, string search, int departmentId, int page, string scope = "active")
     {
         await RequireAsync(organisationId);
         await using var db = await factory.CreateDbContextAsync();
         var today = Today;
+        search = search.Trim();
+        if (string.Equals(scope, "individuals", StringComparison.OrdinalIgnoreCase))
+        {
+            var people = db.Individuals.AsNoTracking().Where(x => !db.Jobs.Any(j => j.IndividualID == x.BusinessEntityId));
+            if (search.Length > 0) people = people.Where(x => (x.FirstNameEnglish + " " + (x.MiddleNameEnglish ?? "") + " " + (x.LastNameEnglish ?? "")).Contains(search));
+            var totalIndividuals = await people.CountAsync();
+            var pageIndividuals = await people.OrderBy(x => x.FirstNameEnglish).ThenBy(x => x.BusinessEntityId).Skip(Math.Max(0, page) * 20).Take(20)
+                .Select(x => new OrganisationWorkspaceStaff(x.BusinessEntityId, (x.FirstNameEnglish + " " + (x.MiddleNameEnglish ?? "") + " " + (x.LastNameEnglish ?? "")).Trim(), "Not assigned to an organisation", null, null, DateTime.MinValue)).ToListAsync();
+            return (pageIndividuals, totalIndividuals);
+        }
         var query = db.Jobs.AsNoTracking().Where(x => x.OrganisationID == organisationId && x.JobStateId == SharedConfig.JobStates.APPROVED && x.TerminatedDate == null && x.JoinedDate <= today);
+        if (string.Equals(scope, "former", StringComparison.OrdinalIgnoreCase))
+            query = db.Jobs.AsNoTracking().Where(x => x.OrganisationID == organisationId && (x.JobStateId != SharedConfig.JobStates.APPROVED || x.JoinedDate > today || (x.TerminatedDate != null && x.TerminatedDate <= today)));
         var staffIds = await query.Select(x => x.IndividualID).Distinct().ToListAsync();
         var viewableStaffIds = await StaffAttributeAccess.FilterViewableAsync(db, access, organisationId, staffIds);
         if (viewableStaffIds.Count < staffIds.Count)
             query = query.Where(x => viewableStaffIds.Contains(x.IndividualID));
         if (departmentId > 0) query = query.Where(x => x.OrganisationStructureId == departmentId);
-        search = search.Trim();
         if (search.Length > 0) query = query.Where(x => (x.Individual.FirstNameEnglish + " " + (x.Individual.MiddleNameEnglish ?? "") + " " + (x.Individual.LastNameEnglish ?? "")).Contains(search) ||
             (x.Staff.EmployeeNumber != null && x.Staff.EmployeeNumber.Contains(search)) || (x.Sapnumber != null && x.Sapnumber.Contains(search)));
         var rows = query.Select(x => new

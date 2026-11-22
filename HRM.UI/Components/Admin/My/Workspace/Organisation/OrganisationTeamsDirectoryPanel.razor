@@ -5,6 +5,7 @@
 @inject IOrganisationDirectoryQueries Directory
 @inject HRM.Services.Contracts.OrganisationSettingsServiceContracts.IOperations Settings
 @inject HRM.Services.Contracts.OrganisationWorkspaceServiceContracts.IOperations WorkspaceService
+@inject NavigationManager Navigation
 
 <section class="w-full min-w-0 flex flex-col gap-3">
     @if (!string.IsNullOrWhiteSpace(error))
@@ -38,6 +39,19 @@
                         </p>
                     </div>
                     <div class="flex items-center gap-1 shrink-0">
+                        <button type="button"
+                                class="app-button app-button-primary app-button-sm"
+                                title="Add a team"
+                                @onclick="OpenTeamManagement">
+                            <AppIcon Name="add" /> Add
+                        </button>
+                        <button type="button"
+                                class="app-button app-button-secondary app-button-sm"
+                                title="Edit the selected team"
+                                disabled="@(!selectedTeamId.HasValue)"
+                                @onclick="OpenTeamManagement">
+                            <AppIcon Name="edit" /> Edit
+                        </button>
                         @if (selectedSubTeamId.HasValue)
                         {
                             <button type="button"
@@ -440,6 +454,8 @@
     private List<OrganisationSettingsOption> FilteredStaff => (ActiveTeam?.Members ?? [])
         .Where(m => string.IsNullOrWhiteSpace(staffSearch) || m.Name.Contains(staffSearch, StringComparison.OrdinalIgnoreCase))
         .ToList();
+
+    private void OpenTeamManagement() => Navigation.NavigateTo($"/admin/settings/org/manage/{OrganisationId}/teams");
 
     protected override async Task OnParametersSetAsync()
     {
