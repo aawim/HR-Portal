@@ -2,125 +2,257 @@
 @using HRM.Components.Pages.Online.Dashboard
 @inject HRM.Services.Interfaces.IAttendanceService Attendance
 
-<section class="w-full p-2 flex flex-col gap-2" aria-label="Selected employee attendance">
-    @if(!ReadOnly){<HRM.Components.Shared.WeeklyHoursReview StaffId="StaffId" />}
-    <div class="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100">
-        <div>
-            <h3 class="text-base font-bold text-slate-800">Attendance Records</h3>
-            <p class="text-xs text-slate-500 mt-0.5">Attendance records, daily hours, shift duty, and raw clock events.</p>
-        </div>
-        <button type="button" class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs hover:bg-slate-50 transition-colors" disabled="@loading" @onclick="LoadAsync">
-            <span class="@(loading ? "animate-spin" : "")">↻</span>
-            <span>Refresh</span>
-        </button>
-    </div>
-    @if (!ExternalDateFilters)
+<section class="w-full min-w-0 flex flex-col gap-3 text-slate-900 dark:text-slate-100" aria-label="Selected employee attendance">
+    @if (!ReadOnly)
     {
-    <div class="flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-slate-50/70 p-3 shadow-2xs">
-        <div>
-            <label class="block text-xs font-semibold text-slate-600 mb-1">From</label>
-            <InputDate @bind-Value="from" class="block rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500" />
-        </div>
-        <div>
-            <label class="block text-xs font-semibold text-slate-600 mb-1">To</label>
-            <InputDate @bind-Value="to" class="block rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500" />
-        </div>
-        <button type="button" class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-1.5 text-xs font-semibold shadow-2xs transition-colors" disabled="@loading" @onclick="ApplyAsync">
-            Show records
-        </button>
-    </div>
+        <HRM.Components.Shared.WeeklyHoursReview StaffId="StaffId" />
     }
-    @if(error != null) { <p role="alert" class="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700 shadow-2xs">@error</p> }
-    @if(loading) { <p role="status" class="text-xs text-slate-500">Loading attendance...</p> }
+
+    <!-- Compact Section Header (no background/border) -->
+    <header class="flex flex-wrap items-center justify-between gap-2 px-1 pt-0.5">
+        <div class="min-w-0">
+            <div class="flex items-center gap-2 flex-wrap">
+                <h3 class="text-base font-bold text-slate-900 dark:text-slate-100">Attendance Records</h3>
+                @if (!loading && error == null)
+                {
+                    <span class="inline-flex items-center rounded-full border border-teal-200 dark:border-teal-800 bg-teal-50 dark:bg-teal-950/50 px-2 py-0.5 text-[10px] font-semibold text-teal-800 dark:text-teal-300">
+                        @periodFrom.ToString("dd MMM yyyy") – @periodTo.ToString("dd MMM yyyy")
+                    </span>
+                }
+            </div>
+            <p class="text-xs text-slate-500 dark:text-slate-400">Attendance records, daily hours, shift duty, and raw clock events.</p>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-1.5">
+            @if (!loading && error == null)
+            {
+                <HRM.Components.Shared.AttendanceExportButtons CreateReport="BuildExport" Disabled="@loading" />
+            }
+            <button type="button"
+                    class="app-button app-button-secondary app-button-sm"
+                    disabled="@loading"
+                    @onclick="LoadAsync">
+                <AppIcon Name="refresh" Class="@(loading ? "animate-spin text-xs" : "text-xs")" />
+                <span>Refresh</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Enterprise Filter & Inline KPI Bar -->
+    @if (!ExternalDateFilters || (!loading && error == null))
+    {
+        <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3.5 py-2.5 flex flex-wrap items-end justify-between gap-3">
+            @if (!ExternalDateFilters)
+            {
+                <div class="flex flex-wrap items-end gap-2.5">
+                    <div>
+                        <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">From</label>
+                        <InputDate @bind-Value="from" class="block h-8 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 text-xs text-slate-800 dark:text-slate-100 focus:border-teal-600 focus:outline-none" />
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">To</label>
+                        <InputDate @bind-Value="to" class="block h-8 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 text-xs text-slate-800 dark:text-slate-100 focus:border-teal-600 focus:outline-none" />
+                    </div>
+                    <button type="button"
+                            class="app-button app-button-primary app-button-sm"
+                            disabled="@loading"
+                            @onclick="ApplyAsync">
+                        Show records
+                    </button>
+                </div>
+            }
+
+            @if (!loading && error == null)
+            {
+                <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500 dark:text-slate-400">
+                    @foreach (var stat in Stats)
+                    {
+                        <span class="inline-flex items-center gap-1.5">
+                            <span class="h-1.5 w-1.5 rounded-full @GetStatDotClass(stat.Label)"></span>
+                            <span>@stat.Label:</span>
+                            <strong class="text-slate-900 dark:text-slate-100 tabular-nums">@stat.Value</strong>
+                        </span>
+                    }
+                </div>
+            }
+        </div>
+    }
+
+    @if (error != null)
+    {
+        <div role="alert" class="rounded-xl border border-rose-200 dark:border-rose-800 bg-rose-50/80 dark:bg-rose-950/40 px-3.5 py-2.5 text-xs text-rose-800 dark:text-rose-200">
+            @error
+        </div>
+    }
+
+    @if (loading)
+    {
+        <div role="status" class="flex items-center justify-center gap-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-8 text-xs text-slate-500 dark:text-slate-400">
+            <span class="h-4 w-4 rounded-full border-2 border-blue-600 border-t-transparent animate-spin"></span>
+            <span>Loading attendance…</span>
+        </div>
+    }
+
     @if (ShowOverview)
     {
         <YearlyAttendanceGridCard Days="days" SelectedYear="year" YearChanged="ChangeYearAsync" IsLoading="loading" AllowYearChange="@(!ExternalDateFilters)" ShowExports="false" />
     }
-    @if(!loading && error == null)
+
+    @if (!loading && error == null)
     {
-        <HRM.Components.Shared.AttendanceExportButtons CreateReport="BuildExport" />
-
-        <div class="grid grid-cols-2 gap-3 sm:grid-cols-5">
-            @foreach(var stat in Stats) { <div class="rounded-xl border border-slate-200 bg-white p-3 shadow-2xs"><p class="text-[11px] font-medium text-slate-500">@stat.Label</p><p class="mt-1 text-lg font-bold text-slate-800">@stat.Value</p></div> }
-        </div>
-
-        <!-- Two-Column Grid: Daily Attendance (Left 7) and Clock Events/Duty (Right 5) -->
-        <div class="grid grid-cols-1 lg:grid-cols-12 gap-2 p-2 items-start">
-            <!-- Left Column: Daily Attendance Table (7 cols) -->
-            <div class="lg:col-span-7 min-w-0 space-y-4">
-                <div class="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-2xs">
-                    <div class="p-3 border-b border-slate-100 font-bold text-xs text-slate-800 flex items-center justify-between">
-                        <span>Daily attendance · @periodFrom.ToString("dd MMM yyyy") – @periodTo.ToString("dd MMM yyyy")</span>
-                        <span class="text-[11px] text-slate-400 font-normal">@PeriodDays.Count() days</span>
+        <!-- Explicit Responsive Two-Column Grid: Daily Attendance (Left) and Clock Events/Duty (Right) -->
+        <div class="staff-att-grid">
+            <!-- Left Column: Daily Attendance Table -->
+            <div class="min-w-0 flex flex-col gap-3">
+                <div class="overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+                    <div class="bg-slate-50/80 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 px-3.5 py-2.5 flex items-center justify-between gap-2">
+                        <h4 class="text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-200">
+                            Daily Attendance
+                        </h4>
+                        <span class="rounded-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-2 py-0.5 text-[10px] font-semibold text-slate-600 dark:text-slate-300">
+                            @PeriodDays.Count() days
+                        </span>
                     </div>
-                    <table class="w-full text-left text-xs">
-                        <thead><tr class="bg-slate-50/80 text-slate-600 text-[11px] font-semibold uppercase tracking-wider"><th class="px-3.5 py-2.5">Date</th><th class="px-3.5 py-2.5">Status</th><th class="px-3.5 py-2.5">Check In</th><th class="px-3.5 py-2.5">Check Out</th><th class="px-3.5 py-2.5">Worked</th><th class="px-3.5 py-2.5">Duty</th><th class="px-3.5 py-2.5">Events</th></tr></thead>
-                        <tbody>@foreach(var day in PeriodDays.OrderByDescending(x => x.Date)) {
-                            <tr class="border-t border-slate-100 hover:bg-slate-50/50 transition-colors">
-                                <td class="whitespace-nowrap px-3.5 py-2.5 font-medium text-slate-800">@day.Date.ToString("dd MMM · ddd")</td>
-                                <td class="px-3.5 py-2.5"><span class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold @GetAttendanceBadgeClass(day)">@Status(day)</span></td>
-                                <td class="px-3.5 py-2.5">@(day.FirstCheckIn?.ToString("HH:mm") ?? "—")</td>
-                                <td class="px-3.5 py-2.5">@(day.LastCheckOut?.ToString("HH:mm") ?? "—")</td>
-                                <td class="px-3.5 py-2.5 font-semibold text-slate-900">@day.WorkedHours.ToString("0.##")h</td>
-                                <td class="px-3.5 py-2.5 text-slate-600">@day.DutyWorkedHours.ToString("0.##")h</td>
-                                <td class="px-3.5 py-2.5 font-mono text-[11px]">@day.ClockEventCount</td>
-                            </tr>
-                        }</tbody>
-                    </table>
-                    @if(!PeriodDays.Any()) { <p class="p-6 text-center text-xs text-slate-500">No attendance days in this employment period.</p> }
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-xs">
+                            <thead>
+                                <tr class="bg-slate-50/60 dark:bg-slate-800/40 border-b border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 text-[10px] font-bold uppercase tracking-wider">
+                                    <th class="px-3 py-2">Date</th>
+                                    <th class="px-3 py-2">Status</th>
+                                    <th class="px-3 py-2">Check In</th>
+                                    <th class="px-3 py-2">Check Out</th>
+                                    <th class="px-3 py-2 text-right">Worked</th>
+                                    <th class="px-3 py-2 text-right">Duty</th>
+                                    <th class="px-3 py-2 text-right">Events</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100 dark:divide-slate-800/70">
+                                @foreach (var day in PeriodDays.OrderByDescending(x => x.Date))
+                                {
+                                    <tr class="even:bg-slate-50/40 dark:even:bg-slate-800/20 hover:bg-teal-50/30 dark:hover:bg-slate-800/40 transition-colors">
+                                        <td class="whitespace-nowrap px-3 py-2 font-semibold text-slate-800 dark:text-slate-100">@day.Date.ToString("dd MMM · ddd")</td>
+                                        <td class="px-3 py-2">
+                                            <span class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold @GetAttendanceBadgeClass(day)">@Status(day)</span>
+                                        </td>
+                                        <td class="whitespace-nowrap px-3 py-2 font-mono text-[11px] text-slate-700 dark:text-slate-300">@(day.FirstCheckIn?.ToString("HH:mm") ?? "—")</td>
+                                        <td class="whitespace-nowrap px-3 py-2 font-mono text-[11px] text-slate-700 dark:text-slate-300">@(day.LastCheckOut?.ToString("HH:mm") ?? "—")</td>
+                                        <td class="whitespace-nowrap px-3 py-2 text-right font-semibold text-slate-900 dark:text-slate-100 tabular-nums">@day.WorkedHours.ToString("0.##")h</td>
+                                        <td class="whitespace-nowrap px-3 py-2 text-right text-slate-600 dark:text-slate-400 tabular-nums">@day.DutyWorkedHours.ToString("0.##")h</td>
+                                        <td class="whitespace-nowrap px-3 py-2 text-right font-mono text-[11px] text-slate-600 dark:text-slate-400">@day.ClockEventCount</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                    @if (!PeriodDays.Any())
+                    {
+                        <p class="p-6 text-center text-xs text-slate-500 dark:text-slate-400">No attendance days in this employment period.</p>
+                    }
                 </div>
             </div>
 
-            <!-- Right Column: Clock Events & Duty Shifts (5 cols) -->
-            <div class="lg:col-span-5 min-w-0 space-y-4">
+            <!-- Right Column: Required Shift/Duty & Clock Events Log -->
+            <div class="min-w-0 flex flex-col gap-3">
                 @if (ShowDutyAttendance)
                 {
-                    <div class="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-2xs">
-                        <div class="p-3 border-b border-slate-100 font-bold text-xs text-slate-800">Required shift/duty attendance</div>
-                        <table class="w-full whitespace-nowrap text-left text-xs">
-                            <thead><tr class="bg-slate-50/80 text-slate-600 text-[11px] font-semibold uppercase tracking-wider"><th class="px-3 py-2">Date</th><th class="px-3 py-2">Schedule</th><th class="px-3 py-2">Status</th><th class="px-3 py-2">Credited</th></tr></thead>
-                            <tbody>@foreach (var duty in dutyAttendance.Where(d => d.IsShiftOrDuty && d.RequiresAttendance))
-                            {
-                                <tr class="border-t border-slate-100 hover:bg-slate-50/50 transition-colors">
-                                    <td class="px-3 py-2 font-medium text-slate-800">@duty.Date.ToString("dd MMM")</td>
-                                    <td class="px-3 py-2 text-slate-600 truncate max-w-[120px]" title="@duty.Purpose · @duty.Name">@duty.Purpose · @duty.Name</td>
-                                    <td class="px-3 py-2">@DutyStatus(duty)</td>
-                                    <td class="px-3 py-2 font-medium">@duty.CreditedMinutes m</td>
-                                </tr>
-                            }</tbody>
-                        </table>
-                        @if (!dutyAttendance.Any(d => d.IsShiftOrDuty && d.RequiresAttendance)) { <p class="p-3 text-xs text-slate-500">No required shift/duty assignments for this period.</p> }
+                    var requiredDuties = dutyAttendance.Where(d => d.IsShiftOrDuty && d.RequiresAttendance).ToList();
+                    <div class="overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+                        <div class="bg-slate-50/80 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 px-3.5 py-2.5 flex items-center justify-between gap-2">
+                            <h4 class="text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-200">Required Shift / Duty</h4>
+                            <span class="rounded-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-2 py-0.5 text-[10px] font-semibold text-slate-600 dark:text-slate-300">@requiredDuties.Count</span>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full whitespace-nowrap text-left text-xs">
+                                <thead>
+                                    <tr class="bg-slate-50/60 dark:bg-slate-800/40 border-b border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 text-[10px] font-bold uppercase tracking-wider">
+                                        <th class="px-3 py-2">Date</th>
+                                        <th class="px-3 py-2">Schedule</th>
+                                        <th class="px-3 py-2">Status</th>
+                                        <th class="px-3 py-2 text-right">Credited</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-100 dark:divide-slate-800/70">
+                                    @foreach (var duty in requiredDuties)
+                                    {
+                                        <tr class="even:bg-slate-50/40 dark:even:bg-slate-800/20 hover:bg-teal-50/30 dark:hover:bg-slate-800/40 transition-colors">
+                                            <td class="px-3 py-2 font-semibold text-slate-800 dark:text-slate-100">@duty.Date.ToString("dd MMM")</td>
+                                            <td class="px-3 py-2 text-slate-600 dark:text-slate-300 truncate max-w-[140px]" title="@duty.Purpose · @duty.Name">@duty.Purpose · @duty.Name</td>
+                                            <td class="px-3 py-2 text-slate-700 dark:text-slate-300">@DutyStatus(duty)</td>
+                                            <td class="px-3 py-2 text-right font-semibold tabular-nums">@duty.CreditedMinutes m</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                        @if (requiredDuties.Count == 0)
+                        {
+                            <p class="p-4 text-center text-xs text-slate-500 dark:text-slate-400">No required shift/duty assignments for this period.</p>
+                        }
                     </div>
                 }
 
-                <div class="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-2xs">
-                    <div class="p-3 border-b border-slate-100 font-bold text-xs text-slate-800 flex items-center justify-between">
-                        <span>Clock Events Log</span>
-                        <span class="text-[11px] font-normal text-slate-400">@events.Count events</span>
+                <div class="overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+                    <div class="bg-slate-50/80 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 px-3.5 py-2.5 flex items-center justify-between gap-2">
+                        <h4 class="text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-200">Clock Events Log</h4>
+                        <span class="rounded-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-2 py-0.5 text-[10px] font-semibold text-slate-600 dark:text-slate-300">
+                            @events.Count events
+                        </span>
                     </div>
-                    <table class="w-full text-left text-xs">
-                        <thead><tr class="bg-slate-50/80 text-slate-600 text-[11px] font-semibold uppercase tracking-wider"><th class="px-3 py-2">Time</th><th class="px-3 py-2">Event</th><th class="px-3 py-2">Schedule / Method</th></tr></thead>
-                        <tbody>@foreach(var entry in events.Take(100)) {
-                            <tr class="border-t border-slate-100 hover:bg-slate-50/50 transition-colors">
-                                <td class="whitespace-nowrap px-3 py-2 font-mono text-[11px] text-slate-800">@entry.Time.ToString("dd MMM HH:mm:ss")</td>
-                                <td class="px-3 py-2">
-                                    <span class="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold @(entry.Event.Contains("In", StringComparison.OrdinalIgnoreCase) ? "bg-emerald-50 text-emerald-800 border border-emerald-200" : "bg-slate-100 text-slate-700 border border-slate-200")">
-                                        @entry.Event
-                                    </span>
-                                </td>
-                                <td class="px-3 py-2 text-xs text-slate-600 truncate max-w-[160px]" title="@(entry.SharedScheduleSummary ?? entry.Schedule)">
-                                    @(entry.SharedScheduleSummary ?? entry.Schedule)
-                                </td>
-                            </tr>
-                        }</tbody>
-                    </table>
-                    @if(events.Count == 0) { <p class="p-4 text-center text-xs text-slate-500">No clock events for this date range.</p> }
-                    @if(events.Count > 100) { <p class="p-2.5 text-center text-[11px] text-slate-400 border-t border-slate-100">Showing first 100 of @events.Count events</p> }
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-xs">
+                            <thead>
+                                <tr class="bg-slate-50/60 dark:bg-slate-800/40 border-b border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 text-[10px] font-bold uppercase tracking-wider">
+                                    <th class="px-3 py-2">Time</th>
+                                    <th class="px-3 py-2">Event</th>
+                                    <th class="px-3 py-2">Schedule / Method</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100 dark:divide-slate-800/70">
+                                @foreach (var entry in events.Take(100))
+                                {
+                                    <tr class="even:bg-slate-50/40 dark:even:bg-slate-800/20 hover:bg-teal-50/30 dark:hover:bg-slate-800/40 transition-colors">
+                                        <td class="whitespace-nowrap px-3 py-2 font-mono text-[11px] text-slate-800 dark:text-slate-200">@entry.Time.ToString("dd MMM HH:mm:ss")</td>
+                                        <td class="px-3 py-2">
+                                            <span class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold @(entry.Event.Contains("In", StringComparison.OrdinalIgnoreCase) ? "bg-emerald-50 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800" : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700")">
+                                                @entry.Event
+                                            </span>
+                                        </td>
+                                        <td class="px-3 py-2 text-xs text-slate-600 dark:text-slate-300 truncate max-w-[180px]" title="@(entry.SharedScheduleSummary ?? entry.Schedule)">
+                                            @(entry.SharedScheduleSummary ?? entry.Schedule)
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                    @if (events.Count == 0)
+                    {
+                        <p class="p-4 text-center text-xs text-slate-500 dark:text-slate-400">No clock events for this date range.</p>
+                    }
+                    @if (events.Count > 100)
+                    {
+                        <p class="p-2.5 text-center text-[11px] text-slate-400 border-t border-slate-100 dark:border-slate-800">Showing first 100 of @events.Count events</p>
+                    }
                 </div>
             </div>
         </div>
     }
 </section>
+
+<style>
+    .staff-att-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 0.75rem;
+        align-items: start;
+    }
+
+    @@media (min-width: 1024px) {
+        .staff-att-grid {
+            grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+        }
+    }
+</style>
 
 @code {
     private AttendanceExportReport BuildExport()
@@ -189,6 +321,15 @@
         }
         return DateTime.UtcNow.AddHours(5) > duty.ScheduledStart ? "Missing check in" : "Upcoming";
     }
+
+    private static string GetStatDotClass(string label) => label switch
+    {
+        "Present" => "bg-teal-500",
+        "Absent" => "bg-rose-500",
+        "Leave" => "bg-emerald-500",
+        "Rest days" => "bg-slate-400",
+        _ => "bg-blue-500"
+    };
 
     private static string GetAttendanceBadgeClass(YearlyAttendanceDayDto day)
     {

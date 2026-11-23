@@ -13,13 +13,11 @@
 <PageTitle>Staff Groups - HR Portal</PageTitle>
 
 <section class="w-full min-w-0 p-2 flex flex-col gap-3 text-slate-900 dark:text-slate-100">
-    <!-- Standard Full-Width Sticky Header (UI_DESIGN_STANDARD Sections 3 & 6.4) -->
-    <header class="staff-overview-no-print sticky top-0 z-30 m-0 border-b border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xs px-4 py-3 shadow-xs rounded-xl flex flex-wrap items-center justify-between gap-3">
+    <!-- Compact Header (no background/border) -->
+    <header class="staff-overview-no-print flex flex-wrap items-center justify-between gap-2 px-1 py-1">
         <div class="min-w-0">
-            <div class="flex items-center gap-1.5 flex-wrap mb-1">
-                <span class="inline-flex items-center rounded-full bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200/80 dark:border-indigo-800 px-2 py-0.5 text-[10px] font-semibold text-indigo-700 dark:text-indigo-300">
-                    HR Workforce
-                </span>
+            <div class="flex items-center gap-2 flex-wrap">
+                <h1 class="text-lg font-bold text-slate-900 dark:text-slate-100 truncate">Staff Groups</h1>
                 @if (workspace != null)
                 {
                     <span class="inline-flex items-center gap-1 rounded-full bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200/80 dark:border-emerald-800 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300">
@@ -28,8 +26,7 @@
                     </span>
                 }
             </div>
-            <h1 class="text-lg font-bold text-slate-900 dark:text-slate-100 truncate">Staff Groups</h1>
-            <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+            <p class="text-xs text-slate-500 dark:text-slate-400">
                 Create cross-department staff groups with schedule, overtime, work type, leave policy, and admin portal access overrides.
             </p>
         </div>
@@ -57,7 +54,7 @@
         </div>
     </header>
 
-    <div class="w-full min-w-0 flex flex-col gap-3 transition-all duration-300 @(isFullWidth ? "max-w-none" : "max-w-7xl mx-auto")">
+    <div class="staff-groups-shell @(isFullWidth ? "staff-groups-shell-full" : "staff-groups-shell-standard")">
     @if (!string.IsNullOrWhiteSpace(errorMessage))
     {
         <div class="staff-overview-no-print flex items-center justify-between rounded-xl border border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/40 p-3 text-xs text-rose-800 dark:text-rose-200">
@@ -494,6 +491,24 @@
 </section>
 
 <style>
+    .staff-groups-shell {
+        width: 100%;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+        margin-inline: auto;
+        transition: max-width .25s ease;
+    }
+
+    .staff-groups-shell-standard {
+        max-width: 80rem;
+    }
+
+    .staff-groups-shell-full {
+        max-width: none;
+    }
+
     .staff-groups-panels {
         display: grid;
         grid-template-columns: minmax(0, 1fr);

@@ -4,33 +4,48 @@
 @inject ToastService Toasts
 @inject ILogger<StaffPositions> Logger
 
-<section class="w-full p-2 flex flex-col gap-2" aria-label="Staff positions">
-    <div class="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100">
-        <div>
-            <h3 class="text-base font-bold text-slate-800">Staff Positions & Appointments</h3>
-            <p class="text-xs text-slate-500 mt-0.5">Manage assignments, effective dates, pay steps, and termination requests.</p>
+<section class="w-full min-w-0 flex flex-col gap-3 text-slate-900 dark:text-slate-100" aria-label="Staff positions">
+    <!-- Compact Header (no background/border) -->
+    <header class="flex flex-wrap items-center justify-between gap-2 px-1 py-0.5">
+        <div class="min-w-0">
+            <div class="flex items-center gap-2 flex-wrap">
+                <h3 class="text-base font-bold text-slate-900 dark:text-slate-100">Staff Positions &amp; Appointments</h3>
+                @if (data != null)
+                {
+                    <span class="inline-flex items-center gap-1 rounded-full bg-teal-50 dark:bg-teal-950/60 border border-teal-200/80 dark:border-teal-800 px-2 py-0.5 text-[10px] font-semibold text-teal-700 dark:text-teal-300">
+                        <span class="h-1.5 w-1.5 rounded-full bg-teal-500"></span>
+                        @data.Assignments.Count assignments
+                    </span>
+                }
+            </div>
+            <p class="text-xs text-slate-500 dark:text-slate-400">Manage assignments, effective dates, pay steps, and termination requests.</p>
         </div>
-        <div class="flex flex-wrap gap-2">
+        <div class="flex flex-wrap items-center gap-1.5">
+            <button type="button" class="app-button app-button-secondary app-button-sm" disabled="@busy" @onclick="LoadAsync">
+                <AppIcon Name="refresh" Class="@(loading ? "animate-spin text-xs" : "text-xs")" />
+                <span>Refresh</span>
+            </button>
             @if (CanAssign)
             {
-                <button type="button" class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-2xs hover:bg-emerald-700 disabled:opacity-50 transition-colors" disabled="@busy" @onclick="New">
-                    <span>+</span>
+                <button type="button" class="app-button app-button-primary app-button-sm" disabled="@busy" @onclick="New">
+                    <AppIcon Name="add" Class="text-xs" />
                     <span>Assign Position</span>
                 </button>
             }
-            <button type="button" class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs hover:bg-slate-50 disabled:opacity-50 transition-colors" disabled="@busy" @onclick="LoadAsync">
-                <span class="@(loading ? "animate-spin" : "")">↻</span>
-                <span>Refresh</span>
-            </button>
         </div>
-    </div>
+    </header>
+
     @if (message != null)
     {
-        <p role="alert" class="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 shadow-2xs">@message</p>
+        <div role="alert" class="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50/80 dark:bg-amber-950/40 px-3.5 py-2.5 text-xs text-amber-800 dark:text-amber-200">@message</div>
     }
+
     @if (loading)
     {
-        <p role="status" class="text-xs text-slate-500">Loading positions…</p>
+        <div role="status" class="flex items-center justify-center gap-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-8 text-xs text-slate-500">
+            <span class="h-4 w-4 rounded-full border-2 border-blue-600 border-t-transparent animate-spin"></span>
+            <span>Loading positions…</span>
+        </div>
     }
     else if (data != null)
     {
@@ -38,111 +53,168 @@
             <div class="position-editor min-w-0">
                 @if (editing)
                 {
-                    <form @onsubmit="SaveAsync" @onsubmit:preventDefault class="space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-2xs">
-                        <h4 class="font-bold text-sm text-slate-800">@(ending ? "Job termination request" : changing ? "Change position" : original != null ? "Edit position dates" : "Assign position")</h4>
-                        @if (changing)
-                        {
-                            <p class="text-xs text-slate-500">@original!.Name will end the day before the new position starts.</p>
-                        }
-                        <fieldset disabled="@busy" class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                            <label class="block text-xs font-semibold text-slate-600">Employment
-                                <select class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500" @bind="jobId" disabled="@(original != null)" required>
-                                    <option value="0">Select employment</option>
-                                    @foreach (var job in data.Jobs) { <option value="@job.Id">@job.Name</option> }
-                                    @if (original != null && !data.Jobs.Any(j => j.Id == original.JobId))
-                                    { <option value="@original.JobId">Job @original.JobId</option> }
-                                </select>
-                            </label>
-                            @if(SelectingPosition)
+                    <form @onsubmit="SaveAsync" @onsubmit:preventDefault class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden">
+                        <div class="bg-slate-50/80 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 px-3.5 py-2.5">
+                            <h4 class="text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-200">
+                                @(ending ? "Job Termination Request" : changing ? "Change Position" : original != null ? "Edit Position Dates" : "Assign Position")
+                            </h4>
+                            @if (changing)
                             {
-                                <label class="block text-xs font-semibold text-slate-600">Framework<select class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500" @bind="selectedFrameworkId" @bind:after="FrameworkChanged" required><option value="0">Select framework</option>@foreach(var framework in data.Frameworks){<option value="@framework.Id">@framework.Name</option>}</select></label>
-                                <label class="block text-xs font-semibold text-slate-600">Position matrix<select class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500" @bind="selectedMatrixId" @bind:after="MatrixChanged" disabled="@(selectedFrameworkId==0)" required><option value="0">Select position matrix</option>@foreach(var matrix in data.PositionMatrices.Where(x=>x.FrameworkId==selectedFrameworkId)){<option value="@matrix.Id" disabled="@(matrix.AvailableSlots==0)">@matrix.Name · @matrix.AvailableSlots / @matrix.ApprovedSlots slots available@(matrix.AvailableSlots==0?" · Full":"")</option>}</select></label>
+                                <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">@original!.Name will end the day before the new position starts.</p>
                             }
-                            <label class="block text-xs font-semibold text-slate-600">@(SelectingPosition?"Vacant position slot":"Position")
-                                <select class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500" @bind="positionId" @bind:after="()=>jobMatrixStepId=null" disabled="@(!SelectingPosition||(SelectingPosition&&selectedMatrixId==0))" required>
-                                    <option value="0">Select position</option>
-                                    @foreach (var position in data.Positions.Where(p=>!SelectingPosition||p.FrameworkId==selectedFrameworkId&&p.MatrixId==selectedMatrixId)) { <option value="@position.Id">@position.Name · #@position.Id</option> }
-                                    @if (!SelectingPosition && original != null && !data.Positions.Any(p => p.Id == original.PositionId))
-                                    { <option value="@original.PositionId">@original.Name</option> }
-                                </select>
-                            </label>
-                            @if(ending)
+                        </div>
+                        <div class="p-3.5 space-y-3">
+                            <fieldset disabled="@busy" class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">Employment
+                                    <select class="mt-1 w-full h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 text-xs text-slate-900 dark:text-slate-100 focus:border-teal-600 focus:outline-none" @bind="jobId" disabled="@(original != null)" required>
+                                        <option value="0">Select employment</option>
+                                        @foreach (var job in data.Jobs) { <option value="@job.Id">@job.Name</option> }
+                                        @if (original != null && !data.Jobs.Any(j => j.Id == original.JobId))
+                                        { <option value="@original.JobId">Job @original.JobId</option> }
+                                    </select>
+                                </label>
+                                @if (SelectingPosition)
+                                {
+                                    <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">Framework
+                                        <select class="mt-1 w-full h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 text-xs text-slate-900 dark:text-slate-100 focus:border-teal-600 focus:outline-none" @bind="selectedFrameworkId" @bind:after="FrameworkChanged" required>
+                                            <option value="0">Select framework</option>
+                                            @foreach (var framework in data.Frameworks) { <option value="@framework.Id">@framework.Name</option> }
+                                        </select>
+                                    </label>
+                                    <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">Position Matrix
+                                        <select class="mt-1 w-full h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 text-xs text-slate-900 dark:text-slate-100 focus:border-teal-600 focus:outline-none" @bind="selectedMatrixId" @bind:after="MatrixChanged" disabled="@(selectedFrameworkId == 0)" required>
+                                            <option value="0">Select position matrix</option>
+                                            @foreach (var matrix in data.PositionMatrices.Where(x => x.FrameworkId == selectedFrameworkId))
+                                            {
+                                                <option value="@matrix.Id" disabled="@(matrix.AvailableSlots == 0)">@matrix.Name · @matrix.AvailableSlots / @matrix.ApprovedSlots slots available@(matrix.AvailableSlots == 0 ? " · Full" : "")</option>
+                                            }
+                                        </select>
+                                    </label>
+                                }
+                                <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">@(SelectingPosition ? "Vacant Position Slot" : "Position")
+                                    <select class="mt-1 w-full h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 text-xs text-slate-900 dark:text-slate-100 focus:border-teal-600 focus:outline-none" @bind="positionId" @bind:after="() => jobMatrixStepId = null" disabled="@(!SelectingPosition || (SelectingPosition && selectedMatrixId == 0))" required>
+                                        <option value="0">Select position</option>
+                                        @foreach (var position in data.Positions.Where(p => !SelectingPosition || p.FrameworkId == selectedFrameworkId && p.MatrixId == selectedMatrixId)) { <option value="@position.Id">@position.Name · #@position.Id</option> }
+                                        @if (!SelectingPosition && original != null && !data.Positions.Any(p => p.Id == original.PositionId))
+                                        { <option value="@original.PositionId">@original.Name</option> }
+                                    </select>
+                                </label>
+                                @if (ending)
+                                {
+                                    <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">Job Termination Request Type
+                                        <select class="mt-1 w-full h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 text-xs text-slate-900 dark:text-slate-100 focus:border-teal-600 focus:outline-none" @bind="terminationRequestTypeId" required>
+                                            <option value="">Select request type</option>
+                                            @foreach (var type in data.TerminationRequestTypes) { <option value="@type.Id">@type.Name</option> }
+                                        </select>
+                                    </label>
+                                    @if (data.TerminationRequestTypes.Count == 0) { <p role="status" class="text-xs text-amber-700">Job termination requests are unavailable. Please contact HR.</p> }
+                                }
+                                else
+                                {
+                                    <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">From Date
+                                        <InputDate class="mt-1 w-full h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 text-xs text-slate-900 dark:text-slate-100 focus:border-teal-600 focus:outline-none" @bind-Value="from" disabled="@ending" />
+                                    </label>
+                                }
+                                @if (data.Positions.FirstOrDefault(x => x.Id == positionId)?.Pay is { } payDefinition && (original == null || changing))
+                                {
+                                    <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">Employee Job Pay Step
+                                        <select class="mt-1 w-full h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 text-xs text-slate-900 dark:text-slate-100 focus:border-teal-600 focus:outline-none" @bind="jobMatrixStepId">
+                                            <option value="">Select pay step</option>
+                                            @foreach (var s in payDefinition.Steps) { <option value="@s.Id">Step @s.Number · @s.JobAllowance.ToString("N2") @payDefinition.Currency</option> }
+                                        </select>
+                                    </label>
+                                }
+                                <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">@(ending ? "Termination Effective Date" : "To Date (optional)")
+                                    <InputDate class="mt-1 w-full h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 text-xs text-slate-900 dark:text-slate-100 focus:border-teal-600 focus:outline-none" @bind-Value="to" />
+                                </label>
+                                <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 sm:col-span-2">Reason
+                                    <textarea class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 p-2 text-xs text-slate-900 dark:text-slate-100 focus:border-teal-600 focus:outline-none" @bind="reason" maxlength="500" required rows="2"></textarea>
+                                </label>
+                            </fieldset>
+                            @if (data.Positions.FirstOrDefault(x => x.Id == positionId)?.Pay is { } selectedPay)
                             {
-                                <label class="block text-xs font-semibold text-slate-600">Job termination request type<select class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500" @bind="terminationRequestTypeId" required><option value="">Select request type</option>@foreach(var type in data.TerminationRequestTypes){<option value="@type.Id">@type.Name</option>}</select></label>
-                                @if(data.TerminationRequestTypes.Count==0){<p role="status" class="text-xs text-amber-700">Job termination requests are unavailable. Please contact HR.</p>}
+                                <div class="text-xs bg-slate-50/70 dark:bg-slate-800/40 p-2.5 rounded-lg border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300">
+                                    <p class="font-semibold">Basic salary: <span class="tabular-nums">@selectedPay.BasicSalary.ToString("N2") @selectedPay.Currency</span> · Job allowance: <span class="tabular-nums">@selectedPay.JobAllowance.ToString("N2")</span></p>
+                                    @foreach (var b in selectedPay.Benefits) { <p class="text-[11px] text-slate-500">@b.Name · @(b.Amount?.ToString("N2") ?? "Non-cash") · @b.Frequency</p> }
+                                </div>
                             }
-                            else
-                            {
-                            <label class="block text-xs font-semibold text-slate-600">From date
-                                <InputDate class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500" @bind-Value="from" disabled="@ending" />
-                            </label>
-                            }
-                            @if(data.Positions.FirstOrDefault(x=>x.Id==positionId)?.Pay is {} payDefinition && (original==null||changing))
-                            {
-                                <label class="block text-xs font-semibold text-slate-600">Employee Job pay step<select class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500" @bind="jobMatrixStepId"><option value="">Select pay step</option>@foreach(var s in payDefinition.Steps){<option value="@s.Id">Step @s.Number · @s.JobAllowance.ToString("N2") @payDefinition.Currency</option>}</select></label>
-                            }
-                            <label class="block text-xs font-semibold text-slate-600">@(ending ? "Termination effective date (first day no longer employed)" : "To date (optional)")
-                                <InputDate class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500" @bind-Value="to" />
-                            </label>
-                            <label class="block text-xs font-semibold text-slate-600 sm:col-span-2">Reason
-                                <textarea class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500" @bind="reason" maxlength="500" required rows="2"></textarea>
-                            </label>
-                        </fieldset>
-                        @if(data.Positions.FirstOrDefault(x=>x.Id==positionId)?.Pay is {} selectedPay)
-                        {
-                            <div class="text-xs bg-slate-50 p-2.5 rounded-lg border border-slate-200 text-slate-700"><p class="font-medium">Basic salary: @selectedPay.BasicSalary.ToString("N2") @selectedPay.Currency · Job allowance: @selectedPay.JobAllowance.ToString("N2")</p>@foreach(var b in selectedPay.Benefits){<p class="text-slate-500">@b.Name · @(b.Amount?.ToString("N2")??"Non-cash") · @b.Frequency</p>}</div>
-                        }
-                        <div class="flex flex-wrap gap-2 pt-2">
-                            <button type="submit" class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-2xs hover:bg-emerald-700 disabled:opacity-50 transition-colors" disabled="@busy">@(busy ? "Submitting…" : "Submit for approval")</button>
-                            <button type="button" class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs hover:bg-slate-50 disabled:opacity-50 transition-colors" disabled="@busy" @onclick="() => editing = false">Cancel</button>
+                            <div class="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+                                <button type="submit" class="app-button app-button-primary app-button-sm" disabled="@busy">@(busy ? "Submitting…" : "Submit for Approval")</button>
+                                <button type="button" class="app-button app-button-secondary app-button-sm" disabled="@busy" @onclick="() => editing = false">Cancel</button>
+                            </div>
                         </div>
                     </form>
                 }
                 else
                 {
-                    <div class="rounded-xl border border-slate-200 bg-white p-4 text-xs text-slate-500 shadow-2xs">
-                        @(data.Jobs.Count==0?"No active employment is available. A new employment appointment must be approved before a position can be assigned.":"Select a position action to start.")
+                    <div class="rounded-xl border border-dashed border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-6 text-center text-xs text-slate-500">
+                        @(data.Jobs.Count == 0 ? "No active employment is available. A new employment appointment must be approved before a position can be assigned." : "Select a position action to start.")
                     </div>
                 }
             </div>
-            <div class="position-list-panel min-w-0 space-y-4">
-                <div class="position-list rounded-xl border border-slate-200 bg-white p-4 shadow-2xs space-y-3" aria-label="Position assignments">
-                    <h4 class="font-bold text-sm text-slate-800 pb-2 border-b border-slate-100 flex items-center justify-between">
-                        <span>Positions</span>
-                        <span class="text-xs font-normal text-slate-500">(@data.Assignments.Count assignments)</span>
-                    </h4>
-                    @if (data.Assignments.Count == 0)
-                    {
-                        <p class="py-2 text-xs text-slate-500">No position assignments found in this organisation.</p>
-                    }
-                    else
-                    {
-                        @foreach (var assignment in data.Assignments)
+
+            <div class="position-list-panel min-w-0 flex flex-col gap-3">
+                <div class="position-list rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden" aria-label="Position assignments">
+                    <div class="bg-slate-50/80 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 px-3.5 py-2.5 flex items-center justify-between gap-2">
+                        <h4 class="text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-200">Positions</h4>
+                        <span class="rounded-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-2 py-0.5 text-[10px] font-semibold text-slate-600 dark:text-slate-300">@data.Assignments.Count</span>
+                    </div>
+                    <div class="p-3 space-y-2.5">
+                        @if (data.Assignments.Count == 0)
                         {
-                            <article class="p-3 rounded-lg border border-slate-100 bg-slate-50/50 text-xs space-y-2 hover:bg-slate-50 transition-colors" @key="assignment.Id">
-                                <div class="flex items-start justify-between gap-2 flex-wrap">
-                                    <h5 class="font-bold text-slate-800">@assignment.Name <span class="font-normal text-slate-400">· #@assignment.PositionId</span></h5>
-                                    <span class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">@Status(assignment)</span>
-                                </div>
-                                <p class="text-slate-500">Job @assignment.JobId · @assignment.From.ToString("dd MMM yyyy") – @(assignment.To?.ToString("dd MMM yyyy") ?? "Ongoing")</p>
-                                @if(assignment.Pay is {} pay){<details class="text-[11px] text-slate-600"><summary class="cursor-pointer font-medium text-emerald-700">Framework pay details</summary><p class="mt-1">Basic salary: @pay.BasicSalary.ToString("N2") @pay.Currency · Job allowance: @pay.JobAllowance.ToString("N2")</p>@foreach(var b in pay.Benefits){<p>@b.Name · @(b.Amount?.ToString("N2")??"Non-cash") · @b.Frequency</p>}</details>}
-                                @if (data.CanManage && assignment.StateId == 4 && (!assignment.To.HasValue || assignment.To.Value.Date > Today))
-                                {
-                                    <div class="flex flex-wrap gap-1.5 pt-1">
-                                        <button type="button" class="inline-flex items-center rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 shadow-2xs hover:bg-slate-50 disabled:opacity-50 transition-colors" disabled="@busy" @onclick="() => Edit(assignment)">Edit dates</button>
-                                        <button type="button" class="inline-flex items-center rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 shadow-2xs hover:bg-slate-50 disabled:opacity-50 transition-colors" disabled="@busy" @onclick="() => Edit(assignment, change: true)">Change position</button>
-                                        <button type="button" class="inline-flex items-center rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1 text-xs font-medium text-rose-700 shadow-2xs hover:bg-rose-100 disabled:opacity-50 transition-colors" disabled="@busy" @onclick="() => Edit(assignment, end: true)">Job termination</button>
-                                    </div>
-                                }
-                            </article>
+                            <p class="py-3 text-center text-xs text-slate-500">No position assignments found in this organisation.</p>
                         }
-                    }
+                        else
+                        {
+                            @foreach (var assignment in data.Assignments)
+                            {
+                                <article class="p-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950/40 text-xs space-y-2" @key="assignment.Id">
+                                    <div class="flex items-start justify-between gap-2 flex-wrap">
+                                        <h5 class="font-semibold text-slate-900 dark:text-slate-100">@assignment.Name <span class="font-mono font-normal text-slate-400">· #@assignment.PositionId</span></h5>
+                                        <span class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold bg-teal-50 dark:bg-teal-950/50 text-teal-800 dark:text-teal-300 border border-teal-200 dark:border-teal-800">@Status(assignment)</span>
+                                    </div>
+                                    <p class="text-[11px] text-slate-500 dark:text-slate-400">Job @assignment.JobId · @assignment.From.ToString("dd MMM yyyy") – @(assignment.To?.ToString("dd MMM yyyy") ?? "Ongoing")</p>
+                                    @if (assignment.Pay is { } pay)
+                                    {
+                                        <details class="rounded-md border border-slate-200/80 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40 px-2.5 py-1.5 text-[11px] text-slate-600 dark:text-slate-300">
+                                            <summary class="cursor-pointer font-semibold text-teal-700 dark:text-teal-300 select-none">Framework pay details</summary>
+                                            <p class="mt-1">Basic salary: <strong class="tabular-nums">@pay.BasicSalary.ToString("N2") @pay.Currency</strong> · Job allowance: <strong class="tabular-nums">@pay.JobAllowance.ToString("N2")</strong></p>
+                                            @foreach (var b in pay.Benefits) { <p>@b.Name · @(b.Amount?.ToString("N2") ?? "Non-cash") · @b.Frequency</p> }
+                                        </details>
+                                    }
+                                    @if (data.CanManage && assignment.StateId == 4 && (!assignment.To.HasValue || assignment.To.Value.Date > Today))
+                                    {
+                                        <div class="flex flex-wrap gap-1.5 pt-2 border-t border-slate-100 dark:border-slate-800">
+                                            <button type="button" class="app-button app-button-secondary app-button-sm" disabled="@busy" @onclick="() => Edit(assignment)">Edit dates</button>
+                                            <button type="button" class="app-button app-button-secondary app-button-sm" disabled="@busy" @onclick="() => Edit(assignment, change: true)">Change position</button>
+                                            <button type="button" class="inline-flex items-center rounded-lg border border-rose-200 dark:border-rose-800 bg-rose-50/80 dark:bg-rose-950/40 px-2.5 py-1 text-xs font-semibold text-rose-700 dark:text-rose-300 hover:bg-rose-100 disabled:opacity-50 transition-colors" disabled="@busy" @onclick="() => Edit(assignment, end: true)">Job termination</button>
+                                        </div>
+                                    }
+                                </article>
+                            }
+                        }
+                    </div>
                 </div>
                 <HRM.Components.Shared.StaffPositionRequests StaffId="StaffId" RefreshVersion="requestVersion" OnChanged="LoadAsync" />
             </div>
         </div>
     }
 </section>
+
+<style>
+    .staff-position-layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 0.75rem;
+        align-items: start;
+    }
+
+    @@media (min-width: 1024px) {
+        .staff-position-layout {
+            grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+        }
+    }
+</style>
 
 @code {
     [Parameter] public int StaffId { get; set; }

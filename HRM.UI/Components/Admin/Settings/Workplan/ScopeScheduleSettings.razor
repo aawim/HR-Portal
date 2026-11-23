@@ -8,92 +8,237 @@
 @inject HRM.WorkPlanning.Abstractions.IWorkAssignmentManagementService Assignments
 @inject HRM.WorkPlanning.Abstractions.IManualWorkAssignmentService ManualAssignments
 @inject HRM.Services.Interfaces.IUserAccessService UserAccess
-<section class="space-y-4 p-4">
-    <div><h1 class="text-xl font-semibold">@(OrganisationOnly?"Organisation schedules":"Schedule assignments")</h1><p class="mt-1 text-sm text-slate-500">Assign existing templates to the current organisation, approved structures, or staff groups. Staff overrides take priority, followed by group, nearest structure, and organisation default. Duty schedules are additional.</p></div>
-    @if(error!=null){<p role="alert" class="rounded-lg border p-3 text-sm">@error</p>}
-    @if(data==null){<button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@busy" @onclick="LoadAsync">Reload configuration</button>}
+<section class="w-full min-w-0 flex flex-col gap-3 text-slate-900 dark:text-slate-100">
+    <!-- Compact Header (no background/border) -->
+    <header class="flex flex-wrap items-center justify-between gap-2 px-1 py-0.5">
+        <div class="min-w-0">
+            <h1 class="text-base font-bold text-slate-900 dark:text-slate-100">@(OrganisationOnly ? "Organisation Schedules" : "Schedule Assignments")</h1>
+            <p class="text-xs text-slate-500 dark:text-slate-400">Assign existing templates to the current organisation, approved structures, or staff groups. Staff overrides take priority, followed by group, nearest structure, and organisation default. Duty schedules are additional.</p>
+        </div>
+    </header>
+
+    @if (error != null)
+    {
+        <div role="alert" class="rounded-xl border border-rose-200 dark:border-rose-800 bg-rose-50/80 dark:bg-rose-950/40 px-3.5 py-2.5 text-xs text-rose-800 dark:text-rose-200">@error</div>
+    }
+
+    @if (data == null)
+    {
+        <div>
+            <button type="button" class="app-button app-button-secondary app-button-sm" disabled="@busy" @onclick="LoadAsync">
+                <AppIcon Name="refresh" Class="text-xs" />
+                <span>Reload Configuration</span>
+            </button>
+        </div>
+    }
     else
     {
-        @if(!OrganisationOnly)
-        {
-        <div class="flex flex-wrap gap-2" role="tablist" aria-label="Schedule assignment scope">
-            @foreach(var item in new[]{"Organisation","Structure","Group"}){<button role="tab" aria-selected="@(scope==item)" class="@(scope==item?"inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors":"inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors")" @onclick="()=>ChangeScope(item)">@item schedules</button>}
-        </div>
-        }
-        @if(scope=="Group"){<label class="block text-sm">Filter group<select @bind="filterGroup" class="mt-1 block rounded border bg-transparent p-2"><option value="">All groups</option>@foreach(var g in data.Groups){<option value="@g.Id">@g.Name</option>}</select></label>}
-        @if(scope=="Structure"){
-            <div class="flex flex-wrap gap-3">
-                <label class="block text-sm">Organisation structure type<select @bind="filterStructureType" @bind:after="StructureTypeChanged" class="mt-1 block rounded border bg-transparent p-2"><option value="">All types</option>@foreach(var type in data.Structures.GroupBy(s=>s.TypeId).Select(g=>g.First()).OrderBy(s=>s.TypeName)){<option value="@type.TypeId">@type.TypeName</option>}</select></label>
-                <label class="block text-sm">Filter structure<select @bind="filterStructure" class="mt-1 block rounded border bg-transparent p-2"><option value="">All approved structures</option>@foreach(var g in FilteredStructures){<option value="@g.Id">@g.Name</option>}</select></label>
-            </div>
-        }
-        <div class="flex flex-wrap gap-3"><button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@busy" @onclick="New">Assign template</button>@if(!OrganisationOnly){<a class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" href="/admin/settings/workplaning/templates">Manage templates</a>}</div>
-        <label class="block text-sm">Status<select @bind="statusFilter" class="mt-1 block rounded border bg-transparent p-2"><option value="All">All statuses</option><option value="Enabled">Enabled</option><option value="Disabled">Disabled</option><option value="Ended">Ended</option></select></label>
-        @if(model!=null)
-        {
-            <fieldset disabled="@busy" class="space-y-4 rounded-xl border p-4">
-                <h2 class="font-semibold">@scope schedule assignment</h2>
-                <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                    @if(scope=="Structure"){<label>Approved structure<select @bind="model.OrganisationStructureId" class="mt-1 block w-full rounded border bg-transparent p-2"><option value="">Select structure</option>@foreach(var s in FilteredStructures){<option value="@s.Id">@s.Name</option>}</select></label>}
-                    @if(scope=="Group"){<label>Staff group<select @bind="model.GroupId" class="mt-1 block w-full rounded border bg-transparent p-2"><option value="">Select group</option>@foreach(var s in data.Groups){<option value="@s.Id">@s.Name</option>}</select></label><label>Group priority (higher wins)<input type="number" min="0" max="9999" @bind="model.Priority" class="mt-1 block w-full rounded border bg-transparent p-2" /></label>}
-                    <label>Purpose<select @bind="model.SchedulePurpose" class="mt-1 block w-full rounded border bg-transparent p-2"><option value="Official">Default official hours</option><option value="Duty">Additional duty</option></select></label>
-                    <label>Template<select @bind="model.WorkTemplateId" class="mt-1 block w-full rounded border bg-transparent p-2"><option value="0">Select template</option>@foreach(var s in data.Templates.Where(t=>t.IsActive)){<option value="@s.Id">@s.Name</option>}</select></label>
-                    <label>Pattern<select @bind="model.ScheduleMode" class="mt-1 block w-full rounded border bg-transparent p-2"><option value="Standard">@(model.SchedulePurpose=="Duty"?"Every day":"Sunday–Thursday")</option><option value="Weekly">Selected weekdays</option><option value="Rotation">Rotating cycle</option></select></label>
-                    <label>Effective from<InputDate @bind-Value="model.EffectiveFrom" class="mt-1 block w-full rounded border bg-transparent p-2" /></label>
-                    <label>Effective to (optional)<InputDate @bind-Value="model.EffectiveTo" class="mt-1 block w-full rounded border bg-transparent p-2" /></label>
-                </div>
-                @if(model.ScheduleMode=="Weekly") {<div class="flex flex-wrap gap-3">@foreach(var day in Enum.GetValues<DayOfWeek>()){var bit=1<<(int)day;<label><input type="checkbox" checked="@((model.WorkingDaysMask&bit)!=0)" @onchange="e=>ToggleDay(bit,e.Value is true)" /> @day</label>}</div>}
-                @if(model.ScheduleMode=="Rotation")
+        <!-- Unified Tabs & Actions Bar: [Organisation schedules, Structure schedules, Group schedules | Assign template, Manage templates] -->
+        <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2 flex flex-wrap items-center justify-between gap-2 text-xs">
+            <div class="flex flex-wrap items-center gap-1" role="tablist" aria-label="Schedule assignment scope">
+                @if (!OrganisationOnly)
                 {
-                    <div class="rounded-lg border border-slate-200 bg-slate-50/70 p-3 space-y-3">
-                        <div class="flex flex-wrap items-end justify-between gap-2">
-                            <label class="block text-xs font-medium text-slate-700">Cycle day 1<InputDate @bind-Value="model.RotationAnchorDate" class="mt-1 block rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm" /></label>
-                            <div class="flex flex-wrap gap-2">
-                                <button type="button" class="inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 transition-colors" @onclick="ApplyWeeklyPreset">Weekly (Sun–Sat)</button>
-                                <button type="button" class="inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-100 border border-slate-300 disabled:opacity-50 transition-colors" disabled="@(rotation.Count>=90)" @onclick="AddCycleDay">+ Add cycle day</button>
+                    @foreach (var item in new[] { "Organisation", "Structure", "Group" })
+                    {
+                        var isActive = scope == item;
+                        <button type="button"
+                                role="tab"
+                                aria-selected="@isActive"
+                                class="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors whitespace-nowrap @(isActive ? "bg-teal-50 dark:bg-teal-950/50 text-teal-800 dark:text-teal-300 border border-teal-200 dark:border-teal-800" : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 border border-transparent")"
+                                @onclick="() => ChangeScope(item)">
+                            @item schedules
+                        </button>
+                    }
+                }
+            </div>
+
+            <div class="flex flex-wrap items-center gap-1.5">
+                <button type="button"
+                        class="app-button app-button-primary app-button-sm"
+                        disabled="@busy"
+                        @onclick="New">
+                    <AppIcon Name="add" Class="text-xs" />
+                    <span>Assign template</span>
+                </button>
+                @if (!OrganisationOnly)
+                {
+                    <a class="app-button app-button-secondary app-button-sm" href="/admin/settings/workplaning/templates">
+                        <span>Manage templates</span>
+                    </a>
+                }
+            </div>
+        </div>
+
+        <!-- Compact Horizontal Filter Panel -->
+        <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3.5 py-2.5 flex flex-wrap items-end gap-3 text-xs">
+            @if (scope == "Group")
+            {
+                <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 min-w-[180px]">
+                    Filter group
+                    <select @bind="filterGroup" class="mt-1 block w-full h-8 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 text-xs text-slate-800 dark:text-slate-100 focus:border-teal-600 focus:outline-none">
+                        <option value="">All groups</option>
+                        @foreach (var g in data.Groups) { <option value="@g.Id">@g.Name</option> }
+                    </select>
+                </label>
+            }
+            @if (scope == "Structure")
+            {
+                <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 min-w-[180px]">
+                    Organisation structure type
+                    <select @bind="filterStructureType" @bind:after="StructureTypeChanged" class="mt-1 block w-full h-8 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 text-xs text-slate-800 dark:text-slate-100 focus:border-teal-600 focus:outline-none">
+                        <option value="">All types</option>
+                        @foreach (var type in data.Structures.GroupBy(s => s.TypeId).Select(g => g.First()).OrderBy(s => s.TypeName)) { <option value="@type.TypeId">@type.TypeName</option> }
+                    </select>
+                </label>
+                <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 min-w-[200px]">
+                    Filter structure
+                    <select @bind="filterStructure" class="mt-1 block w-full h-8 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 text-xs text-slate-800 dark:text-slate-100 focus:border-teal-600 focus:outline-none">
+                        <option value="">All approved structures</option>
+                        @foreach (var g in FilteredStructures) { <option value="@g.Id">@g.Name</option> }
+                    </select>
+                </label>
+            }
+            <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 min-w-[150px]">
+                Status
+                <select @bind="statusFilter" class="mt-1 block w-full h-8 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 text-xs text-slate-800 dark:text-slate-100 focus:border-teal-600 focus:outline-none">
+                    <option value="All">All statuses</option>
+                    <option value="Enabled">Enabled</option>
+                    <option value="Disabled">Disabled</option>
+                    <option value="Ended">Ended</option>
+                </select>
+            </label>
+        </div>
+
+        @if (model != null)
+        {
+            <fieldset disabled="@busy" class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden">
+                <div class="bg-slate-50/80 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 px-3.5 py-2.5">
+                    <h2 class="text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-200">@scope Schedule Assignment</h2>
+                </div>
+                <div class="p-3.5 space-y-3.5">
+                    <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 text-xs">
+                        @if (scope == "Structure") { <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">Approved structure<select @bind="model.OrganisationStructureId" class="mt-1 block w-full h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 text-xs"><option value="">Select structure</option>@foreach (var s in FilteredStructures) { <option value="@s.Id">@s.Name</option> }</select></label> }
+                        @if (scope == "Group") { <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">Staff group<select @bind="model.GroupId" class="mt-1 block w-full h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 text-xs"><option value="">Select group</option>@foreach (var s in data.Groups) { <option value="@s.Id">@s.Name</option> }</select></label><label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">Group priority (higher wins)<input type="number" min="0" max="9999" @bind="model.Priority" class="mt-1 block w-full h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 text-xs" /></label> }
+                        <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">Purpose<select @bind="model.SchedulePurpose" class="mt-1 block w-full h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 text-xs"><option value="Official">Default official hours</option><option value="Duty">Additional duty</option></select></label>
+                        <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">Template<select @bind="model.WorkTemplateId" class="mt-1 block w-full h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 text-xs"><option value="0">Select template</option>@foreach (var s in data.Templates.Where(t => t.IsActive)) { <option value="@s.Id">@s.Name</option> }</select></label>
+                        <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">Pattern<select @bind="model.ScheduleMode" class="mt-1 block w-full h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 text-xs"><option value="Standard">@(model.SchedulePurpose == "Duty" ? "Every day" : "Sunday–Thursday")</option><option value="Weekly">Selected weekdays</option><option value="Rotation">Rotating cycle</option></select></label>
+                        <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">Effective from<InputDate @bind-Value="model.EffectiveFrom" class="mt-1 block w-full h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 text-xs" /></label>
+                        <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">Effective to (optional)<InputDate @bind-Value="model.EffectiveTo" class="mt-1 block w-full h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 text-xs" /></label>
+                    </div>
+                    @if (model.ScheduleMode == "Weekly") { <div class="flex flex-wrap gap-3 text-xs">@foreach (var day in Enum.GetValues<DayOfWeek>()) { var bit = 1 << (int)day; <label class="inline-flex items-center gap-1.5"><input type="checkbox" checked="@((model.WorkingDaysMask & bit) != 0)" @onchange="e => ToggleDay(bit, e.Value is true)" /> @day</label> }</div> }
+                    @if (model.ScheduleMode == "Rotation")
+                    {
+                        <div class="rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 p-3 space-y-3">
+                            <div class="flex flex-wrap items-end justify-between gap-2">
+                                <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">Cycle day 1<InputDate @bind-Value="model.RotationAnchorDate" class="mt-1 block h-8 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 text-xs" /></label>
+                                <div class="flex flex-wrap gap-1.5">
+                                    <button type="button" class="app-button app-button-secondary app-button-sm" @onclick="ApplyWeeklyPreset">Weekly (Sun–Sat)</button>
+                                    <button type="button" class="app-button app-button-secondary app-button-sm" disabled="@(rotation.Count >= 90)" @onclick="AddCycleDay">+ Add cycle day</button>
+                                </div>
+                            </div>
+                            <p class="text-[11px] text-slate-500">Assign a shift template per cycle day (or Rest day) and optionally set custom shift times/labels (e.g. Sun Morning 10:00–12:00, Tue Evening 14:00–16:00).</p>
+                            <div class="space-y-2">
+                                @for (var i = 0; i < rotation.Count; i++)
+                                {
+                                    var index = i;
+                                    var slot = rotation[index];
+                                    var dayLabel = model.RotationAnchorDate.HasValue ? model.RotationAnchorDate.Value.AddDays(index).ToString("ddd") : $"D{index + 1}";
+                                    <div class="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-2.5 space-y-2">
+                                        <div class="flex flex-wrap items-center gap-2">
+                                            <span class="inline-flex min-w-[5.25rem] items-center justify-center rounded-md bg-slate-100 dark:bg-slate-800 px-2 py-1 text-xs font-semibold text-slate-700 dark:text-slate-300">Day @(index + 1) · @dayLabel</span>
+                                            <select @bind="slot.TemplateId" class="flex-1 min-w-[11rem] h-8 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2 text-xs"><option value="0">Rest day (Off)</option>@foreach (var t in data.Templates.Where(t => t.IsActive)) { <option value="@t.Id">@t.Name</option> }</select>
+                                            <button type="button" class="app-button app-button-secondary app-button-sm" disabled="@(rotation.Count <= 1)" @onclick="() => rotation.RemoveAt(index)">Remove</button>
+                                        </div>
+                                        @if (slot.TemplateId > 0)
+                                        {
+                                            <div class="grid grid-cols-1 gap-2 sm:grid-cols-3 pt-1.5 border-t border-slate-100 dark:border-slate-800">
+                                                <label class="text-[11px] font-medium text-slate-600 dark:text-slate-400">Shift label<input type="text" maxlength="40" placeholder="e.g. Morning, Evening" class="mt-0.5 w-full h-8 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2 text-xs" @bind="slot.Label" /></label>
+                                                <label class="text-[11px] font-medium text-slate-600 dark:text-slate-400">Start override<input type="time" class="mt-0.5 w-full h-8 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2 text-xs" value="@slot.StartText" @onchange="e => slot.StartText = e.Value?.ToString() ?? string.Empty" /></label>
+                                                <label class="text-[11px] font-medium text-slate-600 dark:text-slate-400">End override<input type="time" class="mt-0.5 w-full h-8 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2 text-xs" value="@slot.EndText" @onchange="e => slot.EndText = e.Value?.ToString() ?? string.Empty" /></label>
+                                            </div>
+                                        }
+                                    </div>
+                                }
                             </div>
                         </div>
-                        <p class="text-xs text-slate-500">Assign a shift template per cycle day (or Rest day) and optionally set custom shift times/labels (e.g. Sun Morning 10:00–12:00, Tue Evening 14:00–16:00).</p>
-                        <div class="space-y-2">
-                            @for(var i=0;i<rotation.Count;i++)
-                            {
-                                var index=i;
-                                var slot=rotation[index];
-                                var dayLabel=model.RotationAnchorDate.HasValue?model.RotationAnchorDate.Value.AddDays(index).ToString("ddd"):$"D{index+1}";
-                                <div class="rounded-lg border border-slate-200 bg-white p-2.5 space-y-2">
-                                    <div class="flex flex-wrap items-center gap-2">
-                                        <span class="inline-flex min-w-[5.25rem] items-center justify-center rounded-md bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700">Day @(index+1) · @dayLabel</span>
-                                        <select @bind="slot.TemplateId" class="flex-1 min-w-[11rem] rounded-md border border-slate-300 bg-white px-2 py-1.5 text-xs"><option value="0">Rest day (Off)</option>@foreach(var t in data.Templates.Where(t=>t.IsActive)){<option value="@t.Id">@t.Name</option>}</select>
-                                        <button type="button" class="inline-flex items-center justify-center rounded-md px-2.5 py-1.5 text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 transition-colors" disabled="@(rotation.Count<=1)" @onclick="()=>rotation.RemoveAt(index)">Remove</button>
-                                    </div>
-                                    @if(slot.TemplateId>0)
-                                    {
-                                        <div class="grid grid-cols-1 gap-2 sm:grid-cols-3 pt-1 border-t border-slate-100">
-                                            <label class="text-[11px] font-medium text-slate-600">Shift label<input type="text" maxlength="40" placeholder="e.g. Morning, Evening" class="mt-0.5 w-full rounded-md border border-slate-300 px-2 py-1 text-xs" @bind="slot.Label" /></label>
-                                            <label class="text-[11px] font-medium text-slate-600">Start override<input type="time" class="mt-0.5 w-full rounded-md border border-slate-300 px-2 py-1 text-xs" value="@slot.StartText" @onchange="e=>slot.StartText=e.Value?.ToString()??string.Empty" /></label>
-                                            <label class="text-[11px] font-medium text-slate-600">End override<input type="time" class="mt-0.5 w-full rounded-md border border-slate-300 px-2 py-1 text-xs" value="@slot.EndText" @onchange="e=>slot.EndText=e.Value?.ToString()??string.Empty" /></label>
-                                        </div>
-                                    }
-                                </div>
-                            }
-                        </div>
+                    }
+                    <p class="text-[11px] text-slate-500 dark:text-slate-400">Hours and clock events come from the template. Duty needs default official hours for every affected staff member and duty date. Edits apply from the selected date; earlier settings remain in history. Existing punches and finalized plans are preserved.</p>
+                    <div class="flex flex-wrap gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+                        <button type="button" class="app-button app-button-primary app-button-sm" @onclick="SaveAsync">Save Assignment</button>
+                        <button type="button" class="app-button app-button-secondary app-button-sm" @onclick="() => model = null">Close</button>
                     </div>
-                }
-                <p class="text-xs text-slate-500">Hours and clock events come from the template. Duty needs default official hours for every affected staff member and duty date. Edits apply from the selected date; earlier settings remain in history. Existing punches and finalized plans are preserved.</p>
-                <div class="flex flex-wrap gap-2"><button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" @onclick="SaveAsync">Save assignment</button><button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" @onclick="()=>model=null">Close</button></div>
+                </div>
             </fieldset>
         }
-        @if(ending!=null)
+
+        @if (ending != null)
         {
-            <fieldset disabled="@busy" class="space-y-3 rounded-xl border p-4"><h2 class="font-semibold">End schedule assignment</h2><label>Last scheduled day<InputDate @bind-Value="lastDay" class="mt-1 block rounded border bg-transparent p-2" /></label><p class="text-xs text-slate-500">Use yesterday to stop from today. Ending a future assignment before it starts withdraws it. Lower-priority default hours resume automatically.</p><div class="flex gap-2"><button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" @onclick="EndAsync">End assignment</button><button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" @onclick="()=>ending=null">Close</button></div></fieldset>
+            <fieldset disabled="@busy" class="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50/60 dark:bg-amber-950/30 p-3.5 space-y-2.5 text-xs">
+                <h2 class="text-[11px] font-bold uppercase tracking-wider text-amber-900 dark:text-amber-200">End Schedule Assignment</h2>
+                <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">Last scheduled day<InputDate @bind-Value="lastDay" class="mt-1 block h-8 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 text-xs" /></label>
+                <p class="text-[11px] text-slate-600 dark:text-slate-400">Use yesterday to stop from today. Ending a future assignment before it starts withdraws it. Lower-priority default hours resume automatically.</p>
+                <div class="flex gap-2">
+                    <button type="button" class="app-button app-button-primary app-button-sm" @onclick="EndAsync">End Assignment</button>
+                    <button type="button" class="app-button app-button-secondary app-button-sm" @onclick="() => ending = null">Close</button>
+                </div>
+            </fieldset>
         }
-        <div class="overflow-x-auto rounded-lg border"><table class="w-full text-left text-sm"><thead><tr><th class="p-3">Scope</th><th class="p-3">Schedule</th><th class="p-3">Pattern / period</th><th class="p-3">Status</th><th class="p-3">Actions</th></tr></thead><tbody>
-            @foreach(var row in Rows)
-            {
-                <tr class="border-t"><td class="p-3">@Target(row)@if(row.GroupId.HasValue){<p class="text-xs text-slate-500">Priority @row.Priority</p>}</td><td class="p-3">@(row.SchedulePurpose=="Official"?"Default official hours":"Duty")<p class="mt-1 text-xs text-slate-500">@data.Templates.FirstOrDefault(t=>t.Id==row.WorkTemplateId)?.Name</p></td><td class="p-3">@row.ScheduleMode<p class="mt-1 text-xs text-slate-500">@row.EffectiveFrom.ToString("dd MMM yyyy")–@(row.EffectiveTo?.ToString("dd MMM yyyy")??"Ongoing")</p></td><td class="p-3">@(!row.IsActive?"Disabled":row.EffectiveTo<Today?"Ended":row.EffectiveFrom>Today?"Enabled · Scheduled":"Enabled")</td><td class="p-3"><div class="flex flex-wrap gap-2"><button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@(busy || row.EffectiveTo<Today)" @onclick="()=>Edit(row)">Edit</button><button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@(busy || !row.IsActive || row.EffectiveTo<Today)" @onclick="()=>BeginEnd(row)">End</button><button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@(busy || row.EffectiveTo<Today)" @onclick="()=>ToggleEnabledAsync(row)">@(row.IsActive?"Disable":"Enable")</button><button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@busy" @onclick="()=>OpenAssignStaff(row)">Assign Staff</button></div></td></tr>
-            }
-            @if(!Rows.Any()){<tr><td colspan="5" class="p-3 text-slate-500">No @scope.ToLowerInvariant() schedule assignments.</td></tr>}
-        </tbody></table></div>
+
+        <div class="overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-xs">
+                    <thead>
+                        <tr class="bg-slate-50/80 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 text-[10px] font-bold uppercase tracking-wider">
+                            <th class="px-3.5 py-2.5">Scope</th>
+                            <th class="px-3.5 py-2.5">Schedule</th>
+                            <th class="px-3.5 py-2.5">Pattern / Period</th>
+                            <th class="px-3.5 py-2.5">Status</th>
+                            <th class="px-3.5 py-2.5">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100 dark:divide-slate-800/70">
+                        @foreach (var row in Rows)
+                        {
+                            var statusText = !row.IsActive ? "Disabled" : row.EffectiveTo < Today ? "Ended" : row.EffectiveFrom > Today ? "Enabled · Scheduled" : "Enabled";
+                            var statusClass = !row.IsActive || row.EffectiveTo < Today
+                                ? "bg-slate-100 text-slate-600 border border-slate-200"
+                                : row.EffectiveFrom > Today
+                                    ? "bg-blue-50 text-blue-700 border border-blue-200"
+                                    : "bg-emerald-50 text-emerald-700 border border-emerald-200";
+                            <tr class="even:bg-slate-50/40 dark:even:bg-slate-800/20 hover:bg-teal-50/30 dark:hover:bg-slate-800/40 transition-colors">
+                                <td class="px-3.5 py-2.5">
+                                    <span class="font-semibold text-slate-900 dark:text-slate-100">@Target(row)</span>
+                                    @if (row.GroupId.HasValue) { <p class="text-[11px] text-slate-500">Priority @row.Priority</p> }
+                                </td>
+                                <td class="px-3.5 py-2.5">
+                                    <span class="font-medium text-slate-800 dark:text-slate-200">@(row.SchedulePurpose == "Official" ? "Default official hours" : "Duty")</span>
+                                    <p class="mt-0.5 text-[11px] text-slate-500">@data.Templates.FirstOrDefault(t => t.Id == row.WorkTemplateId)?.Name</p>
+                                </td>
+                                <td class="px-3.5 py-2.5">
+                                    <span class="font-medium text-slate-800 dark:text-slate-200">@row.ScheduleMode</span>
+                                    <p class="mt-0.5 font-mono text-[11px] text-slate-500">@row.EffectiveFrom.ToString("dd MMM yyyy") – @(row.EffectiveTo?.ToString("dd MMM yyyy") ?? "Ongoing")</p>
+                                </td>
+                                <td class="px-3.5 py-2.5">
+                                    <span class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold @statusClass">@statusText</span>
+                                </td>
+                                <td class="px-3.5 py-2.5">
+                                    <div class="flex flex-wrap gap-1.5">
+                                        <button type="button" class="app-button app-button-secondary app-button-sm" disabled="@(busy || row.EffectiveTo < Today)" @onclick="() => Edit(row)">Edit</button>
+                                        <button type="button" class="app-button app-button-secondary app-button-sm" disabled="@(busy || !row.IsActive || row.EffectiveTo < Today)" @onclick="() => BeginEnd(row)">End</button>
+                                        <button type="button" class="app-button app-button-secondary app-button-sm" disabled="@(busy || row.EffectiveTo < Today)" @onclick="() => ToggleEnabledAsync(row)">@(row.IsActive ? "Disable" : "Enable")</button>
+                                        <button type="button" class="app-button app-button-primary app-button-sm" disabled="@busy" @onclick="() => OpenAssignStaff(row)">Assign Staff</button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                        @if (!Rows.Any())
+                        {
+                            <tr><td colspan="5" class="p-6 text-center text-xs text-slate-500">No @scope.ToLowerInvariant() schedule assignments.</td></tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
     }
     @if (showAssignStaffPanel && data != null)
     {

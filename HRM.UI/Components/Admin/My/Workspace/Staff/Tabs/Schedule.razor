@@ -11,48 +11,80 @@
 @inject HRM.WorkPlanning.Abstractions.IManualWorkAssignmentService ManualAssignments
 
 
-<div class="w-full p-2 flex flex-col gap-2">
+<section class="w-full min-w-0 flex flex-col gap-3 text-slate-900 dark:text-slate-100" aria-label="Staff schedule">
+    <!-- Compact Header (no background/border) -->
+    <header class="flex flex-wrap items-center justify-between gap-2 px-1 py-0.5">
+        <div class="min-w-0">
+            <div class="flex items-center gap-2 flex-wrap">
+                <h3 class="text-base font-bold text-slate-900 dark:text-slate-100">Work Schedule &amp; Duty Assignments</h3>
+                <span class="inline-flex items-center gap-1 rounded-full bg-teal-50 dark:bg-teal-950/60 border border-teal-200/80 dark:border-teal-800 px-2 py-0.5 text-[10px] font-semibold text-teal-700 dark:text-teal-300">
+                    <span class="h-1.5 w-1.5 rounded-full bg-teal-500"></span>
+                    Schedule
+                </span>
+            </div>
+            <p class="text-xs text-slate-500 dark:text-slate-400">Official working schedule, duty templates, and one-off manual duty assignments.</p>
+        </div>
+        <div class="flex flex-wrap items-center gap-1.5">
+            <button type="button" class="app-button app-button-secondary app-button-sm" disabled="@isLoading" @onclick="LoadScheduleAsync">
+                <AppIcon Name="refresh" Class="@(isLoading ? "animate-spin text-xs" : "text-xs")" />
+                <span>Refresh</span>
+            </button>
+        </div>
+    </header>
 
     @if (isLoading)
     {
-        <div class="rounded-xl border border-slate-200 bg-white p-2 text-center">
-            <p class="text-sm text-slate-500">
-                Loading staff schedule...
-            </p>
+        <div role="status" class="flex items-center justify-center gap-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-8 text-xs text-slate-500">
+            <span class="h-4 w-4 rounded-full border-2 border-blue-600 border-t-transparent animate-spin"></span>
+            <span>Loading staff schedule…</span>
         </div>
     }
     else if (!string.IsNullOrWhiteSpace(errorMessage))
     {
-        <div class="rounded-xl border border-amber-200 bg-amber-50 p-2">
-
-            <h3 class="font-semibold text-amber-800">
-                Schedule unavailable
-            </h3>
-
-            <p class="mt-1 text-sm text-amber-700">
-                @errorMessage
-            </p>
-
+        <div role="alert" class="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50/80 dark:bg-amber-950/40 px-3.5 py-3 text-xs text-amber-800 dark:text-amber-200">
+            <h4 class="font-bold">Schedule unavailable</h4>
+            <p class="mt-0.5">@errorMessage</p>
         </div>
     }
     else if (schedule is not null)
     {
         <CurrentScheduleSummary Schedule="@schedule" />
+
         @if ((IsManualAssignmentDetailsOpen || IsManualAssignmentRemovalOpen) && selectedManualAssignment is { } selected)
         {
-            <section class="rounded-2xl border border-slate-200 bg-white p-2 shadow-xs dark:border-slate-800 dark:bg-slate-900">
-                <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 p-2 dark:border-slate-800"><div><h3 class="text-sm font-bold text-slate-900 dark:text-slate-100">@(IsManualAssignmentRemovalOpen ? "Remove duty assignment" : "Duty assignment details")</h3><p class="text-[11px] text-slate-500">@selected.AssignmentName · @selected.WorkTemplateName</p></div><button class="app-button app-button-ghost app-button-sm" disabled="@cancelling" @onclick="ClosePanel">Close</button></div>
-                <div class="grid gap-2 p-2 text-xs sm:grid-cols-2"><p><span class="font-semibold">Period:</span> @selected.StartDateTime.ToString("dd MMM yyyy HH:mm")–@selected.EndDateTime.ToString("dd MMM yyyy HH:mm")</p><p><span class="font-semibold">Attendance:</span> @(selected.RequiresAttendance ? "Required" : "Optional") · @(selected.RequiresCheckout ? "Checkout required" : "No checkout")</p>@if (!string.IsNullOrWhiteSpace(selected.Description)) { <p class="sm:col-span-2 text-slate-600 dark:text-slate-300">@selected.Description</p> }</div>
+            <section class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden">
+                <div class="bg-slate-50/80 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 px-3.5 py-2.5 flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                        <h3 class="text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-200">@(IsManualAssignmentRemovalOpen ? "Remove Duty Assignment" : "Duty Assignment Details")</h3>
+                        <p class="text-[11px] text-slate-500 dark:text-slate-400">@selected.AssignmentName · @selected.WorkTemplateName</p>
+                    </div>
+                    <button type="button" class="app-button app-button-secondary app-button-sm" disabled="@cancelling" @onclick="ClosePanel">Close</button>
+                </div>
+                <div class="grid gap-2 p-3.5 text-xs sm:grid-cols-2">
+                    <p><span class="font-semibold text-slate-700 dark:text-slate-300">Period:</span> <span class="font-mono">@selected.StartDateTime.ToString("dd MMM yyyy HH:mm") – @selected.EndDateTime.ToString("dd MMM yyyy HH:mm")</span></p>
+                    <p><span class="font-semibold text-slate-700 dark:text-slate-300">Attendance:</span> @(selected.RequiresAttendance ? "Required" : "Optional") · @(selected.RequiresCheckout ? "Checkout required" : "No checkout")</p>
+                    @if (!string.IsNullOrWhiteSpace(selected.Description)) { <p class="sm:col-span-2 text-slate-600 dark:text-slate-300">@selected.Description</p> }
+                </div>
                 @if (IsManualAssignmentRemovalOpen)
                 {
-                    <div class="flex flex-col gap-2 border-t border-slate-100 p-2 dark:border-slate-800"><label class="block text-xs font-medium text-slate-700 dark:text-slate-300">Reason for removing this duty<textarea class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs dark:border-slate-700 dark:bg-slate-800" maxlength="500" disabled="@cancelling" @bind="cancelReason"></textarea></label><div><button class="app-button app-button-danger app-button-sm" disabled="@(cancelling || !canManageSchedules || string.IsNullOrWhiteSpace(cancelReason))" @onclick="CancelManualAsync">@(cancelling ? "Removing..." : "Remove duty")</button></div></div>
+                    <div class="flex flex-col gap-2.5 border-t border-slate-200 dark:border-slate-800 bg-rose-50/40 dark:bg-rose-950/20 p-3.5">
+                        <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">Reason for removing this duty
+                            <textarea class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 p-2 text-xs focus:border-teal-600 focus:outline-none" maxlength="500" rows="2" disabled="@cancelling" @bind="cancelReason"></textarea>
+                        </label>
+                        <div>
+                            <button type="button" class="inline-flex items-center rounded-lg border border-rose-300 dark:border-rose-700 bg-rose-50 hover:bg-rose-100 px-3 py-1.5 text-xs font-semibold text-rose-700 dark:text-rose-300 disabled:opacity-50 transition-colors" disabled="@(cancelling || !canManageSchedules || string.IsNullOrWhiteSpace(cancelReason))" @onclick="CancelManualAsync">@(cancelling ? "Removing…" : "Remove Duty")</button>
+                        </div>
+                    </div>
                 }
             </section>
         }
-        @if (!canManageSchedules) { <p class="rounded-xl border border-slate-200 bg-slate-50 p-2 text-xs text-slate-600 dark:border-slate-800 dark:bg-slate-800/40 dark:text-slate-300">Viewing only. Contact HR to change schedules.</p> }
 
-        <div class="grid grid-cols-1 gap-2 xl:grid-cols-2">
+        @if (!canManageSchedules)
+        {
+            <p class="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900 px-3.5 py-2 text-xs text-slate-600 dark:text-slate-300">Viewing only. Contact HR to change schedules.</p>
+        }
 
+        <div class="schedule-cards-grid">
             <AssignTemplateDrawer IsOpen="@IsTemplateDrawerOpen"
                                   IsOpenChanged="@HandleTemplateDrawerVisibilityChanged"
                                   StaffId="@schedule.IndividualId"
@@ -72,51 +104,61 @@
                                     Assignment="@selectedManualAssignment"
                                     IsEditing="@(activePanel == SchedulePanel.EditManualAssignment)"
                                     OnSaved="@HandleManualAssignmentSavedAsync" />
-
         </div>
 
-
-        <div class="grid grid-cols-1 gap-2 xl:grid-cols-2">
-        @foreach (var purpose in new[] { "Official", "Duty" })
-        {
-        <TemplateAssignmentCard StaffId="@schedule.IndividualId"
-                                SchedulePurpose="@purpose"
-                                JobId="@schedule.JobId"
-                                OrganisationBusinessEntityId="@schedule.OrganisationBusinessEntityId"
-                                CurrentAssignment="@schedule.CurrentTemplates.FirstOrDefault(x => x.SchedulePurpose == purpose)"
-                                CurrentAssignments="@schedule.CurrentTemplates.Where(x => x.SchedulePurpose == purpose).ToList()"
-                                HasDefaultOfficialSchedule="@(schedule.CurrentTemplates.Any(x=>x.SchedulePurpose=="Official") || schedule.TemplateHistory.Any(x => x.SchedulePurpose == "Official" && x.IsActive && (!x.EffectiveTo.HasValue || x.EffectiveTo.Value.Date >= DateTime.UtcNow.AddHours(5).Date)))"
-                                History="@schedule.TemplateHistory.Where(x => x.SchedulePurpose == purpose).ToList()"
-                                IsDisabled="@(!schedule.HasActiveJob || !canManageSchedules)"
-                                OnAssignRequested="@(() => OpenTemplateAssignmentForPurposeAsync(purpose))"
-                                OnChanged="@HandleScheduleChangedAsync" />
-        }
+        <div class="schedule-cards-grid">
+            @foreach (var purpose in new[] { "Official", "Duty" })
+            {
+                <TemplateAssignmentCard StaffId="@schedule.IndividualId"
+                                        SchedulePurpose="@purpose"
+                                        JobId="@schedule.JobId"
+                                        OrganisationBusinessEntityId="@schedule.OrganisationBusinessEntityId"
+                                        CurrentAssignment="@schedule.CurrentTemplates.FirstOrDefault(x => x.SchedulePurpose == purpose)"
+                                        CurrentAssignments="@schedule.CurrentTemplates.Where(x => x.SchedulePurpose == purpose).ToList()"
+                                        HasDefaultOfficialSchedule="@(schedule.CurrentTemplates.Any(x => x.SchedulePurpose == "Official") || schedule.TemplateHistory.Any(x => x.SchedulePurpose == "Official" && x.IsActive && (!x.EffectiveTo.HasValue || x.EffectiveTo.Value.Date >= DateTime.UtcNow.AddHours(5).Date)))"
+                                        History="@schedule.TemplateHistory.Where(x => x.SchedulePurpose == purpose).ToList()"
+                                        IsDisabled="@(!schedule.HasActiveJob || !canManageSchedules)"
+                                        OnAssignRequested="@(() => OpenTemplateAssignmentForPurposeAsync(purpose))"
+                                        OnChanged="@HandleScheduleChangedAsync" />
+            }
         </div>
 
-        <details class="rounded-2xl border border-slate-200 bg-white p-2 dark:border-slate-800 dark:bg-slate-900">
-        <summary class="cursor-pointer p-2 text-sm font-semibold text-slate-800 dark:text-slate-100">Duty exceptions and one-off assignments</summary>
-        <div class="p-2">
-        <ManualAssignmentCard StaffId="@schedule.IndividualId"
-                              JobId="@schedule.JobId"
-                              OrganisationBusinessEntityId="@schedule.OrganisationBusinessEntityId"
-                              Assignments="@schedule.ManualAssignments"
-                              CurrentTemplate="@schedule.CurrentTemplate"
-                              IsDisabled="@(!schedule.HasActiveJob || !canManageSchedules)"
-                              OnAssignTemplateRequested="@OpenTemplateAssignmentDrawerAsync"
-                              OnAssignRequested="@OpenManualAssignmentDrawerAsync"
-                              OnViewRequested="@OpenManualAssignmentDetailsAsync"
-                              OnEditRequested="@OpenManualAssignmentEditAsync"
-                              OnRemoveRequested="@OpenManualAssignmentRemovalAsync"
-                              OnChanged="@HandleScheduleChangedAsync" />
-        </div>
+        <details class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden">
+            <summary class="cursor-pointer bg-slate-50/80 dark:bg-slate-800/60 px-3.5 py-2.5 text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-200 select-none">
+                Duty Exceptions &amp; One-Off Assignments (@schedule.ManualAssignments.Count)
+            </summary>
+            <div class="p-3 border-t border-slate-200 dark:border-slate-800">
+                <ManualAssignmentCard StaffId="@schedule.IndividualId"
+                                      JobId="@schedule.JobId"
+                                      OrganisationBusinessEntityId="@schedule.OrganisationBusinessEntityId"
+                                      Assignments="@schedule.ManualAssignments"
+                                      CurrentTemplate="@schedule.CurrentTemplate"
+                                      IsDisabled="@(!schedule.HasActiveJob || !canManageSchedules)"
+                                      OnAssignTemplateRequested="@OpenTemplateAssignmentDrawerAsync"
+                                      OnAssignRequested="@OpenManualAssignmentDrawerAsync"
+                                      OnViewRequested="@OpenManualAssignmentDetailsAsync"
+                                      OnEditRequested="@OpenManualAssignmentEditAsync"
+                                      OnRemoveRequested="@OpenManualAssignmentRemovalAsync"
+                                      OnChanged="@HandleScheduleChangedAsync" />
+            </div>
         </details>
+    }
+</section>
 
-
-
-
+<style>
+    .schedule-cards-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 0.75rem;
+        align-items: start;
     }
 
-</div>
+    @@media (min-width: 1024px) {
+        .schedule-cards-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+</style>
 
 @code {
     [Parameter]

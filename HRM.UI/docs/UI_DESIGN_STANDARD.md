@@ -33,20 +33,38 @@ All primary page containers and root feature section components must include sta
 
 ## 3. Header Layout & Requirements
 
-- **Position & Sticky Behavior**:
-  - Full-width sticky header (`sticky top-0 z-30`).
-  - Occupies 100% of the available width regardless of whether content is standard width or full width.
-  - Border: `border-b border-slate-200 bg-white/95 backdrop-blur-xs px-3 py-3 shadow-xs`.
-  - Margins / Padding: `m-0` with no extraneous outer top/left offsets.
+- **Compact, Transparent, Borderless Header**:
+  - Page and section headers must be **compact** with **no background fill, no border, no box shadow, and no card wrapper**.
+  - Layout: `flex flex-wrap items-center justify-between gap-2 px-1 py-0.5` (transparent directly on the page canvas).
+  - Do not add a redundant `← Back` link inside standard module headers.
 - **Header Elements**:
-  - Title: `text-lg font-bold text-slate-900`.
-  - Subtitle / Description: `text-xs text-slate-500 mt-0.5`.
-  - Category / Mode Badges: rounded pill badges (`rounded-full px-2.5 py-0.5 text-xs font-semibold`).
-  - Actions Container: `flex flex-wrap items-center gap-2`.
-  - Header actions include:
-    - **Full Width / Shrink View** toggle button.
-    - Secondary actions (Refresh `↻`, Print / Report notes, Export).
-    - Primary action (e.g. `+ New Request` with `bg-blue-600 text-white hover:bg-blue-700`).
+  - Title: `text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 truncate`.
+  - Context / Status Badge (inline beside title): compact pill (`inline-flex items-center gap-1 rounded-full bg-teal-50 dark:bg-teal-950/60 border border-teal-200/80 dark:border-teal-800 px-2 py-0.5 text-[10px] font-semibold text-teal-700 dark:text-teal-300`) with a `h-1.5 w-1.5 rounded-full` status dot.
+  - Subtitle / Description: `text-xs text-slate-500 dark:text-slate-400`.
+  - Actions Container: `flex flex-wrap items-center gap-1.5` using compact `app-button-sm` controls:
+    - **Full Width / Shrink View** toggle (`app-button app-button-neutral app-button-sm` with `fullscreen` / `fullscreen_exit` icon).
+    - Secondary actions (`app-button app-button-secondary app-button-sm`: Refresh, Print / Report, Export).
+    - Primary action (`app-button app-button-primary app-button-sm`: cobalt blue `#2563eb`).
+- **Canonical Header Snippet**:
+  ```html
+  <header class="flex flex-wrap items-center justify-between gap-2 px-1 py-0.5">
+      <div class="min-w-0">
+          <div class="flex items-center gap-2 flex-wrap">
+              <h1 class="text-lg font-bold text-slate-900 dark:text-slate-100 truncate">Page Title</h1>
+              <span class="inline-flex items-center gap-1 rounded-full bg-teal-50 dark:bg-teal-950/60 border border-teal-200/80 dark:border-teal-800 px-2 py-0.5 text-[10px] font-semibold text-teal-700 dark:text-teal-300">
+                  <span class="h-1.5 w-1.5 rounded-full bg-teal-500"></span>
+                  Context
+              </span>
+          </div>
+          <p class="text-xs text-slate-500 dark:text-slate-400">Concise one-line description.</p>
+      </div>
+      <div class="flex flex-wrap items-center gap-1.5">
+          <button type="button" class="app-button app-button-neutral app-button-sm">Full Width</button>
+          <button type="button" class="app-button app-button-secondary app-button-sm">Refresh</button>
+          <button type="button" class="app-button app-button-primary app-button-sm">New Item</button>
+      </div>
+  </header>
+  ```
 
 ---
 

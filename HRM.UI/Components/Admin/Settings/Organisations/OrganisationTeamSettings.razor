@@ -6,155 +6,491 @@
 @inject HRM.Services.Interfaces.IUserAccessService Access
 @inject HRM.Services.Contracts.SupervisorChangeRequestServiceContracts.IOperations SupervisorRequests
 
-<section class="space-y-5 rounded-xl border border-slate-200 bg-white p-5">
-    <div><h2 class="text-xl font-semibold">Supervisors Management</h2><p class="mt-1 text-sm text-slate-500">Assign supervisors for organisation teams and departments.</p></div>
-    @if (message != null) { <p role="status" class="rounded border p-3 text-sm">@message</p> }
-    @if (ShowOrganisationSelector && isSuperAdministrator)
+<section class="flex flex-col gap-3 min-w-0 text-slate-900 dark:text-slate-100">
+    @if (ShowHeading)
     {
-        <div class="max-w-xl">
-            <HRM.Components.Shared.SearchableSelect Label="Organisation" Placeholder="Select an organisation" Disabled="@busy" CanClear="false"
-                Options="@organisations.Select(o=>new HRM.Components.Shared.SearchableSelect.Option(o.Id,o.Name))"
-                @bind-Value="organisationId" @bind-Value:after="ChangeOrganisationAsync" />
+        <div class="flex flex-wrap items-center justify-between gap-2 px-1">
+            <div>
+                <h2 class="text-base font-bold text-slate-900 dark:text-slate-100">Supervisors Management</h2>
+                <p class="text-xs text-slate-500 dark:text-slate-400">Assign supervisors for organisation teams and departments.</p>
+            </div>
         </div>
     }
-    @if (!isSuperAdministrator && organisations.Count == 1)
+
+    @if (message != null)
     {
-        <p class="text-sm"><span class="text-slate-500">Organisation:</span> <span class="font-medium">@organisations[0].Name</span></p>
+        <div role="status" class="flex items-center justify-between gap-2 rounded-xl border border-teal-200 dark:border-teal-800 bg-teal-50/80 dark:bg-teal-950/40 px-3.5 py-2.5 text-xs text-teal-900 dark:text-teal-200">
+            <span>@message</span>
+            <button type="button" class="text-teal-700 dark:text-teal-300 font-bold hover:opacity-80" aria-label="Dismiss message" @onclick="() => message = null">✕</button>
+        </div>
     }
-    @if (busy && data == null) { <p role="status" class="text-sm text-slate-500">Loading teams and supervisors…</p> }
+
+    @if ((ShowOrganisationSelector && isSuperAdministrator) || (!isSuperAdministrator && organisations.Count == 1))
+    {
+        <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3.5 py-2.5 flex flex-wrap items-center justify-between gap-3">
+            @if (ShowOrganisationSelector && isSuperAdministrator)
+            {
+                <div class="w-full max-w-md">
+                    <HRM.Components.Shared.SearchableSelect Label="Organisation" Placeholder="Select an organisation" Disabled="@busy" CanClear="false"
+                        Options="@organisations.Select(o => new HRM.Components.Shared.SearchableSelect.Option(o.Id, o.Name))"
+                        @bind-Value="organisationId" @bind-Value:after="ChangeOrganisationAsync" />
+                </div>
+            }
+            else if (!isSuperAdministrator && organisations.Count == 1)
+            {
+                <div class="flex items-center gap-2.5 min-w-0">
+                    <span class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-teal-50 dark:bg-teal-950/60 border border-teal-200 dark:border-teal-800 text-xs font-bold text-teal-700 dark:text-teal-300">
+                        @GetInitials(organisations[0].Name)
+                    </span>
+                    <div class="min-w-0">
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <span class="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate">@organisations[0].Name</span>
+                            <span class="inline-flex items-center rounded-full bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300">Organisation</span>
+                        </div>
+                        <p class="text-[11px] text-slate-500 dark:text-slate-400">Active organisation scope for supervisor assignments</p>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+
+    @if (busy && data == null)
+    {
+        <div role="status" class="flex flex-col items-center justify-center rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-10">
+            <div class="h-7 w-7 rounded-full border-2 border-blue-600 border-t-transparent animate-spin"></div>
+            <p class="mt-2.5 text-xs font-medium text-slate-600 dark:text-slate-300">Loading teams and supervisors…</p>
+        </div>
+    }
+
     @if (data != null)
     {
-        <div class="grid grid-cols-1 items-start gap-5 xl:grid-cols-12">
-        <div class="min-w-0 space-y-4 xl:col-span-8">
-        <div class="flex flex-wrap items-center gap-3">
-            <button type="button" disabled="@busy" aria-pressed="@(kind == "Team")" class="rounded border px-3 py-2 text-sm @(kind == "Team" ? "bg-blue-50 text-blue-700" : "")" @onclick="() => ChangeKind(true)">Teams</button>
-            <button type="button" disabled="@busy" aria-pressed="@(kind == "Department")" class="rounded border px-3 py-2 text-sm @(kind == "Department" ? "bg-blue-50 text-blue-700" : "")" @onclick="() => ChangeKind(false)">Departments</button>
-            <button type="button" disabled="@busy" class="text-sm text-blue-700" @onclick="LoadSettingsAsync">Refresh</button>
+        var teamCount = data.Rows.Count(r => r.Kind == "Team");
+        var unassignedDeptCount = data.Rows.Count(r => r.Kind == "Department" && r.Supervisors.Count == 0);
+        var assignedTotalCount = data.Rows.Count(r => r.Supervisors.Count > 0);
+        var totalEligibleStaff = data.Staff.Count;
+
+        <!-- Narrow Sub-Navigation & Inline KPI Bar -->
+        <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2 flex flex-wrap items-center justify-between gap-2 text-xs">
+            <div class="flex flex-wrap items-center gap-1" role="tablist" aria-label="Supervisor target type">
+                <button type="button"
+                        role="tab"
+                        disabled="@busy"
+                        aria-selected="@(kind == "Team")"
+                        aria-pressed="@(kind == "Team")"
+                        class="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors @(kind == "Team" ? "bg-teal-50 dark:bg-teal-950/50 text-teal-800 dark:text-teal-300 border border-teal-200 dark:border-teal-800" : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 border border-transparent")"
+                        @onclick="() => ChangeKind(true)">
+                    <span>Teams</span>
+                    <span class="rounded-full bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 text-[10px] font-bold text-slate-700 dark:text-slate-300">@teamCount</span>
+                </button>
+                <button type="button"
+                        role="tab"
+                        disabled="@busy"
+                        aria-selected="@(kind == "Department")"
+                        aria-pressed="@(kind == "Department")"
+                        class="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors @(kind == "Department" ? "bg-teal-50 dark:bg-teal-950/50 text-teal-800 dark:text-teal-300 border border-teal-200 dark:border-teal-800" : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 border border-transparent")"
+                        @onclick="() => ChangeKind(false)">
+                    <span>Departments</span>
+                    <span class="rounded-full bg-amber-50 dark:bg-amber-950/50 border border-amber-200/80 dark:border-amber-800 px-1.5 py-0.5 text-[10px] font-bold text-amber-700 dark:text-amber-300">@unassignedDeptCount</span>
+                </button>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-3 text-[11px] text-slate-500 dark:text-slate-400">
+                <span class="inline-flex items-center gap-1.5">
+                    <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
+                    Assigned: <strong class="text-slate-800 dark:text-slate-200">@assignedTotalCount</strong>
+                </span>
+                <span aria-hidden="true">·</span>
+                <span class="inline-flex items-center gap-1.5">
+                    <span class="h-1.5 w-1.5 rounded-full bg-amber-500"></span>
+                    Unassigned Depts: <strong class="text-slate-800 dark:text-slate-200">@unassignedDeptCount</strong>
+                </span>
+                <span aria-hidden="true">·</span>
+                <span class="inline-flex items-center gap-1.5">
+                    <span class="h-1.5 w-1.5 rounded-full bg-blue-500"></span>
+                    Eligible Staff: <strong class="text-slate-800 dark:text-slate-200">@totalEligibleStaff</strong>
+                </span>
+                <button type="button"
+                        disabled="@busy"
+                        class="app-button app-button-secondary app-button-sm"
+                        @onclick="LoadSettingsAsync">
+                    <AppIcon Name="refresh" Class="@(busy ? "animate-spin text-xs" : "text-xs")" />
+                    <span>Refresh</span>
+                </button>
+            </div>
         </div>
-        <div class="grid grid-cols-1 gap-5 lg:grid-cols-3">
-            <div class="space-y-3">
-                @if (kind == "Department")
-                {
-                    <label class="block text-sm">Organisation Structure Type
-                        <select class="mt-1 w-full rounded border p-2" disabled="@busy" @bind="structureTypeId" @bind:after="ApplyStructureFilter">
-                            <option value="0">All structure types</option>
-                            @foreach (var type in data.StructureTypes) { <option value="@type.Id">@type.Name</option> }
-                        </select>
-                    </label>
-                    <p class="text-xs text-slate-500">Only approved departments without an assigned supervisor are shown.</p>
-                }
-                <label class="block text-sm">Search @kind.ToLower()s<input class="mt-1 w-full rounded border p-2" type="search" placeholder="Team or department name" @bind="search" @bind:event="oninput" /></label>
-                <div class="max-h-[32rem] space-y-2 overflow-y-auto">
-                    @foreach (var row in Filtered)
+
+        <!-- 3-Column Responsive Workspace Grid -->
+        <div class="ots-workspace-grid">
+            <!-- Column 1: Teams / Departments Directory List -->
+            <div class="ots-col-list rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden flex flex-col min-w-0">
+                <div class="bg-slate-50/80 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 px-3.5 py-2.5 flex items-center justify-between gap-2">
+                    <h3 class="text-[11px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">
+                        @(kind == "Team" ? "Organisation Teams" : "Unassigned Departments")
+                    </h3>
+                    <span class="rounded-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-2 py-0.5 text-[10px] font-semibold text-slate-600 dark:text-slate-300">
+                        @Filtered.Count()
+                    </span>
+                </div>
+
+                <div class="p-3 space-y-2.5 flex-1 flex flex-col min-w-0">
+                    @if (kind == "Department")
                     {
-                        <button type="button" disabled="@busy" aria-pressed="@(selected?.Id == row.Id && selected.Kind == row.Kind)"
-                                class="block w-full rounded-lg border p-3 text-left @(selected?.Id == row.Id && selected.Kind == row.Kind ? "border-blue-300 bg-blue-50" : "")"
-                                @onclick="() => Select(row)">
-                            <span class="block text-sm font-semibold">@row.Name</span>
-                            <span class="mt-1 block text-xs @(EligibleCount(row) == 0 ? "text-amber-700" : "text-slate-500")">@(EligibleCount(row) == 0 ? "No eligible supervisor" : $"{EligibleCount(row)} eligible supervisor(s)")</span>
-                        </button>
+                        <div>
+                            <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">Organisation Structure Type</label>
+                            <select class="w-full h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 text-xs text-slate-800 dark:text-slate-100 focus:border-teal-600 focus:outline-none"
+                                    disabled="@busy" @bind="structureTypeId" @bind:after="ApplyStructureFilter">
+                                <option value="0">All structure types</option>
+                                @foreach (var type in data.StructureTypes)
+                                {
+                                    <option value="@type.Id">@type.Name</option>
+                                }
+                            </select>
+                            <p class="mt-1 text-[11px] text-slate-500 dark:text-slate-400">Only approved departments without an assigned supervisor are shown.</p>
+                        </div>
                     }
-                    @if (!Filtered.Any()) { <p class="text-sm text-slate-500">@(kind == "Department" ? "No departments without a supervisor match your search." : "No teams found.")</p> }
+
+                    <div>
+                        <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">Search @kind.ToLower()s</label>
+                        <input class="w-full h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 text-xs text-slate-800 dark:text-slate-100 placeholder:text-slate-400 focus:border-teal-600 focus:outline-none"
+                               type="search"
+                               placeholder="Filter by team or department name…"
+                               @bind="search"
+                               @bind:event="oninput" />
+                    </div>
+
+                    <div class="max-h-[32rem] space-y-1.5 overflow-y-auto pr-0.5">
+                        @foreach (var row in Filtered)
+                        {
+                            var isSelected = selected?.Id == row.Id && selected.Kind == row.Kind;
+                            var eligible = EligibleCount(row);
+                            <button type="button"
+                                    disabled="@busy"
+                                    aria-pressed="@isSelected"
+                                    class="block w-full rounded-lg border px-3 py-2.5 text-left transition-colors @(isSelected ? "border-teal-500 bg-teal-50/70 dark:bg-teal-950/40 dark:border-teal-600" : "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/60")"
+                                    @onclick="() => Select(row)">
+                                <div class="flex items-start justify-between gap-2">
+                                    <span class="text-xs font-semibold text-slate-900 dark:text-slate-100 leading-snug">@row.Name</span>
+                                    <span class="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold @(eligible == 0 ? "bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 border border-amber-200/80 dark:border-amber-800" : "bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800")">
+                                        @(eligible == 0 ? "None" : $"{eligible}")
+                                    </span>
+                                </div>
+                                <span class="mt-1 block text-[11px] @(eligible == 0 ? "text-amber-700 dark:text-amber-300" : "text-slate-500 dark:text-slate-400")">
+                                    @(eligible == 0 ? "No eligible supervisor" : $"{eligible} eligible supervisor(s)")
+                                </span>
+                            </button>
+                        }
+                        @if (!Filtered.Any())
+                        {
+                            <div class="rounded-lg border border-dashed border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/30 p-4 text-center text-xs text-slate-500 dark:text-slate-400">
+                                @(kind == "Department" ? "No departments without a supervisor match your search." : "No teams found.")
+                            </div>
+                        }
+                    </div>
                 </div>
             </div>
-            <div class="rounded-lg border p-4 space-y-4 lg:col-span-2">
-                @if (selected == null) { <p class="text-sm text-slate-500">Select a team or department to manage its supervisors.</p> }
-                else
-                {
-                    <div><h3 class="font-semibold">@selected.Name</h3><p class="text-xs text-slate-500">@selected.Kind supervisors</p></div>
-                    <details open class="rounded border p-3">
-                        <summary class="cursor-pointer text-sm font-medium">Assigned staff (@selected.Members.Count)</summary>
-                        <div class="mt-2 max-h-60 space-y-2 overflow-y-auto">
-                            @foreach (var member in selected.Members)
-                            {
-                                <a class="block text-sm text-blue-700 underline dark:text-blue-300" href="@($"/admin/my/workspace/staff/{member.Id}/overview")">@member.Name</a>
-                            }
-                            @if(selected.Members.Count==0){<p class="text-xs text-slate-500">No active staff assigned.</p>}
-                        </div>
-                    </details>
-                    @if (selected.Supervisors.Count == 0) { <p class="rounded bg-amber-50 p-3 text-sm text-amber-800">No supervisor is assigned. Choose an eligible staff member below.</p> }
-                    @foreach (var supervisor in selected.Supervisors)
+
+            <!-- Column 2: Selected Team / Department Supervisor Editor -->
+            <div class="ots-col-editor rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden flex flex-col min-w-0">
+                <div class="bg-slate-50/80 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 px-3.5 py-2.5 flex items-center justify-between gap-2">
+                    <div class="min-w-0">
+                        <h3 class="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">
+                            @(selected != null ? selected.Name : "Supervisor Assignment")
+                        </h3>
+                        <p class="text-[11px] text-slate-500 dark:text-slate-400">
+                            @(selected != null ? $"{selected.Kind} supervisors & reporting line" : "Select a team or department from the list")
+                        </p>
+                    </div>
+                    @if (selected != null)
                     {
-                        <div @key="supervisor.Id" class="flex flex-wrap items-center justify-between gap-3 rounded border p-3">
-                            <div><span class="text-sm">@supervisor.Name</span>
-                                @if (data.SupervisorIssues.TryGetValue(supervisor.Id, out var issue)) { <p class="mt-1 text-xs text-amber-800">@issue</p> }
-                            </div>
-                            @if (CanRemove)
-                            {
-                                <button type="button" disabled="@busy" class="text-sm text-red-700" @onclick="() => removeId = supervisor.Id">Request removal</button>
-                            }
-                        </div>
+                        <span class="shrink-0 inline-flex items-center rounded-full bg-teal-50 dark:bg-teal-950/50 border border-teal-200 dark:border-teal-800 px-2 py-0.5 text-[10px] font-semibold text-teal-800 dark:text-teal-300">
+                            @selected.Kind
+                        </span>
                     }
-                    @if (removeId.HasValue)
+                </div>
+
+                <div class="p-3.5 space-y-3.5 min-w-0">
+                    @if (selected == null)
                     {
-                        <div class="rounded border border-amber-200 bg-amber-50 p-3 text-sm space-y-3">
-                            <label class="block">Reason for removal<textarea class="mt-1 w-full rounded border bg-transparent p-2" rows="2" maxlength="500" @bind="reason"></textarea></label>
-                            <p>Request removal of @(selected.Supervisors.FirstOrDefault(x => x.Id == removeId)?.Name) as supervisor?</p>
-                            <button type="button" disabled="@busy" class="rounded border bg-white px-3 py-2" @onclick="RemoveAsync">Submit removal request</button>
-                            <button type="button" disabled="@busy" class="ml-3 text-blue-700" @onclick="() => removeId = null">Cancel</button>
+                        <div class="rounded-lg border border-dashed border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/30 p-8 text-center text-xs text-slate-500 dark:text-slate-400">
+                            Select a team or department to manage its supervisors.
                         </div>
                     }
-                    @if (CanAssign && !removeId.HasValue)
+                    else
                     {
-                        <fieldset disabled="@busy" class="space-y-3 border-t pt-4">
-                            <HRM.Components.Shared.SearchableSelect Label="Assign supervisor" Placeholder="Select a staff member" Disabled="@busy"
-                                Options="@AvailableStaff.Select(s=>new HRM.Components.Shared.SearchableSelect.Option(s.Id,s.Name))" @bind-Value="staffId" />
-                            <label class="block text-sm">Reason for assignment<textarea class="mt-1 w-full rounded border bg-transparent p-2" rows="2" maxlength="500" @bind="reason"></textarea></label>
-                            <p class="text-xs text-slate-500">Eligible staff must have an active approved job and user account in this organisation. A supervisor cannot approve their own leave handover.</p>
-                            <button type="button" disabled="@(busy || staffId <= 0 || string.IsNullOrWhiteSpace(reason))" class="rounded bg-blue-600 px-4 py-2 text-sm text-white disabled:opacity-50" @onclick="AssignAsync">@(busy ? "Saving…" : "Submit assignment request")</button>
-                            @if (!AvailableStaff.Any()) { <p class="text-sm text-amber-800">No additional eligible staff are available.</p> }
-                        </fieldset>
-                    }
-                    else { <p class="text-sm text-slate-500">You can view these assignments. Editing requires supervisor management permission.</p> }
-                }
-            </div>
-        </div>
-        </div>
-        <aside class="min-w-0 space-y-4 rounded-xl border p-4 xl:col-span-4" aria-label="Existing departments, teams and supervisors">
-            <div><h3 class="font-semibold">Assigned departments and teams</h3><p class="mt-1 text-xs text-slate-500">Current supervisors in the selected organisation. Select a record to manage it.</p></div>
-            <label class="block text-sm">Search assignments<input class="mt-1 w-full rounded border p-2" type="search" placeholder="Department, team, supervisor or staff" @bind="overviewSearch" @bind:event="oninput" /></label>
-            @foreach (var overviewKind in new[] { "Department", "Team" })
-            {
-                var records = OverviewRows.Where(r => r.Kind == overviewKind).OrderBy(r => r.Name).ToList();
-                <section class="space-y-2">
-                    <h4 class="border-b pb-2 text-sm font-semibold">@(overviewKind == "Department" ? "Departments" : "Teams") <span class="font-normal text-slate-500">(@records.Count)</span></h4>
-                    @foreach (var row in records)
-                    {
-                        <article @key="(row.Kind, row.Id)" class="space-y-3 rounded-lg border p-3 @(selected?.Id == row.Id && selected.Kind == row.Kind ? "border-blue-300 bg-blue-50" : "")">
-                            <button type="button" disabled="@busy" @onclick="()=>SelectOverview(row)" aria-pressed="@(selected?.Id == row.Id && selected.Kind == row.Kind)" class="block w-full text-left text-sm font-medium">@row.Name</button>
-                            <div class="space-y-1"><h5 class="text-xs font-semibold text-slate-500">Supervisors</h5>
-                            @foreach (var supervisor in row.Supervisors)
-                            {
-                                <a class="block text-sm text-blue-700 underline dark:text-blue-300" href="@($"/admin/my/workspace/staff/{supervisor.Id}/overview")">@supervisor.Name</a>
-                                @if (data.SupervisorIssues.TryGetValue(supervisor.Id, out var issue)) { <span class="block text-xs text-amber-700">@issue</span> }
-                            }
-                            </div>
-                            <details><summary class="cursor-pointer text-xs font-semibold text-slate-500">Assigned staff (@row.Members.Count)</summary>
-                                <div class="mt-2 max-h-60 space-y-2 overflow-y-auto">
-                                @foreach(var member in row.Members)
+                        <!-- Assigned Staff Collapsible Inset -->
+                        <details open class="rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40 p-3">
+                            <summary class="cursor-pointer text-xs font-semibold text-slate-700 dark:text-slate-200 select-none">
+                                Assigned staff <span class="font-normal text-slate-500">(@selected.Members.Count)</span>
+                            </summary>
+                            <div class="mt-2.5 max-h-52 flex flex-wrap gap-1.5 overflow-y-auto">
+                                @foreach (var member in selected.Members)
                                 {
-                                    <a class="block text-sm text-blue-700 underline dark:text-blue-300" href="@($"/admin/my/workspace/staff/{member.Id}/overview")">@member.Name</a>
+                                    <a class="inline-flex items-center rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-xs font-medium text-blue-700 dark:text-blue-300 hover:border-blue-300 hover:bg-blue-50/60 dark:hover:bg-slate-800 transition-colors"
+                                       href="@($"/admin/my/workspace/staff/{member.Id}/overview")">
+                                        @member.Name
+                                    </a>
                                 }
-                                @if(row.Members.Count==0){<p class="text-xs text-slate-500">No active staff assigned.</p>}
+                                @if (selected.Members.Count == 0)
+                                {
+                                    <p class="text-xs text-slate-500 dark:text-slate-400">No active staff assigned.</p>
+                                }
+                            </div>
+                        </details>
+
+                        <!-- Current Supervisors -->
+                        <div class="space-y-2">
+                            <div class="flex items-center justify-between">
+                                <h4 class="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Current Supervisors</h4>
+                                <span class="text-[11px] text-slate-500 dark:text-slate-400">@selected.Supervisors.Count assigned</span>
+                            </div>
+
+                            @if (selected.Supervisors.Count == 0)
+                            {
+                                <div class="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50/80 dark:bg-amber-950/40 px-3 py-2.5 text-xs text-amber-800 dark:text-amber-200">
+                                    No supervisor is assigned. Choose an eligible staff member below.
                                 </div>
-                            </details>
-                        </article>
+                            }
+
+                            @foreach (var supervisor in selected.Supervisors)
+                            {
+                                <div @key="supervisor.Id" class="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950/60 px-3 py-2.5">
+                                    <div class="min-w-0">
+                                        <a href="@($"/admin/my/workspace/staff/{supervisor.Id}/overview")"
+                                           class="text-xs font-semibold text-slate-900 dark:text-slate-100 hover:text-blue-700 dark:hover:text-blue-300 hover:underline">
+                                            @supervisor.Name
+                                        </a>
+                                        @if (data.SupervisorIssues.TryGetValue(supervisor.Id, out var issue))
+                                        {
+                                            <p class="mt-0.5 text-[11px] text-amber-700 dark:text-amber-300">@issue</p>
+                                        }
+                                    </div>
+                                    @if (CanRemove)
+                                    {
+                                        <button type="button"
+                                                disabled="@busy"
+                                                class="inline-flex items-center rounded-md border border-rose-200 dark:border-rose-800 bg-rose-50/70 dark:bg-rose-950/40 px-2.5 py-1 text-[11px] font-semibold text-rose-700 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-900/50 disabled:opacity-50 transition-colors"
+                                                @onclick="() => removeId = supervisor.Id">
+                                            Request removal
+                                        </button>
+                                    }
+                                </div>
+                            }
+                        </div>
+
+                        @if (removeId.HasValue)
+                        {
+                            <div class="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50/80 dark:bg-amber-950/40 p-3 text-xs space-y-2.5">
+                                <p class="font-semibold text-amber-900 dark:text-amber-200">
+                                    Request removal of @(selected.Supervisors.FirstOrDefault(x => x.Id == removeId)?.Name) as supervisor?
+                                </p>
+                                <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-200">
+                                    Reason for removal
+                                    <textarea class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 p-2 text-xs text-slate-800 dark:text-slate-100 focus:border-teal-600 focus:outline-none"
+                                              rows="2" maxlength="500" @bind="reason"></textarea>
+                                </label>
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <button type="button"
+                                            disabled="@busy"
+                                            class="inline-flex items-center rounded-lg border border-rose-300 dark:border-rose-700 bg-white dark:bg-slate-900 px-3 py-1.5 text-xs font-semibold text-rose-700 dark:text-rose-300 hover:bg-rose-50 disabled:opacity-50 transition-colors"
+                                            @onclick="RemoveAsync">
+                                        Submit removal request
+                                    </button>
+                                    <button type="button"
+                                            disabled="@busy"
+                                            class="app-button app-button-secondary app-button-sm"
+                                            @onclick="() => removeId = null">
+                                        Cancel
+                                    </button>
+                                </div>
+                            </div>
+                        }
+
+                        @if (CanAssign && !removeId.HasValue)
+                        {
+                            <fieldset disabled="@busy" class="space-y-3 border-t border-slate-200 dark:border-slate-800 pt-3.5">
+                                <HRM.Components.Shared.SearchableSelect Label="Assign supervisor" Placeholder="Select a staff member" Disabled="@busy"
+                                    Options="@AvailableStaff.Select(s => new HRM.Components.Shared.SearchableSelect.Option(s.Id, s.Name))" @bind-Value="staffId" />
+                                <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                                    Reason for assignment
+                                    <textarea class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 p-2 text-xs text-slate-800 dark:text-slate-100 placeholder:text-slate-400 focus:border-teal-600 focus:outline-none"
+                                              rows="2" maxlength="500" placeholder="Provide justification for this supervisor assignment…" @bind="reason"></textarea>
+                                </label>
+                                <p class="text-[11px] text-slate-500 dark:text-slate-400">
+                                    Eligible staff must have an active approved job and user account in this organisation. A supervisor cannot approve their own leave handover.
+                                </p>
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <button type="button"
+                                            disabled="@(busy || staffId <= 0 || string.IsNullOrWhiteSpace(reason))"
+                                            class="app-button app-button-primary app-button-sm"
+                                            @onclick="AssignAsync">
+                                        @(busy ? "Saving…" : "Submit assignment request")
+                                    </button>
+                                </div>
+                                @if (!AvailableStaff.Any())
+                                {
+                                    <p class="text-xs text-amber-700 dark:text-amber-300">No additional eligible staff are available.</p>
+                                }
+                            </fieldset>
+                        }
+                        else if (!CanAssign)
+                        {
+                            <p class="border-t border-slate-200 dark:border-slate-800 pt-3 text-xs text-slate-500 dark:text-slate-400">
+                                You can view these assignments. Editing requires supervisor management permission.
+                            </p>
+                        }
                     }
-                    @if (records.Count == 0) { <p class="text-xs text-slate-500">No matching @(overviewKind == "Department" ? "departments" : "teams") with assigned supervisors.</p> }
-                </section>
-            }
-        </aside>
+                </div>
+            </div>
+
+            <!-- Column 3: Assigned Departments & Teams Directory -->
+            <aside class="ots-col-assigned rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden flex flex-col min-w-0" aria-label="Existing departments, teams and supervisors">
+                <div class="bg-slate-50/80 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 px-3.5 py-2.5 flex items-center justify-between gap-2">
+                    <div class="min-w-0">
+                        <h3 class="text-[11px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">Assigned Departments &amp; Teams</h3>
+                        <p class="text-[11px] text-slate-500 dark:text-slate-400">Select a record to inspect or manage.</p>
+                    </div>
+                    <span class="shrink-0 rounded-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-2 py-0.5 text-[10px] font-semibold text-slate-600 dark:text-slate-300">
+                        @OverviewRows.Count()
+                    </span>
+                </div>
+
+                <div class="p-3 space-y-3 min-w-0">
+                    <div>
+                        <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">Search assignments</label>
+                        <input class="w-full h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 text-xs text-slate-800 dark:text-slate-100 placeholder:text-slate-400 focus:border-teal-600 focus:outline-none"
+                               type="search"
+                               placeholder="Department, team, supervisor or staff…"
+                               @bind="overviewSearch"
+                               @bind:event="oninput" />
+                    </div>
+
+                    <div class="max-h-[34rem] overflow-y-auto space-y-4 pr-0.5">
+                        @foreach (var overviewKind in new[] { "Department", "Team" })
+                        {
+                            var records = OverviewRows.Where(r => r.Kind == overviewKind).OrderBy(r => r.Name).ToList();
+                            <section class="space-y-2">
+                                <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-1.5">
+                                    <h4 class="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                                        @(overviewKind == "Department" ? "Departments" : "Teams")
+                                    </h4>
+                                    <span class="text-[11px] font-semibold text-slate-500 dark:text-slate-400">@records.Count</span>
+                                </div>
+
+                                @foreach (var row in records)
+                                {
+                                    var isSelected = selected?.Id == row.Id && selected.Kind == row.Kind;
+                                    <article @key="(row.Kind, row.Id)"
+                                             class="space-y-2 rounded-lg border p-2.5 transition-colors @(isSelected ? "border-teal-500 bg-teal-50/60 dark:bg-teal-950/40 dark:border-teal-600" : "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950/40")">
+                                        <button type="button"
+                                                disabled="@busy"
+                                                @onclick="() => SelectOverview(row)"
+                                                aria-pressed="@isSelected"
+                                                class="block w-full text-left text-xs font-semibold text-slate-900 dark:text-slate-100 hover:text-teal-700 dark:hover:text-teal-300">
+                                            @row.Name
+                                        </button>
+
+                                        <div class="space-y-1">
+                                            <h5 class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Supervisors</h5>
+                                            @foreach (var supervisor in row.Supervisors)
+                                            {
+                                                <div class="flex flex-col">
+                                                    <a class="text-xs font-medium text-blue-700 dark:text-blue-300 hover:underline"
+                                                       href="@($"/admin/my/workspace/staff/{supervisor.Id}/overview")">
+                                                        @supervisor.Name
+                                                    </a>
+                                                    @if (data.SupervisorIssues.TryGetValue(supervisor.Id, out var issue))
+                                                    {
+                                                        <span class="text-[11px] text-amber-700 dark:text-amber-300">@issue</span>
+                                                    }
+                                                </div>
+                                            }
+                                        </div>
+
+                                        <details class="pt-1 border-t border-slate-100 dark:border-slate-800">
+                                            <summary class="cursor-pointer text-[11px] font-semibold text-slate-500 dark:text-slate-400 select-none">
+                                                Assigned staff (@row.Members.Count)
+                                            </summary>
+                                            <div class="mt-1.5 max-h-40 space-y-1 overflow-y-auto">
+                                                @foreach (var member in row.Members)
+                                                {
+                                                    <a class="block text-xs text-blue-700 dark:text-blue-300 hover:underline"
+                                                       href="@($"/admin/my/workspace/staff/{member.Id}/overview")">
+                                                        @member.Name
+                                                    </a>
+                                                }
+                                                @if (row.Members.Count == 0)
+                                                {
+                                                    <p class="text-[11px] text-slate-500 dark:text-slate-400">No active staff assigned.</p>
+                                                }
+                                            </div>
+                                        </details>
+                                    </article>
+                                }
+
+                                @if (records.Count == 0)
+                                {
+                                    <p class="text-xs text-slate-500 dark:text-slate-400 py-1">
+                                        No matching @(overviewKind == "Department" ? "departments" : "teams") with assigned supervisors.
+                                    </p>
+                                }
+                            </section>
+                        }
+                    </div>
+                </div>
+            </aside>
         </div>
-        <p class="text-xs text-slate-500">Additions and removals follow the configured approval flow. Current assignments change only after final approval.</p>
+
+        <p class="px-1 text-[11px] text-slate-500 dark:text-slate-400">
+            Additions and removals follow the configured approval flow. Current assignments change only after final approval.
+        </p>
+
         <HRM.Components.Shared.SupervisorChangeRequests OrganisationId="organisationId" RefreshVersion="requestVersion" OnChanged="LoadSettingsAsync" @key="organisationId" />
     }
 </section>
 
+<style>
+    .ots-workspace-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 0.75rem;
+        align-items: start;
+    }
+
+    @@media (min-width: 900px) {
+        .ots-workspace-grid {
+            grid-template-columns: minmax(240px, 0.9fr) minmax(0, 1.35fr);
+        }
+
+        .ots-col-assigned {
+            grid-column: 1 / -1;
+        }
+    }
+
+    @@media (min-width: 1280px) {
+        .ots-workspace-grid {
+            grid-template-columns: minmax(240px, 0.85fr) minmax(0, 1.35fr) minmax(270px, 1fr);
+        }
+
+        .ots-col-assigned {
+            grid-column: auto;
+        }
+    }
+</style>
+
 @code {
     [Parameter] public int? InitialOrganisationId { get; set; }
     [Parameter] public bool ShowOrganisationSelector { get; set; } = true;
+    [Parameter] public bool ShowHeading { get; set; } = true;
     [Parameter] public string? InitialKind { get; set; }
     [SupplyParameterFromQuery(Name = "teamView")] public string? QueryKind { get; set; }
+    private static string GetInitials(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return "OR";
+        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length == 1
+            ? parts[0][..Math.Min(2, parts[0].Length)].ToUpperInvariant()
+            : $"{char.ToUpperInvariant(parts[0][0])}{char.ToUpperInvariant(parts[^1][0])}";
+    }
     private List<OrganisationSettingsOption> organisations = [];
     private OrganisationTeamSettingsData? data;
     private OrganisationTeamSettingsRow? selected;

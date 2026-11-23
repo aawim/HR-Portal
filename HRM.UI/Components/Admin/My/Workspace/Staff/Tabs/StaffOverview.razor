@@ -91,65 +91,90 @@
             page-break-inside: avoid !important;
         }
     }
+
+    .staff-overview-shell {
+        width: 100%;
+        min-width: 0;
+        transition: max-width 200ms ease;
+    }
+
+    .staff-overview-shell-standard {
+        max-width: 64rem;
+        margin-left: auto;
+        margin-right: auto;
+    }
+
+    .staff-overview-shell-full {
+        max-width: none;
+    }
 </style>
 
-<div class="staff-overview-container w-full flex flex-col gap-3">
+<div class="staff-overview-container w-full min-w-0 flex flex-col gap-3 text-slate-900 dark:text-slate-100">
 
     @if (_loading)
     {
-        <div class="max-w-4xl mx-auto w-full p-8 bg-white border border-slate-200 shadow-sm animate-pulse space-y-4">
-            <div class="h-8 bg-slate-200 w-3/4"></div>
-            <div class="h-4 bg-slate-100 w-1/2"></div>
-            <div class="h-32 bg-slate-100 w-full mt-4"></div>
-            <div class="h-48 bg-slate-100 w-full"></div>
+        <div role="status" class="staff-overview-shell staff-overview-shell-standard flex items-center justify-center gap-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-10 text-xs text-slate-500">
+            <span class="h-4 w-4 rounded-full border-2 border-blue-600 border-t-transparent animate-spin"></span>
+            <span>Loading employee personnel dossier…</span>
         </div>
     }
     else if (!string.IsNullOrWhiteSpace(_errorMessage))
     {
-        <div class="max-w-4xl mx-auto w-full p-6 bg-white border border-rose-300 shadow-sm text-xs text-rose-800 space-y-3">
-            <h3 class="font-bold text-sm">Unable to load employee profile</h3>
-            <p>@_errorMessage</p>
-            <button type="button" class="px-3 py-1.5 bg-rose-700 text-white font-semibold rounded-none cursor-pointer" @onclick="LoadProfileAsync">
-                ↻ Try Again
+        <div role="alert" class="staff-overview-shell staff-overview-shell-standard rounded-xl border border-rose-200 dark:border-rose-800 bg-rose-50/80 dark:bg-rose-950/40 p-4 text-xs text-rose-800 dark:text-rose-200 flex flex-wrap items-center justify-between gap-3">
+            <div>
+                <h3 class="font-bold text-sm">Unable to load employee profile</h3>
+                <p class="mt-0.5">@_errorMessage</p>
+            </div>
+            <button type="button" class="app-button app-button-primary app-button-sm" @onclick="LoadProfileAsync">
+                <AppIcon Name="refresh" Class="text-xs" />
+                <span>Try Again</span>
             </button>
         </div>
     }
     else if (_profile is null)
     {
-        <div class="max-w-4xl mx-auto w-full p-8 bg-white border border-dashed border-slate-300 text-center text-xs text-slate-500">
+        <div class="staff-overview-shell staff-overview-shell-standard rounded-xl border border-dashed border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-8 text-center text-xs text-slate-500">
             Personnel record not found.
         </div>
     }
     else
     {
-        <!-- Action Toolbar: Web UI helper to trigger PDF Export (Hidden on Print) -->
-        <header class="staff-overview-no-print max-w-4xl mx-auto w-full flex flex-wrap items-center justify-between gap-2 p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs">
-            <div class="flex items-center gap-2">
-                <span class="inline-flex items-center gap-1.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 px-3 py-1 text-xs font-semibold">
-                    <span>📄</span>
-                    <span>Staff Personnel Dossier</span>
-                </span>
-                <span class="text-xs font-mono text-slate-500">
-                    REF: DOC-EMP-@EffectiveStaffId.ToString("D5")
-                </span>
+        <!-- Compact Header (no background/border, hidden on print) -->
+        <header class="staff-overview-no-print flex flex-wrap items-center justify-between gap-2 px-1 py-0.5">
+            <div class="min-w-0">
+                <div class="flex items-center gap-2 flex-wrap">
+                    <h2 class="text-base font-bold text-slate-900 dark:text-slate-100 truncate">Staff Personnel Dossier</h2>
+                    <span class="inline-flex items-center gap-1 rounded-full bg-teal-50 dark:bg-teal-950/60 border border-teal-200/80 dark:border-teal-800 px-2 py-0.5 font-mono text-[10px] font-semibold text-teal-700 dark:text-teal-300">
+                        <span class="h-1.5 w-1.5 rounded-full bg-teal-500"></span>
+                        DOC-EMP-@EffectiveStaffId.ToString("D5")
+                    </span>
+                </div>
+                <p class="text-xs text-slate-500 dark:text-slate-400">
+                    Official personnel record extract, employment specification, and identity summary.
+                </p>
             </div>
 
-            <div class="flex items-center gap-2">
+            <div class="flex flex-wrap items-center gap-1.5">
                 <button type="button"
-                        class="inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 active:bg-emerald-900 px-4 py-2 text-xs font-bold text-white shadow-xs transition cursor-pointer"
-                        title="Export this dossier to PDF or print"
-                        @onclick="PrintProfile">
-                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                    <span>Export to PDF</span>
+                        class="app-button app-button-neutral app-button-sm"
+                        title="@(isFullWidth ? "Shrink to standard A4 layout" : "Expand to full page width")"
+                        @onclick="ToggleFullWidth">
+                    <AppIcon Name="@(isFullWidth ? "fullscreen_exit" : "fullscreen")" Class="text-xs" />
+                    <span>@(isFullWidth ? "Shrink View" : "Full Width")</span>
                 </button>
-
                 <button type="button"
-                        class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 transition cursor-pointer"
+                        class="app-button app-button-secondary app-button-sm"
                         title="Reload latest staff data"
                         @onclick="LoadProfileAsync">
-                    <span>↻ Refresh</span>
+                    <AppIcon Name="refresh" Class="text-xs" />
+                    <span>Refresh</span>
+                </button>
+                <button type="button"
+                        class="app-button app-button-primary app-button-sm"
+                        title="Export this dossier to PDF or print"
+                        @onclick="PrintProfile">
+                    <AppIcon Name="picture_as_pdf" Class="text-xs" />
+                    <span>Export to PDF</span>
                 </button>
             </div>
         </header>
@@ -158,7 +183,7 @@
         <!-- STATIC A4 PRINT-READY DOCUMENT: STAFF PERSONNEL DOSSIER  -->
         <!-- Formal paper layout matching a Microsoft Word document   -->
         <!-- ======================================================== -->
-        <article class="staff-overview-doc max-w-4xl mx-auto w-full bg-white text-slate-900 border border-slate-300 p-8 sm:p-12 shadow-md rounded-none print:shadow-none print:border-none print:p-0 print:m-0 print:max-w-none">
+        <article class="staff-overview-doc staff-overview-shell @(isFullWidth ? "staff-overview-shell-full" : "staff-overview-shell-standard") bg-white text-slate-900 border border-slate-200 rounded-xl p-6 sm:p-8 print:shadow-none print:border-none print:rounded-none print:p-0 print:m-0 print:max-w-none">
 
             <!-- ---------------------------------------------------- -->
             <!-- 1. OFFICIAL HEADER BOX                               -->
@@ -973,6 +998,8 @@
     }
 
 @code {
+    private bool isFullWidth;
+    private void ToggleFullWidth() => isFullWidth = !isFullWidth;
     private bool isPhotoModalOpen;
     private void HandlePhotoUpdated(string? newUrl) { if (_profile != null) _profile.ImageUrl = newUrl; }
     [Parameter] public int IndividualId { get; set; }

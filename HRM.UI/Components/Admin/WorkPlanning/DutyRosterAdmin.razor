@@ -7,69 +7,96 @@
 
 <PageTitle>Schedule Manager</PageTitle>
 
-<section class="w-full min-w-0 space-y-4 p-2">
-    <!-- Full-Width Sticky Header -->
-    <header class="sticky top-0 z-30 m-0 flex flex-wrap items-center justify-between gap-3 rounded-2xl border-b border-slate-200 bg-white/95 px-3 py-3 shadow-xs backdrop-blur-xs">
+<section class="w-full min-w-0 p-2 flex flex-col gap-3 text-slate-900 dark:text-slate-100">
+    <!-- Compact Header (no background/border) -->
+    <header class="flex flex-wrap items-center justify-between gap-2 px-1 py-0.5">
         <div class="min-w-0">
             <div class="flex flex-wrap items-center gap-2">
-                <span class="rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-semibold text-blue-800">Workforce Scheduling</span>
-                <span class="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-800">Duty &amp; Roster Engine</span>
+                <h1 class="truncate text-lg font-bold text-slate-900 dark:text-slate-100">Schedule Manager</h1>
+                <span class="inline-flex items-center gap-1 rounded-full bg-teal-50 dark:bg-teal-950/60 border border-teal-200/80 dark:border-teal-800 px-2 py-0.5 text-[10px] font-semibold text-teal-700 dark:text-teal-300">
+                    <span class="h-1.5 w-1.5 rounded-full bg-teal-500"></span>
+                    Workforce Scheduling
+                </span>
             </div>
-            <h1 class="mt-0.5 truncate text-lg font-bold text-slate-900">Schedule Manager</h1>
-            <p class="mt-0.5 text-xs text-slate-500">Manage rosters, draft planning, schedule assignments, manual duty planning, policies, and ledger reviews.</p>
+            <p class="text-xs text-slate-500 dark:text-slate-400">Manage rosters, draft planning, schedule assignments, manual duty planning, policies, and ledger reviews.</p>
         </div>
-        <div class="flex flex-wrap items-center gap-2">
+        <div class="flex flex-wrap items-center gap-1.5">
             <button type="button"
-                    class="inline-flex items-center justify-center rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition-colors"
+                    class="app-button app-button-neutral app-button-sm"
                     @onclick="ToggleWidthAsync">
-                @(isFullWidth ? "Shrink View" : "Full Width")
+                <AppIcon Name="@(isFullWidth ? "fullscreen_exit" : "fullscreen")" Class="text-xs" />
+                <span>@(isFullWidth ? "Shrink View" : "Full Width")</span>
             </button>
         </div>
     </header>
 
-    <!-- Segmented Navigation Bar -->
-    <div class="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-xs @(isFullWidth ? "max-w-none" : "mx-auto max-w-7xl")">
-        <div class="flex flex-wrap gap-0.5 rounded-lg border border-slate-300 bg-slate-50 p-0.5" role="tablist" aria-label="Duty roster sections">
-            @foreach (var item in TabItems)
+    <div class="dr-shell @(isFullWidth ? "dr-shell-full" : "dr-shell-standard")">
+        <!-- Narrow Sub-Navigation Bar -->
+        <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2 flex flex-wrap items-center justify-between gap-2">
+            <div class="flex flex-wrap items-center gap-1 overflow-x-auto" role="tablist" aria-label="Duty roster sections">
+                @foreach (var item in TabItems)
+                {
+                    var isActive = tab == item.Key;
+                    <button type="button"
+                            role="tab"
+                            aria-selected="@isActive"
+                            class="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors whitespace-nowrap @(isActive ? "bg-teal-50 dark:bg-teal-950/50 text-teal-800 dark:text-teal-300 border border-teal-200 dark:border-teal-800" : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 border border-transparent")"
+                            @onclick="() => SelectTab(item.Key)">
+                        @item.Label
+                    </button>
+                }
+            </div>
+        </div>
+
+        <div class="w-full min-w-0">
+            @if (tab == "schedule")
             {
-                <button type="button"
-                        role="tab"
-                        aria-selected="@(tab == item.Key)"
-                        class="rounded-md px-3 py-1.5 text-xs font-semibold transition @(tab == item.Key ? "bg-white text-blue-700 shadow-xs" : "text-slate-600 hover:text-slate-900")"
-                        @onclick="() => SelectTab(item.Key)">
-                    @item.Label
-                </button>
+                <ScopeScheduleSettings />
+            }
+            else if (tab == "draft")
+            {
+                <ScheduleManagerDraft />
+            }
+            else if (tab == "manual")
+            {
+                <ManualAssignment />
+            }
+            else if (tab == "policies")
+            {
+                <ScheduleManagerPolicies />
+            }
+            else if (tab == "review")
+            {
+                <ScheduleManagerReviews />
+            }
+            else
+            {
+                <DutyRoster />
             }
         </div>
     </div>
-
-    <div class="@(isFullWidth ? "max-w-none" : "mx-auto max-w-7xl")">
-        @if (tab == "schedule")
-        {
-            <ScopeScheduleSettings />
-        }
-        else if (tab == "draft")
-        {
-            <ScheduleManagerDraft />
-        }
-        else if (tab == "manual")
-        {
-            <ManualAssignment />
-        }
-        else if (tab == "policies")
-        {
-            <ScheduleManagerPolicies />
-        }
-        else if (tab == "review")
-        {
-            <ScheduleManagerReviews />
-        }
-        else
-        {
-            <DutyRoster />
-        }
-    </div>
 </section>
+
+<style>
+    .dr-shell {
+        width: 100%;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+        transition: max-width 200ms ease;
+    }
+
+    .dr-shell-standard {
+        max-width: 80rem;
+        margin-left: auto;
+        margin-right: auto;
+    }
+
+    .dr-shell-full {
+        max-width: none;
+    }
+</style>
 
 @code {
     [SupplyParameterFromQuery(Name = "tab")] public string? RequestedTab { get; set; }

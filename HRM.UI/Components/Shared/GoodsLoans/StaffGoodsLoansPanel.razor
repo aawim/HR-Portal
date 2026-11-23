@@ -13,51 +13,44 @@
 @inject ToastService Toast
 @inject IJSRuntime JS
 
-<section class="goods-loans-panel w-full min-w-0 p-2 space-y-4">
-    <!-- Header -->
-    <header class="sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur-xs px-3 py-3 shadow-xs rounded-xl flex items-center justify-between flex-wrap gap-2">
-        <div>
-            <div class="flex items-center gap-2">
-                <h2 class="text-lg font-bold text-slate-900">Staff Goods Loans</h2>
-                <span class="rounded-full px-2.5 py-0.5 text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+<section class="goods-loans-panel w-full min-w-0 flex flex-col gap-3 text-slate-900 dark:text-slate-100">
+    <!-- Compact Header (no background/border) -->
+    <header class="flex flex-wrap items-center justify-between gap-2 px-1 py-0.5">
+        <div class="min-w-0">
+            <div class="flex items-center gap-2 flex-wrap">
+                <h2 class="text-base font-bold text-slate-900 dark:text-slate-100">Staff Goods Loans</h2>
+                <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300 border border-teal-200/80 dark:border-teal-800">
+                    <span class="h-1.5 w-1.5 rounded-full bg-teal-500"></span>
                     Store Purchase Agreements
                 </span>
             </div>
-            <p class="text-xs text-slate-500 mt-0.5">
+            <p class="text-xs text-slate-500 dark:text-slate-400">
                 @if (EffectiveCanEnterLoan)
                 {
-                    <span>Record store purchase agreements and track active repayment schedules & deductions for this employee.</span>
+                    <span>Record store purchase agreements and track active repayment schedules &amp; deductions for this employee.</span>
                 }
                 else
                 {
-                    <span>Track your active store purchase agreement statuses, repayment schedules & deductions. Store purchase agreements are registered and managed by HR & Finance Administration.</span>
+                    <span>Track your active store purchase agreement statuses, repayment schedules &amp; deductions.</span>
                 }
             </p>
         </div>
-        <div class="flex items-center gap-2">
+        <div class="flex flex-wrap items-center gap-1.5">
             @if (!IsEmbedded)
             {
                 <button type="button"
-                        class="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition"
+                        class="app-button app-button-neutral app-button-sm"
                         @onclick="ToggleFullWidth">
-                    @if (isFullWidth)
-                    {
-                        <AppIcon Name="fullscreen" Class="h-3.5 w-3.5 text-slate-500 text-sm" />
-                        <span>Shrink View</span>
-                    }
-                    else
-                    {
-                        <AppIcon Name="fullscreen" Class="h-3.5 w-3.5 text-slate-500 text-sm" />
-                        <span>Full Width</span>
-                    }
+                    <AppIcon Name="@(isFullWidth ? "fullscreen_exit" : "fullscreen")" Class="text-xs" />
+                    <span>@(isFullWidth ? "Shrink View" : "Full Width")</span>
                 </button>
             }
 
             <button type="button"
-                    class="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition"
+                    class="app-button app-button-secondary app-button-sm"
                     @onclick="ReloadDataAsync"
                     disabled="@isLoading">
-                <AppIcon Name="refresh" Class="h-3.5 w-3.5 text-slate-500 text-sm " />
+                <AppIcon Name="refresh" Class="@(isLoading ? "animate-spin text-xs" : "text-xs")" />
                 <span>Refresh</span>
             </button>
 
@@ -66,16 +59,16 @@
                 @if (!isApplying)
                 {
                     <button type="button"
-                            class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 transition"
+                            class="app-button app-button-primary app-button-sm"
                             @onclick="StartNewApplication">
-                        <AppIcon Name="add" Class="h-3.5 w-3.5 text-sm" />
-                        <span>+ Enter Goods Loan</span>
+                        <AppIcon Name="add" Class="text-xs" />
+                        <span>Enter Goods Loan</span>
                     </button>
                 }
                 else
                 {
                     <button type="button"
-                            class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition"
+                            class="app-button app-button-secondary app-button-sm"
                             @onclick="CancelApplication">
                         <span>Back to Details</span>
                     </button>
@@ -84,38 +77,32 @@
         </div>
     </header>
 
-    <!-- Metrics Cards Overview -->
-    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        <div class="rounded-xl border border-slate-200 bg-white p-3 shadow-xs">
-            <div class="text-[11px] font-medium text-slate-500">Active Loans</div>
-            <div class="text-lg font-bold text-slate-900 mt-1">@summary.ActiveLoansCount</div>
-            <div class="text-[10px] text-slate-400 mt-0.5">Separate agreements</div>
-        </div>
-        <div class="rounded-xl border border-slate-200 bg-white p-3 shadow-xs">
-            <div class="text-[11px] font-medium text-slate-500">Total Borrowed</div>
-            <div class="text-lg font-bold text-blue-600 mt-1">MVR @summary.AllLoans.Sum(l => l.PrincipalAmount).ToString("N2")</div>
-            <div class="text-[10px] text-slate-400 mt-0.5">Approved purchases</div>
-        </div>
-        <div class="rounded-xl border border-slate-200 bg-white p-3 shadow-xs">
-            <div class="text-[11px] font-medium text-slate-500">Total Repaid</div>
-            <div class="text-lg font-bold text-emerald-600 mt-1">MVR @summary.AllLoans.Sum(l => l.TotalPaidAmount).ToString("N2")</div>
-            <div class="text-[10px] text-slate-400 mt-0.5">Payroll deductions</div>
-        </div>
-        <div class="rounded-xl border border-slate-200 bg-white p-3 shadow-xs">
-            <div class="text-[11px] font-medium text-slate-500">Outstanding Balance</div>
-            <div class="text-lg font-bold text-amber-600 mt-1">MVR @summary.TotalOutstandingBalance.ToString("N2")</div>
-            <div class="text-[10px] text-slate-400 mt-0.5">Remaining obligations</div>
-        </div>
-        <div class="rounded-xl border border-slate-200 bg-white p-3 shadow-xs">
-            <div class="text-[11px] font-medium text-slate-500">Monthly Deduction</div>
-            <div class="text-lg font-bold text-slate-900 mt-1">MVR @summary.CurrentMonthlyDeduction.ToString("N2")</div>
-            <div class="text-[10px] text-slate-400 mt-0.5">Active commitment</div>
-        </div>
-        <div class="rounded-xl border border-emerald-200 bg-emerald-50/50 p-3 shadow-xs">
-            <div class="text-[11px] font-medium text-emerald-700">Available Capacity</div>
-            <div class="text-lg font-bold text-emerald-700 mt-1">MVR @summary.AvailableMonthlyCapacity.ToString("N2")</div>
-            <div class="text-[10px] text-emerald-600 mt-0.5">Monthly loan limit</div>
-        </div>
+    <!-- Narrow Inline KPI Summary Bar -->
+    <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3.5 py-2.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5 text-[11px] text-slate-500 dark:text-slate-400">
+        <span class="inline-flex items-center gap-1.5">
+            <span class="h-1.5 w-1.5 rounded-full bg-slate-500"></span>
+            Active Loans: <strong class="text-slate-900 dark:text-slate-100 tabular-nums">@summary.ActiveLoansCount</strong>
+        </span>
+        <span class="inline-flex items-center gap-1.5">
+            <span class="h-1.5 w-1.5 rounded-full bg-blue-500"></span>
+            Borrowed: <strong class="text-slate-900 dark:text-slate-100 tabular-nums">MVR @summary.AllLoans.Sum(l => l.PrincipalAmount).ToString("N2")</strong>
+        </span>
+        <span class="inline-flex items-center gap-1.5">
+            <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
+            Repaid: <strong class="text-slate-900 dark:text-slate-100 tabular-nums">MVR @summary.AllLoans.Sum(l => l.TotalPaidAmount).ToString("N2")</strong>
+        </span>
+        <span class="inline-flex items-center gap-1.5">
+            <span class="h-1.5 w-1.5 rounded-full bg-amber-500"></span>
+            Outstanding: <strong class="text-amber-700 dark:text-amber-300 tabular-nums">MVR @summary.TotalOutstandingBalance.ToString("N2")</strong>
+        </span>
+        <span class="inline-flex items-center gap-1.5">
+            <span class="h-1.5 w-1.5 rounded-full bg-slate-400"></span>
+            Monthly Deduction: <strong class="text-slate-900 dark:text-slate-100 tabular-nums">MVR @summary.CurrentMonthlyDeduction.ToString("N2")</strong>
+        </span>
+        <span class="inline-flex items-center gap-1.5">
+            <span class="h-1.5 w-1.5 rounded-full bg-teal-500"></span>
+            Available Capacity: <strong class="text-teal-700 dark:text-teal-300 tabular-nums">MVR @summary.AvailableMonthlyCapacity.ToString("N2")</strong>
+        </span>
     </div>
 
     <!-- 2-Panel Grid System -->

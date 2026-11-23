@@ -5,196 +5,196 @@
 @inject HRM.Services.ToastService Toasts
 @inject ILogger<StaffEmergencyContacts> Logger
 
-<div class="staff-emergency-contacts w-full min-w-0 p-2 space-y-4">
-    <!-- Header Bar -->
-    <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 py-3 rounded-2xl shadow-xs">
-        <div>
-            <div class="flex items-center gap-2">
-                <span class="text-xl">🚨</span>
+<section class="staff-emergency-contacts w-full min-w-0 flex flex-col gap-3 text-slate-900 dark:text-slate-100">
+    <!-- Compact Header (no background/border) -->
+    <header class="flex flex-wrap items-center justify-between gap-2 px-1 py-0.5">
+        <div class="min-w-0">
+            <div class="flex items-center gap-2 flex-wrap">
                 <h2 class="text-base font-bold text-slate-900 dark:text-slate-100">
                     Emergency Contact Directory
                 </h2>
-                <span class="rounded-full bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 px-2.5 py-0.5 text-xs font-semibold">
+                <span class="inline-flex items-center gap-1 rounded-full bg-rose-50 dark:bg-rose-950/60 border border-rose-200/80 dark:border-rose-800 px-2 py-0.5 text-[10px] font-semibold text-rose-700 dark:text-rose-300">
+                    <span class="h-1.5 w-1.5 rounded-full bg-rose-500"></span>
                     @contacts.Count Contact@(contacts.Count == 1 ? "" : "s")
                 </span>
             </div>
-            <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                Designated individuals to notify in case of medical crises, sudden workplace accidents, or urgent personal incidents.
+            <p class="text-xs text-slate-500 dark:text-slate-400">
+                Designated individuals to notify in case of medical crises, workplace accidents, or urgent personal incidents.
             </p>
         </div>
 
-        <div class="flex items-center gap-2">
+        <div class="flex flex-wrap items-center gap-1.5">
             <button type="button"
-                    class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200 shadow-2xs hover:bg-slate-50 dark:hover:bg-slate-700 transition"
+                    class="app-button app-button-secondary app-button-sm"
                     disabled="@busy"
                     @onclick="LoadContactsAsync">
-                <span>↻</span>
+                <AppIcon Name="refresh" Class="@(busy ? "animate-spin text-xs" : "text-xs")" />
                 <span>Refresh</span>
             </button>
 
             <button type="button"
-                    class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-teal-700 hover:bg-teal-800 text-white px-3.5 py-1.5 text-xs font-semibold shadow-2xs transition"
+                    class="app-button app-button-primary app-button-sm"
                     disabled="@busy"
                     @onclick="OpenAddModal">
-                <span>+</span>
+                <AppIcon Name="add" Class="text-xs" />
                 <span>Add Emergency Contact</span>
             </button>
         </div>
-    </div>
+    </header>
 
     @if (!string.IsNullOrWhiteSpace(globalError))
     {
-        <div class="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800 flex items-center justify-between">
-            <span>⚠️ @globalError</span>
-            <button type="button" class="text-rose-700 font-bold hover:underline" @onclick="() => globalError = null">Dismiss</button>
+        <div role="alert" class="rounded-xl border border-rose-200 dark:border-rose-800 bg-rose-50/80 dark:bg-rose-950/40 px-3.5 py-2.5 text-xs text-rose-800 dark:text-rose-200 flex items-center justify-between">
+            <span>@globalError</span>
+            <button type="button" class="text-rose-700 dark:text-rose-300 font-bold hover:underline" @onclick="() => globalError = null">Dismiss</button>
         </div>
     }
 
     <!-- Content Area -->
     @if (busy && contacts.Count == 0)
     {
-        <div class="py-12 text-center text-xs text-slate-400 animate-pulse">
-            Loading emergency contacts…
+        <div role="status" class="flex items-center justify-center gap-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-8 text-xs text-slate-500">
+            <span class="h-4 w-4 rounded-full border-2 border-blue-600 border-t-transparent animate-spin"></span>
+            <span>Loading emergency contacts…</span>
         </div>
     }
     else if (contacts.Count == 0)
     {
-        <div class="rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-8 text-center text-xs text-slate-500 dark:text-slate-400 flex flex-col items-center gap-2">
-            <span class="text-3xl">🚨</span>
+        <div class="rounded-xl border border-dashed border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-8 text-center text-xs text-slate-500 dark:text-slate-400 flex flex-col items-center gap-2">
             <p class="font-bold text-slate-800 dark:text-slate-200 text-sm">No Emergency Contacts Registered</p>
             <p class="text-xs max-w-md">No next-of-kin or emergency points of contact are on file for this staff member. Having at least one primary emergency contact is crucial for workplace safety and crisis protocols.</p>
             <button type="button"
-                    class="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-teal-700 hover:bg-teal-800 text-white px-3.5 py-1.5 text-xs font-semibold shadow-2xs transition"
+                    class="mt-1 app-button app-button-primary app-button-sm"
                     @onclick="OpenAddModal">
-                <span>+ Add Primary Contact</span>
+                <AppIcon Name="add" Class="text-xs" />
+                <span>Add Primary Contact</span>
             </button>
         </div>
     }
     else
     {
-        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        <div class="ec-cards-grid">
             @foreach (var c in contacts)
             {
-                <div @key="c.Id"
-                     class="rounded-2xl border p-4 shadow-xs flex flex-col justify-between gap-3 transition @(c.IsPrimary ? "border-rose-400 dark:border-rose-600 bg-rose-50/20 dark:bg-rose-950/20 ring-1 ring-rose-400/50" : "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-slate-300")">
+                <article @key="c.Id"
+                         class="rounded-xl border overflow-hidden flex flex-col justify-between transition-colors @(c.IsPrimary ? "border-teal-500 dark:border-teal-600 bg-white dark:bg-slate-900" : "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900")">
 
-                    <!-- Top Bar: Contact Name, Relationship, Badges -->
-                    <div class="flex items-start justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-2.5">
-                        <div class="flex items-center gap-2">
-                            <span class="text-xl shrink-0">👤</span>
-                            <div>
-                                <h3 class="font-bold text-slate-900 dark:text-slate-100 text-sm leading-tight">
-                                    @c.ContactName
-                                </h3>
-                                <span class="inline-block mt-0.5 rounded-md bg-slate-100 dark:bg-slate-800 px-2 py-0.5 text-[11px] font-medium text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
-                                    @c.Relationship
-                                </span>
-                            </div>
+                    <!-- Card Header -->
+                    <div class="bg-slate-50/80 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 px-3.5 py-2.5 flex items-start justify-between gap-2">
+                        <div class="min-w-0">
+                            <h3 class="font-bold text-slate-900 dark:text-slate-100 text-xs leading-snug truncate">@c.ContactName</h3>
+                            <span class="inline-block mt-0.5 rounded-md bg-white dark:bg-slate-900 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                                @c.Relationship
+                            </span>
                         </div>
 
-                        <div>
-                            @if (c.IsPrimary)
-                            {
-                                <span class="rounded-full bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 border border-rose-200 dark:border-rose-900 px-2 py-0.5 text-[10px] font-bold tracking-wide flex items-center gap-1 shadow-2xs">
-                                    <span>⭐</span> Primary
-                                </span>
-                            }
-                        </div>
+                        @if (c.IsPrimary)
+                        {
+                            <span class="shrink-0 rounded-full bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 px-2 py-0.5 text-[10px] font-semibold">
+                                Primary
+                            </span>
+                        }
                     </div>
 
                     <!-- Details Body -->
-                    <div class="space-y-2 text-xs">
-                        <div class="flex items-center justify-between bg-slate-50 dark:bg-slate-800/60 rounded-lg px-2.5 py-1.5 border border-slate-200/60 dark:border-slate-700/60">
-                            <span class="text-slate-500 dark:text-slate-400 font-medium flex items-center gap-1">
-                                <span>📞</span> Primary Phone:
-                            </span>
-                            <a href="tel:@c.PrimaryPhone" class="font-semibold text-teal-700 dark:text-teal-400 hover:underline">
-                                @c.PrimaryPhone
-                            </a>
+                    <div class="p-3.5 space-y-2 text-xs flex-1">
+                        <div class="flex items-center justify-between gap-2 bg-slate-50/70 dark:bg-slate-800/40 rounded-lg px-2.5 py-1.5 border border-slate-200/80 dark:border-slate-800">
+                            <span class="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Primary Phone</span>
+                            <a href="tel:@c.PrimaryPhone" class="font-mono font-semibold text-teal-700 dark:text-teal-400 hover:underline">@c.PrimaryPhone</a>
                         </div>
 
                         @if (!string.IsNullOrWhiteSpace(c.SecondaryPhone))
                         {
-                            <div class="flex items-center justify-between bg-slate-50 dark:bg-slate-800/60 rounded-lg px-2.5 py-1.5 border border-slate-200/60 dark:border-slate-700/60">
-                                <span class="text-slate-500 dark:text-slate-400 font-medium flex items-center gap-1">
-                                    <span>📱</span> Secondary Phone:
-                                </span>
-                                <a href="tel:@c.SecondaryPhone" class="font-medium text-slate-700 dark:text-slate-300 hover:underline">
-                                    @c.SecondaryPhone
-                                </a>
+                            <div class="flex items-center justify-between gap-2 bg-slate-50/70 dark:bg-slate-800/40 rounded-lg px-2.5 py-1.5 border border-slate-200/80 dark:border-slate-800">
+                                <span class="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Secondary Phone</span>
+                                <a href="tel:@c.SecondaryPhone" class="font-mono font-medium text-slate-700 dark:text-slate-300 hover:underline">@c.SecondaryPhone</a>
                             </div>
                         }
 
                         @if (!string.IsNullOrWhiteSpace(c.Email))
                         {
-                            <div class="flex items-center justify-between bg-slate-50 dark:bg-slate-800/60 rounded-lg px-2.5 py-1.5 border border-slate-200/60 dark:border-slate-700/60">
-                                <span class="text-slate-500 dark:text-slate-400 font-medium flex items-center gap-1">
-                                    <span>✉️</span> Email:
-                                </span>
-                                <a href="mailto:@c.Email" class="font-medium text-teal-700 dark:text-teal-400 hover:underline truncate max-w-[180px]">
-                                    @c.Email
-                                </a>
+                            <div class="flex items-center justify-between gap-2 bg-slate-50/70 dark:bg-slate-800/40 rounded-lg px-2.5 py-1.5 border border-slate-200/80 dark:border-slate-800">
+                                <span class="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Email</span>
+                                <a href="mailto:@c.Email" class="font-medium text-teal-700 dark:text-teal-400 hover:underline truncate max-w-[180px]">@c.Email</a>
                             </div>
                         }
 
                         @if (!string.IsNullOrWhiteSpace(c.Address))
                         {
-                            <div class="bg-slate-50 dark:bg-slate-800/60 rounded-lg px-2.5 py-1.5 border border-slate-200/60 dark:border-slate-700/60">
-                                <span class="text-slate-500 dark:text-slate-400 font-medium block text-[11px]">🏠 Address:</span>
+                            <div class="bg-slate-50/70 dark:bg-slate-800/40 rounded-lg px-2.5 py-1.5 border border-slate-200/80 dark:border-slate-800">
+                                <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Address</span>
                                 <p class="text-slate-700 dark:text-slate-300 text-xs mt-0.5 leading-snug">@c.Address</p>
                             </div>
                         }
 
                         @if (!string.IsNullOrWhiteSpace(c.Notes))
                         {
-                            <div class="rounded-lg bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/40 p-2 text-[11px] text-amber-900 dark:text-amber-200">
-                                <span class="font-semibold block text-[10px] text-amber-700 dark:text-amber-400 uppercase tracking-wide">Notes:</span>
+                            <div class="rounded-lg bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/40 px-2.5 py-1.5 text-[11px] text-amber-900 dark:text-amber-200">
+                                <span class="font-bold block text-[10px] text-amber-700 dark:text-amber-400 uppercase tracking-wider">Notes</span>
                                 @c.Notes
                             </div>
                         }
                     </div>
 
                     <!-- Bottom Actions -->
-                    <div class="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800">
+                    <div class="px-3.5 py-2.5 bg-slate-50/50 dark:bg-slate-900/60 border-t border-slate-200/80 dark:border-slate-800 flex items-center justify-between gap-2">
                         @if (!c.IsPrimary)
                         {
                             <button type="button"
-                                    class="inline-flex items-center gap-1 text-[11px] font-semibold text-rose-700 dark:text-rose-400 hover:text-rose-900 transition hover:underline"
+                                    class="text-[11px] font-semibold text-teal-700 dark:text-teal-400 hover:underline disabled:opacity-50"
                                     disabled="@busy"
                                     @onclick="() => SetPrimaryAsync(c.Id)">
-                                <span>★</span>
-                                <span>Set as Primary</span>
+                                Set as Primary
                             </button>
                         }
                         else
                         {
-                            <span class="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1">
-                                <span>✓</span> Default contact
-                            </span>
+                            <span class="text-[11px] text-emerald-700 dark:text-emerald-400 font-semibold">Default contact</span>
                         }
 
-                        <div class="flex items-center gap-1">
+                        <div class="flex items-center gap-1.5">
                             <button type="button"
-                                    class="inline-flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-1.5 text-xs text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition"
+                                    class="app-button app-button-secondary app-button-sm"
                                     title="Edit contact details"
                                     disabled="@busy"
                                     @onclick="() => OpenEditModal(c)">
-                                <span>✏️</span>
+                                Edit
                             </button>
                             <button type="button"
-                                    class="inline-flex items-center justify-center rounded-lg border border-rose-200 dark:border-rose-900/50 bg-rose-50/50 dark:bg-rose-950/50 p-1.5 text-xs text-rose-600 dark:text-rose-400 hover:bg-rose-100 transition"
+                                    class="inline-flex items-center rounded-lg border border-rose-200 dark:border-rose-800 bg-rose-50/70 dark:bg-rose-950/40 px-2.5 py-1 text-xs font-semibold text-rose-700 dark:text-rose-300 hover:bg-rose-100 disabled:opacity-50 transition-colors"
                                     title="Delete contact"
                                     disabled="@busy"
                                     @onclick="() => ConfirmDeleteAsync(c)">
-                                <span>✕</span>
+                                Remove
                             </button>
                         </div>
                     </div>
-                </div>
+                </article>
             }
         </div>
     }
-</div>
+</section>
+
+<style>
+    .ec-cards-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 0.75rem;
+        align-items: stretch;
+    }
+
+    @@media (min-width: 768px) {
+        .ec-cards-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+
+    @@media (min-width: 1280px) {
+        .ec-cards-grid {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+    }
+</style>
 
 @* Add/Edit Contact Modal *@
 @if (showModal)
