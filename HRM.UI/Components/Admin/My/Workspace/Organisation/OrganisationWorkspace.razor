@@ -17,121 +17,171 @@
     }
     else if (data != null)
     {
-        @if (!HideHeader || ActiveTab == WorkspaceTab.Overview)
+        @if (!HideHeader)
         {
-        <section class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-2xs">
-            <div class="flex flex-wrap items-start justify-between gap-2">
-                <div>
-                    <h1 class="text-xl font-bold text-slate-900 dark:text-slate-100">@data.Name</h1>
-                    @if (!string.IsNullOrWhiteSpace(data.DhivehiName))
-                    {
-                        <p lang="dv" dir="rtl" class="mt-1 text-sm text-slate-500 dark:text-slate-400 font-medium">@data.DhivehiName</p>
-                    }
-                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400 font-medium uppercase tracking-wider">@data.Type</p>
+            <section class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 py-3">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                        <h1 class="text-base font-bold text-slate-900 dark:text-slate-100">@data.Name</h1>
+                        @if (!string.IsNullOrWhiteSpace(data.DhivehiName))
+                        {
+                            <p lang="dv" dir="rtl" class="mt-0.5 text-xs text-slate-500 dark:text-slate-400 font-medium">@data.DhivehiName</p>
+                        }
+                        <p class="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400 font-medium uppercase tracking-wider">@data.Type</p>
+                    </div>
+                    <button type="button" class="app-button app-button-secondary app-button-sm" @onclick="LoadAsync">
+                        <AppIcon Name="refresh" Class="text-xs" />
+                        <span>Refresh</span>
+                    </button>
                 </div>
-                <button type="button" class="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200 shadow-2xs hover:bg-slate-50 dark:hover:bg-slate-700 transition" @onclick="LoadAsync">
-                    <span>↻</span>
-                    <span>Refresh</span>
-                </button>
-            </div>
-        </section>
+            </section>
         }
 
         @if (ActiveTab == WorkspaceTab.Overview)
         {
-            <div class="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-2xs">
-                    <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Active Staff</p>
-                    <p class="mt-1 text-2xl font-bold text-slate-900 dark:text-slate-100">@data.StaffCount</p>
+            <!-- Compact Inline KPI & Organisation Metadata Bar (UI_DESIGN_STANDARD Section 6.5) -->
+            <section class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3.5 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs">
+                <div class="flex flex-wrap items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
+                    @if (!string.IsNullOrWhiteSpace(data.Type))
+                    {
+                        <span class="inline-flex rounded-full border border-indigo-200/80 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/60 px-2 py-0.5 text-[10px] font-semibold text-indigo-700 dark:text-indigo-300">@data.Type</span>
+                    }
+                    <span>Reg: <strong class="font-mono text-slate-800 dark:text-slate-100">@(data.RegistrationNumber ?? "—")</strong></span>
+                    <span>·</span>
+                    <span>Parent: <strong class="text-slate-800 dark:text-slate-100">@(data.Parent ?? "—")</strong></span>
+                    @if (!string.IsNullOrWhiteSpace(data.DhivehiName))
+                    {
+                        <span>·</span>
+                        <span lang="dv" dir="rtl" class="font-medium text-slate-700 dark:text-slate-300">@data.DhivehiName</span>
+                    }
                 </div>
-                <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-2xs">
-                    <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Departments</p>
-                    <p class="mt-1 text-2xl font-bold text-slate-900 dark:text-slate-100">@data.Departments.Count</p>
+
+                <div class="flex flex-wrap items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
+                    <span class="inline-flex items-center gap-1.5"><span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>Staff: <strong class="text-slate-800 dark:text-slate-100">@data.StaffCount</strong></span>
+                    <span>·</span>
+                    <span class="inline-flex items-center gap-1.5"><span class="h-1.5 w-1.5 rounded-full bg-blue-500"></span>Departments: <strong class="text-slate-800 dark:text-slate-100">@data.Departments.Count</strong></span>
+                    <span>·</span>
+                    <span class="inline-flex items-center gap-1.5"><span class="h-1.5 w-1.5 rounded-full bg-teal-500"></span>Teams: <strong class="text-slate-800 dark:text-slate-100">@data.Teams.Count</strong></span>
+                    @if (HideHeader)
+                    {
+                        <button type="button" class="app-button app-button-secondary app-button-sm ml-1" @onclick="LoadAsync">
+                            <AppIcon Name="refresh" Class="text-xs" />
+                            <span>Refresh</span>
+                        </button>
+                    }
                 </div>
-                <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-2xs">
-                    <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Active Teams</p>
-                    <p class="mt-1 text-2xl font-bold text-slate-900 dark:text-slate-100">@data.Teams.Count</p>
-                </div>
-            </div>
-            <section class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-2xs">
-                <h2 class="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">Organisation Details</h2>
-                <dl class="mt-3 grid gap-3 text-xs sm:grid-cols-2">
-                    <div>
-                        <dt class="font-medium text-slate-400 dark:text-slate-500">Registration Number</dt>
-                        <dd class="mt-0.5 font-semibold text-slate-900 dark:text-slate-100">@(data.RegistrationNumber ?? "—")</dd>
-                    </div>
-                    <div>
-                        <dt class="font-medium text-slate-400 dark:text-slate-500">Parent Organisation</dt>
-                        <dd class="mt-0.5 font-semibold text-slate-900 dark:text-slate-100">@(data.Parent ?? "—")</dd>
-                    </div>
-                </dl>
             </section>
-            <div class="grid grid-cols-1 items-start gap-2 lg:grid-cols-2">
-                <section class="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs">
-                    <h2 class="border-b border-slate-100 dark:border-slate-800 px-4 py-3 text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">Departments</h2>
+
+            <!-- 3-Column Responsive Enterprise Cards: Departments, Teams, Roles & Permissions -->
+            <div class="org-overview-grid">
+                <section class="overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+                    <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 px-3.5 py-2.5">
+                        <h2 class="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-100">Departments</h2>
+                        <span class="inline-flex rounded-full bg-blue-50 dark:bg-blue-950/50 border border-blue-200/80 dark:border-blue-800 px-2 py-0.5 text-[10px] font-semibold text-blue-700 dark:text-blue-300">@data.Departments.Count</span>
+                    </div>
                     @if (data.Departments.Count == 0)
                     {
                         <p class="p-4 text-xs text-slate-500 dark:text-slate-400">No active departments.</p>
                     }
                     else
                     {
-                        <ul class="max-h-96 divide-y divide-slate-100 dark:divide-slate-800 overflow-y-auto">
-                            @foreach (var group in data.Departments)
-                            {
-                                <li class="flex justify-between gap-2 px-4 py-3 text-xs text-slate-800 dark:text-slate-200">
-                                    <span class="font-medium">@group.Name</span>
-                                    <span class="shrink-0 text-[11px] text-slate-500 dark:text-slate-400">@group.Members staff</span>
-                                </li>
-                            }
-                        </ul>
+                        <div class="max-h-96 overflow-y-auto">
+                            <table class="min-w-full divide-y divide-slate-200/80 dark:divide-slate-800 text-left text-xs">
+                                <thead class="sticky top-0 z-10 bg-slate-50 dark:bg-slate-800/90 text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">
+                                    <tr>
+                                        <th class="px-3.5 py-2">Department</th>
+                                        <th class="px-3.5 py-2 text-right">Staff</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                                    @for (var i = 0; i < data.Departments.Count; i++)
+                                    {
+                                        var group = data.Departments[i];
+                                        var isAlt = i % 2 == 1;
+                                        <tr class="@(isAlt ? "bg-[#f3f8fd] dark:bg-slate-800/30" : "bg-white dark:bg-slate-900")">
+                                            <td class="px-3.5 py-2 font-semibold text-slate-900 dark:text-slate-100">@group.Name</td>
+                                            <td class="px-3.5 py-2 text-right whitespace-nowrap">
+                                                <span class="inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold @(group.Members > 0 ? "bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300" : "bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400")">
+                                                    @group.Members staff
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
                     }
                 </section>
-                <section class="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs">
-                    <h2 class="border-b border-slate-100 dark:border-slate-800 px-4 py-3 text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">Teams</h2>
+
+                <section class="overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+                    <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 px-3.5 py-2.5">
+                        <h2 class="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-100">Teams</h2>
+                        <span class="inline-flex rounded-full bg-teal-50 dark:bg-teal-950/50 border border-teal-200/80 dark:border-teal-800 px-2 py-0.5 text-[10px] font-semibold text-teal-700 dark:text-teal-300">@data.Teams.Count</span>
+                    </div>
                     @if (data.Teams.Count == 0)
                     {
                         <p class="p-4 text-xs text-slate-500 dark:text-slate-400">No active teams.</p>
                     }
                     else
                     {
-                        <ul class="max-h-96 divide-y divide-slate-100 dark:divide-slate-800 overflow-y-auto">
-                            @foreach (var group in data.Teams)
-                            {
-                                <li class="flex justify-between gap-2 px-4 py-3 text-xs text-slate-800 dark:text-slate-200">
-                                    <span class="font-medium">@group.Name</span>
-                                    <span class="shrink-0 text-[11px] text-slate-500 dark:text-slate-400">@group.Members members</span>
-                                </li>
-                            }
-                        </ul>
+                        <div class="max-h-96 overflow-y-auto">
+                            <table class="min-w-full divide-y divide-slate-200/80 dark:divide-slate-800 text-left text-xs">
+                                <thead class="sticky top-0 z-10 bg-slate-50 dark:bg-slate-800/90 text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">
+                                    <tr>
+                                        <th class="px-3.5 py-2">Team</th>
+                                        <th class="px-3.5 py-2 text-right">Members</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                                    @for (var i = 0; i < data.Teams.Count; i++)
+                                    {
+                                        var group = data.Teams[i];
+                                        var isAlt = i % 2 == 1;
+                                        <tr class="@(isAlt ? "bg-[#f3f8fd] dark:bg-slate-800/30" : "bg-white dark:bg-slate-900")">
+                                            <td class="px-3.5 py-2 font-semibold text-slate-900 dark:text-slate-100">@group.Name</td>
+                                            <td class="px-3.5 py-2 text-right whitespace-nowrap">
+                                                <span class="inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold @(group.Members > 0 ? "bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300" : "bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400")">
+                                                    @group.Members members
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
                     }
                 </section>
-            </div>
-            @if (canViewRolesAndPermissions)
-            {
-                <div class="grid grid-cols-1 items-start gap-2 lg:grid-cols-2">
-                    <section class="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs">
-                        <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 px-4 py-3">
+
+                @if (canViewRolesAndPermissions)
+                {
+                    <section class="overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+                        <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 dark:border-slate-800 px-3.5 py-2.5">
                             <div class="flex items-center gap-2">
-                                <h2 class="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">Roles</h2>
-                                <span class="inline-flex items-center rounded-full bg-slate-100 dark:bg-slate-800 px-2 py-0.5 text-[10px] font-semibold text-slate-600 dark:text-slate-300">Read-only · @overviewRoles.Count</span>
+                                <h2 class="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-100">Roles</h2>
+                                <span class="inline-flex items-center rounded-full border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 text-[10px] font-semibold text-slate-600 dark:text-slate-300">Read-only · @overviewRoles.Count</span>
                             </div>
                             <input type="search"
                                    placeholder="Filter roles…"
                                    @bind="overviewRoleSearch"
                                    @bind:event="oninput"
-                                   class="rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1 text-xs text-slate-800 dark:text-slate-100 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                                   class="h-8 rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 text-xs text-slate-800 dark:text-slate-100 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
                         </div>
-                        @if (!FilteredOverviewRoles.Any())
+                        @{
+                            var filteredRoles = FilteredOverviewRoles.ToList();
+                        }
+                        @if (filteredRoles.Count == 0)
                         {
                             <p class="p-4 text-xs text-slate-500 dark:text-slate-400">No roles configured for this organisation.</p>
                         }
                         else
                         {
                             <div class="max-h-96 divide-y divide-slate-100 dark:divide-slate-800 overflow-y-auto">
-                                @foreach (var role in FilteredOverviewRoles)
+                                @for (var i = 0; i < filteredRoles.Count; i++)
                                 {
-                                    <details @key="role.Id" class="px-4 py-3 text-xs">
-                                        <summary class="cursor-pointer font-semibold text-slate-800 dark:text-slate-200 hover:text-teal-600 dark:hover:text-teal-400 transition">
+                                    var role = filteredRoles[i];
+                                    var isAlt = i % 2 == 1;
+                                    <details @key="role.Id" class="px-3.5 py-2.5 text-xs @(isAlt ? "bg-[#f3f8fd] dark:bg-slate-800/30" : "bg-white dark:bg-slate-900")">
+                                        <summary class="cursor-pointer font-semibold text-slate-900 dark:text-slate-100 hover:text-teal-700 dark:hover:text-teal-400 transition">
                                             @role.Name
                                             <span class="mt-0.5 block text-[11px] font-normal text-slate-500 dark:text-slate-400">@role.Summary</span>
                                         </summary>
@@ -154,41 +204,58 @@
                         }
                     </section>
 
-                    <section class="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs">
-                        <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 px-4 py-3">
+                    <section class="overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+                        <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 dark:border-slate-800 px-3.5 py-2.5">
                             <div class="flex items-center gap-2">
-                                <h2 class="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">Permissions</h2>
-                                <span class="inline-flex items-center rounded-full bg-slate-100 dark:bg-slate-800 px-2 py-0.5 text-[10px] font-semibold text-slate-600 dark:text-slate-300">Read-only · @overviewPermissions.Count</span>
+                                <h2 class="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-100">Permissions</h2>
+                                <span class="inline-flex items-center rounded-full border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 text-[10px] font-semibold text-slate-600 dark:text-slate-300">Read-only · @overviewPermissions.Count</span>
                             </div>
                             <input type="search"
                                    placeholder="Filter permissions…"
                                    @bind="overviewPermissionSearch"
                                    @bind:event="oninput"
-                                   class="rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1 text-xs text-slate-800 dark:text-slate-100 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                                   class="h-8 rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 text-xs text-slate-800 dark:text-slate-100 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
                         </div>
-                        @if (!FilteredOverviewPermissions.Any())
+                        @{
+                            var filteredPerms = FilteredOverviewPermissions.ToList();
+                        }
+                        @if (filteredPerms.Count == 0)
                         {
                             <p class="p-4 text-xs text-slate-500 dark:text-slate-400">No permissions enabled for this organisation.</p>
                         }
                         else
                         {
-                            <ul class="max-h-96 divide-y divide-slate-100 dark:divide-slate-800 overflow-y-auto">
-                                @foreach (var perm in FilteredOverviewPermissions)
-                                {
-                                    <li @key="perm.Id" class="px-4 py-2.5 text-xs">
-                                        <div class="font-semibold text-slate-800 dark:text-slate-200">@perm.Name</div>
-                                        <div class="mt-0.5 break-all font-mono text-[11px] text-slate-500 dark:text-slate-400">@perm.Summary</div>
-                                        @if (perm.Details.Count > 0 && !string.IsNullOrWhiteSpace(perm.Details[0]))
+                            <div class="max-h-96 overflow-y-auto">
+                                <table class="min-w-full divide-y divide-slate-200/80 dark:divide-slate-800 text-left text-xs">
+                                    <thead class="sticky top-0 z-10 bg-slate-50 dark:bg-slate-800/90 text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">
+                                        <tr>
+                                            <th class="px-3.5 py-2">Permission</th>
+                                            <th class="px-3.5 py-2">Key</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                                        @for (var i = 0; i < filteredPerms.Count; i++)
                                         {
-                                            <div class="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">@perm.Details[0]</div>
+                                            var perm = filteredPerms[i];
+                                            var isAlt = i % 2 == 1;
+                                            <tr @key="perm.Id" class="@(isAlt ? "bg-[#f3f8fd] dark:bg-slate-800/30" : "bg-white dark:bg-slate-900")">
+                                                <td class="px-3.5 py-2">
+                                                    <div class="font-semibold text-slate-900 dark:text-slate-100">@perm.Name</div>
+                                                    @if (perm.Details.Count > 0 && !string.IsNullOrWhiteSpace(perm.Details[0]))
+                                                    {
+                                                        <div class="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">@perm.Details[0]</div>
+                                                    }
+                                                </td>
+                                                <td class="px-3.5 py-2 font-mono text-[11px] text-slate-500 dark:text-slate-400 break-all">@perm.Summary</td>
+                                            </tr>
                                         }
-                                    </li>
-                                }
-                            </ul>
+                                    </tbody>
+                                </table>
+                            </div>
                         }
                     </section>
-                </div>
-            }
+                }
+            </div>
             @if (canManageLeadership)
             {
                 <HRM.Components.Admin.Settings.LeadershipAdministrationPage Embedded="true" InitialOrganisationId="OrganisationId" />
@@ -377,6 +444,30 @@
         }
     }
 </div>
+
+<style>
+    .org-overview-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        align-items: start;
+        gap: 0.5rem;
+        width: 100%;
+        min-width: 0;
+        box-sizing: border-box;
+    }
+
+    @@media (min-width: 768px) {
+        .org-overview-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+
+    @@media (min-width: 1024px) {
+        .org-overview-grid {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+    }
+</style>
 
 @code {
     [Parameter] public int OrganisationId { get; set; }
