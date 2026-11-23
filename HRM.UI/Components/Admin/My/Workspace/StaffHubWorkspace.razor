@@ -483,6 +483,9 @@
                     <div class="w-full min-w-0 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-2xs">
                         @switch (inspectedOrgSettingsTab)
                         {
+                            case "structure":
+                                <HRM.Components.Admin.Hr.Organisation.Tabs.OrganisationStructureTab @key="inspectedOrgId.Value" OrganisationId="inspectedOrgId.Value" />
+                                break;
                             case "manage":
                                 <HRM.Components.Admin.Settings.Organisations.OrganisationSettingsEditor @key="inspectedOrgId.Value" InitialOrganisationId="inspectedOrgId.Value" HideHeader="true" />
                                 break;
@@ -3843,6 +3846,7 @@
                 }
                 var matchedSettingsTab = orgSection switch
                 {
+                    "structure" or "structures" => "structure",
                     "manage" or "organisations" => "manage",
                     "document-types" or "document-centre" or "document-center" => "document-types",
                     "calendar" => "calendar",
@@ -4561,6 +4565,7 @@
 
     private static readonly (string Key, string Label)[] OrgSettingsTabs =
     [
+        ("structure", "Structure"),
         ("manage", "Manage"),
         ("calendar", "Calendar"),
     ];
