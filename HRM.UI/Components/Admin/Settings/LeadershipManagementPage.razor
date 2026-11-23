@@ -7,85 +7,84 @@
 
 <PageTitle>Leadership Records &amp; Audit</PageTitle>
 
-<section class="w-full min-w-0 p-2 space-y-4">
-    <!-- Full-Width Sticky Header -->
-    <header class="sticky top-0 z-30 m-0 border-b border-slate-200 bg-white/95 backdrop-blur-xs px-3 py-3 shadow-xs rounded-2xl flex flex-wrap items-center justify-between gap-3">
+<section class="w-full min-w-0 p-2 space-y-3">
+    <!-- Standard Full-Width Sticky Header (UI_DESIGN_STANDARD Sections 3 & 6.4) -->
+    <header class="sticky top-0 z-30 m-0 border-b border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xs px-4 py-3 shadow-xs rounded-xl flex flex-wrap items-center justify-between gap-3">
         <div class="min-w-0">
-            <div class="flex items-center gap-2 flex-wrap">
-                <span class="rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-semibold text-blue-800">MDS Governance</span>
-                <span class="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-800">Audited Authority</span>
+            <div class="flex items-center gap-1.5 flex-wrap mb-1">
+                <span class="inline-flex items-center rounded-full bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200/80 dark:border-indigo-800 px-2 py-0.5 text-[10px] font-semibold text-indigo-700 dark:text-indigo-300">MDS Governance</span>
+                <span class="inline-flex items-center gap-1 rounded-full bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200/80 dark:border-emerald-800 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300">
+                    <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
+                    Audited Authority
+                </span>
             </div>
-            <h1 class="text-lg font-bold text-slate-900 truncate mt-0.5">Leadership Records &amp; Audit</h1>
-            <p class="text-xs text-slate-500 mt-0.5">Review, edit, or revoke leadership appointments, organisation responsibilities, authority grants, delegations, and attendance policies.</p>
+            <h1 class="text-lg font-bold text-slate-900 dark:text-slate-100 truncate">Leadership Records &amp; Audit</h1>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Review, edit, or revoke leadership appointments, organisation responsibilities, authority grants, delegations, and attendance policies.</p>
         </div>
 
         <div class="flex flex-wrap items-center gap-2">
             <button type="button"
-                    class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition-colors"
+                    class="app-button app-button-neutral app-button-sm"
                     @onclick="ToggleWidthAsync">
+                <AppIcon Name="@(isFullWidth ? "fullscreen_exit" : "fullscreen")" Class="text-xs" />
                 <span>@(isFullWidth ? "Shrink View" : "Full Width")</span>
             </button>
-            <a class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition-colors"
-               href="/admin/settings/leadership">
-                <span>Appointment Administration</span>
-            </a>
             <button type="button"
-                    class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 transition-colors"
+                    class="app-button app-button-secondary app-button-sm"
                     @onclick="LoadAsync">
+                <AppIcon Name="refresh" Class="text-xs" />
                 <span>Refresh</span>
             </button>
+            <a class="app-button app-button-primary app-button-sm"
+               href="/admin/settings/leadership">
+                <AppIcon Name="admin_panel_settings" Class="text-xs" />
+                <span>Appointment Administration</span>
+            </a>
         </div>
     </header>
 
     @if (error is not null)
     {
-        <div role="alert" class="flex items-center justify-between rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800 @(isFullWidth ? "max-w-none" : "mx-auto max-w-7xl")">
+        <div role="alert" class="flex items-center justify-between rounded-xl border border-rose-200 dark:border-rose-900/60 bg-rose-50 dark:bg-rose-950/40 p-3 text-xs text-rose-800 dark:text-rose-200 @(isFullWidth ? "max-w-none" : "mx-auto max-w-7xl")">
             <span>@error</span>
-            <button type="button" class="font-bold text-rose-600 hover:text-rose-900" @onclick="() => error = null">✕</button>
+            <button type="button" class="font-bold text-rose-600 dark:text-rose-300 hover:text-rose-900" @onclick="() => error = null">✕</button>
         </div>
     }
 
-    <!-- KPI Summary Strip -->
-    <div class="grid grid-cols-2 gap-3 sm:grid-cols-4 @(isFullWidth ? "max-w-none" : "mx-auto max-w-7xl")">
-        <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
-            <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Total Records</p>
-            <p class="mt-1 text-2xl font-bold text-slate-900">@records.Count</p>
-        </div>
-        <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
-            <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Active</p>
-            <p class="mt-1 text-2xl font-bold text-emerald-600">@records.Count(r => r.Status == "Active")</p>
-        </div>
-        <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
-            <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Scheduled</p>
-            <p class="mt-1 text-2xl font-bold text-amber-600">@records.Count(r => r.Status == "Scheduled")</p>
-        </div>
-        <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
-            <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Audit Events</p>
-            <p class="mt-1 text-2xl font-bold text-blue-600">@audit.Count</p>
-        </div>
-    </div>
-
-    <!-- Segmented Navigation Bar -->
-    <div class="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-xs @(isFullWidth ? "max-w-none" : "mx-auto max-w-7xl")">
-        <div class="flex flex-wrap rounded-lg border border-slate-300 p-0.5 bg-slate-50 gap-0.5">
-            <button type="button"
-                    class="px-3 py-1.5 rounded-md text-xs font-semibold transition @(activeTab == "records" ? "bg-white text-blue-700 shadow-xs" : "text-slate-600 hover:text-slate-900")"
+    <!-- Sub-Navigation & Inline KPI Bar (UI_DESIGN_STANDARD Section 6.5) -->
+    <div class="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2 text-xs @(isFullWidth ? "max-w-none" : "mx-auto max-w-7xl")">
+        <div class="flex flex-wrap items-center gap-1" role="tablist" aria-label="Leadership sections">
+            <button type="button" role="tab" aria-selected="@(activeTab == "records")"
+                    class="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors @(activeTab == "records" ? "bg-teal-50 dark:bg-teal-950/50 text-teal-800 dark:text-teal-300 border border-teal-200 dark:border-teal-800" : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 border border-transparent")"
                     @onclick='() => activeTab = "records"'>
-                Appointments &amp; Authority (@records.Count)
+                <span>Appointments &amp; Authority</span>
+                <span class="rounded-full bg-amber-100 dark:bg-amber-900/50 px-1.5 py-0.2 text-[10px] font-bold text-amber-800 dark:text-amber-200">@records.Count</span>
             </button>
-            <button type="button"
-                    class="px-3 py-1.5 rounded-md text-xs font-semibold transition @(activeTab == "audit" ? "bg-white text-blue-700 shadow-xs" : "text-slate-600 hover:text-slate-900")"
+            <button type="button" role="tab" aria-selected="@(activeTab == "audit")"
+                    class="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors @(activeTab == "audit" ? "bg-teal-50 dark:bg-teal-950/50 text-teal-800 dark:text-teal-300 border border-teal-200 dark:border-teal-800" : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 border border-transparent")"
                     @onclick='() => activeTab = "audit"'>
-                Recent Audit History (@audit.Count)
+                <span>Recent Audit History</span>
+                <span class="rounded-full bg-slate-100 dark:bg-slate-800 px-1.5 py-0.2 text-[10px] font-bold text-slate-600 dark:text-slate-300">@audit.Count</span>
             </button>
         </div>
-        @if (activeTab == "records")
-        {
-            <input class="w-full sm:w-64 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-800 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                   placeholder="Filter by kind, status, or details..."
-                   @bind="search"
-                   @bind:event="oninput" />
-        }
+
+        <div class="flex flex-wrap items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
+            <span class="inline-flex items-center gap-1.5"><span class="h-1.5 w-1.5 rounded-full bg-slate-400"></span>Total: <strong class="text-slate-800 dark:text-slate-100">@records.Count</strong></span>
+            <span>·</span>
+            <span class="inline-flex items-center gap-1.5"><span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>Active: <strong class="text-slate-800 dark:text-slate-100">@records.Count(r => r.Status == "Active")</strong></span>
+            <span>·</span>
+            <span class="inline-flex items-center gap-1.5"><span class="h-1.5 w-1.5 rounded-full bg-amber-500"></span>Scheduled: <strong class="text-slate-800 dark:text-slate-100">@records.Count(r => r.Status == "Scheduled")</strong></span>
+            <span>·</span>
+            <span class="inline-flex items-center gap-1.5"><span class="h-1.5 w-1.5 rounded-full bg-blue-500"></span>Audit: <strong class="text-slate-800 dark:text-slate-100">@audit.Count</strong></span>
+
+            @if (activeTab == "records")
+            {
+                <input class="ml-1 h-8 w-full sm:w-56 rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 text-xs text-slate-800 dark:text-slate-100 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                       placeholder="Filter by kind, status, or details..."
+                       @bind="search"
+                       @bind:event="oninput" />
+            }
+        </div>
     </div>
 
     <div class="@(isFullWidth ? "max-w-none" : "mx-auto max-w-7xl") space-y-4">
