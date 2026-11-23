@@ -422,17 +422,15 @@
 
     protected override async Task OnInitializedAsync()
     {
-        if (!Embedded)
+        var orgId = InitialOrganisationId ?? 0;
+        if (orgId <= 0)
         {
-            var orgId = 0;
             try { orgId = await UserAccess.GetCurrentOrganisationIdAsync(); } catch { }
-            Navigation.NavigateTo($"/admin/my/workspace/organisation/{(orgId > 0 ? orgId : 3)}/overview", replace: true);
-            return;
         }
-        if (InitialOrganisationId is > 0)
+        if (orgId > 0)
         {
-            responsibility.OrganisationId = InitialOrganisationId.Value;
-            delegation.OrganisationId = InitialOrganisationId.Value;
+            responsibility.OrganisationId = orgId;
+            delegation.OrganisationId = orgId;
         }
         try { configuration = await Administration.GetConfigurationAsync(); }
         catch { error = "Configuration could not be loaded. Check the API and Leadership database setup."; }
