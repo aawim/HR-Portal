@@ -1,31 +1,90 @@
+@using System.Globalization
 @using HRM.DTOs
 @using HRM.Models
 @inject HRM.Application.Contracts.Pages.IOrganisationDirectoryQueries Directory
 
-<div class="flex h-full w-full min-w-0 flex-col animate-in fade-in duration-300 overflow-hidden relative rounded-xl border border-slate-200 bg-slate-50">
-    <div class="bg-white px-6 py-4 border-b border-slate-200 sticky top-0 z-20">
-        <h4 class="text-lg font-bold text-slate-800">Organisation Architecture</h4>
-        <p class="text-xs text-slate-500">Hierarchical structure mapped via relations.</p>
+<div class="flex h-full w-full min-w-0 flex-col animate-in fade-in duration-300 overflow-hidden relative rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/40">
+    <!-- Compact Sticky Header -->
+    <div class="bg-white/95 dark:bg-slate-900/95 backdrop-blur-xs px-3 py-2 border-b border-slate-200 dark:border-slate-800 sticky top-0 z-20 flex flex-wrap items-center justify-between gap-2">
+        <div class="flex items-center gap-2 min-w-0">
+            <h4 class="text-sm font-bold text-slate-800 dark:text-slate-100 truncate">Organisation Architecture</h4>
+            @if (!isLoading)
+            {
+                <span class="inline-flex items-center rounded-full bg-slate-100 dark:bg-slate-800 px-2 py-0.5 text-[10px] font-semibold text-slate-600 dark:text-slate-300 shrink-0">
+                    @FlatNodes.Count node@(FlatNodes.Count == 1 ? "" : "s")
+                </span>
+            }
+        </div>
+
+        <div class="flex flex-wrap items-center gap-1.5">
+            <!-- Zoom Controls -->
+            <div class="inline-flex items-center rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-0.5 text-xs" role="group" aria-label="Zoom controls">
+                <button type="button"
+                        class="rounded-md px-2 py-1 font-bold text-slate-700 dark:text-slate-200 hover:bg-white dark:hover:bg-slate-700 disabled:opacity-40 transition-colors"
+                        title="Zoom out"
+                        aria-label="Zoom out"
+                        disabled="@(zoomPercent <= MinZoom)"
+                        @onclick="ZoomOut">
+                    −
+                </button>
+                <button type="button"
+                        class="min-w-[3rem] rounded-md px-1.5 py-1 text-center font-mono text-[11px] font-semibold text-slate-700 dark:text-slate-200 hover:bg-white dark:hover:bg-slate-700 transition-colors"
+                        title="Reset zoom to 100%"
+                        @onclick="ResetZoom">
+                    @zoomPercent%
+                </button>
+                <button type="button"
+                        class="rounded-md px-2 py-1 font-bold text-slate-700 dark:text-slate-200 hover:bg-white dark:hover:bg-slate-700 disabled:opacity-40 transition-colors"
+                        title="Zoom in"
+                        aria-label="Zoom in"
+                        disabled="@(zoomPercent >= MaxZoom)"
+                        @onclick="ZoomIn">
+                    +
+                </button>
+            </div>
+
+            <button type="button"
+                    class="app-button app-button-neutral app-button-sm"
+                    title="Refresh structure"
+                    disabled="@isLoading"
+                    @onclick="LoadOrganisationTree">
+                ↻
+            </button>
+
+            <button type="button"
+                    class="app-button app-button-primary app-button-sm"
+                    @onclick="OpenAddStructure">
+                + Add Structure
+            </button>
+
+            <button type="button"
+                    class="app-button app-button-secondary app-button-sm"
+                    disabled="@(isLoading || FlatNodes.Count == 0)"
+                    @onclick="OpenEditStructure">
+                Edit Structure
+            </button>
+        </div>
     </div>
 
-    <div class="min-w-0 flex-1 overflow-auto p-8 custom-scrollbar">
+    <div class="min-w-0 flex-1 overflow-auto p-6 custom-scrollbar">
         @if (isLoading)
         {
-            <div class="flex flex-col items-center justify-center h-full text-slate-400 gap-3">
+            <div class="flex flex-col items-center justify-center h-full text-slate-400 gap-3 py-12">
                 <AppIcon Name="progress_activity" Class="w-8 h-8 animate-spin text-blue-500" />
                 <span class="text-sm font-medium">Building architecture tree...</span>
             </div>
         }
         else if (!rootNodes.Any())
         {
-            <div class="flex justify-center items-center h-full text-slate-400 text-sm">
+            <div class="flex justify-center items-center h-full text-slate-400 text-sm py-12">
                 No structural data found.
             </div>
         }
         else
         {
             <div class="flex justify-center min-w-max pb-10">
-                <div class="org-tree">
+                <div class="org-tree"
+                     style="transform: scale(@ZoomScaleCss); transform-origin: top center; transition: transform 150ms ease;">
                     <ul>
                         @foreach (var root in rootNodes)
                         {
@@ -38,12 +97,115 @@
     </div>
 </div>
 
+@if (editorMode != null)
+{
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4" @onclick="CloseEditor">
+        <div class="w-full max-w-md rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-2xl overflow-hidden" @onclick:stopPropagation="true">
+            <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 px-4 py-3">
+                <h3 class="text-sm font-bold text-slate-900 dark:text-slate-100">
+                    @(editorMode == "add" ? "Add Structure" : "Edit Structure")
+                </h3>
+                <button type="button"
+                        class="rounded-lg p-1 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-600"
+                        @onclick="CloseEditor">
+                    ✕
+                </button>
+            </div>
+
+            <div class="p-4 space-y-3 text-xs">
+                @if (editorMode == "edit")
+                {
+                    <label class="block font-semibold text-slate-700 dark:text-slate-300">
+                        Select Structure
+                        <select class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs text-slate-900 dark:text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                value="@editStructureId"
+                                @onchange="OnEditStructureSelected">
+                            @foreach (var node in FlatNodes)
+                            {
+                                <option value="@node.StructureId">@node.Name (@node.TypeName)</option>
+                            }
+                        </select>
+                    </label>
+                }
+
+                <label class="block font-semibold text-slate-700 dark:text-slate-300">
+                    Structure Name
+                    <input type="text"
+                           class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs text-slate-900 dark:text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                           placeholder="e.g. Corporate Services Division"
+                           @bind="editName" />
+                </label>
+
+                <label class="block font-semibold text-slate-700 dark:text-slate-300">
+                    Parent Structure
+                    <select class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs text-slate-900 dark:text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            @bind="editParentId">
+                        <option value="">None (Root)</option>
+                        @foreach (var node in FlatNodes.Where(n => editorMode != "edit" || n.StructureId != editStructureId))
+                        {
+                            <option value="@node.StructureId">@node.Name</option>
+                        }
+                    </select>
+                </label>
+
+                @if (!string.IsNullOrWhiteSpace(editorMessage))
+                {
+                    <div class="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 p-2.5 text-[11px] text-amber-800 dark:text-amber-200">
+                        @editorMessage
+                    </div>
+                }
+            </div>
+
+            <div class="flex items-center justify-end gap-2 border-t border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 px-4 py-3">
+                <button type="button" class="app-button app-button-neutral app-button-sm" @onclick="CloseEditor">Cancel</button>
+                <button type="button"
+                        class="app-button app-button-primary app-button-sm"
+                        disabled="@string.IsNullOrWhiteSpace(editName)"
+                        @onclick="SubmitStructureForm">
+                    @(editorMode == "add" ? "Save Structure" : "Update Structure")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
+    private const int MinZoom = 40;
+    private const int MaxZoom = 150;
+    private const int ZoomStep = 10;
+
     [Parameter]
     public int OrganisationId { get; set; }
 
     private List<OrgNodeDto> rootNodes = new();
     private bool isLoading = true;
+    private int zoomPercent = 100;
+
+    private string? editorMode; // "add" | "edit" | null
+    private int editStructureId;
+    private int? editParentId;
+    private string editName = string.Empty;
+    private string? editorMessage;
+
+    private string ZoomScaleCss => (zoomPercent / 100.0).ToString("0.00", CultureInfo.InvariantCulture);
+
+    private List<OrgNodeDto> FlatNodes
+    {
+        get
+        {
+            var list = new List<OrgNodeDto>();
+            void Walk(IEnumerable<OrgNodeDto> nodes)
+            {
+                foreach (var n in nodes)
+                {
+                    if (n.StructureId > 0) list.Add(n);
+                    if (n.Children.Count > 0) Walk(n.Children);
+                }
+            }
+            Walk(rootNodes);
+            return list;
+        }
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -55,5 +217,55 @@
         isLoading = true;
         try { rootNodes = await Directory.GetApprovedStructureAsync(OrganisationId); }
         finally { isLoading = false; }
+    }
+
+    private void ZoomIn() => zoomPercent = Math.Min(MaxZoom, zoomPercent + ZoomStep);
+    private void ZoomOut() => zoomPercent = Math.Max(MinZoom, zoomPercent - ZoomStep);
+    private void ResetZoom() => zoomPercent = 100;
+
+    private void OpenAddStructure()
+    {
+        editorMode = "add";
+        editStructureId = 0;
+        editParentId = FlatNodes.FirstOrDefault()?.StructureId;
+        editName = string.Empty;
+        editorMessage = null;
+    }
+
+    private void OpenEditStructure()
+    {
+        var first = FlatNodes.FirstOrDefault();
+        if (first == null) return;
+        editorMode = "edit";
+        editStructureId = first.StructureId;
+        editParentId = first.ParentId;
+        editName = first.Name;
+        editorMessage = null;
+    }
+
+    private void OnEditStructureSelected(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var id))
+        {
+            var found = FlatNodes.FirstOrDefault(n => n.StructureId == id);
+            if (found != null)
+            {
+                editStructureId = found.StructureId;
+                editParentId = found.ParentId;
+                editName = found.Name;
+                editorMessage = null;
+            }
+        }
+    }
+
+    private void CloseEditor()
+    {
+        editorMode = null;
+        editorMessage = null;
+    }
+
+    private void SubmitStructureForm()
+    {
+        editorMessage = "Backend structure save endpoint is not wired yet. Ask to enable HRM.Api persistence for OrganisationStructures to save directly from here.";
     }
 }
