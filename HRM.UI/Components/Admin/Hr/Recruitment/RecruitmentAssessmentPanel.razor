@@ -1,10 +1,37 @@
 @using HRM.Application.Contracts.Recruitment
 @inject HRM.UI.Services.Recruitment.IRecruitmentApiClient Api
 
+<style>
+    .rap-grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 1rem;
+        align-items: start;
+    }
+
+    @@media (min-width: 1024px) {
+        .rap-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+</style>
+
 <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs space-y-4">
-    <div>
-        <h2 class="text-sm font-bold text-slate-900">Assessments &amp; Panel Scorecards</h2>
-        <p class="mt-0.5 text-xs text-slate-500">Schedule assessments using verified templates and record locked panel scorecards for shortlisted applicants.</p>
+    <div class="flex flex-wrap items-center justify-between gap-2">
+        <div>
+            <h2 class="text-sm font-bold text-slate-900">Assessments &amp; Panel Scorecards</h2>
+            <p class="mt-0.5 text-xs text-slate-500">Schedule assessments using verified templates and record locked panel scorecards for shortlisted applicants.</p>
+        </div>
+        @if (vacancy > 0)
+        {
+            <button type="button"
+                    class="app-button app-button-secondary app-button-sm"
+                    disabled="@busy"
+                    @onclick="Load">
+                <i class="bi bi-arrow-clockwise text-xs" aria-hidden="true"></i>
+                <span>Refresh</span>
+            </button>
+        }
     </div>
 
     <label class="block text-xs font-medium text-slate-700 max-w-md">
@@ -13,14 +40,18 @@
             <option value="0">-- Select vacancy --</option>
             @foreach (var v in vacancies)
             {
-                <option value="@v.Id">@v.Reference</option>
+                <option value="@v.Id">@v.Reference · @v.Status</option>
             }
         </select>
     </label>
 
     @if (workspace is not null)
     {
-        <div class="grid items-start gap-4 lg:grid-cols-2">
+        var shortlisted = applicants
+            .Where(x => string.Equals(x.Status?.Trim(), "Shortlisted", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        <div class="rap-grid">
             <!-- Left: Schedule Assessment -->
             <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-4 space-y-3">
                 <h3 class="text-xs font-bold uppercase tracking-wide text-slate-700">1. Schedule Assessment</h3>
@@ -69,7 +100,12 @@
 
             <!-- Right: Submit Scorecard -->
             <div class="rounded-xl border border-blue-200 bg-blue-50/30 p-4 space-y-3">
-                <h3 class="text-xs font-bold uppercase tracking-wide text-slate-700">2. Submit Panel Scorecard</h3>
+                <div class="flex items-center justify-between gap-2">
+                    <h3 class="text-xs font-bold uppercase tracking-wide text-slate-700">2. Submit Panel Scorecard</h3>
+                    <span class="rounded-full px-2 py-0.5 text-[10px] font-semibold @(shortlisted.Count > 0 ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800")">
+                        @shortlisted.Count shortlisted
+                    </span>
+                </div>
 
                 <label class="block text-xs font-medium text-slate-700">
                     Scheduled Assessment
@@ -84,14 +120,32 @@
 
                 <label class="block text-xs font-medium text-slate-700">
                     Shortlisted Applicant
-                    <select class="@InputClass" @bind="application">
+                    <select class="@InputClass" @bind="application" disabled="@(shortlisted.Count == 0)">
                         <option value="0">-- Select applicant --</option>
-                        @foreach (var a in applicants.Where(x => x.Status == "Shortlisted"))
+                        @foreach (var a in shortlisted)
                         {
                             <option value="@a.Id">@a.ApplicantName · @a.Reference</option>
                         }
                     </select>
                 </label>
+
+                @if (shortlisted.Count == 0)
+                {
+                    <div class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                        @if (applicants.Count == 0)
+                        {
+                            <span>No applications have been submitted for this vacancy yet.</span>
+                        }
+                        else
+                        {
+                            var breakdown = string.Join(", ", applicants.GroupBy(x => x.Status).Select(g => $"{g.Count()} {g.Key}"));
+                            <span>
+                                No <strong>Shortlisted</strong> applicants yet (current applications: <strong>@breakdown</strong>).
+                                Go to <strong>Screening &amp; Shortlisting</strong>, shortlist eligible candidates, then click <strong>Refresh</strong>.
+                            </span>
+                        }
+                    </div>
+                }
 
                 @if (criteria.Count > 0)
                 {
@@ -157,6 +211,8 @@
         criteria = [];
         assessment = application = 0;
         workspace = null;
+        applicants = [];
+        message = null;
         try
         {
             if (vacancy > 0)
