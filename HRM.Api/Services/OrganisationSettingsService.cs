@@ -176,13 +176,74 @@ public partial class OrganisationSettingsService(IDbContextFactory<HrmTeContext>
     {
         await RequireAsync(id, "UserOrganisations.View", "UserOrganisations.Admin.View", "Organisation.Edit", "Organisation.Contact.View");
         await using var db = await factory.CreateDbContextAsync();
-        var rows = await db.Jobs.AsNoTracking().Where(x => x.OrganisationID == id)
-            .OrderBy(x => x.Individual.FirstNameEnglish).ThenBy(x => x.JobId)
-            .Select(x => new OrganisationStaffRow(x.JobId,
-                x.Individual.FirstNameEnglish + " " + (x.Individual.MiddleNameEnglish ?? "") + " " + (x.Individual.LastNameEnglish ?? ""),
-                x.Staff.EmployeeNumber, x.OrganisationStructure.Name, x.JobType.TypeName, x.JobState.StateName) { IndividualId = x.IndividualID })
+        var today = FormerStaffPolicy.Today;
+        var currentJobIds = (await FormerStaffPolicy.CurrentJobs(db)
+            .Where(j => j.OrganisationID == id)
+            .Select(j => j.JobId)
+            .ToListAsync()).ToHashSet();
+
+        var jobs = await db.Jobs.AsNoTracking().Where(x => x.OrganisationID == id)
+            .Select(x => new
+            {
+                x.JobId,
+                x.IndividualID,
+                Name = x.Individual.FirstNameEnglish + " " + (x.Individual.MiddleNameEnglish ?? "") + " " + (x.Individual.LastNameEnglish ?? ""),
+                x.Staff.EmployeeNumber,
+                Department = x.OrganisationStructure.Name,
+                JobType = x.JobType.TypeName,
+                StateName = x.JobState.StateName,
+                x.JoinedDate,
+                x.TerminatedDate
+            })
             .ToListAsync();
-        return rows.Select(row => row with { Name = string.Join(" ", row.Name.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)) }).ToList();
+
+        var deduplicated = jobs
+            .GroupBy(x => x.IndividualID)
+            .Select(group =>
+            {
+                var currentJob = group
+                    .Where(x => currentJobIds.Contains(x.JobId))
+                    .OrderByDescending(x => x.JoinedDate)
+                    .ThenByDescending(x => x.JobId)
+                    .FirstOrDefault();
+
+                if (currentJob is not null)
+                {
+                    return new OrganisationStaffRow(
+                        currentJob.JobId,
+                        string.Join(" ", currentJob.Name.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)),
+                        currentJob.EmployeeNumber,
+                        currentJob.Department,
+                        currentJob.JobType,
+                        currentJob.StateName)
+                    { IndividualId = currentJob.IndividualID };
+                }
+
+                var latestJob = group
+                    .OrderByDescending(x => x.TerminatedDate ?? x.JoinedDate)
+                    .ThenByDescending(x => x.JobId)
+                    .First();
+
+                var status = latestJob.TerminatedDate.HasValue && latestJob.TerminatedDate.Value <= today &&
+                    (latestJob.StateName.Equals("Active", StringComparison.OrdinalIgnoreCase) ||
+                     latestJob.StateName.Equals("Approved", StringComparison.OrdinalIgnoreCase))
+                    ? "Terminated"
+                    : latestJob.StateName;
+
+                return new OrganisationStaffRow(
+                    latestJob.JobId,
+                    string.Join(" ", latestJob.Name.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)),
+                    latestJob.EmployeeNumber,
+                    latestJob.Department,
+                    latestJob.JobType,
+                    status)
+                { IndividualId = latestJob.IndividualID };
+            })
+            .OrderBy(r => r.Name, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(r => r.JobId)
+            .ToList();
+
+        return deduplicated;
     }
     public async Task<ServiceResult> DeleteContactAsync(int id, int contactId)
     {

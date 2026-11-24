@@ -74,8 +74,19 @@ public sealed class OrganisationDirectoryQueries(IDbContextFactory<HrmTeContext>
             var visible = await HRM.Helpers.StaffAttributeAccess.FilterViewableAsync(db, access, org, members.Select(x => x.StaffId), ct);
             members = members.Where(x => visible.Contains(x.StaffId)).ToList();
         }
-        var current = members.Where(m => m.StartsOn <= today && (!m.EndsOn.HasValue || m.EndsOn > today)).OrderBy(m => m.Name).ToList();
-        var previous = members.Where(m => m.EndsOn <= today).OrderByDescending(m => m.EndsOn).ToList();
+        var current = members
+            .Where(m => m.StartsOn <= today && (!m.EndsOn.HasValue || m.EndsOn > today))
+            .GroupBy(m => m.StaffId)
+            .Select(g => g.OrderByDescending(m => m.StartsOn).First())
+            .OrderBy(m => m.Name)
+            .ToList();
+        var currentStaffIds = current.Select(m => m.StaffId).ToHashSet();
+        var previous = members
+            .Where(m => m.EndsOn <= today && !currentStaffIds.Contains(m.StaffId))
+            .GroupBy(m => m.StaffId)
+            .Select(g => g.OrderByDescending(m => m.EndsOn).ThenByDescending(m => m.StartsOn).First())
+            .OrderByDescending(m => m.EndsOn)
+            .ToList();
         var history = new List<OrganisationMembershipPeriod>();
         if (members.Count > 0)
         {
