@@ -18,6 +18,11 @@ public sealed class RecruitmentAssessmentQueriesController(IDbContextFactory<Hrm
         if(vacancy is null)return NotFound();
         var assessments=await db.RecruitmentAssessments.AsNoTracking().Where(x=>x.RecruitmentVacancyId==vacancyId&&x.OrganisationId==org).OrderBy(x=>x.ScheduledAtUtc).Select(x=>new RecruitmentAssessmentRow(x.Id,x.Type,x.TemplateCode,x.ScheduledAtUtc,x.Status)).ToListAsync(ct);
         var templates=await db.RecruitmentOfficialTemplates.AsNoTracking().Where(x=>x.RecruitmentPolicyVersionId==vacancy.RecruitmentPolicyVersionId&&x.IsActive&&x.VerificationStatus=="Verified").Select(x=>new RecruitmentScoringTemplateRow(x.TemplateCode,x.Name,x.TemplateDefinitionJson)).ToListAsync(ct);
+        if(templates.Count==0)
+        {
+            await HRM.Services.RecruitmentOfficialTemplateService.EnsureDefaultCscTemplatesAsync(db,vacancy.RecruitmentPolicyVersionId,org,ct);
+            templates=await db.RecruitmentOfficialTemplates.AsNoTracking().Where(x=>x.RecruitmentPolicyVersionId==vacancy.RecruitmentPolicyVersionId&&x.IsActive&&x.VerificationStatus=="Verified").Select(x=>new RecruitmentScoringTemplateRow(x.TemplateCode,x.Name,x.TemplateDefinitionJson)).ToListAsync(ct);
+        }
         return Ok(new RecruitmentAssessmentWorkspace(assessments,templates));
     }
 }
