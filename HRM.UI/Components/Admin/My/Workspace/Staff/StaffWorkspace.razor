@@ -31,7 +31,7 @@
 
             @if (IsEmploymentCategory)
             {
-                <div class="w-full border-b border-slate-200 dark:border-slate-800 overflow-x-auto">
+                <div class="staff-subtab-bar w-full overflow-x-auto">
                     <nav class="flex items-end gap-1.5 min-w-max" aria-label="Employment Sub-Tabs">
                         @RenderSubTab(WorkspaceTab.Position, "Positions", "bi-briefcase")
                         @RenderSubTab(WorkspaceTab.JobHistory, "Job History", "bi-clock-history")
@@ -43,7 +43,7 @@
             }
             else if (IsTimeAttendanceCategory)
             {
-                <div class="w-full border-b border-slate-200 dark:border-slate-800 overflow-x-auto">
+                <div class="staff-subtab-bar w-full overflow-x-auto">
                     <nav class="flex items-end gap-1.5 min-w-max" aria-label="Time & Attendance Sub-Tabs">
                         @RenderSubTab(WorkspaceTab.Attendance, "Attendance", "bi-person-check", PendingAttendanceCount)
                         @RenderSubTab(WorkspaceTab.Leave, "Leave", "bi-calendar-event", PendingLeaveCount)
@@ -55,7 +55,7 @@
             }
             else if (IsFinanceCategory)
             {
-                <div class="w-full border-b border-slate-200 dark:border-slate-800 overflow-x-auto">
+                <div class="staff-subtab-bar w-full overflow-x-auto">
                     <nav class="flex items-end gap-1.5 min-w-max" aria-label="Finance Sub-Tabs">
                         @RenderSubTab(WorkspaceTab.Finance, "Allowances & Deductions", "bi-cash-coin")
                         @RenderSubTab(WorkspaceTab.GoodsLoans, "Goods Loans", "bi-receipt")
@@ -65,7 +65,7 @@
             }
             else if (IsItemsCategory)
             {
-                <div class="w-full border-b border-slate-200 dark:border-slate-800 overflow-x-auto">
+                <div class="staff-subtab-bar w-full overflow-x-auto">
                     <nav class="flex items-end gap-1.5 min-w-max" aria-label="Items Sub-Tabs">
                         @RenderSubTab(WorkspaceTab.JobRelatedItems, "Job Items", "bi-box-seam", PendingJobItemsCount)
                         @RenderSubTab(WorkspaceTab.PersonalItems, "Personal Items", "bi-bag", PendingPersonalItemsCount)
@@ -74,7 +74,7 @@
             }
             else if (IsRecordsCategory)
             {
-                <div class="w-full border-b border-slate-200 dark:border-slate-800 overflow-x-auto">
+                <div class="staff-subtab-bar w-full overflow-x-auto">
                     <nav class="flex items-end gap-1.5 min-w-max" aria-label="Records Sub-Tabs">
                         @RenderSubTab(WorkspaceTab.Documents, "Documents", "bi-file-earmark-text")
                         @RenderSubTab(WorkspaceTab.Certificates, "Certificates", "bi-award", PendingCertificatesCount)
@@ -167,6 +167,52 @@
     }
 </div>
 
+<style>
+    .staff-subtab-bar {
+        border-bottom: 2px solid #0f766e;
+    }
+
+    .staff-subtab-btn {
+        border-top: 1px solid #99f6e4;
+        border-left: 1px solid #99f6e4;
+        border-right: 1px solid #99f6e4;
+        background: #f0fdfa;
+        color: #115e59;
+    }
+
+    .staff-subtab-btn:hover {
+        background: #ccfbf1;
+        color: #134e4a;
+    }
+
+    .staff-subtab-btn.is-active {
+        border-color: #0f766e;
+        background: #0f766e;
+        color: #ffffff;
+    }
+
+    .dark .staff-subtab-bar {
+        border-bottom-color: #0d9488;
+    }
+
+    .dark .staff-subtab-btn {
+        border-color: #115e59;
+        background: rgba(19, 78, 74, 0.35);
+        color: #99f6e4;
+    }
+
+    .dark .staff-subtab-btn:hover {
+        background: rgba(15, 118, 110, 0.45);
+        color: #ffffff;
+    }
+
+    .dark .staff-subtab-btn.is-active {
+        border-color: #0f766e;
+        background: #0f766e;
+        color: #ffffff;
+    }
+</style>
+
 @code {
     private bool Loading;
     private bool former;
@@ -201,7 +247,7 @@
     {
         var active = ActiveTab == tab;
         <button type="button"
-                class="rounded-t-lg px-3.5 py-1.5 font-semibold text-xs transition-all border-t border-l border-r inline-flex items-center gap-1.5 @(active ? "bg-blue-600 text-white border-blue-600 shadow-2xs" : "bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700")"
+                class="staff-subtab-btn @(active ? "is-active" : "") rounded-t-lg px-3.5 py-1.5 font-semibold text-xs transition-all inline-flex items-center gap-1.5"
                 @onclick="() => SelectSubTabAsync(tab)">
             <i class="bi @icon text-[11px]" aria-hidden="true"></i>
             <span>@label</span>
