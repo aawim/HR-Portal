@@ -87,12 +87,14 @@
 
         <!-- Job Summary Cards -->
         <div class="flex flex-col gap-3">
-            @foreach (var job in jobs)
+            @for (var i = 0; i < jobs.Count; i++)
             {
+                var job = jobs[i];
+                var isAltJob = i % 2 == 1;
                 <article @key="job.JobId"
-                         class="rounded-xl border overflow-hidden bg-white dark:bg-slate-900 @(job.IsCurrent ? "border-teal-500/80 dark:border-teal-600" : "border-slate-200 dark:border-slate-800")">
+                         class="rounded-xl border overflow-hidden @(isAltJob ? "jh-card-alt" : "bg-white dark:bg-slate-900") @(job.IsCurrent ? "border-teal-500/80 dark:border-teal-600" : "border-slate-200 dark:border-slate-800")">
                     <!-- Job Header -->
-                    <div class="bg-slate-50/80 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 px-3.5 py-2.5 flex flex-wrap items-center justify-between gap-2">
+                    <div class="@(isAltJob ? "jh-card-header-alt" : "bg-slate-50/80 dark:bg-slate-800/60") border-b border-slate-200 dark:border-slate-800 px-3.5 py-2.5 flex flex-wrap items-center justify-between gap-2">
                         <div class="min-w-0">
                             <div class="flex flex-wrap items-center gap-2">
                                 <span class="rounded bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-1.5 py-0.5 font-mono text-[10px] font-bold text-slate-600 dark:text-slate-300">
@@ -171,9 +173,10 @@
                                 else
                                 {
                                     <div class="divide-y divide-slate-100 dark:divide-slate-800/70 max-h-48 overflow-y-auto">
-                                        @foreach (var p in job.Projects)
+                                        @for (var pIdx = 0; pIdx < job.Projects.Count; pIdx++)
                                         {
-                                            <div class="px-3 py-2 flex items-center justify-between gap-2 text-xs">
+                                            var p = job.Projects[pIdx];
+                                            <div class="px-3 py-2 flex items-center justify-between gap-2 text-xs @(pIdx % 2 == 1 ? "jh-row-alt" : "")">
                                                 <div class="min-w-0">
                                                     <div class="font-semibold text-slate-800 dark:text-slate-100 truncate">
                                                         @if (!string.IsNullOrWhiteSpace(p.Reference))
@@ -207,9 +210,10 @@
                                 else
                                 {
                                     <div class="divide-y divide-slate-100 dark:divide-slate-800/70 max-h-48 overflow-y-auto">
-                                        @foreach (var t in job.Tasks)
+                                        @for (var tIdx = 0; tIdx < job.Tasks.Count; tIdx++)
                                         {
-                                            <div class="px-3 py-2 flex items-center justify-between gap-2 text-xs">
+                                            var t = job.Tasks[tIdx];
+                                            <div class="px-3 py-2 flex items-center justify-between gap-2 text-xs @(tIdx % 2 == 1 ? "jh-row-alt" : "")">
                                                 <div class="min-w-0">
                                                     <div class="font-semibold text-slate-800 dark:text-slate-100 truncate">
                                                         @if (!string.IsNullOrWhiteSpace(t.Reference))
@@ -267,6 +271,30 @@
         .jh-work-grid {
             grid-template-columns: repeat(2, minmax(0, 1fr));
         }
+    }
+
+    .jh-card-alt {
+        background-color: #f3f8fd;
+    }
+
+    .jh-card-header-alt {
+        background-color: #e6f0fb;
+    }
+
+    .jh-row-alt {
+        background-color: #f3f8fd;
+    }
+
+    .dark .jh-card-alt {
+        background-color: rgba(30, 41, 59, 0.45);
+    }
+
+    .dark .jh-card-header-alt {
+        background-color: rgba(30, 41, 59, 0.8);
+    }
+
+    .dark .jh-row-alt {
+        background-color: rgba(30, 41, 59, 0.35);
     }
 </style>
 
