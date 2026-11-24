@@ -329,21 +329,46 @@
 
     @if (previewDocument != null)
     {
-        <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4"
+        <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-2 sm:p-3"
              role="dialog"
              aria-modal="true"
              aria-label="Contract preview"
              @onclick="ClosePreview">
-            <div class="w-full max-w-5xl rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+            <div class="contract-preview-modal w-full max-w-6xl rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-2xl overflow-hidden flex flex-col"
                  @onclick:stopPropagation="true">
-                <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 dark:border-slate-800 bg-slate-50/90 dark:bg-slate-800/80 px-4 py-3">
+                <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 dark:border-slate-800 bg-slate-50/90 dark:bg-slate-800/80 px-4 py-2.5 shrink-0">
                     <div class="min-w-0">
                         <h4 class="text-sm font-bold text-slate-900 dark:text-slate-100 truncate">@previewDocument.Title</h4>
                         <p class="text-[11px] text-slate-500 dark:text-slate-400 font-mono">
                             @previewDocument.DocumentNumber · v@(previewDocument.CurrentVersionNumber).0@(string.IsNullOrWhiteSpace(previewFileName) ? "" : $" · {previewFileName}")
                         </p>
                     </div>
-                    <div class="flex items-center gap-2">
+                    <div class="flex flex-wrap items-center gap-1.5">
+                        @if (!loadingPreview && string.IsNullOrWhiteSpace(previewError) && (IsPdfPreview || IsImagePreview))
+                        {
+                            <div class="inline-flex items-center rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 overflow-hidden">
+                                <button type="button"
+                                        class="px-2 py-1 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40"
+                                        title="Zoom out"
+                                        disabled="@(previewZoom <= 50)"
+                                        @onclick="ZoomOut">
+                                    <i class="bi bi-zoom-out" aria-hidden="true"></i>
+                                </button>
+                                <button type="button"
+                                        class="px-2 py-1 text-[11px] font-mono font-semibold text-slate-700 dark:text-slate-200 border-x border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800"
+                                        title="Reset zoom to 100%"
+                                        @onclick="ResetZoom">
+                                    @previewZoom%
+                                </button>
+                                <button type="button"
+                                        class="px-2 py-1 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40"
+                                        title="Zoom in"
+                                        disabled="@(previewZoom >= 250)"
+                                        @onclick="ZoomIn">
+                                    <i class="bi bi-zoom-in" aria-hidden="true"></i>
+                                </button>
+                            </div>
+                        }
                         <button type="button"
                                 class="app-button app-button-secondary app-button-sm"
                                 @onclick="() => DownloadContractAsync(previewDocument.DocumentId)">
@@ -358,7 +383,7 @@
                     </div>
                 </div>
 
-                <div class="p-4 overflow-auto flex-1 bg-slate-100/70 dark:bg-slate-950/60">
+                <div class="contract-preview-body p-3 overflow-auto flex-1 bg-slate-100/70 dark:bg-slate-950/60">
                     @if (loadingPreview)
                     {
                         <div class="flex items-center justify-center gap-2 py-16 text-xs text-slate-500">
@@ -374,16 +399,20 @@
                     }
                     else if (IsPdfPreview && !string.IsNullOrWhiteSpace(previewDataUrl))
                     {
-                        <iframe src="@previewDataUrl"
-                                title="@previewDocument.Title"
-                                class="w-full h-[72vh] rounded-lg border border-slate-200 dark:border-slate-700 bg-white"></iframe>
+                        <div class="contract-preview-stage" style="width: @(previewZoom)%; height: @(Math.Max(100, previewZoom))%;">
+                            <iframe @key="@($"pdf-{previewDocument.DocumentId}-{previewZoom}")"
+                                    src="@($"{previewDataUrl}#zoom={previewZoom}")"
+                                    title="@previewDocument.Title"
+                                    class="w-full h-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white"></iframe>
+                        </div>
                     }
                     else if (IsImagePreview && !string.IsNullOrWhiteSpace(previewDataUrl))
                     {
                         <div class="flex justify-center">
                             <img src="@previewDataUrl"
                                  alt="@previewDocument.Title"
-                                 class="max-h-[72vh] max-w-full rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm bg-white" />
+                                 style="width: @(previewZoom)%; max-width: none;"
+                                 class="rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm bg-white" />
                         </div>
                     }
                     else
@@ -418,6 +447,20 @@
             grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
         }
     }
+
+    .contract-preview-modal {
+        height: calc(100vh - 1.5rem);
+        max-height: calc(100vh - 1.5rem);
+    }
+
+    .contract-preview-body {
+        min-height: 0;
+    }
+
+    .contract-preview-stage {
+        min-width: 100%;
+        min-height: 100%;
+    }
 </style>
 
 @code {
@@ -427,6 +470,7 @@
     private Assignment? attachingContractFor;
     private DmsDocumentSummaryDto? previewDocument;
     private string? previewDataUrl, previewContentType, previewFileName, previewError;
+    private int previewZoom = 100;
     private List<DmsDocumentSummaryDto> staffDocuments = [];
     private List<DmsDocumentTypeDto> docTypes = [];
     private DmsDocumentUploadInput contractUpload = new();
@@ -582,6 +626,7 @@
         previewContentType = null;
         previewFileName = null;
         previewError = null;
+        previewZoom = 100;
         loadingPreview = true;
         try
         {
@@ -609,6 +654,10 @@
         }
     }
 
+    private void ZoomIn() => previewZoom = Math.Min(250, previewZoom + 25);
+    private void ZoomOut() => previewZoom = Math.Max(50, previewZoom - 25);
+    private void ResetZoom() => previewZoom = 100;
+
     private void ClosePreview()
     {
         previewDocument = null;
@@ -616,6 +665,7 @@
         previewContentType = null;
         previewFileName = null;
         previewError = null;
+        previewZoom = 100;
         loadingPreview = false;
     }
 
