@@ -182,6 +182,10 @@
             }
             else error = result.Message;
         }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or InvalidOperationException)
+        {
+            error = ex.Message;
+        }
         catch (Exception)
         {
             error = "The position matrix could not be created. Please try again.";
