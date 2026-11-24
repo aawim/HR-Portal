@@ -251,6 +251,17 @@ namespace HRM.WorkPlanning.Services.JobWorkTemplateAssignmentService
                     return ServiceResult.Failed($"These working hours are available until {template.EffectiveTo.Value:dd MMM yyyy}. Choose an end date on or before that day.");
                 if (dto.SchedulePurpose == "Duty" && !await HRM.Helpers.OfficialSchedulePrerequisite.CoversAsync(db, dto.JobId, dto.OrganisationBusinessEntityId, from, to, ct))
                     return ServiceResult.Failed(HRM.Helpers.OfficialSchedulePrerequisite.Message);
+                if (dto.SchedulePurpose == "Official")
+                {
+                    var targetIndividualId = await db.Jobs.AsNoTracking().Where(j => j.JobId == dto.JobId).Select(j => j.IndividualID).SingleOrDefaultAsync(ct);
+                    if (targetIndividualId > 0)
+                    {
+                        var proposedMask = dto.ScheduleMode == "Standard" ? 31 : dto.WorkingDaysMask;
+                        var hoursConflict = await HRM.Helpers.ConcurrentJobPolicy.ValidateWorkingHoursOverlapAsync(db, targetIndividualId, dto.JobId, from, to, template, proposedMask, ct);
+                        if (!string.IsNullOrWhiteSpace(hoursConflict))
+                            return ServiceResult.Failed(hoursConflict);
+                    }
+                }
                 var overlaps = await db.JobWorkTemplateAssignments.Where(x => x.JobID == dto.JobId && x.SchedulePurpose == dto.SchedulePurpose && x.IsActive &&
                     (dto.SchedulePurpose == "Official" || x.WorkTemplateID == dto.WorkTemplateId) &&
                     (!to.HasValue || x.EffectiveFrom <= to.Value) && (x.EffectiveTo == null || x.EffectiveTo >= from)).ToListAsync(ct);

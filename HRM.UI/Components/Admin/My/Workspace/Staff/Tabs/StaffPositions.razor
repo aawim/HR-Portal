@@ -21,7 +21,7 @@
                 {
                     <span class="inline-flex items-center gap-1 rounded-full bg-teal-50 dark:bg-teal-950/60 border border-teal-200/80 dark:border-teal-800 px-2 py-0.5 text-[10px] font-semibold text-teal-700 dark:text-teal-300">
                         <span class="h-1.5 w-1.5 rounded-full bg-teal-500"></span>
-                        @data.Assignments.Count assignments
+                        @ActiveAssignments.Count active @(ActiveAssignments.Count == 1 ? "position" : "positions")
                     </span>
                 }
             </div>
@@ -57,7 +57,7 @@
     else if (data != null)
     {
         <div class="staff-position-layout">
-            <div class="position-editor min-w-0">
+            <div class="position-editor min-w-0 flex flex-col gap-3">
                 @if (attachingContractFor != null)
                 {
                     <div class="rounded-xl border border-blue-200 dark:border-blue-800 bg-white dark:bg-slate-900 overflow-hidden">
@@ -238,22 +238,23 @@
                         @(data.Jobs.Count == 0 ? "No active employment is available. A new employment appointment must be approved before a position can be assigned." : "Select a position action to start.")
                     </div>
                 }
+                <HRM.Components.Shared.StaffPositionRequests StaffId="StaffId" RefreshVersion="requestVersion" OnChanged="LoadAsync" />
             </div>
 
             <div class="position-list-panel min-w-0 flex flex-col gap-3">
-                <div class="position-list rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden" aria-label="Position assignments">
+                <div class="position-list rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden" aria-label="Active position assignments">
                     <div class="bg-slate-50/80 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 px-3.5 py-2.5 flex items-center justify-between gap-2">
-                        <h4 class="text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-200">Positions</h4>
-                        <span class="rounded-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-2 py-0.5 text-[10px] font-semibold text-slate-600 dark:text-slate-300">@data.Assignments.Count</span>
+                        <h4 class="text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-200">Active Positions</h4>
+                        <span class="rounded-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-2 py-0.5 text-[10px] font-semibold text-slate-600 dark:text-slate-300">@ActiveAssignments.Count</span>
                     </div>
                     <div class="p-3 space-y-2.5">
-                        @if (data.Assignments.Count == 0)
+                        @if (ActiveAssignments.Count == 0)
                         {
-                            <p class="py-3 text-center text-xs text-slate-500">No position assignments found in this organisation.</p>
+                            <p class="py-3 text-center text-xs text-slate-500">No active position assignments found in this organisation.</p>
                         }
                         else
                         {
-                            @foreach (var assignment in data.Assignments)
+                            @foreach (var assignment in ActiveAssignments)
                             {
                                 <article class="p-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950/40 text-xs space-y-2" @key="assignment.Id">
                                     <div class="flex items-start justify-between gap-2 flex-wrap">
@@ -322,7 +323,6 @@
                         }
                     </div>
                 </div>
-                <HRM.Components.Shared.StaffPositionRequests StaffId="StaffId" RefreshVersion="requestVersion" OnChanged="LoadAsync" />
             </div>
         </div>
     }
@@ -640,13 +640,17 @@
             Toasts.Error("Download failed. Please try again.");
         }
     }
+    private IReadOnlyList<Assignment> ActiveAssignments =>
+        data == null ? [] : data.Assignments.Where(IsActivePosition).ToList();
+
     private void New()
     {
-        if(!CanAssign)return;
+        if (!CanAssign) return;
         attachingContractFor = null;
-        selectedFrameworkId=selectedMatrixId=0;
-        terminationRequestTypeId=null;jobMatrixStepId=null;original = null; changing = ending = false; editing = true; message = null;
-        jobId = data!.Jobs.FirstOrDefault()?.Id ?? 0; positionId = 0; from = Today; to = null; reason = "";
+        selectedFrameworkId = selectedMatrixId = 0;
+        terminationRequestTypeId = null; jobMatrixStepId = null; original = null; changing = ending = false; editing = true; message = null;
+        var unassignedJob = data!.Jobs.FirstOrDefault(j => !ActiveAssignments.Any(a => a.JobId == j.Id));
+        jobId = unassignedJob?.Id ?? data.Jobs.FirstOrDefault()?.Id ?? 0; positionId = 0; from = Today; to = null; reason = "";
     }
     private void Edit(Assignment item, bool change = false, bool end = false)
     {
@@ -681,8 +685,8 @@
         catch (Exception ex) { message = "The position could not be saved. Refresh and try again."; Logger.LogError(ex, "Saving position for staff {StaffId}", StaffId); Toasts.Error(message); }
         finally { busy = false; }
     }
-    private bool SelectingPosition=>original==null||changing;
-    private bool CanAssign=>data?.CanManage==true&&data.Jobs.Count>0&&!data.Assignments.Any(a=>a.StateId==4&&a.From.Date<=Today&&(!a.To.HasValue||a.To.Value.Date>Today)&&data.Jobs.Any(j=>j.Id==a.JobId));
+    private bool SelectingPosition => original == null || changing;
+    private bool CanAssign => data?.CanManage == true && data.Jobs.Any(j => !ActiveAssignments.Any(a => a.JobId == j.Id));
     private void FrameworkChanged(){selectedMatrixId=positionId=0;jobMatrixStepId=null;}
     private void MatrixChanged(){positionId=0;jobMatrixStepId=null;}
     private static string Status(Assignment a)

@@ -68,8 +68,6 @@ public sealed class StaffOnboardingService(IDbContextFactory<HrmTeContext> facto
     {
         if (!await db.Individuals.AnyAsync(x => x.BusinessEntityId == person))
             throw new UnauthorizedAccessException("This individual is not available in the current organisation’s registry.");
-        if (await FormerStaffPolicy.CurrentJobs(db).AnyAsync(x => x.IndividualID == person))
-            throw new InvalidOperationException("This individual already has an active job and cannot be onboarded.");
         if (await db.StaffOnboardingRequests.AnyAsync(x => x.IndividualId == person && x.IsOpen))
             throw new InvalidOperationException("An onboarding request is already processing for this individual.");
     }
@@ -106,9 +104,12 @@ public sealed class StaffOnboardingService(IDbContextFactory<HrmTeContext> facto
             throw new InvalidOperationException("Select an active position available to this organisation, or assign it later.");
         if(r.PositionId.HasValue)await PositionVacancy.RequireAsync(db,r.PositionId.Value,r.JoinedDate,null);
         if(r.PositionId.HasValue){var info=await PositionMatrixAssignments.SummaryAsync(db,r.PositionId.Value,r.JobMatrixStepId);if(info!=null&&(!r.JobMatrixStepId.HasValue||!info.Steps.Any(x=>x.Id==r.JobMatrixStepId)))throw new InvalidOperationException("Select the employee job pay step.");if(info==null&&r.JobMatrixStepId.HasValue)throw new InvalidOperationException("This position has no Job Matrix pay step.");}
-        if (await db.Jobs.AnyAsync(x => x.IndividualID == r.IndividualId && x.JobStateId == 4 &&
-            (!x.TerminatedDate.HasValue || x.TerminatedDate >= r.JoinedDate)))
-            throw new InvalidOperationException("This individual already has approved employment overlapping the proposed joining date.");
+        var sameTypeJob = await db.Jobs.AsNoTracking()
+            .Include(x => x.JobType)
+            .FirstOrDefaultAsync(x => x.IndividualID == r.IndividualId && x.JobStateId == 4 && x.JobTypeId == r.JobTypeId &&
+                (!x.TerminatedDate.HasValue || x.TerminatedDate >= r.JoinedDate));
+        if (sameTypeJob != null)
+            throw new InvalidOperationException($"This individual already has an approved {sameTypeJob.JobType.TypeName} employment overlapping the proposed joining date. A staff member cannot hold two jobs of the same job type.");
         var identity = await IdentityAsync(db, r.IndividualId);
         if (await db.Users.AnyAsync(x => x.Username == identity && x.BusinessEntityID != r.IndividualId))
             throw new InvalidOperationException("The National ID is linked to another account. Contact the administrator.");
