@@ -123,6 +123,14 @@
         }
     }
 
+    function resize(elementId) {
+        const entry = maps.get(elementId);
+        if (!entry) return;
+        setTimeout(() => {
+            try { entry.map.invalidateSize(); } catch { }
+        }, 80);
+    }
+
     function getCurrentPosition() {
         return new Promise((resolve) => {
             if (!navigator.geolocation) {
@@ -151,5 +159,5 @@
         });
     }
 
-    window.hrmGeoMap = { init, update, destroy, getCurrentPosition };
+    window.hrmGeoMap = { init, update, destroy, resize, getCurrentPosition };
 })();
