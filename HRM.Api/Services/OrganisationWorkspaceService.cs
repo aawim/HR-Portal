@@ -82,9 +82,30 @@ public partial class OrganisationWorkspaceService(IDbContextFactory<HrmTeContext
                 .Select(x => new OrganisationWorkspaceStaff(x.BusinessEntityId, (x.FirstNameEnglish + " " + (x.MiddleNameEnglish ?? "") + " " + (x.LastNameEnglish ?? "")).Trim(), "Not assigned to an organisation", null, null, DateTime.MinValue, "—")).ToListAsync();
             return (pageIndividuals, totalIndividuals);
         }
-        var query = db.Jobs.AsNoTracking().Where(x => x.OrganisationID == organisationId && x.JobStateId == SharedConfig.JobStates.APPROVED && x.TerminatedDate == null && x.JoinedDate <= today);
+        var activeJobs = db.Jobs.AsNoTracking().Where(x =>
+            x.OrganisationID == organisationId &&
+            x.JobStateId == SharedConfig.JobStates.APPROVED &&
+            x.JoinedDate <= today &&
+            (!x.TerminatedDate.HasValue || x.TerminatedDate > today));
+
+        IQueryable<Job> query;
         if (string.Equals(scope, "former", StringComparison.OrdinalIgnoreCase))
-            query = db.Jobs.AsNoTracking().Where(x => x.OrganisationID == organisationId && (x.JobStateId != SharedConfig.JobStates.APPROVED || x.JoinedDate > today || (x.TerminatedDate != null && x.TerminatedDate <= today)));
+        {
+            var endedJobs = db.Jobs.AsNoTracking().Where(x =>
+                x.OrganisationID == organisationId &&
+                !activeJobs.Any(a => a.IndividualID == x.IndividualID) &&
+                (x.JobStateId != SharedConfig.JobStates.APPROVED || x.JoinedDate > today || (x.TerminatedDate != null && x.TerminatedDate <= today)));
+
+            query = endedJobs.Where(x =>
+                !endedJobs.Any(n => n.IndividualID == x.IndividualID &&
+                    (n.JoinedDate > x.JoinedDate || (n.JoinedDate == x.JoinedDate && n.JobId > x.JobId))));
+        }
+        else
+        {
+            query = activeJobs.Where(x =>
+                !activeJobs.Any(n => n.IndividualID == x.IndividualID &&
+                    (n.JoinedDate > x.JoinedDate || (n.JoinedDate == x.JoinedDate && n.JobId > x.JobId))));
+        }
         var staffIds = await query.Select(x => x.IndividualID).Distinct().ToListAsync();
         var viewableStaffIds = await StaffAttributeAccess.FilterViewableAsync(db, access, organisationId, staffIds);
         if (viewableStaffIds.Count < staffIds.Count)

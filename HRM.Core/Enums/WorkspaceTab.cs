@@ -41,6 +41,9 @@ namespace HRM.Enum
 
         Position,
 
+        [Display(Name = "Job History")]
+        JobHistory,
+
         Schedule,
 
         [Display(Name = "Leave Type")]

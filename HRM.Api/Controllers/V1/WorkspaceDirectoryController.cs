@@ -14,6 +14,13 @@ public sealed class WorkspaceDirectoryController(global::HRM.Services.Interfaces
     }
 
     [ApiPermission("Employee.View", "Staff.Details", "Individual.View")]
+    [HttpGet("get-staff-job-history")]
+    public async Task<ActionResult<global::System.Collections.Generic.List<global::HRM.DTOs.StaffJobHistorySummaryDto>>> GetStaffJobHistory([FromQuery] global::System.Int32 staffId)
+    {
+        return Ok(await service.GetStaffJobHistoryAsync(staffId, HttpContext.RequestAborted));
+    }
+
+    [ApiPermission("Employee.View", "Staff.Details", "Individual.View")]
     [HttpPost("query/search")]
     public async Task<ActionResult<global::HRM.DTOs.WorkspaceSearchPage>> Search([FromBody] WorkspaceDirectorySearchRequest request)
     {
