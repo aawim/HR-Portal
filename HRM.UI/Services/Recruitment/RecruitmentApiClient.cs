@@ -16,6 +16,7 @@ public interface IRecruitmentApiClient {
     Task<HRM.DTOs.ServiceResult> CreateVacancyAsync(RecruitmentVacancyInput input);
     Task<HRM.DTOs.ServiceResult> PublishVacancyAsync(int id);
     Task<IReadOnlyList<RecruitmentScreeningApplicationRow>> GetScreeningApplicationsAsync(int vacancyId);
+    Task<IReadOnlyList<RecruitmentConflictDeclarationRow>> GetConflictDeclarationsAsync(int vacancyId);
     Task<HRM.DTOs.ServiceResult> RecordScreeningAsync(RecordScreeningInput input);
     Task<HRM.DTOs.ServiceResult> DeclareConflictAsync(DeclareRecruitmentConflictInput input);
     Task<RecruitmentAssessmentWorkspace> GetAssessmentWorkspaceAsync(int vacancyId);
@@ -64,6 +65,7 @@ public sealed class RecruitmentApiClient(HttpClient http) : IRecruitmentApiClien
     public Task<HRM.DTOs.ServiceResult> CreateAssessmentAsync(CreateRecruitmentAssessmentInput input)=>PostAsync("/api/v1/recruitment/assessments",input,default);
     public Task<HRM.DTOs.ServiceResult> SubmitScorecardAsync(SubmitPanelScorecardInput input)=>PostAsync("/api/v1/recruitment/assessments/scorecards",input,default);
     public async Task<IReadOnlyList<RecruitmentScreeningApplicationRow>> GetScreeningApplicationsAsync(int vacancyId)=>await http.GetFromJsonAsync<List<RecruitmentScreeningApplicationRow>>($"/api/v1/recruitment/screening/applications/{vacancyId}")??[];
+    public async Task<IReadOnlyList<RecruitmentConflictDeclarationRow>> GetConflictDeclarationsAsync(int vacancyId)=>await http.GetFromJsonAsync<List<RecruitmentConflictDeclarationRow>>($"/api/v1/recruitment/screening/conflicts/{vacancyId}")??[];
     public Task<HRM.DTOs.ServiceResult> RecordScreeningAsync(RecordScreeningInput input)=>PostAsync("/api/v1/recruitment/screening",input,default);
     public Task<HRM.DTOs.ServiceResult> DeclareConflictAsync(DeclareRecruitmentConflictInput input)=>PostAsync("/api/v1/recruitment/screening/conflicts",input,default);
     public async Task<IReadOnlyList<RecruitmentVacancyRow>> GetVacanciesAsync()=>await http.GetFromJsonAsync<List<RecruitmentVacancyRow>>("/api/v1/recruitment/vacancies")??[];

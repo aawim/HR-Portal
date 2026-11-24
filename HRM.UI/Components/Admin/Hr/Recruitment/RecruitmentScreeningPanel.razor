@@ -191,7 +191,7 @@
                     class="inline-flex items-center justify-center rounded-lg border border-slate-300 bg-white px-3.5 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 disabled:opacity-50 transition-colors"
                     disabled="@(busy || vacancyId <= 0 || string.IsNullOrWhiteSpace(declaration))"
                     @onclick="Declare">
-                Record Declaration
+                @(myDeclaration is not null ? "Update Declaration" : "Record Declaration")
             </button>
         </div>
 
@@ -202,12 +202,48 @@
                 <button type="button" class="font-bold text-slate-500 hover:text-slate-800" @onclick="() => conflictMessage = null">✕</button>
             </div>
         }
+
+        @if (vacancyId > 0)
+        {
+            <div class="border-t border-slate-100 pt-3 space-y-2">
+                <div class="flex items-center justify-between">
+                    <h4 class="text-[11px] font-bold uppercase tracking-wide text-slate-600">Recorded Declarations</h4>
+                    <span class="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-700">@conflictDeclarations.Count</span>
+                </div>
+                @if (conflictDeclarations.Count == 0)
+                {
+                    <p class="text-xs text-slate-500">No declarations recorded for this vacancy yet.</p>
+                }
+                else
+                {
+                    <div class="space-y-2">
+                        @foreach (var item in conflictDeclarations)
+                        {
+                            <div class="rounded-xl border @(item.HasConflict ? "border-rose-200 bg-rose-50/40" : "border-emerald-200 bg-emerald-50/40") p-2.5 text-xs space-y-1">
+                                <div class="flex flex-wrap items-center justify-between gap-1.5">
+                                    <span class="font-semibold text-slate-800">
+                                        @item.DeclaredByName@(item.IsMine ? " (You)" : "")
+                                    </span>
+                                    <span class="rounded-full px-2 py-0.5 text-[10px] font-semibold @(item.HasConflict ? "bg-rose-100 text-rose-800" : "bg-emerald-100 text-emerald-800")">
+                                        @(item.HasConflict ? "Conflict Declared" : "No Conflict")
+                                    </span>
+                                </div>
+                                <p class="text-[11px] text-slate-700">@item.Declaration</p>
+                                <div class="text-[10px] text-slate-500">@item.DeclaredAtUtc.AddHours(5).ToString("dd MMM yyyy HH:mm") MVT</div>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        }
     </aside>
 </div>
 
 @code {
     private IReadOnlyList<RecruitmentVacancyRow> vacancies = [];
     private IReadOnlyList<RecruitmentScreeningApplicationRow> applications = [];
+    private IReadOnlyList<RecruitmentConflictDeclarationRow> conflictDeclarations = [];
+    private RecruitmentConflictDeclarationRow? myDeclaration;
     private RecruitmentScreeningApplicationRow? selected;
     private int vacancyId;
     private bool busy, eligible, shortlisted, conflict;
@@ -226,14 +262,39 @@
     {
         selected = null;
         applications = [];
+        conflictDeclarations = [];
+        myDeclaration = null;
+        conflict = false;
+        declaration = "";
         conflictMessage = null;
         try
         {
-            if (vacancyId > 0) applications = await Api.GetScreeningApplicationsAsync(vacancyId);
+            if (vacancyId > 0)
+            {
+                applications = await Api.GetScreeningApplicationsAsync(vacancyId);
+                await LoadConflictsAsync();
+            }
         }
         catch (HttpRequestException)
         {
             message = "Applications could not be loaded. Check your recruitment access.";
+        }
+    }
+
+    private async Task LoadConflictsAsync()
+    {
+        if (vacancyId <= 0) return;
+        conflictDeclarations = await Api.GetConflictDeclarationsAsync(vacancyId);
+        myDeclaration = conflictDeclarations.FirstOrDefault(x => x.IsMine);
+        if (myDeclaration is not null)
+        {
+            conflict = myDeclaration.HasConflict;
+            declaration = myDeclaration.Declaration;
+        }
+        else
+        {
+            conflict = false;
+            declaration = "";
         }
     }
 
@@ -283,8 +344,7 @@
                 conflictMessage = result.Message;
                 if (result.Success)
                 {
-                    declaration = "";
-                    conflict = false;
+                    await LoadConflictsAsync();
                 }
             }
             else

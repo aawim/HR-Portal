@@ -17,4 +17,29 @@ public sealed class RecruitmentScreeningQueriesController(IDbContextFactory<HrmT
         if(!await db.RecruitmentVacancies.AnyAsync(x=>x.Id==vacancyId&&x.OrganisationId==org,ct))return NotFound();
         return Ok(await(from app in db.RecruitmentApplications.AsNoTracking() join person in db.RecruitmentApplicants on app.RecruitmentApplicantId equals person.Id where app.RecruitmentVacancyId==vacancyId&&app.OrganisationId==org orderby app.SubmittedAtUtc select new RecruitmentScreeningApplicationRow(app.Id,app.Reference,person.FullName,app.Status,app.SubmittedAtUtc)).ToListAsync(ct));
     }
+
+    [HttpGet("/api/v1/recruitment/screening/conflicts/{vacancyId:int}")]
+    public async Task<ActionResult<List<RecruitmentConflictDeclarationRow>>> ListConflicts(int vacancyId,CancellationToken ct)
+    {
+        var org=await access.GetCurrentOrganisationIdAsync();
+        if(org<=0||!await access.HasOrganisationAccessAsync(org)||!await access.HasPermissionAsync("Recruitment.Manage"))return Forbid();
+        var actor=await access.RequireContextAsync();
+        await using var db=await factory.CreateDbContextAsync(ct);
+        if(!await db.RecruitmentVacancies.AnyAsync(x=>x.Id==vacancyId&&x.OrganisationId==org,ct))return NotFound();
+        var rows=await(from c in db.RecruitmentPanelConflictDeclarations.AsNoTracking()
+                       join u in db.Users.AsNoTracking() on c.DeclaredByUserId equals u.UserId into us
+                       from u in us.DefaultIfEmpty()
+                       where c.RecruitmentVacancyId==vacancyId&&c.OrganisationId==org
+                       orderby c.DeclaredAtUtc descending
+                       select new RecruitmentConflictDeclarationRow(
+                           c.Id,
+                           c.DeclaredByUserId,
+                           u!=null&&!string.IsNullOrWhiteSpace(u.Username)?u.Username:$"User #{c.DeclaredByUserId}",
+                           c.HasConflict,
+                           c.Declaration,
+                           c.Mitigation,
+                           c.DeclaredAtUtc,
+                           c.DeclaredByUserId==actor.UserId)).ToListAsync(ct);
+        return Ok(rows);
+    }
 }

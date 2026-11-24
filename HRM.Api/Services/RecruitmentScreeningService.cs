@@ -109,8 +109,25 @@ public sealed class RecruitmentScreeningService(IDbContextFactory<HrmTeContext> 
         if (!await d.RecruitmentVacancies.AnyAsync(x => x.Id == i.VacancyId && x.OrganisationId == o, ct))
             throw new UnauthorizedAccessException();
 
-        if (await d.RecruitmentPanelConflictDeclarations.AnyAsync(x => x.RecruitmentVacancyId == i.VacancyId && x.DeclaredByUserId == u, ct))
-            return ServiceResult.Fail("Your conflict declaration is already recorded for this vacancy.");
+        var existing = await d.RecruitmentPanelConflictDeclarations.SingleOrDefaultAsync(x => x.RecruitmentVacancyId == i.VacancyId && x.DeclaredByUserId == u, ct);
+        if (existing is not null)
+        {
+            var hasScored = await (from s in d.RecruitmentPanelScorecards
+                                   join a in d.RecruitmentAssessments on s.RecruitmentAssessmentId equals a.Id
+                                   where a.RecruitmentVacancyId == i.VacancyId && s.ScorerUserId == u
+                                   select s.Id).AnyAsync(ct);
+            if (hasScored)
+                return ServiceResult.Fail("Your conflict declaration cannot be changed after submitting a scorecard for this vacancy.");
+
+            var updateLog = await logs.CreateAsync(d, SharedConfig.OperationLogActionTypes.REQUESTS_UPDATE, $"Recruitment conflict declaration updated for vacancy {i.VacancyId} (HasConflict={i.HasConflict}).");
+            existing.HasConflict = i.HasConflict;
+            existing.Declaration = i.Declaration.Trim();
+            existing.Mitigation = i.Mitigation?.Trim();
+            existing.DeclaredAtUtc = DateTime.UtcNow;
+            existing.OperationLogId = updateLog.OperationLogId;
+            await d.SaveChangesAsync(ct);
+            return ServiceResult.Ok(i.HasConflict ? "Conflict declaration updated (conflict declared)." : "Conflict declaration updated (no conflict).");
+        }
 
         var l = await logs.CreateAsync(d, SharedConfig.OperationLogActionTypes.REQUESTS_CREATE, $"Recruitment conflict declaration recorded for vacancy {i.VacancyId}.");
         d.RecruitmentPanelConflictDeclarations.Add(new RecruitmentPanelConflictDeclaration
