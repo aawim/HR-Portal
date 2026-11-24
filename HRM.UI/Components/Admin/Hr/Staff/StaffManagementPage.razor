@@ -21,77 +21,56 @@
 
 <PageTitle>Staff Management - HR Portal</PageTitle>
 
-<section class="staff-manage-page w-full min-w-0 p-1 space-y-4">
-        <!-- Sticky Header conforming to UI Design Standard -->
-        <header class="staff-manage-header sticky top-0 z-30 m-0 flex w-full min-w-0 flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white/95 backdrop-blur-xs p-3 shadow-xs no-print">
-            <div>
-                <div class="flex items-center gap-2">
-                    <h1 class="text-lg font-bold text-slate-900">Staff Management</h1>
+<section class="staff-manage-page w-full min-w-0 flex flex-col gap-3">
+        <!-- Compact Transparent Borderless Header (UI_DESIGN_STANDARD Section 3) -->
+        <header class="staff-manage-header bg-transparent flex w-full min-w-0 flex-wrap items-center justify-between gap-2 px-1 py-0.5 no-print">
+            <div class="min-w-0">
+                <div class="flex items-center gap-2 flex-wrap">
+                    <h2 class="text-base font-bold text-slate-900 dark:text-slate-100">Workforce Roster</h2>
                     @if (!string.IsNullOrWhiteSpace(organisationName))
                     {
-                        <span class="rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-semibold text-blue-800">@organisationName</span>
+                        <span class="inline-flex items-center rounded-full border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/50 px-2 py-0.5 text-[10px] font-semibold text-blue-700 dark:text-blue-300">@organisationName</span>
                     }
-                    <span class="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-700">@allStaff.Count Total Staff</span>
+                    <span class="inline-flex items-center rounded-full border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 text-[10px] font-semibold text-slate-700 dark:text-slate-300">@allStaff.Count staff</span>
                 </div>
-                <p class="text-xs text-slate-500 mt-0.5">Comprehensive workforce roster, department allocations, operational groups, and staff profiles.</p>
+                <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Workforce roster, department allocations, operational groups, and staff profiles.</p>
             </div>
 
-            <div class="flex flex-wrap items-center gap-2">
-                <!-- Full Width / Shrink View Toggle Button -->
-                <button type="button"
-                        class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition-colors"
-                        title="@(isFullWidth ? "Shrink to standard layout" : "Expand to full page width")"
-                        @onclick="ToggleFullWidth">
-                    @if (isFullWidth)
-                    {
-                        <AppIcon Name="fullscreen_exit" Class="h-4 w-4 text-slate-600 text-base" />
-                        <span>Shrink View</span>
-                    }
-                    else
-                    {
-                        <AppIcon Name="fullscreen" Class="h-4 w-4 text-slate-600 text-base" />
-                        <span>Full Width</span>
-                    }
-                </button>
-
+            <div class="flex flex-wrap items-center gap-1.5">
                 <!-- Export CSV Button -->
                 <button type="button"
-                        class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 disabled:opacity-50 transition-colors"
+                        class="app-button app-button-secondary app-button-sm"
                         disabled="@(exporting || !FilteredStaff.Any())"
                         @onclick="ExportCsvAsync"
                         title="Export current staff list to CSV spreadsheet">
-                    <svg class="h-4 w-4 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
+                    <i class="bi bi-file-earmark-spreadsheet text-xs text-emerald-600" aria-hidden="true"></i>
                     <span>@(exportingCsv ? "Exporting..." : "Export CSV")</span>
                 </button>
 
                 <!-- Export PDF Button -->
                 <button type="button"
-                        class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 disabled:opacity-50 transition-colors"
+                        class="app-button app-button-secondary app-button-sm"
                         disabled="@(exporting || !FilteredStaff.Any())"
                         @onclick="ExportPdfAsync"
                         title="Export current staff list to PDF report">
-                    <svg class="h-4 w-4 text-rose-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                    </svg>
+                    <i class="bi bi-file-earmark-pdf text-xs text-rose-600" aria-hidden="true"></i>
                     <span>@(exportingPdf ? "Generating..." : "Export PDF")</span>
                 </button>
 
                 <!-- Refresh Button -->
                 <button type="button"
-                        class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 disabled:opacity-50 transition-colors"
+                        class="app-button app-button-secondary app-button-sm"
                         disabled="@busy"
                         @onclick="LoadAsync"
                         title="Reload staff records and group assignments">
-                    <span class="@(busy ? "animate-spin" : "")">↻</span>
+                    <i class="bi bi-arrow-clockwise text-xs @(busy ? "animate-spin" : "")" aria-hidden="true"></i>
                     <span>Refresh</span>
                 </button>
 
                 <!-- Add / Onboard Staff Action Button -->
-                <a class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 transition-colors"
+                <a class="app-button app-button-primary app-button-sm"
                    href="/admin/my/workspace/onboarding?tab=add-individual">
-                    <span>+</span>
+                    <i class="bi bi-person-plus text-xs" aria-hidden="true"></i>
                     <span>Onboard Staff</span>
                 </a>
             </div>
@@ -100,56 +79,33 @@
         <!-- Error Banner -->
         @if (!string.IsNullOrEmpty(error))
         {
-            <div role="alert" class="flex items-center justify-between rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800 no-print">
+            <div role="alert" class="flex items-center justify-between rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-xs text-rose-800 no-print">
                 <div class="flex items-center gap-2">
-                    <span class="text-base">⚠️</span>
+                    <i class="bi bi-exclamation-triangle-fill text-rose-600" aria-hidden="true"></i>
                     <span>@error</span>
                 </div>
                 <button type="button" @onclick="() => error = null" class="font-bold text-rose-600 hover:text-rose-800">✕</button>
             </div>
         }
 
-        <!-- KPI Metric Summary Strip -->
-        <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 no-print">
-            <div class="rounded-xl border border-slate-200 bg-white p-3.5 shadow-xs flex items-center justify-between">
-                <div>
-                    <span class="block text-xs font-medium text-slate-500">Total Staff</span>
-                    <span class="text-xl font-bold text-slate-900">@allStaff.Count</span>
-                </div>
-                <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
-                    <span class="text-lg">💼</span>
-                </div>
-            </div>
-
-            <div class="rounded-xl border border-slate-200 bg-white p-3.5 shadow-xs flex items-center justify-between">
-                <div>
-                    <span class="block text-xs font-medium text-slate-500">Active Staff</span>
-                    <span class="text-xl font-bold text-slate-900">@allStaff.Count(s => s.IsActive)</span>
-                </div>
-                <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
-                    <span class="text-lg">✅</span>
-                </div>
-            </div>
-
-            <div class="rounded-xl border border-slate-200 bg-white p-3.5 shadow-xs flex items-center justify-between">
-                <div>
-                    <span class="block text-xs font-medium text-slate-500">Departments</span>
-                    <span class="text-xl font-bold text-slate-900">@DepartmentCount</span>
-                </div>
-                <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
-                    <span class="text-lg">🏢</span>
-                </div>
-            </div>
-
-            <div class="rounded-xl border border-slate-200 bg-white p-3.5 shadow-xs flex items-center justify-between">
-                <div>
-                    <span class="block text-xs font-medium text-slate-500">Groups & Teams</span>
-                    <span class="text-xl font-bold text-slate-900">@GroupCount</span>
-                </div>
-                <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-50 text-purple-600">
-                    <span class="text-lg">🏷️</span>
-                </div>
-            </div>
+        <!-- Compact Inline KPI Summary Bar (UI_DESIGN_STANDARD Section 6.5) -->
+        <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3.5 py-2.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5 text-[11px] text-slate-500 dark:text-slate-400 no-print">
+            <span class="inline-flex items-center gap-1.5">
+                <span class="h-1.5 w-1.5 rounded-full bg-blue-500"></span>
+                Total Staff: <strong class="text-slate-900 dark:text-slate-100 tabular-nums">@allStaff.Count</strong>
+            </span>
+            <span class="inline-flex items-center gap-1.5">
+                <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
+                Active Staff: <strong class="text-emerald-700 dark:text-emerald-400 tabular-nums">@allStaff.Count(s => s.IsActive)</strong>
+            </span>
+            <span class="inline-flex items-center gap-1.5">
+                <span class="h-1.5 w-1.5 rounded-full bg-indigo-500"></span>
+                Departments: <strong class="text-slate-900 dark:text-slate-100 tabular-nums">@DepartmentCount</strong>
+            </span>
+            <span class="inline-flex items-center gap-1.5">
+                <span class="h-1.5 w-1.5 rounded-full bg-purple-500"></span>
+                Groups &amp; Teams: <strong class="text-slate-900 dark:text-slate-100 tabular-nums">@GroupCount</strong>
+            </span>
         </div>
 
         <!-- View Segmented Tabs & Filters Toolbar -->
@@ -292,9 +248,11 @@
                             }
                             else
                             {
-                                @foreach (var staff in FilteredStaff)
+                                var filteredList = FilteredStaff.ToList();
+                                @for (var sIdx = 0; sIdx < filteredList.Count; sIdx++)
                                 {
-                                    <tr @key="staff.JobId" class="hover:bg-slate-50/70 transition-colors">
+                                    var staff = filteredList[sIdx];
+                                    <tr @key="staff.JobId" class="@(sIdx % 2 == 1 ? "bg-[#f3f8fd] dark:bg-slate-800/30" : "bg-white dark:bg-slate-900") hover:bg-blue-50/50 transition-colors">
                                         <!-- Photo Avatar -->
                                         <td class="p-3 text-center">
                                             <div class="relative group inline-block">

@@ -19,7 +19,7 @@
 @inject IUserAccessService UserAccess
 @rendermode RenderMode.InteractiveServer
 
-<PageTitle>@(CategoryName.Equals("requests", StringComparison.OrdinalIgnoreCase) ? "Received Requests - HR Portal" : CategoryName.Equals("supervisors", StringComparison.OrdinalIgnoreCase) ? "Supervisors Workspace - HR Portal" : "HR Portal")</PageTitle>
+<PageTitle>@(CategoryName.Equals("requests", StringComparison.OrdinalIgnoreCase) ? "Received Requests - HR Portal" : CategoryName.Equals("supervisors", StringComparison.OrdinalIgnoreCase) ? "Supervisors Workspace - HR Portal" : CategoryName.Equals("staff", StringComparison.OrdinalIgnoreCase) ? "Staff Management - HR Portal" : "HR Portal")</PageTitle>
 
 <AuthorizeView>
     <Authorized>
@@ -94,6 +94,87 @@
                     {
                         <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6 text-center text-xs text-slate-500">
                             Select an item to view supervisor assignments.
+                        </div>
+                    }
+                </div>
+            </section>
+            <style>
+                .supervisors-shell {
+                    width: 100%;
+                    min-width: 0;
+                    display: flex;
+                    flex-direction: column;
+                    gap: 0.75rem;
+                    transition: max-width 200ms ease;
+                }
+                .supervisors-shell-standard {
+                    max-width: 80rem;
+                    margin-left: auto;
+                    margin-right: auto;
+                }
+                .supervisors-shell-full {
+                    max-width: none;
+                }
+            </style>
+        }
+        else if (CategoryName.Equals("staff", StringComparison.OrdinalIgnoreCase))
+        {
+            var staffItems = GetSubItems(CategoryName).Where(x => x.ComponentType != null).ToList();
+            <section class="w-full min-w-0 p-2 flex flex-col gap-3 text-slate-900 dark:text-slate-100">
+                <header class="staff-overview-no-print bg-transparent flex flex-wrap items-center justify-between gap-2 px-1 py-1">
+                    <div class="min-w-0">
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <h1 class="text-lg font-bold text-slate-900 dark:text-slate-100 truncate">Staff Management</h1>
+                            <span class="inline-flex items-center gap-1 rounded-full bg-teal-50 dark:bg-teal-950/60 border border-teal-200/80 dark:border-teal-800 px-2 py-0.5 text-[10px] font-semibold text-teal-700 dark:text-teal-300">
+                                <span class="h-1.5 w-1.5 rounded-full bg-teal-500"></span>
+                                HR Staff
+                            </span>
+                        </div>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">
+                            Manage staff roster, search employee records, former staff history, enrollment numbers, and bulk uploads.
+                        </p>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <button type="button"
+                                class="app-button app-button-neutral app-button-sm"
+                                @onclick="ToggleSupervisorsFullWidth">
+                            <AppIcon Name="@(supervisorsFullWidth ? "fullscreen_exit" : "fullscreen")" Class="text-xs" />
+                            <span>@(supervisorsFullWidth ? "Shrink View" : "Full Width")</span>
+                        </button>
+                        <button type="button"
+                                class="app-button app-button-secondary app-button-sm"
+                                @onclick="RefreshSupervisorsView">
+                            <AppIcon Name="refresh" Class="text-xs" />
+                            <span>Refresh</span>
+                        </button>
+                    </div>
+                </header>
+
+                <div class="supervisors-shell @(supervisorsFullWidth ? "supervisors-shell-full" : "supervisors-shell-standard")">
+                    <div class="org-workspace-tabs my-workspace-tabs w-full border-b-2 border-teal-700 dark:border-teal-600 overflow-x-auto">
+                        <nav class="flex items-end gap-1 min-w-max pb-0" aria-label="Staff Management Sections">
+                            @foreach (var item in staffItems)
+                            {
+                                var isActive = activeItem?.Title == item.Title;
+                                <button type="button"
+                                        aria-current="@(isActive ? "page" : null)"
+                                        class="rounded-t-xl px-4 py-2 font-bold text-xs md:text-sm transition-all border-t border-l border-r inline-flex items-center gap-1.5 @(isActive ? "bg-teal-700 dark:bg-teal-600 text-white border-teal-700 dark:border-teal-600 shadow-sm" : "bg-[#86b0be]/30 text-slate-700 hover:text-slate-900 hover:bg-[#86b0be]/50 dark:bg-slate-800/90 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-700 border-slate-300 dark:border-slate-700")"
+                                        @onclick="() => SelectItem(item)">
+                                    <i class="bi @StaffSectionIcon(item.Title) text-xs" aria-hidden="true"></i>
+                                    <span>@item.Title</span>
+                                </button>
+                            }
+                        </nav>
+                    </div>
+
+                    @if (activeItem?.ComponentType != null)
+                    {
+                        <DynamicComponent @key="(CategoryName, Section, supervisorsRefreshKey)" Type="@activeItem.ComponentType" Parameters="SelectedParameters" />
+                    }
+                    else
+                    {
+                        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6 text-center text-xs text-slate-500">
+                            Select a staff management section above.
                         </div>
                     }
                 </div>
@@ -280,6 +361,16 @@
     }
 
     private record SubItem(string Title, string Icon, string Description, Type? ComponentType = null);
+
+    private static string StaffSectionIcon(string title) => title switch
+    {
+        "Manage Staff" => "bi-people",
+        "Search" => "bi-search",
+        "Former Staff" => "bi-archive",
+        "Staff Enrollment" => "bi-person-vcard",
+        "Employee Bulk Upload" => "bi-upload",
+        _ => "bi-grid"
+    };
 
     private static string ItemSlug(SubItem item) => item.Title switch
     {
