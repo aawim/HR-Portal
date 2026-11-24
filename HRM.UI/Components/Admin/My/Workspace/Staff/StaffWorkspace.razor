@@ -37,6 +37,7 @@
                         @RenderSubTab(WorkspaceTab.JobHistory, "Job History", "bi-clock-history")
                         @RenderSubTab(WorkspaceTab.StaffTransfer, "Transfer", "bi-arrow-left-right")
                         @RenderSubTab(WorkspaceTab.Performance, "Performance", "bi-graph-up-arrow")
+                        @RenderSubTab(WorkspaceTab.StaffSeparation, "Separation & Offboarding", "bi-box-arrow-right")
                     </nav>
                 </div>
             }
@@ -149,6 +150,10 @@
             {
                 <HRM.Components.Admin.Hr.Transfers.StaffTransferManagementPage @key="StaffId" StaffId="StaffId" />
             }
+            else if (ActiveTab == WorkspaceTab.StaffSeparation)
+            {
+                <HRM.Components.Admin.Hr.Separations.StaffSeparationManagementPage @key="StaffId" StaffId="StaffId" />
+            }
             else if (ActiveTab == WorkspaceTab.Certificates)
             {
                 <HRM.Components.Admin.My.Workspace.Staff.Tabs.StaffCertificatesTab @key="StaffId" StaffId="StaffId" OnChanged="OnRequestsChanged" />
@@ -178,7 +183,7 @@
     [Parameter] public int PendingPersonalItemsCount { get; set; }
     [Parameter] public int PendingCertificatesCount { get; set; }
 
-    private bool IsEmploymentCategory => ActiveTab is WorkspaceTab.Position or WorkspaceTab.JobHistory or WorkspaceTab.StaffTransfer or WorkspaceTab.Performance;
+    private bool IsEmploymentCategory => ActiveTab is WorkspaceTab.Position or WorkspaceTab.JobHistory or WorkspaceTab.StaffTransfer or WorkspaceTab.Performance or WorkspaceTab.StaffSeparation;
     private bool IsTimeAttendanceCategory => ActiveTab is WorkspaceTab.Attendance or WorkspaceTab.Leave or WorkspaceTab.OT or WorkspaceTab.Schedule or WorkspaceTab.WorkTypes;
     private bool IsFinanceCategory => ActiveTab is WorkspaceTab.Finance or WorkspaceTab.GoodsLoans or WorkspaceTab.Bank;
     private bool IsItemsCategory => ActiveTab is WorkspaceTab.JobRelatedItems or WorkspaceTab.PersonalItems;

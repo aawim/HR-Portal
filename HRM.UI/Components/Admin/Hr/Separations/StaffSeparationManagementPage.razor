@@ -1,4 +1,3 @@
-@page "/admin/hr/separations"
 @namespace HRM.Components.Admin.Hr.Separations
 @using HRM.DTOs
 @using HRM.DTOs.Separation
@@ -13,41 +12,46 @@
 @inject IJSRuntime JS
 @inject ILogger<StaffSeparationManagementPage> Logger
 
-<PageTitle>Enterprise Staff Separation & Offboarding - HR Portal</PageTitle>
+@if (StaffId <= 0)
+{
+    <PageTitle>Enterprise Staff Separation &amp; Offboarding - HR Portal</PageTitle>
+}
 
-<div class="separation-workspace w-full min-w-0 p-2 flex flex-col gap-2">
-    <!-- Header -->
-    <div class="separation-header flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-3 dark:border-slate-800">
+<div class="separation-workspace w-full min-w-0 flex flex-col gap-3">
+    <!-- Compact Transparent Borderless Header -->
+    <div class="separation-header bg-transparent flex flex-wrap items-center justify-between gap-2 px-1 py-0.5">
         <div>
             <div class="flex items-center gap-2">
-                <span class="rounded bg-slate-100 px-2 py-1 text-[10px] font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-400">
-                    Staff exits
+                <h2 class="text-base font-bold text-slate-900 dark:text-slate-100">Staff Separation &amp; Offboarding</h2>
+                <span class="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-400">
+                    Clearance, Handover &amp; Deprovisioning
                 </span>
-                <span class="text-xs text-slate-400">Clearance, Handover &amp; Deprovisioning</span>
             </div>
-            <h1 class="mt-1 text-sm font-bold text-slate-900 dark:text-slate-100">Staff Separation &amp; Offboarding</h1>
-            <p class="mt-1 text-xs text-slate-500">
+            <p class="mt-0.5 text-xs text-slate-500">
                 End-to-end employee exit management: notice periods, supervisor handover, asset recovery, finance settlement, IT deprovisioning, and legal termination.
             </p>
         </div>
 
         <div class="flex flex-wrap items-center gap-2">
-            <!-- Full Page Width Toggle Button -->
-            <button type="button"
-                    class="app-button app-button-secondary app-button-sm"
-                    title="@(isFullWidth ? "Shrink to standard layout" : "Expand to full page width")"
-                    @onclick="ToggleFullWidth">
-                @if (isFullWidth)
-                {
-                    <AppIcon Name="fullscreen_exit" Class="h-4 w-4 text-slate-600 text-base" />
-                    <span>Shrink View</span>
-                }
-                else
-                {
-                    <AppIcon Name="fullscreen" Class="h-4 w-4 text-slate-600 text-base" />
-                    <span>Full Width</span>
-                }
-            </button>
+            @if (StaffId <= 0)
+            {
+                <!-- Full Page Width Toggle Button -->
+                <button type="button"
+                        class="app-button app-button-secondary app-button-sm"
+                        title="@(isFullWidth ? "Shrink to standard layout" : "Expand to full page width")"
+                        @onclick="ToggleFullWidth">
+                    @if (isFullWidth)
+                    {
+                        <AppIcon Name="fullscreen_exit" Class="h-4 w-4 text-slate-600 text-base" />
+                        <span>Shrink View</span>
+                    }
+                    else
+                    {
+                        <AppIcon Name="fullscreen" Class="h-4 w-4 text-slate-600 text-base" />
+                        <span>Full Width</span>
+                    }
+                </button>
+            }
 
             <button type="button"
                     @onclick="OpenNewSeparationModal"
@@ -58,7 +62,7 @@
         </div>
     </div>
 
-    <div class="w-full min-w-0 flex flex-col gap-2 transition-all duration-300 @(isFullWidth ? "max-w-none" : "max-w-7xl mx-auto")">
+    <div class="w-full min-w-0 flex flex-col gap-2 transition-all duration-300 @(StaffId > 0 || isFullWidth ? "max-w-none" : "max-w-7xl mx-auto")">
     <!-- Solid-Color KPI Summary Cards -->
     @if (dashboard is not null)
     {
@@ -1118,6 +1122,8 @@
         showSeparationRegister = !showSeparationRegister;
     }
 
+    [Parameter] public int StaffId { get; set; }
+
     private StaffSeparationDashboardData? dashboard;
     private StaffSeparationDetailDto? activeDetail;
     private StaffSeparationFormLookupsDto? formLookups;
@@ -1169,7 +1175,16 @@
 
     private async Task LoadDashboardDataAsync()
     {
-        dashboard = await Separations.LoadDashboardAsync(null, selectedStatusFilter, searchTerm);
+        var loaded = await Separations.LoadDashboardAsync(null, selectedStatusFilter, searchTerm);
+        if (StaffId > 0 && loaded != null)
+        {
+            loaded.Separations = loaded.Separations.Where(x => x.IndividualId == StaffId).ToList();
+        }
+        dashboard = loaded;
+        if (activeDetail != null && (dashboard == null || !dashboard.Separations.Any(x => x.StaffSeparationId == activeDetail.StaffSeparationId)))
+        {
+            activeDetail = null;
+        }
         if (activeDetail == null && dashboard?.Separations.Any() == true)
         {
             await SelectSeparationAsync(dashboard.Separations.First().StaffSeparationId);
@@ -1212,6 +1227,7 @@
     {
         initiateInput = new StaffSeparationInitiateInput
         {
+            IndividualId = StaffId > 0 ? StaffId : 0,
             RequestedNoticeDate = DateTime.Today,
             LastWorkingDate = DateTime.Today.AddDays(30),
             EffectiveSeparationDate = DateTime.Today.AddDays(30)

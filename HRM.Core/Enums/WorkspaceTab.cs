@@ -60,6 +60,8 @@ namespace HRM.Enum
         Finance,
         [Display(Name = "Staff Transfer")]
         StaffTransfer,
+        [Display(Name = "Separation & Offboarding")]
+        StaffSeparation,
         Onboarding,
         Certificates,
         [Display(Name = "Goods Loans")]

@@ -289,7 +289,7 @@
                                                     </div>
                                                     <div class="inline-flex items-center gap-1 shrink-0">
                                                         <button type="button"
-                                                                class="app-button app-button-primary app-button-sm"
+                                                                class="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
                                                                 disabled="@loadingPreview"
                                                                 @onclick="() => ViewContractAsync(doc)">
                                                             <i class="bi bi-eye text-[11px]" aria-hidden="true"></i>
@@ -309,13 +309,19 @@
                                     @if (data.CanManage && IsActivePosition(assignment))
                                     {
                                         <div class="flex flex-wrap gap-1.5 pt-2 border-t border-slate-100 dark:border-slate-800">
+                                            @if (contracts.Count > 0)
+                                            {
+                                                <button type="button" class="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50 transition-colors" disabled="@loadingPreview" @onclick="() => ViewContractAsync(contracts[0])">
+                                                    <i class="bi bi-eye text-xs" aria-hidden="true"></i>
+                                                    <span>View Contract</span>
+                                                </button>
+                                            }
                                             <button type="button" class="app-button app-button-secondary app-button-sm" disabled="@(busy || uploadingContract)" @onclick="() => OpenContractAttach(assignment)">
                                                 <i class="bi bi-paperclip text-xs" aria-hidden="true"></i>
                                                 <span>Attach Contract / Agreement</span>
                                             </button>
                                             <button type="button" class="app-button app-button-secondary app-button-sm" disabled="@busy" @onclick="() => Edit(assignment)">Edit dates</button>
                                             <button type="button" class="app-button app-button-secondary app-button-sm" disabled="@busy" @onclick="() => Edit(assignment, change: true)">Change position</button>
-                                            <button type="button" class="inline-flex items-center rounded-lg border border-rose-200 dark:border-rose-800 bg-rose-50/80 dark:bg-rose-950/40 px-2.5 py-1 text-xs font-semibold text-rose-700 dark:text-rose-300 hover:bg-rose-100 disabled:opacity-50 transition-colors" disabled="@busy" @onclick="() => Edit(assignment, end: true)">Job termination</button>
                                         </div>
                                     }
                                 </article>
@@ -516,8 +522,11 @@
     private List<DmsDocumentSummaryDto> GetContractsForAssignment(Assignment assignment)
     {
         var refCode = $"POS-{assignment.Id}";
+        var posTag = $"Position:{assignment.PositionId}";
         return staffDocuments
-            .Where(d => string.Equals(d.ReferenceCode, refCode, StringComparison.OrdinalIgnoreCase))
+            .Where(d => string.Equals(d.ReferenceCode, refCode, StringComparison.OrdinalIgnoreCase)
+                || (!string.IsNullOrWhiteSpace(d.Description) && d.Description.Contains($"Position Assignment #{assignment.Id}", StringComparison.OrdinalIgnoreCase))
+                || (!string.IsNullOrWhiteSpace(d.DocumentNumber) && string.Equals(d.ReferenceCode, posTag, StringComparison.OrdinalIgnoreCase)))
             .OrderByDescending(d => d.DocumentId)
             .ToList();
     }
