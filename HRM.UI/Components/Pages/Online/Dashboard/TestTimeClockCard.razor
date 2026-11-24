@@ -1,5 +1,6 @@
 @using HRM.Components.Tools
 @using HRM.DTOs.Attendance
+@using HRM.DTOs.WorkTypes
 @using HRM.Enum
 @using HRM.Models
 @using HRM.Services
@@ -10,8 +11,9 @@
 @inject IUserAccessService UserAccessService
 @* @inject IAttendance AttendanceLogService *@
 @inject IAttendanceService AttendanceService
-
-
+@inject IWorkTypeService WorkTypes
+@inject IJSRuntime JS
+@inject ToastService ToastService
 
 @inject HRM.Services.Contracts.AttendanceLogServiceContracts.IOperations AttendanceLogService
 
@@ -197,19 +199,71 @@
             var timestamp =
                 GetAttendanceTimestamp();
 
-            await AttendanceLogService.AddClockEventAsync(
-                context.IndividualId,
-                timestamp);
+            List<WorkTypeGeofenceDto> geofences = [];
+            try { geofences = await WorkTypes.GetActiveClockGeofencesAsync(); }
+            catch { }
+
+            if (geofences.Count > 0)
+            {
+                var pos = await JS.InvokeAsync<GeoPositionResult>("hrmGeoMap.getCurrentPosition");
+                if (pos is not { Ok: true })
+                {
+                    ToastService.Error(pos?.Error ?? "Location access is required to clock for your Geo Location work type.");
+                    return;
+                }
+
+                var closest = geofences
+                    .Select(g => new
+                    {
+                        Geofence = g,
+                        Distance = WorkTypeGeofenceHelper.DistanceMeters(pos.Lat, pos.Lng, g.Latitude, g.Longitude)
+                    })
+                    .OrderBy(x => x.Distance)
+                    .First();
+
+                if (closest.Distance > closest.Geofence.RadiusMeters)
+                {
+                    ToastService.Error($"Outside allowed clock boundary: you are {Math.Round(closest.Distance):N0} m away from {closest.Geofence.Label} (allowed radius: {closest.Geofence.RadiusMeters} m).");
+                    return;
+                }
+
+                await AttendanceLogService.AddClockEventWithLocationAsync(
+                    context.IndividualId,
+                    pos.Lat,
+                    pos.Lng,
+                    timestamp);
+                ToastService.Success($"Clock event recorded at {timestamp:HH:mm} (verified inside {closest.Geofence.Label}, {Math.Round(closest.Distance):N0} m from center).");
+            }
+            else
+            {
+                await AttendanceLogService.AddClockEventAsync(
+                    context.IndividualId,
+                    timestamp);
+                ToastService.Success($"Clock event recorded at {timestamp:HH:mm}.");
+            }
 
             if (OnClock.HasDelegate)
             {
                 await OnClock.InvokeAsync();
             }
         }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or InvalidOperationException)
+        {
+            ToastService.Error(ex.Message);
+        }
         finally
         {
             ProcessingClock = false;
         }
+    }
+
+    private sealed class GeoPositionResult
+    {
+        public bool Ok { get; set; }
+        public double Lat { get; set; }
+        public double Lng { get; set; }
+        public int Accuracy { get; set; }
+        public string? Error { get; set; }
     }
 
  

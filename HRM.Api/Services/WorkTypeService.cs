@@ -524,7 +524,8 @@ namespace HRM.Services
             var geofences = new List<WorkTypeGeofenceDto>();
             foreach (var r in rows)
             {
-                if (WorkTypeGeofenceHelper.TryParse(r.Location, out var lat, out var lng, out var radius, out var label))
+                if (WorkTypeGeofenceHelper.IsGeoWorkTypeName(r.WorkTypeName)
+                    && WorkTypeGeofenceHelper.TryParse(r.Location, out var lat, out var lng, out var radius, out var label))
                 {
                     geofences.Add(new WorkTypeGeofenceDto(
                         r.AssignedWorkTypeId,
