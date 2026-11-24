@@ -94,7 +94,7 @@ public sealed class WorkspaceDirectoryService(IDbContextFactory<HrmTeContext> fa
             .Distinct()
             .ToListAsync(ct);
 
-        var projectMemberships = await db.ProjectMembers.AsNoTracking()
+        var projectMemberships = (await db.ProjectMembers.AsNoTracking()
             .Where(pm => pm.StaffId == staffId && orgIds.Contains(pm.Project.OrganisationId))
             .Select(pm => new
             {
@@ -105,10 +105,24 @@ public sealed class WorkspaceDirectoryService(IDbContextFactory<HrmTeContext> fa
                 pm.Role,
                 pm.Project.Status,
                 pm.Project.ProgressPercentage,
-                StartDate = pm.AssignedDate != default ? pm.AssignedDate : pm.Project.StartDate,
+                pm.AssignedDate,
+                ProjectStartDate = pm.Project.StartDate,
                 EndDate = pm.RemovedAt ?? pm.Project.ActualEndDate ?? pm.ExpectedEndDate ?? pm.Project.PlannedEndDate
             })
-            .ToListAsync(ct);
+            .ToListAsync(ct))
+            .Select(pm => new
+            {
+                pm.OrganisationId,
+                pm.ProjectId,
+                pm.Reference,
+                pm.Name,
+                pm.Role,
+                pm.Status,
+                pm.ProgressPercentage,
+                StartDate = pm.AssignedDate != default ? pm.AssignedDate : pm.ProjectStartDate,
+                pm.EndDate
+            })
+            .ToList();
 
         var managedProjects = await db.Projects.AsNoTracking()
             .Where(p => p.ProjectManagerStaffId == staffId && orgIds.Contains(p.OrganisationId))

@@ -70,8 +70,36 @@ public sealed class RecruitmentApiClient(HttpClient http) : IRecruitmentApiClien
     {
         using var response = await http.PostAsJsonAsync(path, input, ct);
         if (response.StatusCode == System.Net.HttpStatusCode.Forbidden) return HRM.DTOs.ServiceResult.Fail("Recruitment.Manage permission is required for this action.");
+        if (response.StatusCode is System.Net.HttpStatusCode.Conflict or System.Net.HttpStatusCode.BadRequest)
+        {
+            var body = await response.Content.ReadAsStringAsync(ct);
+            var detail = TryExtractErrorMessage(body);
+            if (!string.IsNullOrWhiteSpace(detail))
+                return HRM.DTOs.ServiceResult.Fail(detail);
+        }
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadFromJsonAsync<HRM.DTOs.ServiceResult>(cancellationToken: ct) ?? HRM.DTOs.ServiceResult.Fail("The server returned no action result.");
+    }
+
+    private static string? TryExtractErrorMessage(string? body)
+    {
+        if (string.IsNullOrWhiteSpace(body)) return null;
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(body);
+            var root = doc.RootElement;
+            if (root.ValueKind == System.Text.Json.JsonValueKind.Object)
+            {
+                if (root.TryGetProperty("detail", out var d) && d.ValueKind == System.Text.Json.JsonValueKind.String && !string.IsNullOrWhiteSpace(d.GetString()))
+                    return d.GetString();
+                if (root.TryGetProperty("message", out var m) && m.ValueKind == System.Text.Json.JsonValueKind.String && !string.IsNullOrWhiteSpace(m.GetString()))
+                    return m.GetString();
+                if (root.TryGetProperty("title", out var t) && t.ValueKind == System.Text.Json.JsonValueKind.String && !string.IsNullOrWhiteSpace(t.GetString()))
+                    return t.GetString();
+            }
+        }
+        catch { }
+        return null;
     }
     public async Task<IReadOnlyList<RecruitmentRequisitionRow>> GetRequisitionsAsync(CancellationToken ct = default)
     {
