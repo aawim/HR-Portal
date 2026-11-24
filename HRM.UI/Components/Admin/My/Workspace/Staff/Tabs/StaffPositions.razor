@@ -286,37 +286,120 @@
                                                         <div class="font-semibold text-slate-800 dark:text-slate-100 truncate">@doc.Title</div>
                                                         <div class="text-[10px] text-slate-500 font-mono">@doc.DocumentNumber · v@(doc.CurrentVersionNumber).0</div>
                                                     </div>
-                                                    <button type="button"
-                                                            class="app-button app-button-secondary app-button-sm shrink-0"
-                                                            @onclick="() => DownloadContractAsync(doc.DocumentId)">
-                                                        <i class="bi bi-download text-[11px]" aria-hidden="true"></i>
-                                                        <span>Download</span>
-                                                    </button>
+                                                    <div class="inline-flex items-center gap-1 shrink-0">
+                                                        <button type="button"
+                                                                class="app-button app-button-primary app-button-sm"
+                                                                disabled="@loadingPreview"
+                                                                @onclick="() => ViewContractAsync(doc)">
+                                                            <i class="bi bi-eye text-[11px]" aria-hidden="true"></i>
+                                                            <span>View</span>
+                                                        </button>
+                                                        <button type="button"
+                                                                class="app-button app-button-secondary app-button-sm"
+                                                                @onclick="() => DownloadContractAsync(doc.DocumentId)">
+                                                            <i class="bi bi-download text-[11px]" aria-hidden="true"></i>
+                                                            <span>Download</span>
+                                                        </button>
+                                                    </div>
                                                 </div>
                                             }
                                         </div>
                                     }
-                                    <div class="flex flex-wrap gap-1.5 pt-2 border-t border-slate-100 dark:border-slate-800">
-                                        @if (data.CanManage)
-                                        {
+                                    @if (data.CanManage && IsActivePosition(assignment))
+                                    {
+                                        <div class="flex flex-wrap gap-1.5 pt-2 border-t border-slate-100 dark:border-slate-800">
                                             <button type="button" class="app-button app-button-secondary app-button-sm" disabled="@(busy || uploadingContract)" @onclick="() => OpenContractAttach(assignment)">
                                                 <i class="bi bi-paperclip text-xs" aria-hidden="true"></i>
                                                 <span>Attach Contract / Agreement</span>
                                             </button>
-                                        }
-                                        @if (data.CanManage && assignment.StateId == 4 && (!assignment.To.HasValue || assignment.To.Value.Date > Today))
-                                        {
                                             <button type="button" class="app-button app-button-secondary app-button-sm" disabled="@busy" @onclick="() => Edit(assignment)">Edit dates</button>
                                             <button type="button" class="app-button app-button-secondary app-button-sm" disabled="@busy" @onclick="() => Edit(assignment, change: true)">Change position</button>
                                             <button type="button" class="inline-flex items-center rounded-lg border border-rose-200 dark:border-rose-800 bg-rose-50/80 dark:bg-rose-950/40 px-2.5 py-1 text-xs font-semibold text-rose-700 dark:text-rose-300 hover:bg-rose-100 disabled:opacity-50 transition-colors" disabled="@busy" @onclick="() => Edit(assignment, end: true)">Job termination</button>
-                                        }
-                                    </div>
+                                        </div>
+                                    }
                                 </article>
                             }
                         }
                     </div>
                 </div>
                 <HRM.Components.Shared.StaffPositionRequests StaffId="StaffId" RefreshVersion="requestVersion" OnChanged="LoadAsync" />
+            </div>
+        </div>
+    }
+
+    @if (previewDocument != null)
+    {
+        <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4"
+             role="dialog"
+             aria-modal="true"
+             aria-label="Contract preview"
+             @onclick="ClosePreview">
+            <div class="w-full max-w-5xl rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+                 @onclick:stopPropagation="true">
+                <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 dark:border-slate-800 bg-slate-50/90 dark:bg-slate-800/80 px-4 py-3">
+                    <div class="min-w-0">
+                        <h4 class="text-sm font-bold text-slate-900 dark:text-slate-100 truncate">@previewDocument.Title</h4>
+                        <p class="text-[11px] text-slate-500 dark:text-slate-400 font-mono">
+                            @previewDocument.DocumentNumber · v@(previewDocument.CurrentVersionNumber).0@(string.IsNullOrWhiteSpace(previewFileName) ? "" : $" · {previewFileName}")
+                        </p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button type="button"
+                                class="app-button app-button-secondary app-button-sm"
+                                @onclick="() => DownloadContractAsync(previewDocument.DocumentId)">
+                            <i class="bi bi-download text-xs" aria-hidden="true"></i>
+                            <span>Download</span>
+                        </button>
+                        <button type="button"
+                                class="app-button app-button-secondary app-button-sm"
+                                @onclick="ClosePreview">
+                            <span>Close</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="p-4 overflow-auto flex-1 bg-slate-100/70 dark:bg-slate-950/60">
+                    @if (loadingPreview)
+                    {
+                        <div class="flex items-center justify-center gap-2 py-16 text-xs text-slate-500">
+                            <span class="h-4 w-4 rounded-full border-2 border-blue-600 border-t-transparent animate-spin"></span>
+                            <span>Loading contract preview…</span>
+                        </div>
+                    }
+                    else if (!string.IsNullOrWhiteSpace(previewError))
+                    {
+                        <div role="alert" class="rounded-xl border border-rose-200 bg-rose-50 p-4 text-xs text-rose-800">
+                            @previewError
+                        </div>
+                    }
+                    else if (IsPdfPreview && !string.IsNullOrWhiteSpace(previewDataUrl))
+                    {
+                        <iframe src="@previewDataUrl"
+                                title="@previewDocument.Title"
+                                class="w-full h-[72vh] rounded-lg border border-slate-200 dark:border-slate-700 bg-white"></iframe>
+                    }
+                    else if (IsImagePreview && !string.IsNullOrWhiteSpace(previewDataUrl))
+                    {
+                        <div class="flex justify-center">
+                            <img src="@previewDataUrl"
+                                 alt="@previewDocument.Title"
+                                 class="max-h-[72vh] max-w-full rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm bg-white" />
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="rounded-xl border border-dashed border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-8 text-center text-xs text-slate-600 dark:text-slate-300 space-y-3">
+                            <i class="bi bi-file-earmark-text text-3xl text-slate-400" aria-hidden="true"></i>
+                            <p class="font-semibold text-slate-800 dark:text-slate-100">Inline preview is not available for this file format (@previewContentType).</p>
+                            <button type="button"
+                                    class="app-button app-button-primary app-button-sm"
+                                    @onclick="() => DownloadContractAsync(previewDocument.DocumentId)">
+                                <i class="bi bi-download text-xs" aria-hidden="true"></i>
+                                <span>Download File</span>
+                            </button>
+                        </div>
+                    }
+                </div>
             </div>
         </div>
     }
@@ -342,10 +425,12 @@
     private Data? data;
     private Assignment? original;
     private Assignment? attachingContractFor;
+    private DmsDocumentSummaryDto? previewDocument;
+    private string? previewDataUrl, previewContentType, previewFileName, previewError;
     private List<DmsDocumentSummaryDto> staffDocuments = [];
     private List<DmsDocumentTypeDto> docTypes = [];
     private DmsDocumentUploadInput contractUpload = new();
-    private bool loading, busy, editing, changing, ending, uploadingContract;
+    private bool loading, busy, editing, changing, ending, uploadingContract, loadingPreview;
     private int jobId, positionId, requestVersion,selectedFrameworkId,selectedMatrixId;
     private int? jobMatrixStepId,terminationRequestTypeId;
     private DateTime from = Today;
@@ -393,8 +478,23 @@
             .ToList();
     }
 
+    private static bool IsActivePosition(Assignment a) =>
+        a.StateId == 4 && (!a.To.HasValue || a.To.Value.Date > Today);
+
+    private bool IsPdfPreview =>
+        string.Equals(previewContentType, "application/pdf", StringComparison.OrdinalIgnoreCase)
+        || (previewFileName?.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase) == true);
+
+    private bool IsImagePreview =>
+        previewContentType?.StartsWith("image/", StringComparison.OrdinalIgnoreCase) == true;
+
     private void OpenContractAttach(Assignment assignment)
     {
+        if (!IsActivePosition(assignment))
+        {
+            Toasts.Error("Contracts can only be attached to active positions.");
+            return;
+        }
         attachingContractFor = assignment;
         editing = false;
         message = null;
@@ -475,6 +575,50 @@
         }
     }
 
+    private async Task ViewContractAsync(DmsDocumentSummaryDto doc)
+    {
+        previewDocument = doc;
+        previewDataUrl = null;
+        previewContentType = null;
+        previewFileName = null;
+        previewError = null;
+        loadingPreview = true;
+        try
+        {
+            var dl = await DmsService.DownloadDocumentVersionAsync(doc.DocumentId, null, isPreview: true);
+            if (!dl.Success)
+            {
+                previewError = dl.ErrorMessage ?? "Contract preview could not be loaded.";
+                return;
+            }
+            previewFileName = dl.FileName;
+            previewContentType = string.IsNullOrWhiteSpace(dl.ContentType) ? "application/octet-stream" : dl.ContentType;
+            if (dl.Content.Length > 0)
+            {
+                previewDataUrl = $"data:{previewContentType};base64,{Convert.ToBase64String(dl.Content)}";
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Previewing contract document {DocumentId}", doc.DocumentId);
+            previewError = "Contract preview could not be loaded. Try downloading instead.";
+        }
+        finally
+        {
+            loadingPreview = false;
+        }
+    }
+
+    private void ClosePreview()
+    {
+        previewDocument = null;
+        previewDataUrl = null;
+        previewContentType = null;
+        previewFileName = null;
+        previewError = null;
+        loadingPreview = false;
+    }
+
     private async Task DownloadContractAsync(long documentId)
     {
         try
@@ -506,6 +650,11 @@
     }
     private void Edit(Assignment item, bool change = false, bool end = false)
     {
+        if (!IsActivePosition(item))
+        {
+            Toasts.Error("Only active positions can be edited.");
+            return;
+        }
         attachingContractFor = null;
         selectedFrameworkId=selectedMatrixId=0;
         terminationRequestTypeId=null;original = item; changing = change; ending = end; editing = true; message = null;
