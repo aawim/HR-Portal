@@ -12,6 +12,9 @@ public sealed class RecruitmentRequisitionsController(global::HRM.Application.Co
     [HttpGet("available-positions")]
     public async Task<ActionResult<IReadOnlyList<global::HRM.Application.Contracts.Recruitment.AvailablePositionMatrixOption>>> AvailablePositions(CancellationToken ct) => Ok(await service.ListAvailablePositionsAsync(ct));
 
+    [HttpGet("{id:int}/vacancy-draft-context")]
+    public async Task<ActionResult<global::HRM.Application.Contracts.Recruitment.VacancyDraftContextDto>> VacancyDraftContext(int id, CancellationToken ct) => Ok(await service.GetVacancyDraftContextAsync(id, ct));
+
     [HttpPost]
     public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> Create([FromBody] CreateRequest request,CancellationToken ct) => Ok(await service.CreateAsync(request.Input,ct));
 

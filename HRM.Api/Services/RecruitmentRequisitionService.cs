@@ -205,4 +205,165 @@ public sealed class RecruitmentRequisitionService(IDbContextFactory<HrmTeContext
      await d.SaveChangesAsync(ct);
      return ServiceResult.Ok(x.IsActive?"Policy assignment activated.":"Policy assignment deactivated.");
  }
+
+ public async Task<VacancyDraftContextDto> GetVacancyDraftContextAsync(int requisitionId,CancellationToken ct=default)
+ {
+     var o=await access.GetCurrentOrganisationIdAsync();
+     if(o<=0||!await access.HasOrganisationAccessAsync(o)||(!await access.HasPermissionAsync("Recruitment.View")&&!await access.HasPermissionAsync("Recruitment.Manage")&&!await access.HasPermissionAsync("Admin")))
+         throw new UnauthorizedAccessException("Recruitment viewing permission is required.");
+
+     await using var d=await factory.CreateDbContextAsync(ct);
+     var req=await d.RecruitmentRequisitions.AsNoTracking().SingleOrDefaultAsync(x=>x.Id==requisitionId&&x.OrganisationId==o,ct)
+         ??throw new InvalidOperationException("Recruitment requisition was not found.");
+     var pm=await d.PositionMatrices.AsNoTracking().SingleOrDefaultAsync(x=>x.PositionMatrixId==req.PositionMatrixId,ct)
+         ??throw new InvalidOperationException("Position matrix linked to this requisition was not found.");
+     var jm=await d.FrameworkJobMatrices.AsNoTracking().SingleOrDefaultAsync(x=>x.JobMatrixId==pm.JobMatrixId,ct)
+         ??throw new InvalidOperationException("Job matrix linked to this position was not found.");
+
+     var unitName=pm.OrganisationStructureId.HasValue
+         ?await d.OrganisationStructures.AsNoTracking().Where(x=>x.OrganisationStructureId==pm.OrganisationStructureId.Value).Select(x=>x.Name).FirstOrDefaultAsync(ct)
+         :null;
+     var step=pm.JobMatrixStepId.HasValue
+         ?await d.FrameworkJobMatrixSteps.AsNoTracking().SingleOrDefaultAsync(x=>x.JobMatrixStepId==pm.JobMatrixStepId.Value,ct)
+         :null;
+     var basicSalary=step?.BasicSalaryOverride??jm.BasicSalary;
+     var jobAllowance=step?.JobAllowance;
+
+     var matrixTitles=await(from link in d.FrameworkJobMatrixTitles.AsNoTracking()
+                            join title in d.FrameworkJobTitles.AsNoTracking() on link.JobTitleId equals title.JobTitleId
+                            where link.JobMatrixId==jm.JobMatrixId&&title.IsActive
+                            select new{title.JobTitleId,title.Name}).ToListAsync(ct);
+
+     var titleMap=matrixTitles.ToDictionary(x=>x.JobTitleId,x=>x.Name);
+     if(pm.JobTitleId>0&&!titleMap.ContainsKey(pm.JobTitleId))
+     {
+         var assignedTitle=await d.FrameworkJobTitles.AsNoTracking().Where(x=>x.JobTitleId==pm.JobTitleId).Select(x=>new{x.JobTitleId,x.Name}).FirstOrDefaultAsync(ct);
+         if(assignedTitle is not null)titleMap[assignedTitle.JobTitleId]=assignedTitle.Name;
+     }
+
+     var availableTitles=titleMap
+         .Select(kv=>new VacancyTitleOption(kv.Key,kv.Value,kv.Key==pm.JobTitleId))
+         .OrderByDescending(x=>x.IsPositionDefault)
+         .ThenBy(x=>x.Name)
+         .ToList();
+
+     var defaultOption=availableTitles.FirstOrDefault(x=>x.IsPositionDefault)??availableTitles.FirstOrDefault();
+     var defaultTitle=defaultOption?.Name??jm.Name;
+
+     var qualificationCriteria=new List<string>();
+     var pathways=await d.MatrixQualificationPathways.AsNoTracking().Where(x=>x.JobMatrixId==jm.JobMatrixId&&x.IsActive).OrderBy(x=>x.Id).ToListAsync(ct);
+     if(pathways.Count>0)
+     {
+         var pathwayIds=pathways.Select(x=>x.Id).ToArray();
+         var conditions=await d.MatrixQualificationConditions.AsNoTracking().Where(x=>pathwayIds.Contains(x.PathwayId)&&x.IsActive).OrderBy(x=>x.Id).ToListAsync(ct);
+         foreach(var p in pathways)
+         {
+             var parts=new List<string>();
+             var pConds=conditions.Where(c=>c.PathwayId==p.Id).ToList();
+             foreach(var c in pConds)
+             {
+                 var seg=c.Qualification.Trim();
+                 if(c.MinimumLevel.HasValue)
+                     seg+=c.MaximumLevel.HasValue&&c.MaximumLevel!=c.MinimumLevel?$" (MNQF Level {c.MinimumLevel}–{c.MaximumLevel})":$" (MNQF Level {c.MinimumLevel})";
+                 if(!string.IsNullOrWhiteSpace(c.FieldOfStudy))
+                     seg+=$" in {c.FieldOfStudy.Trim()}";
+                 if(c.AccreditedRequired)
+                     seg+=" [Accredited]";
+                 parts.Add(seg);
+             }
+             if(p.RelevantExperienceMonths>0)parts.Add($"{FormatMonths(p.RelevantExperienceMonths)} relevant experience");
+             if(p.PostQualificationMonths>0)parts.Add($"{FormatMonths(p.PostQualificationMonths)} post-qualification experience");
+             if(p.ManagerialExperienceMonths>0)parts.Add($"{FormatMonths(p.ManagerialExperienceMonths)} managerial experience");
+             if(!string.IsNullOrWhiteSpace(p.Conditions))parts.Add(p.Conditions.Trim());
+             var summary=parts.Count>0?string.Join("; ",parts):p.Name;
+             qualificationCriteria.Add(string.IsNullOrWhiteSpace(p.Name)?summary:$"{p.Name.Trim()}: {summary}");
+         }
+     }
+     else
+     {
+         var textQuals=await d.FrameworkMatrixQualifications.AsNoTracking().Where(x=>x.JobMatrixId==jm.JobMatrixId).OrderBy(x=>x.PathwayNumber).Select(x=>x.RequirementText).ToListAsync(ct);
+         qualificationCriteria.AddRange(textQuals.Where(x=>!string.IsNullOrWhiteSpace(x)).Select(x=>x.Trim()));
+     }
+
+     var credentials=await d.MatrixCredentialRequirements.AsNoTracking().Where(x=>x.JobMatrixId==jm.JobMatrixId&&x.IsActive).OrderBy(x=>x.Id).ToListAsync(ct);
+     var credentialCriteria=credentials.Select(c=>
+     {
+         var text=$"[{c.Requirement}] {c.Name.Trim()} ({c.Kind} — {c.Issuer.Trim()})";
+         if(!string.IsNullOrWhiteSpace(c.Condition))text+=$" · Condition: {c.Condition.Trim()}";
+         if(!string.IsNullOrWhiteSpace(c.Equivalents))text+=$" · Equivalents: {c.Equivalents.Trim()}";
+         if(c.TrainingHours.HasValue&&c.TrainingHours>0)text+=$" · {c.TrainingHours:0.##} hrs";
+         return text;
+     }).ToList();
+
+     var duties=await d.FrameworkMatrixDuties.AsNoTracking().Where(x=>x.JobMatrixId==jm.JobMatrixId).OrderBy(x=>x.SequenceNumber).Select(x=>x.DutyDescription).ToListAsync(ct);
+     duties=duties.Where(x=>!string.IsNullOrWhiteSpace(x)).Select(x=>x.Trim()).ToList();
+
+     var formatted=BuildFormattedCriteria(jm,basicSalary,jobAllowance,qualificationCriteria,credentialCriteria,duties);
+
+     return new VacancyDraftContextDto(
+         req.Id,
+         pm.PositionMatrixId,
+         jm.JobMatrixId,
+         jm.MatrixCode,
+         jm.Name,
+         unitName,
+         jm.GradeCode,
+         jm.PublicServiceRank,
+         basicSalary,
+         jobAllowance,
+         defaultOption?.JobTitleId,
+         defaultTitle,
+         availableTitles,
+         qualificationCriteria,
+         credentialCriteria,
+         duties,
+         jm.FieldsOfStudy,
+         jm.ExperienceAreas,
+         jm.LicensesAndTraining,
+         formatted);
+ }
+
+ private static string FormatMonths(int months)
+ {
+     if(months>=12&&months%12==0)return $"{months/12} year{(months/12==1?"":"s")}";
+     if(months>12)return $"{months/12} yr {months%12} mo";
+     return $"{months} month{(months==1?"":"s")}";
+ }
+
+ private static string BuildFormattedCriteria(FrameworkJobMatrix jm,decimal basicSalary,decimal? jobAllowance,List<string> qualifications,List<string> credentials,List<string> duties)
+ {
+     var sections=new List<string>();
+     var meta=new List<string> { $"Job Matrix: {jm.MatrixCode} — {jm.Name}" };
+     if(!string.IsNullOrWhiteSpace(jm.GradeCode))meta.Add($"Grade: {jm.GradeCode}");
+     if(!string.IsNullOrWhiteSpace(jm.PublicServiceRank))meta.Add($"Rank: {jm.PublicServiceRank}");
+     meta.Add($"Basic Salary: MVR {basicSalary:N2}");
+     if(jobAllowance.HasValue&&jobAllowance.Value>0)meta.Add($"Job Allowance: MVR {jobAllowance.Value:N2}");
+     sections.Add(string.Join(" | ",meta));
+
+     if(qualifications.Count>0)
+     {
+         var qLines=qualifications.Select((q,idx)=>$"{idx+1}. {q}");
+         sections.Add("Qualification & Experience Criteria:\n"+string.Join("\n",qLines));
+     }
+     if(credentials.Count>0)
+     {
+         var cLines=credentials.Select(c=>$"- {c}");
+         sections.Add("Licences, Registrations & Training:\n"+string.Join("\n",cLines));
+     }
+     else if(!string.IsNullOrWhiteSpace(jm.LicensesAndTraining))
+     {
+         sections.Add("Licences & Training:\n"+jm.LicensesAndTraining.Trim());
+     }
+     if(!string.IsNullOrWhiteSpace(jm.FieldsOfStudy))
+         sections.Add("Fields of Study:\n"+jm.FieldsOfStudy.Trim());
+     if(!string.IsNullOrWhiteSpace(jm.ExperienceAreas))
+         sections.Add("Experience Areas:\n"+jm.ExperienceAreas.Trim());
+     if(duties.Count>0)
+     {
+         var dLines=duties.Select((duty,idx)=>$"{idx+1}. {duty}");
+         sections.Add("Key Duties & Responsibilities:\n"+string.Join("\n",dLines));
+     }
+     var text=string.Join("\n\n",sections);
+     return text.Length<=7900?text:text[..7900];
+ }
 }
