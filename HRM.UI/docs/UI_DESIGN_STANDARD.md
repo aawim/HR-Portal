@@ -70,6 +70,8 @@ All primary page containers and root feature section components must include sta
 
 ## 4. Standard vs Full Width View Layout
 
+> **Header Never Shrinks Rule**: The **Full Width / Shrink View** toggle must **never** shrink the page header, workspace header bar, or top navigation tab strip. Headers always remain full width; only the content/panels below the header shrink to standard (`max-w-7xl` / `80rem`) width when in Shrink View.
+
 ### The 2-Panel Grid System
 The standard multi-panel layout uses CSS Grid with explicit minimum sizing to avoid content blowing out the viewport or collapsing panels unexpectedly:
 

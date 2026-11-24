@@ -190,7 +190,6 @@
     <!-- ======================================================== -->
     <!-- TAB: STAFF WORKSPACE (Full Width Dedicated Employee Workspace) -->
     <!-- ======================================================== -->
-    <div class="w-full min-w-0 flex flex-col gap-2 transition-all duration-300 @(isFullWidth ? "max-w-none" : "max-w-7xl mx-auto")">
     @if (activeWorkspaceTab == "Staff" && inspectedStaffId.HasValue)
     {
         <div class="flex flex-col gap-2 p-2">
@@ -352,7 +351,7 @@
             </div>
 
             <!-- Staff Workspace Body -->
-            <div class="w-full min-w-0 flex flex-col gap-2">
+            <div class="w-full min-w-0 flex flex-col gap-2 transition-all duration-300 @(isFullWidth ? "max-w-none" : "max-w-7xl mx-auto")">
                 <StaffWorkspace StaffId="inspectedStaffId.Value"
                                 ActiveTab="inspectedStaffTab"
                                 OnTabChanged="SetStaffTab"
@@ -461,7 +460,7 @@
             </div>
 
             <!-- Organisation Workspace Body -->
-            <div class="w-full min-w-0 flex flex-col gap-2">
+            <div class="w-full min-w-0 flex flex-col gap-2 transition-all duration-300 @(isFullWidth ? "max-w-none" : "max-w-7xl mx-auto")">
                 @if (string.IsNullOrEmpty(inspectedOrgSettingsTab) || !canManageOrgSettings)
                 {
                     <OrganisationWorkspace OrganisationId="inspectedOrgId.Value" ActiveTab="inspectedOrgTab" IsSuperAdmin="@(currentUserContext?.IsSuperAdministrator == true)" HideHeader="true" OnStaffSelected="SelectSearchResult" OnLoaded="OnOrgLoaded" />
@@ -491,6 +490,7 @@
     <!-- ======================================================== -->
     <!-- TAB 1: HOME (Responsive Three-Column Grid: 23% / 54% / 23%) -->
     <!-- ======================================================== -->
+    <div class="w-full min-w-0 flex flex-col gap-2 transition-all duration-300 @(isFullWidth ? "max-w-none" : "max-w-7xl mx-auto")">
     @if (activeWorkspaceTab == "Home")
     {
         @if (loading && myTeams.Count == 0)
