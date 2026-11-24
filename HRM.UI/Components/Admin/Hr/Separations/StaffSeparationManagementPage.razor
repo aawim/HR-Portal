@@ -20,12 +20,24 @@
 <div class="separation-workspace w-full min-w-0 flex flex-col gap-3">
     <!-- Compact Transparent Borderless Header -->
     <div class="separation-header bg-transparent flex flex-wrap items-center justify-between gap-2 px-1 py-0.5">
-        <div>
-            <div class="flex items-center gap-2">
+        <div class="min-w-0">
+            <div class="flex flex-wrap items-center gap-2">
                 <h2 class="text-base font-bold text-slate-900 dark:text-slate-100">Staff Separation &amp; Offboarding</h2>
-                <span class="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-400">
-                    Clearance, Handover &amp; Deprovisioning
-                </span>
+                @if (activeDetail is not null)
+                {
+                    <span class="rounded-full px-2 py-0.5 text-[10px] font-semibold @GetStatusBadgeClass(activeDetail.Status)">@activeDetail.Status</span>
+                    <span class="text-xs font-mono text-slate-500">#SEP-@activeDetail.StaffSeparationId</span>
+                    @if (activeDetail.HasUnresolvedObligations)
+                    {
+                        <span class="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold text-rose-700">Unresolved obligations</span>
+                    }
+                }
+                else
+                {
+                    <span class="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-400">
+                        Clearance, Handover &amp; Deprovisioning
+                    </span>
+                }
             </div>
             <p class="mt-0.5 text-xs text-slate-500">
                 End-to-end employee exit management: notice periods, supervisor handover, asset recovery, finance settlement, IT deprovisioning, and legal termination.
@@ -33,6 +45,26 @@
         </div>
 
         <div class="flex flex-wrap items-center gap-2">
+            @if (activeDetail is not null)
+            {
+                <button type="button" class="app-button app-button-secondary app-button-sm" @onclick='() => GenerateDocAsync(StaffSeparationDocumentVariants.ExitClearanceCertificate)'>
+                    <AppIcon Name="document" />
+                    <span>Clearance Certificate</span>
+                </button>
+                <button type="button" class="app-button app-button-secondary app-button-sm" @onclick='() => GenerateDocAsync(StaffSeparationDocumentVariants.ServiceCertificate)'>
+                    <AppIcon Name="document" />
+                    <span>Service Certificate</span>
+                </button>
+                <button type="button"
+                        class="app-button app-button-sm @(showSeparationRegister ? "app-button-primary" : "app-button-secondary")"
+                        aria-expanded="@showSeparationRegister"
+                        aria-controls="separation-register"
+                        @onclick="ToggleSeparationRegister">
+                    <AppIcon Name="users" />
+                    <span>Separation Register</span>
+                </button>
+            }
+
             @if (StaffId <= 0)
             {
                 <!-- Full Page Width Toggle Button -->
@@ -149,32 +181,6 @@
 
     @if (activeDetail is not null)
     {
-        <section class="rounded-2xl border border-teal-200 bg-white p-2 shadow-xs dark:border-teal-800 dark:bg-slate-900" aria-label="Selected staff member">
-            <div class="flex flex-col gap-2 md:flex-row md:items-start">
-                <div aria-hidden="true" class="flex h-16 w-16 shrink-0 items-center justify-center rounded-full border-2 border-teal-300 bg-teal-100 text-lg font-bold text-teal-800 dark:border-teal-700 dark:bg-teal-900 dark:text-teal-200">@string.Concat((activeDetail.FullNameSnapshot ?? "?").Split(' ',StringSplitOptions.RemoveEmptyEntries).Take(2).Select(x=>x[0]))</div>
-                <div class="min-w-0 flex-1">
-                    <div class="flex flex-wrap items-center gap-2"><h2 class="text-lg font-bold text-slate-900 dark:text-slate-100">@activeDetail.FullNameSnapshot</h2><span class="rounded-full px-2.5 py-0.5 text-xs font-semibold @GetStatusBadgeClass(activeDetail.Status)">@activeDetail.Status</span><span class="text-xs text-slate-500">#SEP-@activeDetail.StaffSeparationId</span></div>
-                    <div class="mt-2 grid grid-cols-2 gap-2 text-xs lg:grid-cols-4">
-                        <div><span class="block text-slate-500">Department</span><strong>@activeDetail.DepartmentNameSnapshot</strong></div>
-                        <div><span class="block text-slate-500">Position</span><strong>@activeDetail.PositionTitleSnapshot</strong></div>
-                        <div><span class="block text-slate-500">Employee ID</span><strong>@activeDetail.EmployeeNumberSnapshot</strong></div>
-                        <div><span class="block text-slate-500">Joined date</span><strong>@activeDetail.DateJoinedSnapshot.ToString("dd MMM yyyy")</strong></div>
-                    </div>
-                    @if(activeDetail.HasUnresolvedObligations){<p class="mt-2 text-xs font-semibold text-rose-700">Unresolved separation obligations</p>}
-                </div>
-                <div class="flex shrink-0 flex-wrap items-center justify-end gap-2 md:max-w-md" aria-label="Separation documents and register">
-                    <button type="button" class="app-button app-button-secondary app-button-sm" @onclick='()=>GenerateDocAsync(StaffSeparationDocumentVariants.ExitClearanceCertificate)'><AppIcon Name="document" />Clearance Certificate</button>
-                    <button type="button" class="app-button app-button-secondary app-button-sm" @onclick='()=>GenerateDocAsync(StaffSeparationDocumentVariants.ServiceCertificate)'><AppIcon Name="document" />Service Certificate</button>
-                    <button type="button"
-                            class="app-button app-button-sm @(showSeparationRegister ? "app-button-primary" : "app-button-secondary")"
-                            aria-expanded="@showSeparationRegister"
-                            aria-controls="separation-register"
-                            @onclick="ToggleSeparationRegister">
-                        <AppIcon Name="users" />Separation Register
-                    </button>
-                </div>
-            </div>
-        </section>
         <nav class="separation-section-menu" aria-label="Separation sections">
             <button type="button" class="@(activeTab == "Overview" ? "is-active" : null)" @onclick='() => activeTab = "Overview"'>Overview &amp; Notice</button>
             <button type="button" class="@(activeTab == "Handover" ? "is-active" : null)" @onclick='() => activeTab = "Handover"'>Work Handover <span>@(activeDetail.WorkHandover?.Items.Count ?? 0)</span></button>

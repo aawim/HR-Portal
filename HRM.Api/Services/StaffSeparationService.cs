@@ -117,6 +117,25 @@ public sealed class StaffSeparationService(
             })
             .ToListAsync();
 
+        var jobIdsNeedingEmpNo = items
+            .Where(i => string.IsNullOrWhiteSpace(i.EmployeeNumber) || i.EmployeeNumber == i.IndividualId.ToString())
+            .Select(i => i.JobId)
+            .Distinct()
+            .ToList();
+        if (jobIdsNeedingEmpNo.Count > 0)
+        {
+            var empNos = await db.Jobs
+                .AsNoTracking()
+                .Where(j => jobIdsNeedingEmpNo.Contains(j.JobId) && j.Staff != null && !string.IsNullOrWhiteSpace(j.Staff.EmployeeNumber))
+                .Select(j => new { j.JobId, j.Staff!.EmployeeNumber })
+                .ToDictionaryAsync(x => x.JobId, x => x.EmployeeNumber!);
+            foreach (var item in items)
+            {
+                if (empNos.TryGetValue(item.JobId, out var empNo))
+                    item.EmployeeNumber = empNo;
+            }
+        }
+
         var types = await db.SeparationTypes
             .AsNoTracking()
             .Where(t => t.IsActive && (t.OrganisationId == null || t.OrganisationId == org))
@@ -397,6 +416,18 @@ public sealed class StaffSeparationService(
         var totalPayable = financeItemsDto.Where(f => f.IsCredit).Sum(f => f.Amount);
         var totalDeduction = financeItemsDto.Where(f => !f.IsCredit).Sum(f => f.Amount);
 
+        var employeeNumberSnapshot = sep.EmployeeNumberSnapshot;
+        if (string.IsNullOrWhiteSpace(employeeNumberSnapshot) || employeeNumberSnapshot == sep.IndividualId.ToString())
+        {
+            var resolvedEmpNo = await db.Jobs
+                .AsNoTracking()
+                .Where(j => j.JobId == sep.JobId && j.Staff != null && !string.IsNullOrWhiteSpace(j.Staff.EmployeeNumber))
+                .Select(j => j.Staff!.EmployeeNumber)
+                .FirstOrDefaultAsync();
+            if (!string.IsNullOrWhiteSpace(resolvedEmpNo))
+                employeeNumberSnapshot = resolvedEmpNo;
+        }
+
         return new StaffSeparationDetailDto
         {
             StaffSeparationId = sep.StaffSeparationId,
@@ -427,7 +458,7 @@ public sealed class StaffSeparationService(
             ExitInterviewDate = sep.ExitInterviewDate,
             ExitInterviewNotes = sep.ExitInterviewNotes,
             FullNameSnapshot = sep.FullNameSnapshot,
-            EmployeeNumberSnapshot = sep.EmployeeNumberSnapshot,
+            EmployeeNumberSnapshot = employeeNumberSnapshot,
             ProtectedIdCardSnapshot = sep.ProtectedIdCardSnapshot,
             PositionTitleSnapshot = sep.PositionTitleSnapshot,
             OrganisationNameSnapshot = sep.OrganisationNameSnapshot,
@@ -470,6 +501,7 @@ public sealed class StaffSeparationService(
 
         var activeJob = await db.Jobs
             .Include(j => j.Individual)
+            .Include(j => j.Staff)
             .Include(j => j.Organisation)
             .Include(j => j.OrganisationStructure)
             .Include(j => j.JobPositions)
@@ -511,7 +543,9 @@ public sealed class StaffSeparationService(
 
         // Snapshot details
         var fullName = FullName(activeJob.Individual);
-        var employeeNumber = activeJob.Individual.BusinessEntityId.ToString();
+        var employeeNumber = !string.IsNullOrWhiteSpace(activeJob.Staff?.EmployeeNumber)
+            ? activeJob.Staff.EmployeeNumber
+            : activeJob.Individual.BusinessEntityId.ToString();
         var department = activeJob.OrganisationStructure?.Name ?? "Department";
         var positionTitle = "Employee";
         var activePosition = activeJob.JobPositions.FirstOrDefault(p => p.JobPositionStateId == 4 && (!p.ToDate.HasValue || p.ToDate > TodayMaldives));
@@ -1226,6 +1260,18 @@ public sealed class StaffSeparationService(
             _ => "Official Separation Document"
         };
 
+        var docEmpNo = sep.EmployeeNumberSnapshot;
+        if (string.IsNullOrWhiteSpace(docEmpNo) || docEmpNo == sep.IndividualId.ToString())
+        {
+            var resolvedEmpNo = await db.Jobs
+                .AsNoTracking()
+                .Where(j => j.JobId == sep.JobId && j.Staff != null && !string.IsNullOrWhiteSpace(j.Staff.EmployeeNumber))
+                .Select(j => j.Staff!.EmployeeNumber)
+                .FirstOrDefaultAsync();
+            if (!string.IsNullOrWhiteSpace(resolvedEmpNo))
+                docEmpNo = resolvedEmpNo;
+        }
+
         var html = $@"
             <html>
             <head>
@@ -1252,7 +1298,7 @@ public sealed class StaffSeparationService(
                 <div class='section'>
                     <div class='section-title'>1. Employee Details</div>
                     <table>
-                        <tr><th>Full Name</th><td>{sep.FullNameSnapshot}</td><th>Employee ID</th><td>{sep.EmployeeNumberSnapshot}</td></tr>
+                        <tr><th>Full Name</th><td>{sep.FullNameSnapshot}</td><th>Employee ID</th><td>{docEmpNo}</td></tr>
                         <tr><th>Department</th><td>{sep.DepartmentNameSnapshot}</td><th>Designation</th><td>{sep.PositionTitleSnapshot}</td></tr>
                         <tr><th>Joined Date</th><td>{sep.DateJoinedSnapshot:dd-MMM-yyyy}</td><th>Separation Date</th><td>{sep.EffectiveSeparationDate:dd-MMM-yyyy}</td></tr>
                         <tr><th>Separation Reason</th><td>{sep.ReasonCategory}</td><th>Status</th><td>{sep.Status}</td></tr>
