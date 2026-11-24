@@ -68,7 +68,7 @@
                                                 class="inline-flex items-center justify-center rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
                                                 disabled="@busy"
                                                 @onclick="() => Select(row)">
-                                            @(row.Status == "Submitted" ? "Review" : "View")
+                                            @(row.Status == "Submitted" ? "Review" : row.Status == "EligibleNotShortlisted" ? "Shortlist" : "View")
                                         </button>
                                     </td>
                                 </tr>
@@ -90,10 +90,22 @@
                     <button type="button" class="text-xs font-semibold text-slate-500 hover:text-slate-800" @onclick="() => selected = null">Close</button>
                 </div>
 
-                @if (selected.Status != "Submitted")
+                @if (selected.Status == "EligibleNotShortlisted")
+                {
+                    <div class="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-900">
+                        This candidate already passed eligibility screening (<strong>EligibleNotShortlisted</strong>). Provide a shortlisting reason and evidence below to promote them to <strong>Shortlisted</strong> for assessment.
+                    </div>
+                }
+                else if (selected.Status == "Shortlisted")
+                {
+                    <div class="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
+                        This candidate is already <strong>Shortlisted</strong> and ready for scoring in the <strong>Assessments</strong> tab.
+                    </div>
+                }
+                else if (selected.Status != "Submitted")
                 {
                     <div class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-                        Only applications in <strong>Submitted</strong> status can be screened. This application is currently <strong>@selected.Status</strong>.
+                        Only applications in <strong>Submitted</strong> or <strong>EligibleNotShortlisted</strong> status can be processed here. This application is currently <strong>@selected.Status</strong>.
                     </div>
                 }
 
@@ -103,25 +115,29 @@
                         Meets advertised eligibility requirements
                     </label>
                     <label class="inline-flex items-center gap-2 text-xs font-medium text-slate-700">
-                        <input type="checkbox" disabled="@(busy || selected.Status != "Submitted" || !eligible)" @bind="shortlisted" />
+                        <input type="checkbox" disabled="@(busy || !CanEditSelected || !eligible || selected.Status == "EligibleNotShortlisted")" @bind="shortlisted" />
                         Shortlist for assessment
                     </label>
                 </div>
 
                 <label class="block text-xs font-medium text-slate-700">
-                    Decision Reason <span class="text-rose-600">*</span>
-                    <textarea rows="2" class="@InputClass" maxlength="2000" disabled="@(busy || selected.Status != "Submitted")" @bind="reason" @bind:event="oninput" placeholder="Explain eligibility and shortlisting decision..."></textarea>
+                    @(selected.Status == "EligibleNotShortlisted" ? "Shortlisting Reason" : "Decision Reason") <span class="text-rose-600">*</span>
+                    <textarea rows="2" class="@InputClass" maxlength="2000" disabled="@(busy || !CanEditSelected)" @bind="reason" @bind:event="oninput" placeholder="Explain eligibility and shortlisting decision..."></textarea>
                 </label>
                 <label class="block text-xs font-medium text-slate-700">
                     Evidence Reviewed <span class="text-rose-600">*</span>
-                    <textarea rows="3" class="@InputClass" maxlength="8000" disabled="@(busy || selected.Status != "Submitted")" @bind="evidence" @bind:event="oninput" placeholder="List qualifications, experience letters, and certificates verified..."></textarea>
+                    <textarea rows="3" class="@InputClass" maxlength="8000" disabled="@(busy || !CanEditSelected)" @bind="evidence" @bind:event="oninput" placeholder="List qualifications, experience letters, and certificates verified..."></textarea>
                 </label>
 
                 <div class="flex flex-wrap items-center justify-between gap-2">
                     <p class="text-[11px] text-slate-500">
-                        @if (selected.Status == "Submitted" && (string.IsNullOrWhiteSpace(reason) || string.IsNullOrWhiteSpace(evidence)))
+                        @if (CanEditSelected && (string.IsNullOrWhiteSpace(reason) || string.IsNullOrWhiteSpace(evidence)))
                         {
-                            <span>Enter both Decision Reason and Evidence Reviewed to enable submission.</span>
+                            <span>Enter both Reason and Evidence Reviewed to enable submission.</span>
+                        }
+                        else if (selected.Status == "EligibleNotShortlisted")
+                        {
+                            <span>Promoting this candidate moves them to Shortlisted so they can proceed to Assessments.</span>
                         }
                         else
                         {
@@ -130,9 +146,9 @@
                     </p>
                     <button type="button"
                             class="inline-flex items-center justify-center rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 disabled:opacity-50 transition-colors"
-                            disabled="@(busy || selected.Status != "Submitted" || string.IsNullOrWhiteSpace(reason) || string.IsNullOrWhiteSpace(evidence))"
+                            disabled="@(busy || !CanEditSelected || string.IsNullOrWhiteSpace(reason) || string.IsNullOrWhiteSpace(evidence))"
                             @onclick="Save">
-                        Submit &amp; Lock Screening
+                        @(selected.Status == "EligibleNotShortlisted" ? "Shortlist for Assessment" : "Submit & Lock Screening")
                     </button>
                 </div>
             </div>
@@ -221,11 +237,13 @@
         }
     }
 
+    private bool CanEditSelected => selected?.Status is "Submitted" or "EligibleNotShortlisted";
+
     private void Select(RecruitmentScreeningApplicationRow row)
     {
         selected = row;
-        eligible = false;
-        shortlisted = false;
+        eligible = row.Status is "EligibleNotShortlisted" or "Shortlisted";
+        shortlisted = row.Status is "EligibleNotShortlisted" or "Shortlisted";
         reason = "";
         evidence = "";
     }
