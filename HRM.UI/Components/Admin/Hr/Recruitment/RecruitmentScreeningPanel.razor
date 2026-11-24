@@ -1,8 +1,23 @@
 @using HRM.Application.Contracts.Recruitment
 @inject HRM.UI.Services.Recruitment.IRecruitmentApiClient Api
 
-<div class="grid items-start gap-4 lg:grid-cols-12">
-    <section class="lg:col-span-7 rounded-2xl border border-slate-200 bg-white p-4 shadow-xs space-y-4">
+<style>
+    .rsp-grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 1rem;
+        align-items: start;
+    }
+
+    @@media (min-width: 1024px) {
+        .rsp-grid {
+            grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+        }
+    }
+</style>
+
+<div class="rsp-grid">
+    <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs space-y-4">
         <div>
             <h2 class="text-sm font-bold text-slate-900">Screening &amp; Shortlisting</h2>
             <p class="mt-0.5 text-xs text-slate-500">Select a vacancy, review submitted applications, and lock screening decisions.</p>
@@ -46,14 +61,14 @@
                                     <td class="p-2.5 font-mono text-[11px] font-semibold text-blue-700">@row.Reference</td>
                                     <td class="p-2.5 font-medium text-slate-800">@row.ApplicantName</td>
                                     <td class="p-2.5">
-                                        <span class="rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-semibold text-slate-700">@row.Status</span>
+                                        <span class="rounded-full px-2.5 py-0.5 text-[11px] font-semibold @StatusBadgeClass(row.Status)">@row.Status</span>
                                     </td>
                                     <td class="p-2.5 text-right">
                                         <button type="button"
                                                 class="inline-flex items-center justify-center rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
                                                 disabled="@busy"
                                                 @onclick="() => Select(row)">
-                                            Review
+                                            @(row.Status == "Submitted" ? "Review" : "View")
                                         </button>
                                     </td>
                                 </tr>
@@ -67,33 +82,52 @@
         @if (selected is not null)
         {
             <div class="rounded-xl border border-blue-200 bg-blue-50/40 p-4 space-y-3">
-                <div class="flex items-center justify-between">
-                    <h3 class="text-xs font-bold text-slate-900">Screening Decision: @selected.ApplicantName (@selected.Reference)</h3>
+                <div class="flex items-center justify-between gap-2">
+                    <div class="flex items-center gap-2">
+                        <h3 class="text-xs font-bold text-slate-900">Screening Decision: @selected.ApplicantName (@selected.Reference)</h3>
+                        <span class="rounded-full px-2 py-0.5 text-[10px] font-semibold @StatusBadgeClass(selected.Status)">@selected.Status</span>
+                    </div>
                     <button type="button" class="text-xs font-semibold text-slate-500 hover:text-slate-800" @onclick="() => selected = null">Close</button>
                 </div>
 
+                @if (selected.Status != "Submitted")
+                {
+                    <div class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                        Only applications in <strong>Submitted</strong> status can be screened. This application is currently <strong>@selected.Status</strong>.
+                    </div>
+                }
+
                 <div class="flex flex-wrap gap-4">
                     <label class="inline-flex items-center gap-2 text-xs font-medium text-slate-700">
-                        <input type="checkbox" @bind="eligible" />
+                        <input type="checkbox" disabled="@(busy || selected.Status != "Submitted")" @bind="eligible" @bind:after="OnEligibleChanged" />
                         Meets advertised eligibility requirements
                     </label>
                     <label class="inline-flex items-center gap-2 text-xs font-medium text-slate-700">
-                        <input type="checkbox" disabled="@(!eligible)" @bind="shortlisted" />
+                        <input type="checkbox" disabled="@(busy || selected.Status != "Submitted" || !eligible)" @bind="shortlisted" />
                         Shortlist for assessment
                     </label>
                 </div>
 
                 <label class="block text-xs font-medium text-slate-700">
-                    Decision Reason
-                    <textarea rows="2" class="@InputClass" maxlength="2000" @bind="reason"></textarea>
+                    Decision Reason <span class="text-rose-600">*</span>
+                    <textarea rows="2" class="@InputClass" maxlength="2000" disabled="@(busy || selected.Status != "Submitted")" @bind="reason" @bind:event="oninput" placeholder="Explain eligibility and shortlisting decision..."></textarea>
                 </label>
                 <label class="block text-xs font-medium text-slate-700">
-                    Evidence Reviewed
-                    <textarea rows="3" class="@InputClass" maxlength="8000" @bind="evidence"></textarea>
+                    Evidence Reviewed <span class="text-rose-600">*</span>
+                    <textarea rows="3" class="@InputClass" maxlength="8000" disabled="@(busy || selected.Status != "Submitted")" @bind="evidence" @bind:event="oninput" placeholder="List qualifications, experience letters, and certificates verified..."></textarea>
                 </label>
 
                 <div class="flex flex-wrap items-center justify-between gap-2">
-                    <p class="text-[11px] text-slate-500">Submitting locks this decision. Verify evidence and eligibility before continuing.</p>
+                    <p class="text-[11px] text-slate-500">
+                        @if (selected.Status == "Submitted" && (string.IsNullOrWhiteSpace(reason) || string.IsNullOrWhiteSpace(evidence)))
+                        {
+                            <span>Enter both Decision Reason and Evidence Reviewed to enable submission.</span>
+                        }
+                        else
+                        {
+                            <span>Submitting locks this decision. Verify evidence and eligibility before continuing.</span>
+                        }
+                    </p>
                     <button type="button"
                             class="inline-flex items-center justify-center rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 disabled:opacity-50 transition-colors"
                             disabled="@(busy || selected.Status != "Submitted" || string.IsNullOrWhiteSpace(reason) || string.IsNullOrWhiteSpace(evidence))"
@@ -113,20 +147,27 @@
         }
     </section>
 
-    <aside class="lg:col-span-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-xs space-y-3">
+    <aside class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs space-y-3">
         <div>
             <h3 class="text-sm font-bold text-slate-900">Conflict of Interest Declaration</h3>
             <p class="mt-0.5 text-xs text-slate-500">Record your conflict declaration for the selected vacancy before scoring.</p>
         </div>
 
+        @if (vacancyId <= 0)
+        {
+            <div class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                Select a vacancy on the left to record a conflict of interest declaration.
+            </div>
+        }
+
         <label class="inline-flex items-center gap-2 text-xs font-medium text-slate-700">
-            <input type="checkbox" @bind="conflict" />
+            <input type="checkbox" disabled="@(busy || vacancyId <= 0)" @bind="conflict" />
             I have a conflict of interest relating to this vacancy
         </label>
 
         <label class="block text-xs font-medium text-slate-700">
-            Declaration Statement
-            <textarea rows="4" class="@InputClass" maxlength="2000" @bind="declaration" placeholder="State either no conflict or describe any relationship/conflict..."></textarea>
+            Declaration Statement <span class="text-rose-600">*</span>
+            <textarea rows="4" class="@InputClass" maxlength="2000" disabled="@(busy || vacancyId <= 0)" @bind="declaration" @bind:event="oninput" placeholder="State either no conflict or describe any relationship/conflict..."></textarea>
         </label>
 
         <div class="flex justify-end">
@@ -137,6 +178,14 @@
                 Record Declaration
             </button>
         </div>
+
+        @if (conflictMessage is not null)
+        {
+            <div role="status" class="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-800">
+                <span>@conflictMessage</span>
+                <button type="button" class="font-bold text-slate-500 hover:text-slate-800" @onclick="() => conflictMessage = null">✕</button>
+            </div>
+        }
     </aside>
 </div>
 
@@ -148,6 +197,7 @@
     private bool busy, eligible, shortlisted, conflict;
     private string reason = "", evidence = "", declaration = "";
     private string? message;
+    private string? conflictMessage;
     private const string InputClass = "mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500";
 
     protected override async Task OnInitializedAsync()
@@ -160,6 +210,7 @@
     {
         selected = null;
         applications = [];
+        conflictMessage = null;
         try
         {
             if (vacancyId > 0) applications = await Api.GetScreeningApplicationsAsync(vacancyId);
@@ -179,22 +230,56 @@
         evidence = "";
     }
 
-    private Task Save() => Run(() => Api.RecordScreeningAsync(new(selected!.Id, eligible, eligible && shortlisted, reason, System.Text.Json.JsonSerializer.Serialize(new { EvidenceReviewed = evidence }))));
-    private Task Declare() => Run(() => Api.DeclareConflictAsync(new(vacancyId, conflict, declaration, null)));
+    private void OnEligibleChanged()
+    {
+        if (!eligible)
+            shortlisted = false;
+    }
 
-    private async Task Run(Func<Task<HRM.DTOs.ServiceResult>> action)
+    private static string StatusBadgeClass(string status) => status switch
+    {
+        "Submitted" => "bg-blue-100 text-blue-800",
+        "Shortlisted" => "bg-emerald-100 text-emerald-800",
+        "EligibleNotShortlisted" => "bg-amber-100 text-amber-800",
+        "Ineligible" => "bg-rose-100 text-rose-800",
+        _ => "bg-slate-100 text-slate-700"
+    };
+
+    private Task Save() => Run(
+        () => Api.RecordScreeningAsync(new(selected!.Id, eligible, eligible && shortlisted, reason, System.Text.Json.JsonSerializer.Serialize(new { EvidenceReviewed = evidence }))),
+        isConflict: false);
+
+    private Task Declare() => Run(
+        () => Api.DeclareConflictAsync(new(vacancyId, conflict, declaration, null)),
+        isConflict: true);
+
+    private async Task Run(Func<Task<HRM.DTOs.ServiceResult>> action, bool isConflict)
     {
         if (busy) return;
         busy = true;
         try
         {
             var result = await action();
-            message = result.Message;
-            if (result.Success) await Load();
+            if (isConflict)
+            {
+                conflictMessage = result.Message;
+                if (result.Success)
+                {
+                    declaration = "";
+                    conflict = false;
+                }
+            }
+            else
+            {
+                message = result.Message;
+                if (result.Success) await Load();
+            }
         }
         catch (HttpRequestException)
         {
-            message = "The action failed. Refresh and verify the application state and access.";
+            const string failText = "The action failed. Refresh and verify the application state and access.";
+            if (isConflict) conflictMessage = failText;
+            else message = failText;
         }
         finally
         {
