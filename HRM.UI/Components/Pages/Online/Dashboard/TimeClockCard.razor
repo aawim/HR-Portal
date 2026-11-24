@@ -59,11 +59,25 @@
         <div class="mt-4 flex flex-col gap-2">
             @if (activeGeofences.Count > 0)
             {
-                <div class="flex items-center justify-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50/70 px-2.5 py-1.5 text-[11px] font-medium text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200">
-                    <i class="bi bi-geo-alt-fill text-emerald-600" aria-hidden="true"></i>
-                    <span>
-                        Geo-fenced: @string.Join(", ", activeGeofences.Select(g => $"{g.Label} ({g.RadiusMeters} m)"))
-                    </span>
+                <div class="rounded-lg border border-emerald-200 bg-emerald-50/70 px-2.5 py-1.5 text-[11px] font-medium text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200 space-y-1">
+                    <div class="flex items-center justify-between gap-2">
+                        <span class="inline-flex items-center gap-1.5">
+                            <i class="bi bi-geo-alt-fill text-emerald-600" aria-hidden="true"></i>
+                            <span>Geo-fenced: @string.Join(", ", activeGeofences.Select(g => $"{g.Label} ({g.RadiusMeters} m)"))</span>
+                        </span>
+                        <button type="button"
+                                class="text-[10px] font-semibold text-blue-700 dark:text-blue-300 hover:underline disabled:opacity-50"
+                                disabled="@(checkingLocation || ProcessingClock)"
+                                @onclick="CheckLocationAsync">
+                            @(checkingLocation ? "Locating..." : "Check Location")
+                        </button>
+                    </div>
+                    @if (!string.IsNullOrWhiteSpace(locationStatusText))
+                    {
+                        <div class="text-[10px] @(locationWithinBoundary ? "text-emerald-700 dark:text-emerald-300" : "text-rose-700 dark:text-rose-300")">
+                            @locationStatusText
+                        </div>
+                    }
                 </div>
             }
             <button type="button"
@@ -129,8 +143,11 @@
     // private bool DisableCheckOut => ProcessingCheckIn || ProcessingCheckOut;
 
     private bool ProcessingClock;
+    private bool checkingLocation;
     private bool canClock;
     private List<WorkTypeGeofenceDto> activeGeofences = [];
+    private string? locationStatusText;
+    private bool locationWithinBoundary;
     private bool _useTime = false;
     private AttendanceLogDto? todayCheckIn;
     private AttendanceLogDto? todayCheckOut;
@@ -155,18 +172,59 @@
         try
         {
             canClock = await WorkTypes.CanClockAsync();
-            if (canClock)
-            {
-                activeGeofences = await WorkTypes.GetActiveClockGeofencesAsync();
-            }
         }
         catch
         {
             canClock = false;
-            activeGeofences = [];
+        }
+
+        if (canClock)
+        {
+            try { activeGeofences = await WorkTypes.GetActiveClockGeofencesAsync(); }
+            catch { activeGeofences = []; }
         }
 
         await RefreshTodayStatusAsync();
+    }
+
+    private async Task CheckLocationAsync()
+    {
+        if (checkingLocation || activeGeofences.Count == 0) return;
+        checkingLocation = true;
+        try
+        {
+            var pos = await JS.InvokeAsync<GeoPositionResult>("hrmGeoMap.getCurrentPosition");
+            if (pos is not { Ok: true })
+            {
+                locationWithinBoundary = false;
+                locationStatusText = pos?.Error ?? "Could not resolve your current GPS location.";
+                return;
+            }
+
+            var closest = activeGeofences
+                .Select(g => new
+                {
+                    Geofence = g,
+                    Distance = WorkTypeGeofenceHelper.DistanceMeters(pos.Lat, pos.Lng, g.Latitude, g.Longitude)
+                })
+                .OrderBy(x => x.Distance)
+                .First();
+
+            locationWithinBoundary = closest.Distance <= closest.Geofence.RadiusMeters;
+            var distRounded = Math.Round(closest.Distance);
+            locationStatusText = locationWithinBoundary
+                ? $"Inside boundary · {distRounded:N0} m from {closest.Geofence.Label} ({pos.Lat:F5}, {pos.Lng:F5} ±{pos.Accuracy} m)"
+                : $"Outside boundary · {distRounded:N0} m from {closest.Geofence.Label} (allowed: {closest.Geofence.RadiusMeters} m; your GPS: {pos.Lat:F5}, {pos.Lng:F5})";
+        }
+        catch
+        {
+            locationWithinBoundary = false;
+            locationStatusText = "Could not access browser location.";
+        }
+        finally
+        {
+            checkingLocation = false;
+        }
     }
 
     private async Task RefreshTodayStatusAsync()
@@ -244,12 +302,16 @@
 
                 if (closest.Distance > closest.Geofence.RadiusMeters)
                 {
+                    locationWithinBoundary = false;
+                    locationStatusText = $"Outside boundary · {Math.Round(closest.Distance):N0} m from {closest.Geofence.Label} (allowed: {closest.Geofence.RadiusMeters} m; GPS: {pos.Lat:F5}, {pos.Lng:F5})";
                     feedbackIsError = true;
                     feedbackMessage = $"Outside allowed clock-in boundary: you are {Math.Round(closest.Distance):N0} m away from {closest.Geofence.Label} (allowed radius: {closest.Geofence.RadiusMeters} m).";
                     ToastService.Error(feedbackMessage);
                     return;
                 }
 
+                locationWithinBoundary = true;
+                locationStatusText = $"Verified inside {closest.Geofence.Label} · {Math.Round(closest.Distance):N0} m from center ({pos.Lat:F5}, {pos.Lng:F5})";
                 await AttendanceLogService.AddClockEventWithLocationAsync(context.IndividualId, pos.Lat, pos.Lng);
             }
             else
@@ -258,7 +320,9 @@
             }
 
             await RefreshTodayStatusAsync();
-            feedbackMessage = $"Clock event recorded at {DateTime.UtcNow.AddHours(5):HH:mm}.";
+            feedbackMessage = activeGeofences.Count > 0 && !string.IsNullOrWhiteSpace(locationStatusText)
+                ? $"Clock event recorded at {DateTime.UtcNow.AddHours(5):HH:mm} ({locationStatusText})."
+                : $"Clock event recorded at {DateTime.UtcNow.AddHours(5):HH:mm}.";
             ToastService.Success(feedbackMessage);
 
             if (OnClock.HasDelegate)

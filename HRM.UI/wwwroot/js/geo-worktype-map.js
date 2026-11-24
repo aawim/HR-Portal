@@ -126,9 +126,14 @@
     function resize(elementId) {
         const entry = maps.get(elementId);
         if (!entry) return;
-        setTimeout(() => {
-            try { entry.map.invalidateSize(); } catch { }
-        }, 80);
+        const doResize = () => {
+            try {
+                entry.map.invalidateSize({ animate: false });
+                entry.map.panTo(entry.marker.getLatLng(), { animate: false });
+            } catch { }
+        };
+        requestAnimationFrame(doResize);
+        setTimeout(doResize, 120);
     }
 
     function getCurrentPosition() {

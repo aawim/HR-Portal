@@ -21,50 +21,135 @@ public partial class OrganisationWorkspaceService(IDbContextFactory<HrmTeContext
         await RequireAsync(organisationId);
         await using var db = await factory.CreateDbContextAsync();
         var today = Today;
+        var tomorrow = today.AddDays(1);
         var data = await db.Organisations.AsNoTracking().Where(x => x.BusinessEntityID == organisationId)
             .Select(x => new OrganisationWorkspaceData { Name = x.OrganisationName, DhivehiName = x.OrganisationNameDhivehi,
                 RegistrationNumber = x.RegistrationNumber, Type = x.OrganisationType.TypeName,
                 Parent = x.ParentOrganisationBusinessEntity == null ? null : x.ParentOrganisationBusinessEntity.OrganisationName }).SingleOrDefaultAsync()
             ?? throw new InvalidOperationException("Organisation not found.");
-        var jobs = db.Jobs.AsNoTracking().Where(x => x.OrganisationID == organisationId && x.JobStateId == SharedConfig.JobStates.APPROVED && x.TerminatedDate == null && x.JoinedDate <= today);
-        var staffIds = await jobs.Select(x => x.IndividualID).Distinct().ToListAsync();
+
+        var activeJobs = await db.Jobs.AsNoTracking()
+            .Where(x => x.OrganisationID == organisationId && x.JobStateId == SharedConfig.JobStates.APPROVED && x.TerminatedDate == null && x.JoinedDate <= today)
+            .Select(x => new
+            {
+                x.JobId,
+                x.IndividualID,
+                x.OrganisationStructureId,
+                x.JobTypeId,
+                JobTypeName = x.JobType.TypeName,
+                x.Individual.GenderTypeId
+            })
+            .ToListAsync();
+
+        var staffIds = activeJobs.Select(x => x.IndividualID).Distinct().ToList();
         var viewableStaffIds = await StaffAttributeAccess.FilterViewableAsync(db, access, organisationId, staffIds);
-        if (viewableStaffIds.Count < staffIds.Count)
-            jobs = jobs.Where(x => viewableStaffIds.Contains(x.IndividualID));
-        data.StaffCount = await jobs.Select(x => x.IndividualID).Distinct().CountAsync();
-        data.Workforce = await jobs.Select(x => new OrganisationOverviewStaff(x.IndividualID, x.OrganisationStructureId,
-            x.JobTypeId, x.JobType.TypeName, x.Individual.GenderTypeId)).Distinct().ToListAsync();
+        var viewableSet = viewableStaffIds.ToHashSet();
+        if (viewableSet.Count < staffIds.Count)
+            activeJobs = activeJobs.Where(x => viewableSet.Contains(x.IndividualID)).ToList();
+
+        var activeJobIdSet = activeJobs.Select(x => x.JobId).ToHashSet();
+        data.StaffCount = viewableSet.Count;
+        data.Workforce = activeJobs
+            .Select(x => new OrganisationOverviewStaff(x.IndividualID, x.OrganisationStructureId, x.JobTypeId, x.JobTypeName, x.GenderTypeId))
+            .Distinct()
+            .ToList();
+
         var homeTypeNames = new[] { "work from home", "work-from-home", "working from home", "wfh" };
         var homeTypes = await db.OutOfficeRequestTypes.AsNoTracking()
             .Where(t => homeTypeNames.Contains(t.TypeName.Trim().ToLower()))
             .Select(t => t.OutOfOfficeRequestTypeId).ToListAsync();
         data.HasWorkFromHomeRequestType = homeTypes.Count > 0;
-        data.WorkingFromHomeStaffIds = await db.OutOfOfficeRequests.AsNoTracking()
-            .Where(r => r.OrganisationBusinessEntityID == organisationId && homeTypes.Contains(r.OutOfOfficeRequestTypeId) &&
-                r.Request.OrganisationBusinessEntityID == organisationId && r.Request.RequestStateId == SharedConfig.RequestStates.APPROVED &&
-                r.Date >= today && r.Date < today.AddDays(1) && jobs.Any(j => j.IndividualID == r.StaffId))
-            .Select(r => r.StaffId).Distinct().ToListAsync();
-        data.OnLeaveStaffIds = await db.Leaves.AsNoTracking()
-            .Where(l => jobs.Any(j => j.JobId == l.JobId) && l.LeaveStateId == SharedConfig.LeaveStates.APPROVED && l.FromDate < today.AddDays(1) && l.ToDate >= today)
-            .Select(l => l.Job.IndividualID).Distinct().ToListAsync();
+
+        if (homeTypes.Count > 0 && viewableSet.Count > 0)
+        {
+            var wfhIds = await db.OutOfOfficeRequests.AsNoTracking()
+                .Where(r => r.OrganisationBusinessEntityID == organisationId && homeTypes.Contains(r.OutOfOfficeRequestTypeId) &&
+                    r.Request.OrganisationBusinessEntityID == organisationId && r.Request.RequestStateId == SharedConfig.RequestStates.APPROVED &&
+                    r.Date >= today && r.Date < tomorrow)
+                .Select(r => r.StaffId).Distinct().ToListAsync();
+            data.WorkingFromHomeStaffIds = wfhIds.Where(viewableSet.Contains).ToList();
+        }
+        else
+        {
+            data.WorkingFromHomeStaffIds = [];
+        }
+
         // Leave names are HR data: require the canonical leave-view permission before returning them.
         var actor = await access.RequireContextAsync();
         data.CanViewLeaveDetails = actor.IsSuperAdministrator || await access.HasPermissionAsync("Admin") || await access.HasPermissionAsync("Leave.View");
-        if (data.CanViewLeaveDetails)
-            data.StaffOnLeave = await db.Leaves.AsNoTracking()
-                .Where(l => jobs.Any(j => j.JobId == l.JobId) && l.LeaveStateId == SharedConfig.LeaveStates.APPROVED && l.FromDate < today.AddDays(1) && l.ToDate >= today)
+
+        if (activeJobIdSet.Count > 0)
+        {
+            var todayLeaves = await db.Leaves.AsNoTracking()
+                .Where(l => l.Job.OrganisationID == organisationId && l.LeaveStateId == SharedConfig.LeaveStates.APPROVED && l.FromDate < tomorrow && l.ToDate >= today)
                 .OrderBy(l => l.ToDate).ThenBy(l => l.LeaveId)
-                .Select(l => new OrganisationOverviewLeave(l.LeaveId, l.Job.IndividualID, l.Job.OrganisationStructureId, l.Job.JobTypeId,
-                    (l.Job.Individual.FirstNameEnglish + " " + (l.Job.Individual.MiddleNameEnglish ?? "") + " " + (l.Job.Individual.LastNameEnglish ?? "")).Trim(),
-                    l.LeaveType.Name, l.FromDate, l.ToDate, l.Duration)).ToListAsync();
-        data.Departments = await db.OrganisationStructures.AsNoTracking().Where(x => x.OrganisationBusinessEntityID == organisationId && x.OrganisationStructureStateId == 3)
-            .OrderBy(x => x.Name).Select(x => new OrganisationWorkspaceGroup(x.OrganisationStructureId, x.Name,
-                jobs.Where(j => j.OrganisationStructureId == x.OrganisationStructureId).Select(j => j.IndividualID).Distinct().Count())).ToListAsync();
-        data.Teams = await db.Teams.AsNoTracking().Where(x => x.OrganisationId == organisationId && x.IsValid == true &&
-            (x.StartDate == null || x.StartDate <= today) && (x.EndDate == null || x.EndDate >= today))
-            .OrderBy(x => x.Name).Select(x => new OrganisationWorkspaceGroup(x.TeamId, x.Name,
-                x.TeamStaffs.Where(m => m.IsValid && m.StartDate <= today && (m.EndDate == null || m.EndDate >= today) && jobs.Any(j => j.IndividualID == m.StaffId))
-                    .Select(m => m.StaffId).Distinct().Count())).ToListAsync();
+                .Select(l => new
+                {
+                    l.LeaveId,
+                    l.JobId,
+                    l.Job.IndividualID,
+                    l.Job.OrganisationStructureId,
+                    l.Job.JobTypeId,
+                    Name = (l.Job.Individual.FirstNameEnglish + " " + (l.Job.Individual.MiddleNameEnglish ?? "") + " " + (l.Job.Individual.LastNameEnglish ?? "")).Trim(),
+                    LeaveTypeName = l.LeaveType.Name,
+                    l.FromDate,
+                    l.ToDate,
+                    l.Duration
+                })
+                .ToListAsync();
+
+            var filteredLeaves = todayLeaves.Where(l => activeJobIdSet.Contains(l.JobId)).ToList();
+            data.OnLeaveStaffIds = filteredLeaves.Select(l => l.IndividualID).Distinct().ToList();
+            if (data.CanViewLeaveDetails)
+            {
+                data.StaffOnLeave = filteredLeaves
+                    .Select(l => new OrganisationOverviewLeave(l.LeaveId, l.IndividualID, l.OrganisationStructureId, l.JobTypeId, l.Name, l.LeaveTypeName, l.FromDate, l.ToDate, l.Duration))
+                    .ToList();
+            }
+        }
+        else
+        {
+            data.OnLeaveStaffIds = [];
+        }
+
+        var deptCounts = activeJobs
+            .GroupBy(j => j.OrganisationStructureId)
+            .ToDictionary(g => g.Key, g => g.Select(x => x.IndividualID).Distinct().Count());
+
+        var structures = await db.OrganisationStructures.AsNoTracking()
+            .Where(x => x.OrganisationBusinessEntityID == organisationId && x.OrganisationStructureStateId == 3)
+            .OrderBy(x => x.Name)
+            .Select(x => new { x.OrganisationStructureId, x.Name })
+            .ToListAsync();
+
+        data.Departments = structures
+            .Select(x => new OrganisationWorkspaceGroup(x.OrganisationStructureId, x.Name, deptCounts.GetValueOrDefault(x.OrganisationStructureId)))
+            .ToList();
+
+        var activeTeams = await db.Teams.AsNoTracking()
+            .Where(x => x.OrganisationId == organisationId && x.IsValid == true &&
+                (x.StartDate == null || x.StartDate <= today) && (x.EndDate == null || x.EndDate >= today))
+            .OrderBy(x => x.Name)
+            .Select(x => new { x.TeamId, x.Name })
+            .ToListAsync();
+
+        var teamIds = activeTeams.Select(t => t.TeamId).ToList();
+        var teamMembers = teamIds.Count > 0 && viewableSet.Count > 0
+            ? await db.TeamStaffs.AsNoTracking()
+                .Where(m => teamIds.Contains(m.TeamId) && m.IsValid && m.StartDate <= today && (m.EndDate == null || m.EndDate >= today))
+                .Select(m => new { m.TeamId, m.StaffId })
+                .ToListAsync()
+            : [];
+
+        var teamCounts = teamMembers
+            .Where(m => viewableSet.Contains(m.StaffId))
+            .GroupBy(m => m.TeamId)
+            .ToDictionary(g => g.Key, g => g.Select(x => x.StaffId).Distinct().Count());
+
+        data.Teams = activeTeams
+            .Select(t => new OrganisationWorkspaceGroup(t.TeamId, t.Name, teamCounts.GetValueOrDefault(t.TeamId)))
+            .ToList();
+
         return data;
     }
     public async Task<(List<OrganisationWorkspaceStaff> Rows, int Total)> StaffAsync(int organisationId, string search, int departmentId, int page, string scope = "active")
