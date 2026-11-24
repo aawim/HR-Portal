@@ -6,6 +6,11 @@ public interface IRecruitmentApiClient {
     Task<IReadOnlyList<AvailablePositionMatrixOption>> GetAvailablePositionsAsync(CancellationToken ct = default);
     Task<HRM.DTOs.ServiceResult> CreateRequisitionAsync(RecruitmentRequisitionInput input, CancellationToken ct = default);
     Task<HRM.DTOs.ServiceResult> ApproveRequisitionAsync(int id, CancellationToken ct = default);
+    Task<RecruitmentPolicyWorkspaceDto> GetPoliciesAsync(CancellationToken ct = default);
+    Task<HRM.DTOs.ServiceResult> CreatePolicyAsync(CreateRecruitmentPolicyInput input, CancellationToken ct = default);
+    Task<HRM.DTOs.ServiceResult> VerifyApprovePolicyAsync(int versionId, CancellationToken ct = default);
+    Task<HRM.DTOs.ServiceResult> AssignPolicyAsync(AssignRecruitmentPolicyInput input, CancellationToken ct = default);
+    Task<HRM.DTOs.ServiceResult> TogglePolicyAssignmentAsync(int assignmentId, CancellationToken ct = default);
     Task<IReadOnlyList<RecruitmentVacancyRow>> GetVacanciesAsync();
     Task<HRM.DTOs.ServiceResult> CreateVacancyAsync(RecruitmentVacancyInput input);
     Task<HRM.DTOs.ServiceResult> PublishVacancyAsync(int id);
@@ -66,6 +71,11 @@ public sealed class RecruitmentApiClient(HttpClient http) : IRecruitmentApiClien
     public Task<HRM.DTOs.ServiceResult> CreateRequisitionAsync(RecruitmentRequisitionInput input, CancellationToken ct = default) => PostAsync("/api/v1/recruitment/requisitions", new { input }, ct);
     public async Task<IReadOnlyList<AvailablePositionMatrixOption>> GetAvailablePositionsAsync(CancellationToken ct = default) => await http.GetFromJsonAsync<List<AvailablePositionMatrixOption>>("/api/v1/recruitment/requisitions/available-positions", ct) ?? [];
     public Task<HRM.DTOs.ServiceResult> ApproveRequisitionAsync(int id, CancellationToken ct = default) => PostAsync($"/api/v1/recruitment/requisitions/{id}/approve", new { }, ct);
+    public async Task<RecruitmentPolicyWorkspaceDto> GetPoliciesAsync(CancellationToken ct = default) => await http.GetFromJsonAsync<RecruitmentPolicyWorkspaceDto>("/api/v1/recruitment/requisitions/policies", ct) ?? new([], []);
+    public Task<HRM.DTOs.ServiceResult> CreatePolicyAsync(CreateRecruitmentPolicyInput input, CancellationToken ct = default) => PostAsync("/api/v1/recruitment/requisitions/policies", input, ct);
+    public Task<HRM.DTOs.ServiceResult> VerifyApprovePolicyAsync(int versionId, CancellationToken ct = default) => PostAsync($"/api/v1/recruitment/requisitions/policies/{versionId}/verify", new { }, ct);
+    public Task<HRM.DTOs.ServiceResult> AssignPolicyAsync(AssignRecruitmentPolicyInput input, CancellationToken ct = default) => PostAsync("/api/v1/recruitment/requisitions/policies/assign", input, ct);
+    public Task<HRM.DTOs.ServiceResult> TogglePolicyAssignmentAsync(int assignmentId, CancellationToken ct = default) => PostAsync($"/api/v1/recruitment/requisitions/policies/assignments/{assignmentId}/toggle", new { }, ct);
     private async Task<HRM.DTOs.ServiceResult> PostAsync<T>(string path, T input, CancellationToken ct)
     {
         using var response = await http.PostAsJsonAsync(path, input, ct);

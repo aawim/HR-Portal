@@ -23,4 +23,19 @@ public sealed class RecruitmentRequisitionsController(global::HRM.Application.Co
     public sealed record VacancyRequest(global::HRM.Application.Contracts.Recruitment.RecruitmentVacancyInput Input);
     [HttpPost("vacancies/{id:int}/publish")]
     public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> PublishVacancy(int id,CancellationToken ct) => Ok(await service.PublishVacancyAsync(id,ct));
+
+    [HttpGet("policies")]
+    public async Task<ActionResult<global::HRM.Application.Contracts.Recruitment.RecruitmentPolicyWorkspaceDto>> GetPolicies(CancellationToken ct) => Ok(await service.GetPoliciesAsync(ct));
+
+    [HttpPost("policies")]
+    public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> CreatePolicy([FromBody] global::HRM.Application.Contracts.Recruitment.CreateRecruitmentPolicyInput input,CancellationToken ct) => Ok(await service.CreatePolicyAsync(input,ct));
+
+    [HttpPost("policies/{versionId:int}/verify")]
+    public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> VerifyPolicy(int versionId,CancellationToken ct) => Ok(await service.VerifyApprovePolicyAsync(versionId,ct));
+
+    [HttpPost("policies/assign")]
+    public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> AssignPolicy([FromBody] global::HRM.Application.Contracts.Recruitment.AssignRecruitmentPolicyInput input,CancellationToken ct) => Ok(await service.AssignPolicyAsync(input,ct));
+
+    [HttpPost("policies/assignments/{assignmentId:int}/toggle")]
+    public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> TogglePolicyAssignment(int assignmentId,CancellationToken ct) => Ok(await service.TogglePolicyAssignmentAsync(assignmentId,ct));
 }
