@@ -270,7 +270,22 @@
                 </div>
             </div>
 
-            <!-- Full Staff Sub-Tabs Bar (Folder Tabs with Lighter Green) -->
+            <!-- Full Staff Category Tabs Bar (Folder Tabs with Lighter Green) -->
+            @{
+                var staffPendingLeave = GetStaffPendingLeaveCount(inspectedStaffId.Value, inspectedStaffName);
+                var staffPendingAttendance = GetStaffPendingAttendanceCount(inspectedStaffId.Value, inspectedStaffName);
+                var staffPendingTime = staffPendingLeave + staffPendingAttendance;
+                var staffPendingJobItems = GetStaffPendingJobItemsCount(inspectedStaffId.Value, inspectedStaffName);
+                var staffPendingPersonalItems = GetStaffPendingPersonalItemsCount(inspectedStaffId.Value, inspectedStaffName);
+                var staffPendingItemsCount = staffPendingJobItems + staffPendingPersonalItems;
+                var staffPendingCertificates = GetStaffPendingCertificatesCount(inspectedStaffId.Value);
+
+                var isEmploymentActive = inspectedStaffTab is WorkspaceTab.Position or WorkspaceTab.JobHistory or WorkspaceTab.StaffTransfer or WorkspaceTab.Performance;
+                var isTimeActive = inspectedStaffTab is WorkspaceTab.Attendance or WorkspaceTab.Leave or WorkspaceTab.OT or WorkspaceTab.Schedule or WorkspaceTab.WorkTypes;
+                var isFinanceActive = inspectedStaffTab is WorkspaceTab.Finance or WorkspaceTab.GoodsLoans or WorkspaceTab.Bank;
+                var isItemsActive = inspectedStaffTab is WorkspaceTab.JobRelatedItems or WorkspaceTab.PersonalItems;
+                var isRecordsActive = inspectedStaffTab is WorkspaceTab.Documents or WorkspaceTab.Certificates;
+            }
             <div class="staff-workspace-tabs staff-overview-no-print w-full border-b-2 border-emerald-600 dark:border-emerald-500 overflow-x-auto">
                 <nav class="flex items-end gap-1 min-w-max pb-0" aria-label="Staff Workspace Tabs">
                     <button type="button"
@@ -280,143 +295,73 @@
                         <span>Overview</span>
                     </button>
                     <button type="button"
-                            class="rounded-t-xl px-3.5 py-1.5 font-bold text-xs transition-all border-t border-l border-r inline-flex items-center gap-1.5 @(inspectedStaffTab == WorkspaceTab.Performance ? "bg-emerald-600 dark:bg-emerald-500 text-white border-emerald-600 dark:border-emerald-500 shadow-sm" : "bg-emerald-50/80 hover:bg-emerald-100 text-emerald-950 dark:bg-slate-800 dark:text-slate-300 border-emerald-200/90 dark:border-slate-700")"
-                            @onclick="() => SetStaffTab(WorkspaceTab.Performance)">
-                        <i class="bi bi-graph-up-arrow text-[11px]" aria-hidden="true"></i>
-                        <span>Performance</span>
-                    </button>
-                    <button type="button"
-                            class="rounded-t-xl px-3.5 py-1.5 font-bold text-xs transition-all border-t border-l border-r inline-flex items-center gap-1.5 @(inspectedStaffTab == WorkspaceTab.Leave ? "bg-emerald-600 dark:bg-emerald-500 text-white border-emerald-600 dark:border-emerald-500 shadow-sm" : "bg-emerald-50/80 hover:bg-emerald-100 text-emerald-950 dark:bg-slate-800 dark:text-slate-300 border-emerald-200/90 dark:border-slate-700")"
-                            @onclick="() => SetStaffTab(WorkspaceTab.Leave)">
-                        <i class="bi bi-calendar-event text-[11px]" aria-hidden="true"></i>
-                        <span>Leave</span>
-                        @if (GetStaffPendingLeaveCount(inspectedStaffId.Value, inspectedStaffName) > 0)
-                        {
-                            <span class="rounded-full px-1.5 py-0.2 text-[10px] font-bold @(inspectedStaffTab == WorkspaceTab.Leave ? "bg-white/25 text-white" : "bg-amber-500 text-white")">
-                                @GetStaffPendingLeaveCount(inspectedStaffId.Value, inspectedStaffName)
-                            </span>
-                        }
-                    </button>
-                    <button type="button"
-                            class="rounded-t-xl px-3.5 py-1.5 font-bold text-xs transition-all border-t border-l border-r inline-flex items-center gap-1.5 @(inspectedStaffTab == WorkspaceTab.Attendance ? "bg-emerald-600 dark:bg-emerald-500 text-white border-emerald-600 dark:border-emerald-500 shadow-sm" : "bg-emerald-50/80 hover:bg-emerald-100 text-emerald-950 dark:bg-slate-800 dark:text-slate-300 border-emerald-200/90 dark:border-slate-700")"
-                            @onclick="() => SetStaffTab(WorkspaceTab.Attendance)">
-                        <i class="bi bi-person-check text-[11px]" aria-hidden="true"></i>
-                        <span>Attendance</span>
-                        @if (GetStaffPendingAttendanceCount(inspectedStaffId.Value, inspectedStaffName) > 0)
-                        {
-                            <span class="rounded-full px-1.5 py-0.2 text-[10px] font-bold @(inspectedStaffTab == WorkspaceTab.Attendance ? "bg-white/25 text-white" : "bg-amber-500 text-white")">
-                                @GetStaffPendingAttendanceCount(inspectedStaffId.Value, inspectedStaffName)
-                            </span>
-                        }
-                    </button>
-                    <button type="button"
-                            class="rounded-t-xl px-3.5 py-1.5 font-bold text-xs transition-all border-t border-l border-r inline-flex items-center gap-1.5 @(inspectedStaffTab == WorkspaceTab.Position ? "bg-emerald-600 dark:bg-emerald-500 text-white border-emerald-600 dark:border-emerald-500 shadow-sm" : "bg-emerald-50/80 hover:bg-emerald-100 text-emerald-950 dark:bg-slate-800 dark:text-slate-300 border-emerald-200/90 dark:border-slate-700")"
+                            class="rounded-t-xl px-3.5 py-1.5 font-bold text-xs transition-all border-t border-l border-r inline-flex items-center gap-1.5 @(isEmploymentActive ? "bg-emerald-600 dark:bg-emerald-500 text-white border-emerald-600 dark:border-emerald-500 shadow-sm" : "bg-emerald-50/80 hover:bg-emerald-100 text-emerald-950 dark:bg-slate-800 dark:text-slate-300 border-emerald-200/90 dark:border-slate-700")"
                             @onclick="() => SetStaffTab(WorkspaceTab.Position)">
                         <i class="bi bi-briefcase text-[11px]" aria-hidden="true"></i>
-                        <span>Positions</span>
+                        <span>Employment</span>
                     </button>
                     <button type="button"
-                            class="rounded-t-xl px-3.5 py-1.5 font-bold text-xs transition-all border-t border-l border-r inline-flex items-center gap-1.5 @(inspectedStaffTab == WorkspaceTab.JobHistory ? "bg-emerald-600 dark:bg-emerald-500 text-white border-emerald-600 dark:border-emerald-500 shadow-sm" : "bg-emerald-50/80 hover:bg-emerald-100 text-emerald-950 dark:bg-slate-800 dark:text-slate-300 border-emerald-200/90 dark:border-slate-700")"
-                            @onclick="() => SetStaffTab(WorkspaceTab.JobHistory)">
-                        <i class="bi bi-clock-history text-[11px]" aria-hidden="true"></i>
-                        <span>Job History</span>
+                            class="rounded-t-xl px-3.5 py-1.5 font-bold text-xs transition-all border-t border-l border-r inline-flex items-center gap-1.5 @(isTimeActive ? "bg-emerald-600 dark:bg-emerald-500 text-white border-emerald-600 dark:border-emerald-500 shadow-sm" : "bg-emerald-50/80 hover:bg-emerald-100 text-emerald-950 dark:bg-slate-800 dark:text-slate-300 border-emerald-200/90 dark:border-slate-700")"
+                            @onclick="() => SetStaffTab(WorkspaceTab.Attendance)">
+                        <i class="bi bi-person-check text-[11px]" aria-hidden="true"></i>
+                        <span>Time &amp; Attendance</span>
+                        @if (staffPendingTime > 0)
+                        {
+                            <span class="rounded-full px-1.5 py-0.2 text-[10px] font-bold @(isTimeActive ? "bg-white/25 text-white" : "bg-amber-500 text-white")">
+                                @staffPendingTime
+                            </span>
+                        }
                     </button>
                     <button type="button"
-                            class="rounded-t-xl px-3.5 py-1.5 font-bold text-xs transition-all border-t border-l border-r inline-flex items-center gap-1.5 @(inspectedStaffTab == WorkspaceTab.Finance ? "bg-emerald-600 dark:bg-emerald-500 text-white border-emerald-600 dark:border-emerald-500 shadow-sm" : "bg-emerald-50/80 hover:bg-emerald-100 text-emerald-950 dark:bg-slate-800 dark:text-slate-300 border-emerald-200/90 dark:border-slate-700")"
+                            class="rounded-t-xl px-3.5 py-1.5 font-bold text-xs transition-all border-t border-l border-r inline-flex items-center gap-1.5 @(isFinanceActive ? "bg-emerald-600 dark:bg-emerald-500 text-white border-emerald-600 dark:border-emerald-500 shadow-sm" : "bg-emerald-50/80 hover:bg-emerald-100 text-emerald-950 dark:bg-slate-800 dark:text-slate-300 border-emerald-200/90 dark:border-slate-700")"
                             @onclick="() => SetStaffTab(WorkspaceTab.Finance)">
                         <i class="bi bi-cash-coin text-[11px]" aria-hidden="true"></i>
-                        <span>Allowances &amp; deductions</span>
+                        <span>Finance</span>
                     </button>
                     <button type="button"
-                            class="rounded-t-xl px-3.5 py-1.5 font-bold text-xs transition-all border-t border-l border-r inline-flex items-center gap-1.5 @(inspectedStaffTab == WorkspaceTab.OT ? "bg-emerald-600 dark:bg-emerald-500 text-white border-emerald-600 dark:border-emerald-500 shadow-sm" : "bg-emerald-50/80 hover:bg-emerald-100 text-emerald-950 dark:bg-slate-800 dark:text-slate-300 border-emerald-200/90 dark:border-slate-700")"
-                            @onclick="() => SetStaffTab(WorkspaceTab.OT)">
-                        <i class="bi bi-stopwatch text-[11px]" aria-hidden="true"></i>
-                        <span>Overtime</span>
-                    </button>
-                    <button type="button"
-                            class="rounded-t-xl px-3.5 py-1.5 font-bold text-xs transition-all border-t border-l border-r inline-flex items-center gap-1.5 @(inspectedStaffTab == WorkspaceTab.JobRelatedItems ? "bg-emerald-600 dark:bg-emerald-500 text-white border-emerald-600 dark:border-emerald-500 shadow-sm" : "bg-emerald-50/80 hover:bg-emerald-100 text-emerald-950 dark:bg-slate-800 dark:text-slate-300 border-emerald-200/90 dark:border-slate-700")"
+                            class="rounded-t-xl px-3.5 py-1.5 font-bold text-xs transition-all border-t border-l border-r inline-flex items-center gap-1.5 @(isItemsActive ? "bg-emerald-600 dark:bg-emerald-500 text-white border-emerald-600 dark:border-emerald-500 shadow-sm" : "bg-emerald-50/80 hover:bg-emerald-100 text-emerald-950 dark:bg-slate-800 dark:text-slate-300 border-emerald-200/90 dark:border-slate-700")"
                             @onclick="() => SetStaffTab(WorkspaceTab.JobRelatedItems)">
                         <i class="bi bi-box-seam text-[11px]" aria-hidden="true"></i>
-                        <span>Job Items</span>
-                        @if (GetStaffPendingJobItemsCount(inspectedStaffId.Value, inspectedStaffName) > 0)
+                        <span>Items</span>
+                        @if (staffPendingItemsCount > 0)
                         {
-                            <span class="rounded-full px-1.5 py-0.2 text-[10px] font-bold @(inspectedStaffTab == WorkspaceTab.JobRelatedItems ? "bg-white/25 text-white" : "bg-amber-500 text-white")">
-                                @GetStaffPendingJobItemsCount(inspectedStaffId.Value, inspectedStaffName)
+                            <span class="rounded-full px-1.5 py-0.2 text-[10px] font-bold @(isItemsActive ? "bg-white/25 text-white" : "bg-amber-500 text-white")">
+                                @staffPendingItemsCount
                             </span>
                         }
                     </button>
                     <button type="button"
-                            class="rounded-t-xl px-3.5 py-1.5 font-bold text-xs transition-all border-t border-l border-r inline-flex items-center gap-1.5 @(inspectedStaffTab == WorkspaceTab.PersonalItems ? "bg-emerald-600 dark:bg-emerald-500 text-white border-emerald-600 dark:border-emerald-500 shadow-sm" : "bg-emerald-50/80 hover:bg-emerald-100 text-emerald-950 dark:bg-slate-800 dark:text-slate-300 border-emerald-200/90 dark:border-slate-700")"
-                            @onclick="() => SetStaffTab(WorkspaceTab.PersonalItems)">
-                        <i class="bi bi-bag text-[11px]" aria-hidden="true"></i>
-                        <span>Personal Items</span>
-                        @if (GetStaffPendingPersonalItemsCount(inspectedStaffId.Value, inspectedStaffName) > 0)
-                        {
-                            <span class="rounded-full px-1.5 py-0.2 text-[10px] font-bold @(inspectedStaffTab == WorkspaceTab.PersonalItems ? "bg-white/25 text-white" : "bg-amber-500 text-white")">
-                                @GetStaffPendingPersonalItemsCount(inspectedStaffId.Value, inspectedStaffName)
-                            </span>
-                        }
-                    </button>
-                    <button type="button"
-                            class="rounded-t-xl px-3.5 py-1.5 font-bold text-xs transition-all border-t border-l border-r inline-flex items-center gap-1.5 @(inspectedStaffTab == WorkspaceTab.Documents ? "bg-emerald-600 dark:bg-emerald-500 text-white border-emerald-600 dark:border-emerald-500 shadow-sm" : "bg-emerald-50/80 hover:bg-emerald-100 text-emerald-950 dark:bg-slate-800 dark:text-slate-300 border-emerald-200/90 dark:border-slate-700")"
+                            class="rounded-t-xl px-3.5 py-1.5 font-bold text-xs transition-all border-t border-l border-r inline-flex items-center gap-1.5 @(isRecordsActive ? "bg-emerald-600 dark:bg-emerald-500 text-white border-emerald-600 dark:border-emerald-500 shadow-sm" : "bg-emerald-50/80 hover:bg-emerald-100 text-emerald-950 dark:bg-slate-800 dark:text-slate-300 border-emerald-200/90 dark:border-slate-700")"
                             @onclick="() => SetStaffTab(WorkspaceTab.Documents)">
                         <i class="bi bi-file-earmark-text text-[11px]" aria-hidden="true"></i>
-                        <span>Documents</span>
-                    </button>
-                    <button type="button"
-                            class="rounded-t-xl px-3.5 py-1.5 font-bold text-xs transition-all border-t border-l border-r inline-flex items-center gap-1.5 @(inspectedStaffTab == WorkspaceTab.Schedule ? "bg-emerald-600 dark:bg-emerald-500 text-white border-emerald-600 dark:border-emerald-500 shadow-sm" : "bg-emerald-50/80 hover:bg-emerald-100 text-emerald-950 dark:bg-slate-800 dark:text-slate-300 border-emerald-200/90 dark:border-slate-700")"
-                            @onclick="() => SetStaffTab(WorkspaceTab.Schedule)">
-                        <i class="bi bi-calendar-week text-[11px]" aria-hidden="true"></i>
-                        <span>Schedule</span>
-                    </button>
-                    <button type="button"
-                            class="rounded-t-xl px-3.5 py-1.5 font-bold text-xs transition-all border-t border-l border-r inline-flex items-center gap-1.5 @(inspectedStaffTab == WorkspaceTab.WorkTypes ? "bg-emerald-600 dark:bg-emerald-500 text-white border-emerald-600 dark:border-emerald-500 shadow-sm" : "bg-emerald-50/80 hover:bg-emerald-100 text-emerald-950 dark:bg-slate-800 dark:text-slate-300 border-emerald-200/90 dark:border-slate-700")"
-                            @onclick="() => SetStaffTab(WorkspaceTab.WorkTypes)">
-                        <i class="bi bi-sliders text-[11px]" aria-hidden="true"></i>
-                        <span>Work Types</span>
-                    </button>
-                    <button type="button"
-                            class="rounded-t-xl px-3.5 py-1.5 font-bold text-xs transition-all border-t border-l border-r inline-flex items-center gap-1.5 @(inspectedStaffTab == WorkspaceTab.StaffTransfer ? "bg-emerald-600 dark:bg-emerald-500 text-white border-emerald-600 dark:border-emerald-500 shadow-sm" : "bg-emerald-50/80 hover:bg-emerald-100 text-emerald-950 dark:bg-slate-800 dark:text-slate-300 border-emerald-200/90 dark:border-slate-700")"
-                            @onclick="() => SetStaffTab(WorkspaceTab.StaffTransfer)">
-                        <i class="bi bi-arrow-left-right text-[11px]" aria-hidden="true"></i>
-                        <span>Transfer</span>
-                    </button>
-                    <button type="button"
-                            class="rounded-t-xl px-3.5 py-1.5 font-bold text-xs transition-all border-t border-l border-r inline-flex items-center gap-1.5 @(inspectedStaffTab == WorkspaceTab.Certificates ? "bg-emerald-600 dark:bg-emerald-500 text-white border-emerald-600 dark:border-emerald-500 shadow-sm" : "bg-emerald-50/80 hover:bg-emerald-100 text-emerald-950 dark:bg-slate-800 dark:text-slate-300 border-emerald-200/90 dark:border-slate-700")"
-                            @onclick="() => SetStaffTab(WorkspaceTab.Certificates)">
-                        <i class="bi bi-award text-[11px]" aria-hidden="true"></i>
-                        <span>Certificates</span>
-                        @if (GetStaffPendingCertificatesCount(inspectedStaffId.Value) > 0)
+                        <span>Records</span>
+                        @if (staffPendingCertificates > 0)
                         {
-                            <span class="rounded-full px-1.5 py-0.2 text-[10px] font-bold @(inspectedStaffTab == WorkspaceTab.Certificates ? "bg-white/25 text-white" : "bg-amber-500 text-white")">
-                                @GetStaffPendingCertificatesCount(inspectedStaffId.Value)
+                            <span class="rounded-full px-1.5 py-0.2 text-[10px] font-bold @(isRecordsActive ? "bg-white/25 text-white" : "bg-amber-500 text-white")">
+                                @staffPendingCertificates
                             </span>
                         }
-                    </button>
-                    <button type="button"
-                            class="rounded-t-xl px-3.5 py-1.5 font-bold text-xs transition-all border-t border-l border-r inline-flex items-center gap-1.5 @(inspectedStaffTab == WorkspaceTab.GoodsLoans ? "bg-emerald-600 dark:bg-emerald-500 text-white border-emerald-600 dark:border-emerald-500 shadow-sm" : "bg-emerald-50/80 hover:bg-emerald-100 text-emerald-950 dark:bg-slate-800 dark:text-slate-300 border-emerald-200/90 dark:border-slate-700")"
-                            @onclick="() => SetStaffTab(WorkspaceTab.GoodsLoans)">
-                        <i class="bi bi-receipt text-[11px]" aria-hidden="true"></i>
-                        <span>Goods loans</span>
-                    </button>
-                    <button type="button"
-                            class="rounded-t-xl px-3.5 py-1.5 font-bold text-xs transition-all border-t border-l border-r inline-flex items-center gap-1.5 @(inspectedStaffTab == WorkspaceTab.Bank ? "bg-emerald-600 dark:bg-emerald-500 text-white border-emerald-600 dark:border-emerald-500 shadow-sm" : "bg-emerald-50/80 hover:bg-emerald-100 text-emerald-950 dark:bg-slate-800 dark:text-slate-300 border-emerald-200/90 dark:border-slate-700")"
-                            @onclick="() => SetStaffTab(WorkspaceTab.Bank)">
-                        <i class="bi bi-bank text-[11px]" aria-hidden="true"></i>
-                        <span>Bank details</span>
                     </button>
                     <button type="button"
                             class="rounded-t-xl px-3.5 py-1.5 font-bold text-xs transition-all border-t border-l border-r inline-flex items-center gap-1.5 @(inspectedStaffTab == WorkspaceTab.EmergencyContact ? "bg-emerald-600 dark:bg-emerald-500 text-white border-emerald-600 dark:border-emerald-500 shadow-sm" : "bg-emerald-50/80 hover:bg-emerald-100 text-emerald-950 dark:bg-slate-800 dark:text-slate-300 border-emerald-200/90 dark:border-slate-700")"
                             @onclick="() => SetStaffTab(WorkspaceTab.EmergencyContact)">
                         <i class="bi bi-telephone-plus text-[11px]" aria-hidden="true"></i>
-                        <span>Emergency contacts</span>
+                        <span>Emergency Contacts</span>
                     </button>
                 </nav>
             </div>
 
             <!-- Staff Workspace Body -->
             <div class="w-full min-w-0 flex flex-col gap-2">
-                <StaffWorkspace StaffId="inspectedStaffId.Value" ActiveTab="inspectedStaffTab" OnRequestsChanged="RefreshRequestsAsync" />
+                <StaffWorkspace StaffId="inspectedStaffId.Value"
+                                ActiveTab="inspectedStaffTab"
+                                OnTabChanged="SetStaffTab"
+                                OnRequestsChanged="RefreshRequestsAsync"
+                                PendingLeaveCount="staffPendingLeave"
+                                PendingAttendanceCount="staffPendingAttendance"
+                                PendingJobItemsCount="staffPendingJobItems"
+                                PendingPersonalItemsCount="staffPendingPersonalItems"
+                                PendingCertificatesCount="staffPendingCertificates" />
             </div>
         </div>
     }
