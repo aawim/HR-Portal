@@ -30,7 +30,7 @@
                     <option value="0">-- Select requisition --</option>
                     @foreach (var row in Rows.Where(x => x.Status == "Approved"))
                     {
-                        <option value="@row.Id">@row.Reference (@row.RequestedSlots slots)</option>
+                        <option value="@row.Id">@(string.IsNullOrWhiteSpace(row.PositionName) ? row.Reference : $"{row.PositionName} — {row.Reference}") (@row.RequestedSlots slots)</option>
                     }
                 </select>
             </label>
@@ -168,6 +168,7 @@
             <table class="w-full text-left text-xs">
                 <thead class="border-b border-slate-200 bg-slate-50 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
                     <tr>
+                        <th class="p-2.5">Position</th>
                         <th class="p-2.5">Reference</th>
                         <th class="p-2.5">Slots</th>
                         <th class="p-2.5">Closing (MVT)</th>
@@ -179,7 +180,7 @@
                     @if (vacancies.Count == 0)
                     {
                         <tr>
-                            <td colspan="5" class="p-6 text-center text-slate-500">No vacancies created yet.</td>
+                            <td colspan="6" class="p-6 text-center text-slate-500">No vacancies created yet.</td>
                         </tr>
                     }
                     else
@@ -187,6 +188,7 @@
                         @foreach (var vacancy in vacancies)
                         {
                             <tr class="hover:bg-slate-50/70 transition-colors">
+                                <td class="p-2.5 font-semibold text-slate-900">@(string.IsNullOrWhiteSpace(vacancy.PositionName) ? "—" : vacancy.PositionName)</td>
                                 <td class="p-2.5 font-mono text-[11px] font-semibold text-blue-700">@vacancy.Reference</td>
                                 <td class="p-2.5 font-semibold text-slate-800">@vacancy.Slots</td>
                                 <td class="p-2.5 text-slate-600">@(vacancy.ClosingAtUtc?.AddHours(5).ToString("dd MMM yyyy HH:mm") ?? "—")</td>

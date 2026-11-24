@@ -22,16 +22,28 @@
         <p class="mt-0.5 text-xs text-slate-500">Inspect published rankings, resolve submitted objections, and finalise vacancy results.</p>
     </div>
 
-    <label class="block text-xs font-medium text-slate-700 max-w-md">
+    <label class="block text-xs font-medium text-slate-700 max-w-lg">
         Vacancy
         <select class="@InputClass" @bind="vacancy" @bind:after="Load">
             <option value="0">-- Select vacancy --</option>
             @foreach (var v in vacancies)
             {
-                <option value="@v.Id">@v.Reference</option>
+                <option value="@v.Id">@(string.IsNullOrWhiteSpace(v.PositionName) ? v.Reference : $"{v.PositionName} — {v.Reference}") · @v.Status</option>
             }
         </select>
     </label>
+
+    @if (SelectedVacancy is not null)
+    {
+        <div class="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-blue-100 bg-blue-50/50 px-3 py-2 text-xs">
+            <div class="flex flex-wrap items-center gap-2">
+                <i class="bi bi-briefcase text-blue-600" aria-hidden="true"></i>
+                <span class="font-bold text-slate-900">@(string.IsNullOrWhiteSpace(SelectedVacancy.PositionName) ? SelectedVacancy.Reference : SelectedVacancy.PositionName)</span>
+                <span class="font-mono text-[11px] text-blue-700">@SelectedVacancy.Reference</span>
+            </div>
+            <span class="rounded-full bg-white border border-slate-200 px-2 py-0.5 text-[10px] font-semibold text-slate-700">@SelectedVacancy.Slots slot(s) · @SelectedVacancy.Status</span>
+        </div>
+    }
 
     @if (workspace is not null)
     {
@@ -172,6 +184,7 @@
     private IReadOnlyList<RecruitmentVacancyRow> vacancies = [];
     private RecruitmentResultWorkspace? workspace;
     private int vacancy, selected;
+    private RecruitmentVacancyRow? SelectedVacancy => vacancies.FirstOrDefault(x => x.Id == vacancy);
     private string resolution = "";
     private bool upheld, busy;
     private string? message;

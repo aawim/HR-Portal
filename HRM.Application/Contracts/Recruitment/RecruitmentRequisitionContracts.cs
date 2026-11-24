@@ -1,9 +1,9 @@
 using HRM.DTOs;
 namespace HRM.Application.Contracts.Recruitment;
 public sealed record RecruitmentRequisitionInput(int PositionMatrixId,int RequestedSlots,string EmploymentType,string RecruitmentType,string Reason,int? OrganisationStructureId=null);
-public sealed record RecruitmentRequisitionRow(int Id,string Reference,string Status,int PositionMatrixId,int RequestedSlots,string PolicyVersion,DateTime CreatedAtUtc);
+public sealed record RecruitmentRequisitionRow(int Id,string Reference,string Status,int PositionMatrixId,int RequestedSlots,string PolicyVersion,DateTime CreatedAtUtc,string PositionName="");
 public sealed record RecruitmentVacancyInput(int RequisitionId,DateTime ClosingAtUtc,string AdvertisementSnapshotJson);
-public sealed record RecruitmentVacancyRow(int Id,string Reference,int RequisitionId,string Status,int Slots,DateTime? ClosingAtUtc);
+public sealed record RecruitmentVacancyRow(int Id,string Reference,int RequisitionId,string Status,int Slots,DateTime? ClosingAtUtc,string PositionName="");
 public sealed record AvailablePositionMatrixOption(int PositionMatrixId,string Label,int ApprovedSlots,int RemainingSlots);
 public sealed record RecruitmentPolicyVersionRow(int Id,int ProfileId,string ProfileCode,string ProfileName,string VersionCode,string OfficialSourceUrl,string OfficialSourceReference,DateTime EffectiveFrom,DateTime? EffectiveTo,string VerificationStatus,bool IsApprovedForUse);
 public sealed record RecruitmentPolicyAssignmentRow(int Id,int OrganisationId,int PolicyVersionId,string VersionCode,string ProfileName,string RecruitmentType,string PositionCategory,DateTime EffectiveFrom,DateTime? EffectiveTo,bool IsActive);
