@@ -498,6 +498,45 @@ namespace HRM.Services
             await using var db = await _dbFactory.CreateDbContextAsync();
             return await HasClockAssignmentAsync(db, actor.IndividualId, job, org, Today());
         }
+        public async Task<List<WorkTypeGeofenceDto>> GetActiveClockGeofencesAsync()
+        {
+            var actor = await _access.RequireContextAsync();
+            var org = await _access.GetCurrentOrganisationIdAsync();
+            var job = await _access.GetCurrentJobIdAsync();
+            await using var db = await _dbFactory.CreateDbContextAsync();
+            return await GetActiveGeofencesAsync(db, actor.IndividualId, job, org, Today());
+        }
+        public static async Task<List<WorkTypeGeofenceDto>> GetActiveGeofencesAsync(HrmTeContext db, int individualId, int jobId, int organisationId, DateOnly today)
+        {
+            if (jobId <= 0 || organisationId <= 0 || individualId <= 0)
+                return [];
+
+            var rows = await db.AssignedWorkTypes
+                .AsNoTracking()
+                .Where(a => a.JobId == jobId && a.OrganisationId == organisationId && a.IsValid && a.WorkType.IsValid &&
+                    a.FromDate <= today && (a.ToDate == null || a.ToDate >= today) &&
+                    a.Job.IndividualID == individualId && a.Job.OrganisationID == organisationId && a.Job.JobStateId == 4 &&
+                    a.Job.JoinedDate < today.AddDays(1).ToDateTime(TimeOnly.MinValue) &&
+                    (a.Job.TerminatedDate == null || a.Job.TerminatedDate > today.ToDateTime(TimeOnly.MinValue)))
+                .Select(a => new { a.AssignedWorkTypeId, WorkTypeName = a.WorkType.Name, a.Location })
+                .ToListAsync();
+
+            var geofences = new List<WorkTypeGeofenceDto>();
+            foreach (var r in rows)
+            {
+                if (WorkTypeGeofenceHelper.TryParse(r.Location, out var lat, out var lng, out var radius, out var label))
+                {
+                    geofences.Add(new WorkTypeGeofenceDto(
+                        r.AssignedWorkTypeId,
+                        r.WorkTypeName,
+                        lat,
+                        lng,
+                        radius,
+                        string.IsNullOrWhiteSpace(label) ? r.WorkTypeName : label));
+                }
+            }
+            return geofences;
+        }
         public async Task<List<WorkTypeStaffOption>> GetEligibleStaffAsync()
         {
             var org = await RequireManageAsync();

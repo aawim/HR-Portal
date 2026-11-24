@@ -12,6 +12,12 @@ public sealed class WorkTypeController(global::HRM.Services.Interfaces.IWorkType
         return Ok(await service.CanClockAsync());
     }
 
+    [HttpGet("active-clock-geofences")]
+    public async Task<ActionResult<global::System.Collections.Generic.List<global::HRM.DTOs.WorkTypes.WorkTypeGeofenceDto>>> GetActiveClockGeofences()
+    {
+        return Ok(await service.GetActiveClockGeofencesAsync());
+    }
+
     [HttpGet("get-eligible-staff")]
     public async Task<ActionResult<global::System.Collections.Generic.List<global::HRM.DTOs.WorkTypes.WorkTypeStaffOption>>> GetEligibleStaff()
     {
@@ -114,5 +120,4 @@ public sealed class WorkTypeController(global::HRM.Services.Interfaces.IWorkType
     {
         public global::System.Int32 assignedWorkTypeId { get; set; }
     }
-
 }

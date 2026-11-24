@@ -1,5 +1,6 @@
 @using HRM.Components.Tools
 @using HRM.DTOs.Attendance
+@using HRM.DTOs.WorkTypes
 @using HRM.Models
 @using HRM.Services
 @using HRM.Services.Interfaces
@@ -8,6 +9,8 @@
 @* @inject IAttendance AttendanceLogService *@
 @inject IAttendanceService AttendanceService
 @inject IWorkTypeService WorkTypes
+@inject IJSRuntime JS
+@inject ToastService ToastService
 
 @inject HRM.Services.Contracts.AttendanceLogServiceContracts.IOperations AttendanceLogService
 
@@ -54,6 +57,15 @@
     @if (canClock)
     {
         <div class="mt-4 flex flex-col gap-2">
+            @if (activeGeofences.Count > 0)
+            {
+                <div class="flex items-center justify-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50/70 px-2.5 py-1.5 text-[11px] font-medium text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200">
+                    <i class="bi bi-geo-alt-fill text-emerald-600" aria-hidden="true"></i>
+                    <span>
+                        Geo-fenced: @string.Join(", ", activeGeofences.Select(g => $"{g.Label} ({g.RadiusMeters} m)"))
+                    </span>
+                </div>
+            }
             <button type="button"
                     @onclick="HandleClock"
                     disabled="@ProcessingClock"
@@ -118,6 +130,7 @@
 
     private bool ProcessingClock;
     private bool canClock;
+    private List<WorkTypeGeofenceDto> activeGeofences = [];
     private bool _useTime = false;
     private AttendanceLogDto? todayCheckIn;
     private AttendanceLogDto? todayCheckOut;
@@ -139,8 +152,19 @@
 
     protected override async Task OnInitializedAsync()
     {
-        try { canClock = await WorkTypes.CanClockAsync(); }
-        catch { canClock = false; }
+        try
+        {
+            canClock = await WorkTypes.CanClockAsync();
+            if (canClock)
+            {
+                activeGeofences = await WorkTypes.GetActiveClockGeofencesAsync();
+            }
+        }
+        catch
+        {
+            canClock = false;
+            activeGeofences = [];
+        }
 
         await RefreshTodayStatusAsync();
     }
@@ -198,9 +222,44 @@
         {
             var context = await UserAccessService.RequireContextAsync();
 
-            await AttendanceLogService.AddClockEventAsync(context.IndividualId);
+            if (activeGeofences.Count > 0)
+            {
+                var pos = await JS.InvokeAsync<GeoPositionResult>("hrmGeoMap.getCurrentPosition");
+                if (pos is not { Ok: true })
+                {
+                    feedbackIsError = true;
+                    feedbackMessage = pos?.Error ?? "Location access is required to clock in for your Geo Location work type.";
+                    ToastService.Error(feedbackMessage);
+                    return;
+                }
+
+                var closest = activeGeofences
+                    .Select(g => new
+                    {
+                        Geofence = g,
+                        Distance = WorkTypeGeofenceHelper.DistanceMeters(pos.Lat, pos.Lng, g.Latitude, g.Longitude)
+                    })
+                    .OrderBy(x => x.Distance)
+                    .First();
+
+                if (closest.Distance > closest.Geofence.RadiusMeters)
+                {
+                    feedbackIsError = true;
+                    feedbackMessage = $"Outside allowed clock-in boundary: you are {Math.Round(closest.Distance):N0} m away from {closest.Geofence.Label} (allowed radius: {closest.Geofence.RadiusMeters} m).";
+                    ToastService.Error(feedbackMessage);
+                    return;
+                }
+
+                await AttendanceLogService.AddClockEventWithLocationAsync(context.IndividualId, pos.Lat, pos.Lng);
+            }
+            else
+            {
+                await AttendanceLogService.AddClockEventAsync(context.IndividualId);
+            }
+
             await RefreshTodayStatusAsync();
             feedbackMessage = $"Clock event recorded at {DateTime.UtcNow.AddHours(5):HH:mm}.";
+            ToastService.Success(feedbackMessage);
 
             if (OnClock.HasDelegate)
             {
@@ -211,21 +270,33 @@
         {
             feedbackIsError = true;
             feedbackMessage = ex.Message;
+            ToastService.Error(feedbackMessage);
         }
         catch (InvalidOperationException ex)
         {
             feedbackIsError = true;
             feedbackMessage = ex.Message;
+            ToastService.Error(feedbackMessage);
         }
         catch
         {
             feedbackIsError = true;
             feedbackMessage = "Could not record your clock event right now. Please try again.";
+            ToastService.Error(feedbackMessage);
         }
         finally
         {
             ProcessingClock = false;
         }
+    }
+
+    private sealed class GeoPositionResult
+    {
+        public bool Ok { get; set; }
+        public double Lat { get; set; }
+        public double Lng { get; set; }
+        public int Accuracy { get; set; }
+        public string? Error { get; set; }
     }
 
 

@@ -31,6 +31,21 @@ public sealed class AttendanceLogController(global::HRM.Services.Contracts.Atten
         public global::System.DateTime? checkTime { get; set; } = null;
     }
 
+    [HttpPost("add-clock-event-with-location")]
+    public async Task<IActionResult> AddClockEventWithLocation([FromBody] AttendanceLogAddClockEventWithLocationRequest request)
+    {
+        await service.AddClockEventWithLocationAsync(request.individualId, request.latitude, request.longitude, request.checkTime);
+        return NoContent();
+    }
+
+    public sealed class AttendanceLogAddClockEventWithLocationRequest
+    {
+        public global::System.Int32 individualId { get; set; }
+        public global::System.Double? latitude { get; set; } = null;
+        public global::System.Double? longitude { get; set; } = null;
+        public global::System.DateTime? checkTime { get; set; } = null;
+    }
+
     [HttpGet("get-attendance-logs")]
     public async Task<ActionResult<global::System.Collections.Generic.List<global::HRM.DTOs.Contracts.AttendanceLogDto>>> GetAttendanceLogs([FromQuery] global::System.Int32 userId, [FromQuery] global::System.DateTime startDate, [FromQuery] global::System.DateTime endDate)
     {

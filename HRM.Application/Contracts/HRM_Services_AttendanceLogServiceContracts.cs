@@ -33,6 +33,12 @@ Task AddClockEventAsync(
             int individualId,
             DateTime? checkTime = null)
 ;
+Task AddClockEventWithLocationAsync(
+            int individualId,
+            double? latitude = null,
+            double? longitude = null,
+            DateTime? checkTime = null)
+;
 [Obsolete("Use AddClockEventAsync so official and duty events share the same clock processing.")]
 Task AddAttendanceCheckAsync(int individualId, int mode) ;
 Task<List<global::HRM.DTOs.Contracts.AttendanceLogDto>> GetAttendanceLogsAsync(int userId, DateTime startDate, DateTime endDate)
