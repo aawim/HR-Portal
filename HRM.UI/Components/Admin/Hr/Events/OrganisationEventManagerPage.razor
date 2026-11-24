@@ -8,64 +8,43 @@
 
 <PageTitle>Organisation Event Manager - HR Administration</PageTitle>
 
-<div class="mx-auto min-w-7xl max-w-full p-2 flex flex-col gap-2">
-    <!-- Breadcrumb Header -->
-    <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-2">
-        <nav class="flex items-center gap-1.5 text-xs text-slate-500" aria-label="Breadcrumb">
-            <a href="/admin/hr" class="hover:text-blue-600 transition">HR</a>
-            <span>/</span>
-            <span class="text-slate-900 font-semibold">Organisation Event Manager</span>
-        </nav>
-        <a href="/admin/my/workspace" class="text-xs font-semibold text-slate-500 hover:text-slate-800 transition">
-            ← Back to Admin Workspace
-        </a>
-    </div>
-
-    <section class="events-admin-page w-full min-w-0 p-2 space-y-2">
-        <!-- Full-Width Sticky Header -->
-        <header class="events-admin-header sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur-xs px-3 py-3 shadow-xs rounded-2xl flex flex-wrap items-center justify-between gap-2">
+<div class="w-full min-w-0 p-2 flex flex-col gap-3 text-slate-900 dark:text-slate-100">
+    <section class="events-admin-page w-full min-w-0 flex flex-col gap-3">
+        <!-- Compact Header (no background/border) -->
+        <header class="events-admin-header flex flex-wrap items-center justify-between gap-2 px-1 py-0.5">
             <div class="min-w-0">
-                <div class="flex items-center gap-2">
-                    <span class="rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-semibold text-blue-800">HR Administration</span>
-                    <span class="text-xs text-slate-400">Calendar &amp; Operational Events</span>
-                    <span class="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-bold text-slate-700">@events.Count events</span>
+                <div class="flex items-center gap-2 flex-wrap">
+                    <h1 class="text-lg font-bold text-slate-900 dark:text-slate-100 truncate">Organisation Event Manager</h1>
+                    <span class="inline-flex items-center gap-1 rounded-full bg-teal-50 dark:bg-teal-950/60 border border-teal-200/80 dark:border-teal-800 px-2 py-0.5 text-[10px] font-semibold text-teal-700 dark:text-teal-300">
+                        <span class="h-1.5 w-1.5 rounded-full bg-teal-500"></span>
+                        @events.Count events
+                    </span>
                 </div>
-                <h1 class="text-lg font-bold text-slate-900 truncate mt-0.5">Organisation Event Manager</h1>
-                <p class="text-xs text-slate-500">Configure organisation meetings, ceremonies, non-working days, and official schedule exceptions.</p>
+                <p class="text-xs text-slate-500 dark:text-slate-400">Configure organisation meetings, ceremonies, non-working days, and official schedule exceptions.</p>
             </div>
 
-            <div class="flex flex-wrap items-center gap-2">
-                <!-- Full Width / Shrink View Toggle -->
+            <div class="flex flex-wrap items-center gap-1.5">
                 <button type="button"
-                        class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition-colors"
+                        class="app-button app-button-neutral app-button-sm"
                         @onclick="ToggleFullWidth"
                         title="@(isFullWidth ? "Shrink view width" : "Expand to full viewport width")">
-                    @if (isFullWidth)
-                    {
-                        <AppIcon Name="fullscreen" Class="w-3.5 h-3.5 text-slate-600 text-sm" />
-                        <span>Shrink View</span>
-                    }
-                    else
-                    {
-                        <svg class="w-3.5 h-3.5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-5h-4m4 0v4m0-4l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 4h-4m4 0l-5-5"/></svg>
-                        <span>Full Width</span>
-                    }
+                    <AppIcon Name="@(isFullWidth ? "fullscreen_exit" : "fullscreen")" Class="text-xs" />
+                    <span>@(isFullWidth ? "Shrink View" : "Full Width")</span>
                 </button>
 
-                <!-- Refresh Button -->
                 <button type="button"
-                        class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition-colors"
+                        class="app-button app-button-secondary app-button-sm"
                         disabled="@busy"
                         @onclick="LoadAsync">
-                    <span class="@(busy ? "animate-spin" : "")">↻</span>
+                    <AppIcon Name="refresh" Class="@(busy ? "animate-spin text-xs" : "text-xs")" />
                     <span>Refresh</span>
                 </button>
 
-                <!-- Primary New Event Button -->
                 <button type="button"
-                        class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 transition-colors"
+                        class="app-button app-button-primary app-button-sm"
                         @onclick="NewEvent">
-                    <span>+ New Event</span>
+                    <AppIcon Name="add" Class="text-xs" />
+                    <span>New Event</span>
                 </button>
             </div>
         </header>

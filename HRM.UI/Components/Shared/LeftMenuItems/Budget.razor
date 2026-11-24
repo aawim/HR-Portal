@@ -11,47 +11,76 @@
 
 <AuthorizeView>
     <Authorized>
-        <div class="max-w-7xl mx-auto p-2 space-y-6">
-            <div>
-                <h1 class="text-2xl font-extrabold text-slate-800">State Budget &amp; Appropriations</h1>
-                <p class="text-sm text-slate-500 mt-1">Manage fiscal years, Ministry of Finance allocations, virements, ledger transactions, and payroll budget checks.</p>
+        <section class="w-full min-w-0 p-2 flex flex-col gap-3 text-slate-900 dark:text-slate-100">
+            <!-- Compact Header (no background/border) -->
+            <header class="flex flex-wrap items-center justify-between gap-2 px-1 py-0.5">
+                <div class="min-w-0">
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <h1 class="text-lg font-bold text-slate-900 dark:text-slate-100 truncate">State Budget &amp; Appropriations</h1>
+                        <span class="inline-flex items-center gap-1 rounded-full bg-teal-50 dark:bg-teal-950/60 border border-teal-200/80 dark:border-teal-800 px-2 py-0.5 text-[10px] font-semibold text-teal-700 dark:text-teal-300">
+                            <span class="h-1.5 w-1.5 rounded-full bg-teal-500"></span>
+                            Public Finance
+                        </span>
+                    </div>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Manage fiscal years, Ministry of Finance allocations, virements, ledger transactions, and payroll budget checks.</p>
+                </div>
+            </header>
+
+            <div class="w-full max-w-7xl mx-auto">
+                @if (loading)
+                {
+                    <div role="status" class="flex items-center justify-center gap-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-8 text-xs text-slate-500">
+                        <span class="h-4 w-4 rounded-full border-2 border-blue-600 border-t-transparent animate-spin"></span>
+                        <span>Checking budget permissions…</span>
+                    </div>
+                }
+                else if (!canViewBudget)
+                {
+                    <div role="alert" class="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50/80 dark:bg-amber-950/40 p-4 text-xs text-amber-900 dark:text-amber-200">
+                        You do not have permission to view Budget modules.
+                    </div>
+                }
+                else
+                {
+                    <div class="budget-cards-grid">
+                        @foreach (var cat in mainCategories)
+                        {
+                            <a href="/admin/budget/@cat.Url"
+                               class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 hover:border-teal-500 dark:hover:border-teal-500 hover:bg-slate-50/60 dark:hover:bg-slate-800/50 transition-colors group flex items-start gap-3.5">
+
+                                <div class="h-10 w-10 flex items-center justify-center rounded-lg bg-teal-50 dark:bg-teal-950/60 border border-teal-200/80 dark:border-teal-800 text-teal-700 dark:text-teal-300 group-hover:bg-teal-700 group-hover:text-white transition-colors shrink-0">
+                                    <AppIcon Name="@cat.Icon" Class="text-base" />
+                                </div>
+
+                                <div class="flex-1 min-w-0">
+                                    <h3 class="font-bold text-slate-900 dark:text-slate-100 text-sm mb-1 group-hover:text-teal-700 dark:group-hover:text-teal-300">@cat.Title</h3>
+                                    <p class="text-slate-500 dark:text-slate-400 text-xs leading-relaxed">@cat.Description</p>
+                                </div>
+
+                                <div class="text-slate-300 dark:text-slate-600 group-hover:text-teal-600 transition-colors shrink-0 self-center">
+                                    <AppIcon Name="chevron_right" Class="text-base" />
+                                </div>
+                            </a>
+                        }
+                    </div>
+                }
             </div>
+        </section>
 
-            @if (loading)
-            {
-                <div class="rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-500">Checking budget permissions…</div>
+        <style>
+            .budget-cards-grid {
+                display: grid;
+                grid-template-columns: minmax(0, 1fr);
+                gap: 0.75rem;
+                align-items: stretch;
             }
-            else if (!canViewBudget)
-            {
-                <div class="rounded-xl border border-amber-200 bg-amber-50 p-6 text-sm text-amber-900">
-                    You do not have permission to view Budget modules.
-                </div>
+
+            @@media (min-width: 768px) {
+                .budget-cards-grid {
+                    grid-template-columns: repeat(3, minmax(0, 1fr));
+                }
             }
-            else
-            {
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    @foreach (var cat in mainCategories)
-                    {
-                        <a href="/admin/budget/@cat.Url"
-                           class="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs hover:shadow-md hover:border-blue-400 hover:bg-slate-50 transition-all duration-200 group flex items-center gap-5">
-
-                            <div class="w-14 h-14 flex items-center justify-center rounded-xl bg-blue-50 text-2xl text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors duration-300 flex-shrink-0">
-                                @cat.Icon
-                            </div>
-
-                            <div class="flex-grow min-w-0">
-                                <h3 class="font-bold text-slate-800 text-base mb-1 group-hover:text-blue-700">@cat.Title</h3>
-                                <p class="text-slate-500 text-xs leading-relaxed">@cat.Description</p>
-                            </div>
-
-                            <div class="text-slate-300 group-hover:text-blue-600 transition-colors flex-shrink-0">
-                                <AppIcon Name="chevron_right" Class="w-5 h-5 text-xl" />
-                            </div>
-                        </a>
-                    }
-                </div>
-            }
-        </div>
+        </style>
     </Authorized>
 
     <NotAuthorized>
@@ -71,9 +100,9 @@
 
     private readonly List<Category> mainCategories = new()
     {
-        new("Overview & Execution Reports", "overview", "📊", "Executive summary of budget allocations, personal emoluments utilization, and MoF CSV/PDF exports."),
-        new("Budget Operations & Fiscal Years", "manage", "🏛️", "Configure Fiscal Years, State Budget Allocations, MoF Economic Codes, Virements, and Ledger Transactions."),
-        new("Payroll Budget Bridge", "payroll-bridge", "🔗", "Automated pre-payroll budget solvency checks and payroll component to MoF COA mappings.")
+        new("Overview & Execution Reports", "overview", "bar_chart", "Executive summary of budget allocations, personal emoluments utilization, and MoF CSV/PDF exports."),
+        new("Budget Operations & Fiscal Years", "manage", "account_balance", "Configure Fiscal Years, State Budget Allocations, MoF Economic Codes, Virements, and Ledger Transactions."),
+        new("Payroll Budget Bridge", "payroll-bridge", "link", "Automated pre-payroll budget solvency checks and payroll component to MoF COA mappings.")
     };
 
     protected override async Task OnInitializedAsync()

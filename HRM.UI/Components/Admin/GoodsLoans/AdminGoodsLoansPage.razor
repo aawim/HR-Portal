@@ -17,131 +17,124 @@
 
 <PageTitle>Staff Goods Loan Management - Admin Portal</PageTitle>
 
-<div class="mx-auto min-w-7xl max-w-full p-2 flex flex-col gap-3">
-    <!-- Header -->
-    <header class="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur-xs px-4 py-3 shadow-xs rounded-xl flex items-center justify-between flex-wrap gap-2">
-        <div>
-            <div class="flex items-center gap-2">
-                <h1 class="text-lg font-bold text-slate-900">Staff Goods Loan Management</h1>
-                <span class="rounded-full px-2.5 py-0.5 text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
-                    HR & Finance Administration
+<section class="w-full min-w-0 p-2 flex flex-col gap-3 text-slate-900 dark:text-slate-100">
+    <!-- Compact Header (no background/border) -->
+    <header class="flex flex-wrap items-center justify-between gap-2 px-1 py-0.5">
+        <div class="min-w-0">
+            <div class="flex items-center gap-2 flex-wrap">
+                <h1 class="text-lg font-bold text-slate-900 dark:text-slate-100 truncate">Staff Goods Loan Management</h1>
+                <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300 border border-teal-200/80 dark:border-teal-800">
+                    <span class="h-1.5 w-1.5 rounded-full bg-teal-500"></span>
+                    HR &amp; Finance Administration
                 </span>
             </div>
-            <p class="text-xs text-slate-500 mt-0.5">
+            <p class="text-xs text-slate-500 dark:text-slate-400">
                 Manage merchant stores, organisation agreements, salary deduction policies, loan approvals, payroll schedules, and store settlements.
             </p>
         </div>
-        <div class="flex items-center gap-2">
+        <div class="flex flex-wrap items-center gap-1.5">
             <button type="button"
-                    class="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition"
+                    class="app-button app-button-neutral app-button-sm"
                     @onclick="ToggleFullWidth">
-                @if (isFullWidth)
-                {
-                    <AppIcon Name="fullscreen_exit" Class="h-3.5 w-3.5 text-slate-500 text-sm" />
-                    <span>Shrink View</span>
-                }
-                else
-                {
-                    <AppIcon Name="fullscreen" Class="h-3.5 w-3.5 text-slate-500 text-sm" />
-                    <span>Full Width</span>
-                }
+                <AppIcon Name="@(isFullWidth ? "fullscreen_exit" : "fullscreen")" Class="text-xs" />
+                <span>@(isFullWidth ? "Shrink View" : "Full Width")</span>
             </button>
 
             <button type="button"
-                    class="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition"
+                    class="app-button app-button-secondary app-button-sm"
                     @onclick="ReloadAllDataAsync"
                     disabled="@isLoading">
-                <AppIcon Name="refresh" Class="h-3.5 w-3.5 text-slate-500 text-sm " />
+                <AppIcon Name="refresh" Class="@(isLoading ? "animate-spin text-xs" : "text-xs")" />
                 <span>Refresh</span>
             </button>
         </div>
     </header>
 
-    <div class="w-full min-w-0 flex flex-col gap-3 transition-all duration-300 @(isFullWidth ? "max-w-none" : "max-w-7xl mx-auto")">
-    <!-- Top Summary Metrics Cards -->
-    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        <div class="rounded-xl border border-slate-200 bg-white p-3 shadow-xs">
-            <div class="text-[11px] font-medium text-slate-500">Active Loans</div>
-            <div class="text-lg font-bold text-slate-900 mt-1">@activeLoansCount</div>
-            <div class="text-[10px] text-slate-400 mt-0.5">Across all staff</div>
+    <div class="agl-shell @(isFullWidth ? "agl-shell-full" : "agl-shell-standard")">
+        <!-- Compact Inline KPI Strip -->
+        <div class="agl-kpi-strip">
+            <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2.5">
+                <div class="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-500"><span class="h-1.5 w-1.5 rounded-full bg-slate-500"></span>Active Loans</div>
+                <div class="text-base font-bold text-slate-900 dark:text-slate-100 mt-1 tabular-nums">@activeLoansCount</div>
+                <div class="text-[10px] text-slate-400">Across all staff</div>
+            </div>
+            <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2.5">
+                <div class="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-500"><span class="h-1.5 w-1.5 rounded-full bg-amber-500"></span>Pending</div>
+                <div class="text-base font-bold text-amber-600 dark:text-amber-400 mt-1 tabular-nums">@pendingApprovalsCount</div>
+                <div class="text-[10px] text-slate-400">Awaiting HR action</div>
+            </div>
+            <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2.5">
+                <div class="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-500"><span class="h-1.5 w-1.5 rounded-full bg-blue-500"></span>Disbursed</div>
+                <div class="text-base font-bold text-blue-600 dark:text-blue-400 mt-1 tabular-nums">MVR @totalDisbursed.ToString("N0")</div>
+                <div class="text-[10px] text-slate-400">Purchase value</div>
+            </div>
+            <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2.5">
+                <div class="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-500"><span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>Repaid</div>
+                <div class="text-base font-bold text-emerald-600 dark:text-emerald-400 mt-1 tabular-nums">MVR @totalRepaid.ToString("N0")</div>
+                <div class="text-[10px] text-slate-400">Collected deductions</div>
+            </div>
+            <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2.5">
+                <div class="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-500"><span class="h-1.5 w-1.5 rounded-full bg-amber-500"></span>Outstanding</div>
+                <div class="text-base font-bold text-amber-600 dark:text-amber-400 mt-1 tabular-nums">MVR @totalOutstanding.ToString("N0")</div>
+                <div class="text-[10px] text-slate-400">Active portfolio</div>
+            </div>
+            <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2.5">
+                <div class="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-500"><span class="h-1.5 w-1.5 rounded-full bg-teal-500"></span>Settlements</div>
+                <div class="text-base font-bold text-slate-900 dark:text-slate-100 mt-1 tabular-nums">@settlements.Count(s => s.Status == GoodsLoanSettlementStatus.Draft)</div>
+                <div class="text-[10px] text-slate-400">Batches pending pay</div>
+            </div>
         </div>
-        <div class="rounded-xl border border-slate-200 bg-white p-3 shadow-xs">
-            <div class="text-[11px] font-medium text-slate-500">Pending Approvals</div>
-            <div class="text-lg font-bold text-amber-600 mt-1">@pendingApprovalsCount</div>
-            <div class="text-[10px] text-slate-400 mt-0.5">Awaiting HR action</div>
+
+        <!-- Narrow Sub-Navigation Bar -->
+        <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2 flex flex-wrap items-center gap-1 overflow-x-auto text-xs font-semibold">
+            <button type="button"
+                    class="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors whitespace-nowrap @(activeTab == AdminTab.Approvals ? "bg-teal-50 dark:bg-teal-950/50 text-teal-800 dark:text-teal-300 border border-teal-200 dark:border-teal-800" : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 border border-transparent")"
+                    @onclick="() => SetTab(AdminTab.Approvals)">
+                <span>Loan Approvals</span>
+                @if (pendingApprovalsCount > 0)
+                {
+                    <span class="rounded-full bg-amber-500 text-white px-1.5 py-0.5 text-[10px] font-bold">
+                        @pendingApprovalsCount
+                    </span>
+                }
+            </button>
+
+            <button type="button"
+                    class="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors whitespace-nowrap @(activeTab == AdminTab.Register ? "bg-teal-50 dark:bg-teal-950/50 text-teal-800 dark:text-teal-300 border border-teal-200 dark:border-teal-800" : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 border border-transparent")"
+                    @onclick="() => SetTab(AdminTab.Register)">
+                Loan Register
+            </button>
+
+            <button type="button"
+                    class="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors whitespace-nowrap @(activeTab == AdminTab.Stores ? "bg-teal-50 dark:bg-teal-950/50 text-teal-800 dark:text-teal-300 border border-teal-200 dark:border-teal-800" : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 border border-transparent")"
+                    @onclick="() => SetTab(AdminTab.Stores)">
+                Merchant Stores (@stores.Count)
+            </button>
+
+            <button type="button"
+                    class="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors whitespace-nowrap @(activeTab == AdminTab.Agreements ? "bg-teal-50 dark:bg-teal-950/50 text-teal-800 dark:text-teal-300 border border-teal-200 dark:border-teal-800" : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 border border-transparent")"
+                    @onclick="() => SetTab(AdminTab.Agreements)">
+                Store Agreements (@agreements.Count)
+            </button>
+
+            <button type="button"
+                    class="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors whitespace-nowrap @(activeTab == AdminTab.Policy ? "bg-teal-50 dark:bg-teal-950/50 text-teal-800 dark:text-teal-300 border border-teal-200 dark:border-teal-800" : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 border border-transparent")"
+                    @onclick="() => SetTab(AdminTab.Policy)">
+                Deduction Policy
+            </button>
+
+            <button type="button"
+                    class="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors whitespace-nowrap @(activeTab == AdminTab.Settlements ? "bg-teal-50 dark:bg-teal-950/50 text-teal-800 dark:text-teal-300 border border-teal-200 dark:border-teal-800" : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 border border-transparent")"
+                    @onclick="() => SetTab(AdminTab.Settlements)">
+                Store Settlements
+            </button>
+
+            <button type="button"
+                    class="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors whitespace-nowrap @(activeTab == AdminTab.Reports ? "bg-teal-50 dark:bg-teal-950/50 text-teal-800 dark:text-teal-300 border border-teal-200 dark:border-teal-800" : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 border border-transparent")"
+                    @onclick="() => SetTab(AdminTab.Reports)">
+                Reports &amp; Statements
+            </button>
         </div>
-        <div class="rounded-xl border border-slate-200 bg-white p-3 shadow-xs">
-            <div class="text-[11px] font-medium text-slate-500">Total Disbursed</div>
-            <div class="text-lg font-bold text-blue-600 mt-1">MVR @totalDisbursed.ToString("N0")</div>
-            <div class="text-[10px] text-slate-400 mt-0.5">Purchase value</div>
-        </div>
-        <div class="rounded-xl border border-slate-200 bg-white p-3 shadow-xs">
-            <div class="text-[11px] font-medium text-slate-500">Total Repaid</div>
-            <div class="text-lg font-bold text-emerald-600 mt-1">MVR @totalRepaid.ToString("N0")</div>
-            <div class="text-[10px] text-slate-400 mt-0.5">Collected deductions</div>
-        </div>
-        <div class="rounded-xl border border-slate-200 bg-white p-3 shadow-xs">
-            <div class="text-[11px] font-medium text-slate-500">Total Outstanding</div>
-            <div class="text-lg font-bold text-amber-600 mt-1">MVR @totalOutstanding.ToString("N0")</div>
-            <div class="text-[10px] text-slate-400 mt-0.5">Active portfolio</div>
-        </div>
-        <div class="rounded-xl border border-slate-200 bg-white p-3 shadow-xs">
-            <div class="text-[11px] font-medium text-slate-500">Store Settlements</div>
-            <div class="text-lg font-bold text-slate-900 mt-1">@settlements.Count(s => s.Status == GoodsLoanSettlementStatus.Draft)</div>
-            <div class="text-[10px] text-slate-400 mt-0.5">Batches pending pay</div>
-        </div>
-    </div>
-
-    <!-- Admin Tabs -->
-    <div class="flex border-b border-slate-200 gap-1 overflow-x-auto text-xs font-semibold">
-        <button type="button"
-                class="px-4 py-2 border-b-2 transition flex items-center gap-1.5 @(activeTab == AdminTab.Approvals ? "border-blue-600 text-blue-600" : "border-transparent text-slate-500 hover:text-slate-800")"
-                @onclick="() => SetTab(AdminTab.Approvals)">
-            <span>Loan Approvals</span>
-            @if (pendingApprovalsCount > 0)
-            {
-                <span class="rounded-full bg-amber-500 text-white px-1.5 py-0.2 text-[10px] font-bold">
-                    @pendingApprovalsCount
-                </span>
-            }
-        </button>
-
-        <button type="button"
-                class="px-4 py-2 border-b-2 transition @(activeTab == AdminTab.Register ? "border-blue-600 text-blue-600" : "border-transparent text-slate-500 hover:text-slate-800")"
-                @onclick="() => SetTab(AdminTab.Register)">
-            Loan Register
-        </button>
-
-        <button type="button"
-                class="px-4 py-2 border-b-2 transition @(activeTab == AdminTab.Stores ? "border-blue-600 text-blue-600" : "border-transparent text-slate-500 hover:text-slate-800")"
-                @onclick="() => SetTab(AdminTab.Stores)">
-            Merchant Stores (@stores.Count)
-        </button>
-
-        <button type="button"
-                class="px-4 py-2 border-b-2 transition @(activeTab == AdminTab.Agreements ? "border-blue-600 text-blue-600" : "border-transparent text-slate-500 hover:text-slate-800")"
-                @onclick="() => SetTab(AdminTab.Agreements)">
-            Store Agreements (@agreements.Count)
-        </button>
-
-        <button type="button"
-                class="px-4 py-2 border-b-2 transition @(activeTab == AdminTab.Policy ? "border-blue-600 text-blue-600" : "border-transparent text-slate-500 hover:text-slate-800")"
-                @onclick="() => SetTab(AdminTab.Policy)">
-            Deduction Policy
-        </button>
-
-        <button type="button"
-                class="px-4 py-2 border-b-2 transition @(activeTab == AdminTab.Settlements ? "border-blue-600 text-blue-600" : "border-transparent text-slate-500 hover:text-slate-800")"
-                @onclick="() => SetTab(AdminTab.Settlements)">
-            Store Settlements
-        </button>
-
-        <button type="button"
-                class="px-4 py-2 border-b-2 transition @(activeTab == AdminTab.Reports ? "border-blue-600 text-blue-600" : "border-transparent text-slate-500 hover:text-slate-800")"
-                @onclick="() => SetTab(AdminTab.Reports)">
-            Reports & Statements
-        </button>
-    </div>
 
     <!-- TAB CONTENTS -->
     @switch (activeTab)
@@ -175,7 +168,46 @@
             break;
     }
     </div>
-</div>
+</section>
+
+<style>
+    .agl-shell {
+        width: 100%;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+        transition: max-width 200ms ease;
+    }
+
+    .agl-shell-standard {
+        max-width: 80rem;
+        margin-left: auto;
+        margin-right: auto;
+    }
+
+    .agl-shell-full {
+        max-width: none;
+    }
+
+    .agl-kpi-strip {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.625rem;
+    }
+
+    @@media (min-width: 768px) {
+        .agl-kpi-strip {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+    }
+
+    @@media (min-width: 1200px) {
+        .agl-kpi-strip {
+            grid-template-columns: repeat(6, minmax(0, 1fr));
+        }
+    }
+</style>
 
 <!-- MODAL: ADD / EDIT STORE -->
 @if (showStoreModal)

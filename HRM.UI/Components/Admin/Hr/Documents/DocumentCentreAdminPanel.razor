@@ -14,82 +14,71 @@
 @inject IWebHostEnvironment Environment
 @inject ILogger<DocumentCentreAdminPanel> Logger
 
-<section class="dms-admin-page w-full min-w-0 p-2 space-y-4">
-    <!-- Full-Width Sticky Header -->
-    <header class="sticky top-0 z-30 m-0 border-b border-slate-200 bg-white/95 backdrop-blur-xs px-3 py-3 shadow-xs rounded-2xl flex flex-wrap items-center justify-between gap-3">
+<section class="dms-admin-page w-full min-w-0 p-2 flex flex-col gap-3 text-slate-900 dark:text-slate-100">
+    <!-- Compact Header (no background/border) -->
+    <header class="flex flex-wrap items-center justify-between gap-2 px-1 py-0.5">
         <div class="min-w-0">
             <div class="flex items-center gap-2 flex-wrap">
-                <span class="rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-semibold text-blue-800">DHR-DMS Platform</span>
-                <span class="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-800">SHA-256 Verified Storage</span>
+                <h1 class="text-lg font-bold text-slate-900 dark:text-slate-100 truncate">Enterprise Document &amp; Records Management</h1>
+                <span class="inline-flex items-center gap-1 rounded-full bg-teal-50 dark:bg-teal-950/60 border border-teal-200/80 dark:border-teal-800 px-2 py-0.5 text-[10px] font-semibold text-teal-700 dark:text-teal-300">
+                    <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
+                    SHA-256 Verified
+                </span>
                 @if (dashboard != null && !string.IsNullOrWhiteSpace(dashboard.OrganisationName))
                 {
-                    <span class="text-xs text-slate-400">• @dashboard.OrganisationName</span>
+                    <span class="text-xs text-slate-500 dark:text-slate-400">· @dashboard.OrganisationName</span>
                 }
             </div>
-            <h1 class="text-lg font-bold text-slate-900 truncate mt-0.5">Enterprise Document &amp; Records Management Centre</h1>
-            <p class="text-xs text-slate-500 mt-0.5">Central repository for staff dossiers, organisation libraries, official correspondence, versioning, workflows, and records governance.</p>
+            <p class="text-xs text-slate-500 dark:text-slate-400">Central repository for staff dossiers, organisation libraries, official correspondence, versioning, workflows, and records governance.</p>
         </div>
 
-        <div class="flex flex-wrap items-center gap-2">
-            <!-- Full Width / Shrink View Toggle -->
+        <div class="flex flex-wrap items-center gap-1.5">
             <button type="button"
-                    class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition-colors"
+                    class="app-button app-button-neutral app-button-sm"
                     @onclick="ToggleFullWidth"
                     title="@(isFullWidth ? "Shrink view width" : "Expand to full viewport width")">
-                @if (isFullWidth)
-                {
-                    <AppIcon Name="fullscreen" Class="w-3.5 h-3.5 text-slate-600 text-sm" />
-                    <span>Shrink View</span>
-                }
-                else
-                {
-                    <svg class="w-3.5 h-3.5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-5h-4m4 0v4m0-4l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 4h-4m4 0l-5-5"/></svg>
-                    <span>Full Width</span>
-                }
+                <AppIcon Name="@(isFullWidth ? "fullscreen_exit" : "fullscreen")" Class="text-xs" />
+                <span>@(isFullWidth ? "Shrink View" : "Full Width")</span>
             </button>
 
-            <!-- Refresh Button -->
             <button type="button"
-                    class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition-colors"
+                    class="app-button app-button-secondary app-button-sm"
                     @onclick="RefreshAllAsync"
                     disabled="@isLoading">
-                <AppIcon Name="refresh" Class="w-3.5 h-3.5 text-sm " />
+                <AppIcon Name="refresh" Class="@(isLoading ? "animate-spin text-xs" : "text-xs")" />
                 <span>Refresh</span>
             </button>
 
-            <!-- Primary Action: Upload / Register Document -->
             <button type="button"
-                    class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 transition-colors"
+                    class="app-button app-button-primary app-button-sm"
                     @onclick="OpenUploadForm">
-                <AppIcon Name="add" Class="w-3.5 h-3.5 text-sm" />
-                <span>+ Register / Upload Document</span>
+                <AppIcon Name="add" Class="text-xs" />
+                <span>Register / Upload Document</span>
             </button>
         </div>
     </header>
 
     @if (!string.IsNullOrWhiteSpace(errorMessage))
     {
-        <div class="flex items-center justify-between rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">
-            <div class="flex items-center gap-2">
-                <svg class="w-4 h-4 text-rose-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                <span>@errorMessage</span>
-            </div>
+        <div role="alert" class="flex items-center justify-between rounded-xl border border-rose-200 dark:border-rose-800 bg-rose-50/80 dark:bg-rose-950/40 px-3.5 py-2.5 text-xs text-rose-800 dark:text-rose-200">
+            <span>@errorMessage</span>
             <button type="button" class="text-rose-600 hover:text-rose-900 font-bold" @onclick="() => errorMessage = null">✕</button>
         </div>
     }
 
-    <!-- Segmented Navigation Bar for the 9 Admin Document Centre Modules -->
-    <div class="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-xs">
-        <div class="flex flex-wrap rounded-lg border border-slate-300 p-0.5 bg-slate-50 gap-0.5">
+    <!-- Narrow Sub-Navigation & Inline KPI Bar -->
+    <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2 flex flex-wrap items-center justify-between gap-2 text-xs">
+        <div class="flex flex-wrap items-center gap-1 overflow-x-auto">
             @foreach (var tab in AdminTabs)
             {
+                var isActive = activeTab == tab.Key;
                 <button type="button"
-                        class="px-3 py-1.5 rounded-md text-xs font-semibold transition @(activeTab == tab.Key ? "bg-white text-blue-700 shadow-xs" : "text-slate-600 hover:text-slate-900")"
+                        class="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors whitespace-nowrap @(isActive ? "bg-teal-50 dark:bg-teal-950/50 text-teal-800 dark:text-teal-300 border border-teal-200 dark:border-teal-800" : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 border border-transparent")"
                         @onclick="() => SwitchTabAsync(tab.Key)">
-                    @tab.Label
+                    <span>@tab.Label</span>
                     @if (tab.BadgeCount(dashboard) > 0)
                     {
-                        <span class="ml-1 rounded-full bg-amber-100 text-amber-800 px-1.5 py-0.2 text-[10px]">@tab.BadgeCount(dashboard)</span>
+                        <span class="rounded-full bg-amber-50 dark:bg-amber-950/50 border border-amber-200/80 dark:border-amber-800 text-amber-800 dark:text-amber-300 px-1.5 py-0.5 text-[10px] font-bold">@tab.BadgeCount(dashboard)</span>
                     }
                 </button>
             }
@@ -97,11 +86,14 @@
 
         @if (dashboard != null)
         {
-            <div class="flex items-center gap-3 text-xs text-slate-500 px-2">
-                <span>Total Registry: <strong class="text-slate-800">@dashboard.TotalDocuments</strong></span>
-                <span>• Official Records: <strong class="text-emerald-700">@dashboard.OfficialRecordsCount</strong></span>
-                <span>• Legal Holds: <strong class="text-rose-700">@dashboard.ActiveLegalHoldsCount</strong></span>
-                <span>• Vault Size: <strong class="font-mono text-slate-800">@FormatSize(dashboard.TotalStorageBytes)</strong></span>
+            <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500 dark:text-slate-400">
+                <span class="inline-flex items-center gap-1.5"><span class="h-1.5 w-1.5 rounded-full bg-slate-400"></span>Registry: <strong class="text-slate-900 dark:text-slate-100 tabular-nums">@dashboard.TotalDocuments</strong></span>
+                <span aria-hidden="true" class="text-slate-300 dark:text-slate-600">·</span>
+                <span class="inline-flex items-center gap-1.5"><span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>Official: <strong class="text-emerald-700 dark:text-emerald-400 tabular-nums">@dashboard.OfficialRecordsCount</strong></span>
+                <span aria-hidden="true" class="text-slate-300 dark:text-slate-600">·</span>
+                <span class="inline-flex items-center gap-1.5"><span class="h-1.5 w-1.5 rounded-full bg-rose-500"></span>Legal Holds: <strong class="text-rose-700 dark:text-rose-400 tabular-nums">@dashboard.ActiveLegalHoldsCount</strong></span>
+                <span aria-hidden="true" class="text-slate-300 dark:text-slate-600">·</span>
+                <span class="inline-flex items-center gap-1.5"><span class="h-1.5 w-1.5 rounded-full bg-blue-500"></span>Vault: <strong class="font-mono text-slate-900 dark:text-slate-100">@FormatSize(dashboard.TotalStorageBytes)</strong></span>
             </div>
         }
     </div>
