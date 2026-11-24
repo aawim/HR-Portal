@@ -23,7 +23,7 @@
 @inject IUserAccessService UserAccess
 @rendermode RenderMode.InteractiveServer
 
-<PageTitle>@(ResolvedCategoryName == "org" ? "Organisation Workspace - Settings" : ResolvedCategoryName == "user" ? "User Workspace - Settings" : ResolvedCategoryName == "roles" ? "Roles & Access Workspace - Settings" : "Settings - HR Portal")</PageTitle>
+<PageTitle>@(ResolvedCategoryName == "org" ? "Organisation Workspace - Settings" : ResolvedCategoryName == "user" ? "User Workspace - Settings" : ResolvedCategoryName == "roles" ? "Roles & Access Workspace - Settings" : ResolvedCategoryName == "positions" ? "Positions & Pay Frameworks - Settings" : "Settings - HR Portal")</PageTitle>
 
 <AuthorizeView>
     <Authorized>
@@ -37,94 +37,121 @@
                 You do not have permission to access this Settings category.
             </div>
         }
-        else if (ResolvedCategoryName is "org" or "user" or "roles")
+        else if (ResolvedCategoryName is "org" or "user" or "roles" or "positions")
         {
             var workspaceTitle = ResolvedCategoryName switch
             {
                 "org" => "Organisation Workspace",
                 "user" => "User Workspace",
+                "positions" => "Positions & Pay Frameworks",
                 _ => "Roles & Access Workspace"
             };
             var workspaceBadge = ResolvedCategoryName switch
             {
                 "org" => "Organisation Settings",
                 "user" => "User Settings",
+                "positions" => "Position Settings",
                 _ => "Access Settings"
             };
             var workspaceSubtitle = ResolvedCategoryName switch
             {
                 "org" => "Central management for organisation details, document centre, structure types, calendars, locations and permissions.",
                 "user" => "Central management for user accounts, roles, direct permissions, staff records and enrollment numbers.",
+                "positions" => "Manage active positions, pay frameworks, ranks, classifications, and position allowances.",
                 _ => "Central management for permissions, user groups, area map coverage and staff attribute access control."
             };
-            <!-- Admin Workspace Style Layout for /admin/settings/org, /admin/settings/user, and /admin/settings/roles -->
-            <section class="org-workspace-page w-full min-w-0 p-2 flex flex-col gap-2 bg-slate-50/50 text-slate-900 transition-all duration-300">
-                <!-- Top Header Area Matching Admin Workspace Standard -->
-                <div class="org-workspace-header flex flex-col gap-2 p-2">
-                    <div class="flex items-center justify-between flex-wrap gap-2">
-                        <div>
-                            <div class="flex items-center gap-2">
-                                <h1 class="text-xl md:text-2xl font-bold tracking-tight text-slate-900">@workspaceTitle</h1>
-                                <span class="rounded-full bg-teal-100 px-2.5 py-0.5 text-xs font-semibold text-teal-800">
-                                    @workspaceBadge
-                                </span>
-                            </div>
-                            <p class="text-xs text-slate-500 mt-0.5">
-                                @workspaceSubtitle
-                            </p>
+            <!-- Enterprise Workspace Layout for /admin/settings/org, /user, /roles, and /positions -->
+            <section class="org-workspace-page w-full min-w-0 p-2 flex flex-col gap-3 text-slate-900 dark:text-slate-100">
+                <!-- Compact Header (no background/border) -->
+                <header class="flex flex-wrap items-center justify-between gap-2 px-1 py-0.5">
+                    <div class="min-w-0">
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <h1 class="text-lg font-bold text-slate-900 dark:text-slate-100 truncate">@workspaceTitle</h1>
+                            <span class="inline-flex items-center gap-1 rounded-full bg-teal-50 dark:bg-teal-950/60 border border-teal-200/80 dark:border-teal-800 px-2 py-0.5 text-[10px] font-semibold text-teal-700 dark:text-teal-300">
+                                <span class="h-1.5 w-1.5 rounded-full bg-teal-500"></span>
+                                @workspaceBadge
+                            </span>
                         </div>
-                        <div class="flex items-center gap-2">
-                            <button type="button"
-                                    class="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition"
-                                    @onclick="() => StateHasChanged()">
-                                <i class="bi bi-arrow-clockwise" aria-hidden="true"></i>
-                                <span>Refresh</span>
-                            </button>
-                        </div>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">
+                            @workspaceSubtitle
+                        </p>
                     </div>
-                </div>
+                    <div class="flex flex-wrap items-center gap-1.5">
+                        <button type="button"
+                                class="app-button app-button-neutral app-button-sm"
+                                @onclick="ToggleWorkspaceFullWidth">
+                            <AppIcon Name="@(workspaceFullWidth ? "fullscreen_exit" : "fullscreen")" Class="text-xs" />
+                            <span>@(workspaceFullWidth ? "Shrink View" : "Full Width")</span>
+                        </button>
+                        <button type="button"
+                                class="app-button app-button-secondary app-button-sm"
+                                @onclick="() => StateHasChanged()">
+                            <AppIcon Name="refresh" Class="text-xs" />
+                            <span>Refresh</span>
+                        </button>
+                    </div>
+                </header>
 
-                <!-- Solid Folder Navigation Tabs Matching Admin Workspace -->
-                <div class="org-workspace-tabs my-workspace-tabs w-full border-b-2 border-teal-700 dark:border-teal-600 overflow-x-auto">
-                    <nav class="flex items-end gap-1 min-w-max pb-0" aria-label="@($"{workspaceTitle} Sections")">
-                        @foreach (var item in VisibleItems)
-                        {
-                            var isActive = activeItem?.Title == item.Title;
-                            <button type="button"
-                                    aria-current="@(isActive ? "page" : null)"
-                                    class="rounded-t-xl px-4 py-2 font-bold text-xs md:text-sm transition-all border-t border-l border-r flex items-center gap-2 @(isActive ? "bg-teal-700 dark:bg-teal-600 text-white border-teal-700 dark:border-teal-600 shadow-sm" : "bg-[#86b0be]/30 text-slate-700 hover:text-slate-900 hover:bg-[#86b0be]/50 dark:bg-slate-800/90 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-700 border-slate-300 dark:border-slate-700")"
-                                    @onclick="() => SelectItem(item)">
-                                <i class="bi @item.Icon text-base" aria-hidden="true"></i>
-                                <span>@item.Title</span>
-                            </button>
-                        }
-                    </nav>
-                </div>
+                <div class="settings-ws-shell @(workspaceFullWidth ? "settings-ws-shell-full" : "settings-ws-shell-standard")">
+                    <!-- Contextual Folder Navigation Tabs -->
+                    <div class="org-workspace-tabs my-workspace-tabs w-full border-b-2 border-teal-700 dark:border-teal-600 overflow-x-auto">
+                        <nav class="flex items-end gap-1 min-w-max pb-0" aria-label="@($"{workspaceTitle} Sections")">
+                            @foreach (var item in VisibleItems)
+                            {
+                                var isActive = activeItem?.Title == item.Title;
+                                <button type="button"
+                                        aria-current="@(isActive ? "page" : null)"
+                                        class="rounded-t-xl px-4 py-2 font-bold text-xs md:text-sm transition-all border-t border-l border-r flex items-center gap-2 @(isActive ? "bg-teal-700 dark:bg-teal-600 text-white border-teal-700 dark:border-teal-600 shadow-sm" : "bg-[#86b0be]/30 text-slate-700 hover:text-slate-900 hover:bg-[#86b0be]/50 dark:bg-slate-800/90 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-700 border-slate-300 dark:border-slate-700")"
+                                        @onclick="() => SelectItem(item)">
+                                    <i class="bi @item.Icon text-base" aria-hidden="true"></i>
+                                    <span>@item.Title</span>
+                                </button>
+                            }
+                        </nav>
+                    </div>
 
-                <!-- Dynamic Content Panel -->
-                <div class="w-full min-w-0 bg-white rounded-b-2xl rounded-tr-2xl border border-slate-200 p-2 shadow-xs">
-                    @if (activeItem == null)
-                    {
-                        <div class="h-full flex flex-col items-center justify-center text-slate-400 opacity-60 py-12">
-                            <i class="bi bi-arrow-left-circle text-6xl mb-4" aria-hidden="true"></i>
-                            <p class="text-lg font-medium">Select an item from the menu to view data.</p>
-                        </div>
-                    }
-                    else
-                    {
-                        @if (activeItem.ComponentType != null)
+                    <!-- Dynamic Content Panel -->
+                    <div class="w-full min-w-0 bg-white dark:bg-slate-900 rounded-b-xl rounded-tr-xl border border-slate-200 dark:border-slate-800 p-3">
+                        @if (activeItem == null)
                         {
-                            <DynamicComponent @key="(ResolvedCategoryName, Section)" Type="@activeItem.ComponentType" Parameters="SelectedParameters" />
+                            <div class="h-full flex flex-col items-center justify-center text-slate-400 opacity-60 py-12">
+                                <i class="bi bi-arrow-left-circle text-6xl mb-4" aria-hidden="true"></i>
+                                <p class="text-sm font-medium">Select an item from the menu to view data.</p>
+                            </div>
                         }
                         else
                         {
-                            <div class="bg-slate-50 border border-slate-100 rounded-xl p-8 text-center text-slate-500">
-                                <p><strong>@activeItem.Title</strong> is not available yet. Return to the section menu to choose an available feature.</p>
-                            </div>
+                            @if (activeItem.ComponentType != null)
+                            {
+                                <DynamicComponent @key="(ResolvedCategoryName, Section)" Type="@activeItem.ComponentType" Parameters="SelectedParameters" />
+                            }
+                            else
+                            {
+                                <div class="bg-slate-50 border border-slate-100 rounded-xl p-8 text-center text-xs text-slate-500">
+                                    <p><strong>@activeItem.Title</strong> is not available yet. Return to the section menu to choose an available feature.</p>
+                                </div>
+                            }
                         }
-                    }
+                    </div>
                 </div>
             </section>
+            <style>
+                .settings-ws-shell {
+                    width: 100%;
+                    min-width: 0;
+                    display: flex;
+                    flex-direction: column;
+                    transition: max-width 200ms ease;
+                }
+                .settings-ws-shell-standard {
+                    max-width: 80rem;
+                    margin-left: auto;
+                    margin-right: auto;
+                }
+                .settings-ws-shell-full {
+                    max-width: none;
+                }
+            </style>
         }
         else
         {
@@ -223,6 +250,8 @@
 </AuthorizeView>
 
 @code {
+    private bool workspaceFullWidth = true;
+    private void ToggleWorkspaceFullWidth() => workspaceFullWidth = !workspaceFullWidth;
     [Parameter] public string CategoryName { get; set; } = string.Empty;
     [Parameter] public string? Section { get; set; }
     [Parameter] public int? OrganisationId { get; set; }

@@ -3,42 +3,44 @@
 @inject HRM.Services.Contracts.PositionOverviewServiceContracts.IOperations Overview
 @inject ILogger<PositionOverview> Logger
 
-<section class="position-overview-page w-full min-w-0 p-2 space-y-4">
-    <header class="sticky top-0 z-20 m-0 flex w-full min-w-0 flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-white/95 backdrop-blur-xs px-3 py-3 shadow-xs rounded-xl">
-        <div>
-            <div class="flex items-center gap-2">
-                <h2 class="text-lg font-bold text-slate-900">Position Overview</h2>
-                <span class="rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-semibold text-blue-800">
+<section class="position-overview-page w-full min-w-0 flex flex-col gap-3 text-slate-900 dark:text-slate-100">
+    <!-- Compact Header (no background/border) -->
+    <header class="flex w-full min-w-0 flex-wrap items-center justify-between gap-2 px-1 py-0.5">
+        <div class="min-w-0">
+            <div class="flex items-center gap-2 flex-wrap">
+                <h2 class="text-base font-bold text-slate-900 dark:text-slate-100 truncate">Position Overview</h2>
+                <span class="inline-flex items-center gap-1 rounded-full bg-teal-50 dark:bg-teal-950/60 border border-teal-200/80 dark:border-teal-800 px-2 py-0.5 text-[10px] font-semibold text-teal-700 dark:text-teal-300">
+                    <span class="h-1.5 w-1.5 rounded-full bg-teal-500"></span>
                     @(data?.Organisation ?? "Positions")
                 </span>
             </div>
-            <p class="text-xs text-slate-500 mt-0.5">@(data?.Positions.Count ?? 0) positions · @CurrentStaffCount current staff. Only approved, currently effective job assignments are counted.</p>
+            <p class="text-xs text-slate-500 dark:text-slate-400">@(data?.Positions.Count ?? 0) positions · @CurrentStaffCount current staff. Only approved, currently effective job assignments are counted.</p>
         </div>
-        <div class="flex flex-wrap items-center gap-2">
-            <button type="button" class="app-button app-button-secondary app-button-sm" aria-pressed="@tableView" @onclick="() => tableView = !tableView">@(tableView ? "Card view" : "Table view")</button>
+        <div class="flex flex-wrap items-center gap-1.5">
+            <button type="button" class="app-button app-button-secondary app-button-sm" aria-pressed="@tableView" @onclick="() => tableView = !tableView">
+                @(tableView ? "Card View" : "Table View")
+            </button>
             <button type="button"
-                    class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 disabled:opacity-50 transition-colors"
+                    class="app-button app-button-secondary app-button-sm"
                     disabled="@loading"
                     @onclick="LoadAsync">
-                <span>↻</span>
+                <AppIcon Name="refresh" Class="@(loading ? "animate-spin text-xs" : "text-xs")" />
                 <span>Refresh</span>
             </button>
-            <a href="/admin/settings/positions/manage-positions"
-               class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 transition-colors">
-                <span>💼</span>
-                <span>Manage Positions</span>
-            </a>
             <a href="/admin/settings/positions/position-allowances"
-               class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition-colors">
-                <span>💵</span>
+               class="app-button app-button-secondary app-button-sm">
                 <span>Position Allowances</span>
+            </a>
+            <a href="/admin/settings/positions/manage-positions"
+               class="app-button app-button-primary app-button-sm">
+                <span>Manage Positions</span>
             </a>
         </div>
     </header>
 
     @if (error != null)
     {
-        <div role="alert" class="flex items-center justify-between rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">
+        <div role="alert" class="flex items-center justify-between rounded-xl border border-rose-200 dark:border-rose-800 bg-rose-50/80 dark:bg-rose-950/40 px-3.5 py-2.5 text-xs text-rose-800 dark:text-rose-200">
             <span>@error</span>
             <button type="button" @onclick="() => error = null" class="font-bold text-rose-600 hover:text-rose-800">✕</button>
         </div>
@@ -46,102 +48,145 @@
 
     @if (loading)
     {
-        <div class="flex items-center justify-center py-12">
-            <div class="text-center">
-                <div class="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
-                <p class="mt-3 text-xs text-slate-500">Loading positions…</p>
-            </div>
+        <div role="status" class="flex items-center justify-center gap-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-10 text-xs text-slate-500">
+            <span class="h-4 w-4 rounded-full border-2 border-blue-600 border-t-transparent animate-spin"></span>
+            <span>Loading positions…</span>
         </div>
     }
     else if (data != null)
     {
-        <div class="grid min-w-0 items-start gap-2 lg:grid-cols-12">
+        <div class="po-layout">
             <!-- Left Main Panel: Active Positions -->
-            <div class="min-w-0 space-y-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-xs lg:col-span-9">
+            <div class="min-w-0 flex flex-col gap-3">
                 @if (!VisiblePositions.Any())
                 {
-                    <div class="rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center text-xs text-slate-500">
+                    <div class="rounded-xl border border-dashed border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-8 text-center text-xs text-slate-500">
                         No positions match the search criteria.
                     </div>
                 }
                 else if (tableView)
                 {
-                    <div class="overflow-x-auto rounded-xl border border-slate-200">
-                        <table class="w-full text-left text-xs">
-                            <caption class="sr-only">Positions and their currently assigned staff</caption>
-                            <thead class="border-b border-slate-200 bg-slate-50 text-slate-700"><tr>
-                                <th class="p-2.5" scope="col" aria-sort="@(sortDescending ? "descending" : "ascending")"><button type="button" class="font-semibold" @onclick="() => sortDescending = !sortDescending">Position <span aria-hidden="true">@(sortDescending ? "↓" : "↑")</span></button></th>
-                                <th class="p-2.5" scope="col">Type</th><th class="p-2.5" scope="col">Scope</th><th class="p-2.5" scope="col">Status</th><th class="p-2.5" scope="col">Current staff</th><th class="p-2.5" scope="col">Staff details</th>
-                            </tr></thead>
-                            <tbody class="divide-y divide-slate-100">
-                            @foreach (var position in TablePositions)
-                            {
-                                var staff = StaffFor(position).ToList();
-                                <tr @key="position.Id" class="hover:bg-slate-50/50">
-                                    <td class="p-2.5 font-semibold">@position.Name</td>
-                                    <td class="p-2.5">@(position.MatrixId.HasValue ? "Government Job Matrix" : "Custom / Existing")</td>
-                                    <td class="p-2.5">@(position.IsGlobal ? "Global" : "Organisation")</td>
-                                    <td class="p-2.5">@(position.IsActive ? "Active" : "Inactive")</td>
-                                    <td class="p-2.5">@staff.Select(x=>x.IndividualId).Distinct().Count()</td>
-                                    <td class="p-2.5">@if(staff.Count==0){<span class="text-slate-500">No current staff</span>}else{<details><summary class="cursor-pointer text-blue-600">View staff</summary><ul class="mt-2 space-y-2">@foreach(var employee in staff){<li><a class="font-semibold text-blue-600 hover:underline" href="/admin/my/workspace?entityType=Staff&entityId=@employee.IndividualId">@employee.Name</a><div class="text-slate-500">@employee.Department · @employee.From.ToString("dd MMM yyyy") – @(employee.To?.ToString("dd MMM yyyy") ?? "Ongoing")</div></li>}</ul></details>}</td>
-                                </tr>
-                            }
-                            </tbody>
-                        </table>
+                    <div class="overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left text-xs">
+                                <caption class="sr-only">Positions and their currently assigned staff</caption>
+                                <thead class="border-b border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-800/60 text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                                    <tr>
+                                        <th class="px-3 py-2" scope="col" aria-sort="@(sortDescending ? "descending" : "ascending")">
+                                            <button type="button" class="font-bold uppercase tracking-wider" @onclick="() => sortDescending = !sortDescending">Position <span aria-hidden="true">@(sortDescending ? "↓" : "↑")</span></button>
+                                        </th>
+                                        <th class="px-3 py-2" scope="col">Type</th>
+                                        <th class="px-3 py-2" scope="col">Scope</th>
+                                        <th class="px-3 py-2" scope="col">Status</th>
+                                        <th class="px-3 py-2 text-right" scope="col">Current Staff</th>
+                                        <th class="px-3 py-2" scope="col">Staff Details</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-100 dark:divide-slate-800/70">
+                                    @foreach (var position in TablePositions)
+                                    {
+                                        var staff = StaffFor(position).ToList();
+                                        <tr @key="position.Id" class="even:bg-slate-50/40 dark:even:bg-slate-800/20 hover:bg-teal-50/30 dark:hover:bg-slate-800/40 transition-colors">
+                                            <td class="px-3 py-2 font-semibold text-slate-900 dark:text-slate-100">@position.Name</td>
+                                            <td class="px-3 py-2 text-slate-600 dark:text-slate-300">@(position.MatrixId.HasValue ? "Government Job Matrix" : "Custom / Existing")</td>
+                                            <td class="px-3 py-2 text-slate-600 dark:text-slate-300">@(position.IsGlobal ? "Global" : "Organisation")</td>
+                                            <td class="px-3 py-2">
+                                                <span class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold @(position.IsActive ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-slate-100 text-slate-600 border border-slate-200")">@(position.IsActive ? "Active" : "Inactive")</span>
+                                            </td>
+                                            <td class="px-3 py-2 text-right font-semibold tabular-nums">@staff.Select(x => x.IndividualId).Distinct().Count()</td>
+                                            <td class="px-3 py-2">
+                                                @if (staff.Count == 0)
+                                                {
+                                                    <span class="text-slate-400">No current staff</span>
+                                                }
+                                                else
+                                                {
+                                                    <details>
+                                                        <summary class="cursor-pointer font-semibold text-teal-700 dark:text-teal-400 select-none">View staff</summary>
+                                                        <ul class="mt-2 space-y-1.5">
+                                                            @foreach (var employee in staff)
+                                                            {
+                                                                <li>
+                                                                    <a class="font-semibold text-blue-600 hover:underline" href="/admin/my/workspace?entityType=Staff&entityId=@employee.IndividualId">@employee.Name</a>
+                                                                    <div class="text-[11px] text-slate-500">@employee.Department · @employee.From.ToString("dd MMM yyyy") – @(employee.To?.ToString("dd MMM yyyy") ?? "Ongoing")</div>
+                                                                </li>
+                                                            }
+                                                        </ul>
+                                                    </details>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="border-t border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900 px-3.5 py-2 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600 dark:text-slate-400">
+                            <span>@VisiblePositions.Count() matching positions · Page @SafePage of @PageCount</span>
+                            <div class="flex items-center gap-2">
+                                <label class="inline-flex items-center gap-1.5">Rows
+                                    <select class="h-7 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-1.5 text-xs" @bind="pageSize" @bind:after="ResetPage">
+                                        <option value="10">10</option>
+                                        <option value="25">25</option>
+                                        <option value="50">50</option>
+                                    </select>
+                                </label>
+                                <button type="button" class="app-button app-button-secondary app-button-sm" disabled="@(SafePage <= 1)" @onclick="() => page = SafePage - 1">Previous</button>
+                                <button type="button" class="app-button app-button-secondary app-button-sm" disabled="@(SafePage >= PageCount)" @onclick="() => page = SafePage + 1">Next</button>
+                            </div>
+                        </div>
                     </div>
-                    <div class="flex flex-wrap items-center justify-between gap-2 p-2 text-xs"><span>@VisiblePositions.Count() matching positions · Page @SafePage of @PageCount</span><div class="flex items-center gap-2"><label>Rows <select class="rounded border border-slate-300 p-1" @bind="pageSize" @bind:after="ResetPage"><option value="10">10</option><option value="25">25</option><option value="50">50</option></select></label><button class="app-button app-button-secondary app-button-sm" disabled="@(SafePage<=1)" @onclick="()=>page=SafePage-1">Previous</button><button class="app-button app-button-secondary app-button-sm" disabled="@(SafePage>=PageCount)" @onclick="()=>page=SafePage+1">Next</button></div></div>
                 }
                 else
                 {
-                    <div class="grid items-start gap-3 sm:grid-cols-2">
+                    <div class="po-cards-grid">
                         @foreach (var position in VisiblePositions)
                         {
                             var staff = StaffFor(position).ToList();
-                            <details @key="position.Id" class="group min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-white hover:border-slate-300 transition shadow-xs">
-                                <summary class="cursor-pointer list-none p-3.5 transition-colors hover:bg-slate-50/80 focus-visible:outline-none">
-                                    <div class="flex items-start justify-between gap-3">
-                                        <span class="min-w-0 break-words text-xs font-bold text-slate-900">@position.Name</span>
+                            <details @key="position.Id" class="group min-w-0 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-teal-400 dark:hover:border-teal-600 transition-colors">
+                                <summary class="cursor-pointer list-none p-3.5 transition-colors hover:bg-slate-50/80 dark:hover:bg-slate-800/40 focus-visible:outline-none">
+                                    <div class="flex items-start justify-between gap-2">
+                                        <span class="min-w-0 break-words text-xs font-bold text-slate-900 dark:text-slate-100">@position.Name</span>
                                         <span aria-hidden="true" class="shrink-0 text-slate-400 transition-transform group-open:rotate-180">⌄</span>
                                     </div>
-                                    <div class="mt-2 flex items-center gap-1.5">
-                                        <span class="rounded px-2 py-0.5 text-[10px] font-medium bg-slate-100 text-slate-600">
+                                    <div class="mt-2 flex items-center gap-1.5 flex-wrap">
+                                        <span class="rounded-md border border-slate-200 dark:border-slate-700 px-1.5 py-0.5 text-[10px] font-medium bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
                                             @(position.IsGlobal ? "Global" : "Organisation")
                                         </span>
-                                        <span class="rounded-full px-2 py-0.5 text-[10px] font-semibold @(position.IsActive ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-600")">
+                                        <span class="rounded-full px-2 py-0.5 text-[10px] font-semibold @(position.IsActive ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-slate-100 text-slate-600 border border-slate-200")">
                                             @(position.IsActive ? "Active" : "Inactive")
                                         </span>
                                     </div>
-                                    <div class="mt-3 flex items-end justify-between border-t border-slate-100 pt-2">
+                                    <div class="mt-2.5 flex items-end justify-between border-t border-slate-100 dark:border-slate-800 pt-2">
                                         <span class="text-xs text-slate-500">
-                                            <strong class="text-base font-bold text-slate-900 tabular-nums">@staff.Select(x => x.IndividualId).Distinct().Count()</strong> staff
+                                            <strong class="text-sm font-bold text-slate-900 dark:text-slate-100 tabular-nums">@staff.Select(x => x.IndividualId).Distinct().Count()</strong> staff
                                         </span>
-                                        <span class="text-[11px] font-medium text-blue-600 group-open:text-slate-500">
+                                        <span class="text-[11px] font-semibold text-teal-700 dark:text-teal-400">
                                             View staff
                                         </span>
                                     </div>
                                 </summary>
                                 @if (staff.Count == 0)
                                 {
-                                    <div class="border-t border-slate-100 bg-slate-50/50 p-3 text-center text-xs text-slate-400">
+                                    <div class="border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/30 p-3 text-center text-xs text-slate-400">
                                         No currently assigned staff.
                                     </div>
                                 }
                                 else
                                 {
-                                    <ul class="divide-y divide-slate-100 border-t border-slate-100 bg-slate-50/30">
+                                    <ul class="divide-y divide-slate-100 dark:divide-slate-800 border-t border-slate-100 dark:border-slate-800 bg-slate-50/30 dark:bg-slate-950/20">
                                         @foreach (var employee in staff)
                                         {
-                                            <li class="flex flex-wrap items-start justify-between gap-2 p-3 text-xs hover:bg-slate-50/80 transition">
+                                            <li class="flex flex-wrap items-start justify-between gap-2 p-3 text-xs hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
                                                 <div class="min-w-0">
-                                                    <a href="/admin/my/workspace?entityType=Staff&entityId=@employee.IndividualId" class="font-semibold text-blue-600 hover:text-blue-800 hover:underline">
+                                                    <a href="/admin/my/workspace?entityType=Staff&entityId=@employee.IndividualId" class="font-semibold text-blue-600 dark:text-blue-400 hover:underline">
                                                         @employee.Name
                                                     </a>
                                                     <p class="mt-0.5 text-[11px] text-slate-500">@employee.Department</p>
-                                                    <p class="mt-0.5 text-[11px] text-slate-400">
+                                                    <p class="mt-0.5 font-mono text-[10px] text-slate-400">
                                                         @employee.From.ToString("dd MMM yyyy") – @(employee.To?.ToString("dd MMM yyyy") ?? "Ongoing")
                                                     </p>
                                                 </div>
-                                                <span class="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-700">
+                                                <span class="rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-2 py-0.5 text-[10px] font-semibold text-slate-700 dark:text-slate-300">
                                                     @employee.Status
                                                 </span>
                                             </li>
@@ -154,43 +199,75 @@
                 }
             </div>
 
-            <!-- Right Sidebar: Position Schemes Summary -->
-            <div class="space-y-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-xs lg:col-span-3"><h3 class="text-sm font-bold text-slate-900">Filter positions</h3>                <div class="relative">
-                    <input aria-label="Search positions or staff"
-                           type="search"
-                           placeholder="Search position, staff or department…"
-                           @bind="search"
-                           @bind:event="oninput"
-                           class="w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+            <!-- Right Sidebar: Filter & Position Schemes Summary -->
+            <aside class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden min-w-0">
+                <div class="bg-slate-50/80 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 px-3.5 py-2.5">
+                    <h3 class="text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-200">Filter &amp; Schemes</h3>
                 </div>
-
-<label class="block p-1 text-xs font-medium text-slate-700">Type<select class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs" @bind="positionType"><option value="">All types</option><option value="custom">Custom / Existing</option><option value="matrix">Government Job Matrix</option></select></label>
-                <div class="border-b border-slate-100 pb-3">
-                    <h3 class="text-sm font-bold text-slate-900">Position Schemes</h3>
-                    <p class="text-xs text-slate-500">Overview of configured frameworks and positions.</p>
-                </div>
-
-                <div class="space-y-2.5">
-                    <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
-                        <span class="text-xs font-medium text-slate-500">Custom / Existing</span>
-                        <div class="mt-1 flex items-baseline justify-between">
-                            <span class="text-xl font-bold text-slate-900">@data.Positions.Count(x => !x.MatrixId.HasValue)</span>
-                            <span class="text-[11px] text-slate-500">positions</span>
-                        </div>
+                <div class="p-3.5 space-y-3">
+                    <div>
+                        <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">Search</label>
+                        <input aria-label="Search positions or staff"
+                               type="search"
+                               placeholder="Position, staff or department…"
+                               @bind="search"
+                               @bind:event="oninput"
+                               class="w-full h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:border-teal-600 focus:outline-none" />
                     </div>
 
-                    <div class="rounded-xl border border-blue-200 bg-blue-50/40 p-3">
-                        <span class="text-xs font-medium text-blue-700">Government Job Matrix</span>
-                        <div class="mt-1 flex items-baseline justify-between">
-                            <span class="text-xl font-bold text-blue-900">@data.Positions.Count(x => x.MatrixId.HasValue)</span>
-                            <span class="text-[11px] text-blue-600">positions</span>
+                    <div>
+                        <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">Type</label>
+                        <select class="w-full h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 text-xs text-slate-900 dark:text-slate-100 focus:border-teal-600 focus:outline-none" @bind="positionType">
+                            <option value="">All types</option>
+                            <option value="custom">Custom / Existing</option>
+                            <option value="matrix">Government Job Matrix</option>
+                        </select>
+                    </div>
+
+                    <div class="border-t border-slate-200 dark:border-slate-800 pt-3 space-y-2">
+                        <h4 class="text-[10px] font-bold uppercase tracking-wider text-slate-500">Position Schemes</h4>
+                        <div class="rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 px-3 py-2 flex items-center justify-between">
+                            <span class="text-xs font-medium text-slate-600 dark:text-slate-300">Custom / Existing</span>
+                            <span class="text-sm font-bold text-slate-900 dark:text-slate-100 tabular-nums">@data.Positions.Count(x => !x.MatrixId.HasValue)</span>
+                        </div>
+                        <div class="rounded-lg border border-teal-200/80 dark:border-teal-800 bg-teal-50/50 dark:bg-teal-950/30 px-3 py-2 flex items-center justify-between">
+                            <span class="text-xs font-medium text-teal-800 dark:text-teal-300">Gov. Job Matrix</span>
+                            <span class="text-sm font-bold text-teal-900 dark:text-teal-200 tabular-nums">@data.Positions.Count(x => x.MatrixId.HasValue)</span>
                         </div>
                     </div>
                 </div>
-            </div>
+            </aside>
         </div>
     }
 </section>
+
+<style>
+    .po-layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 0.75rem;
+        align-items: start;
+    }
+
+    @@media (min-width: 1024px) {
+        .po-layout {
+            grid-template-columns: minmax(0, 3fr) minmax(260px, 1fr);
+        }
+    }
+
+    .po-cards-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 0.75rem;
+        align-items: start;
+    }
+
+    @@media (min-width: 640px) {
+        .po-cards-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+</style>
 
 @code {
     private PositionOverviewData? data;
