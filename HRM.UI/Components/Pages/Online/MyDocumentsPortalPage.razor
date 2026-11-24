@@ -1,6 +1,7 @@
 @page "/online/documents"
 @namespace HRM.Components.Pages.Online
 @using System.IO
+@using HRM.Application.Contracts.Positions
 @using HRM.DTOs.Documents
 @using HRM.Services
 @using HRM.Services.Contracts
@@ -12,6 +13,8 @@
 @rendermode RenderMode.InteractiveServer
 
 @inject DocumentManagementServiceContracts.IOperations DmsService
+@inject HRM.UI.Services.Positions.IPositionContractApiClient ContractApi
+@inject NavigationManager Navigation
 @inject IUserAccessService Access
 @inject ToastService Toasts
 @inject IJSRuntime JS
@@ -86,6 +89,14 @@
                     <span>My Documents</span>
                     <span class="ml-1.5 rounded-full px-2 py-0.5 text-xs font-bold @(activeTab == "my-docs" ? "bg-white/20 text-white" : "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300")">
                         @myDocuments.Count
+                    </span>
+                </button>
+                <button type="button"
+                        class="rounded-t-xl px-4 py-2 font-bold text-xs md:text-sm transition-all border-t border-l border-r @(activeTab == "contracts" ? "bg-blue-600 dark:bg-blue-600 text-white border-blue-600 dark:border-blue-500 shadow-sm" : "bg-blue-50/70 text-slate-700 hover:text-slate-900 hover:bg-blue-100/70 dark:bg-slate-800/90 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-700 border-slate-300 dark:border-slate-700")"
+                        @onclick='() => SwitchTab("contracts")'>
+                    <span>Position Contracts</span>
+                    <span class="ml-1.5 rounded-full px-2 py-0.5 text-xs font-bold @(activeTab == "contracts" ? "bg-white/20 text-white" : PendingContractActionsCount > 0 ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300" : "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300")">
+                        @(PendingContractActionsCount > 0 ? $"{PendingContractActionsCount} action" : myPositionContracts.Count.ToString())
                     </span>
                 </button>
                 <button type="button"
@@ -208,6 +219,124 @@
                         <button type="button" class="rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-blue-700" @onclick="SubmitEmployeeUploadAsync">Upload Document</button>
                     </div>
                 }
+                else if (activeTab == "contracts" && selectedContract != null)
+                {
+                    <!-- SELECTED POSITION CONTRACT WORKFLOW PANEL -->
+                    <div class="flex items-center justify-between border-b border-slate-100 pb-3 flex-wrap gap-2">
+                        <div>
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <span class="font-mono text-[11px] font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md">@selectedContract.DocumentNumber</span>
+                                <span class="rounded-full border px-2.5 py-0.5 text-[11px] font-semibold @ContractStatusBadgeClass(selectedContract.WorkflowStatus)">
+                                    @ContractStatusLabel(selectedContract.WorkflowStatus)
+                                </span>
+                            </div>
+                            <h2 class="text-base font-bold text-slate-900 mt-1">@selectedContract.Title</h2>
+                            <p class="text-xs text-slate-500">Position: <strong>@selectedContract.PositionName</strong> • v@(selectedContract.CurrentVersionNumber).0 • Uploaded @selectedContract.CreatedAtUtc.AddHours(5).ToString("dd MMM yyyy")</p>
+                        </div>
+
+                        <div class="flex items-center gap-2">
+                            <button type="button"
+                                    class="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+                                    disabled="@loadingContractPreview"
+                                    @onclick="() => OpenContractModalAsync(selectedContract)">
+                                <i class="bi bi-eye text-xs" aria-hidden="true"></i>
+                                <span>View Contract</span>
+                            </button>
+                            <button type="button"
+                                    class="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                                    @onclick="() => DownloadDocAsync(selectedContract.DocumentId)">
+                                <i class="bi bi-download text-xs" aria-hidden="true"></i>
+                                <span>Download</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    @if (string.Equals(selectedContract.WorkflowStatus, "PendingAcceptance", StringComparison.OrdinalIgnoreCase))
+                    {
+                        <div class="rounded-xl border border-amber-300 bg-amber-50/70 p-4 space-y-3 text-xs">
+                            <div class="font-bold text-amber-900">Action Required: Review &amp; Accept Your Position Contract</div>
+                            <p class="text-amber-800">
+                                Please review the attached contract above. Once you accept it, the contract will be <strong>finalised and locked</strong> so it cannot be changed by HR without your explicit unlock approval.
+                            </p>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <button type="button"
+                                        class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+                                        disabled="@contractActionBusy"
+                                        @onclick="() => AcceptContractAsync(selectedContract.DocumentId)">
+                                    <i class="bi bi-check2-circle text-xs" aria-hidden="true"></i>
+                                    <span>@(contractActionBusy ? "Finalising…" : "Accept & Finalise Contract")</span>
+                                </button>
+                            </div>
+                        </div>
+                    }
+                    else if (string.Equals(selectedContract.WorkflowStatus, "UnlockRequested", StringComparison.OrdinalIgnoreCase))
+                    {
+                        <div class="rounded-xl border border-orange-300 bg-orange-50/70 p-4 space-y-3 text-xs">
+                            <div class="font-bold text-orange-900">HR Requested Permission to Edit Your Finalised Contract</div>
+                            <div class="rounded-lg border border-orange-200 bg-white p-3 space-y-1">
+                                <div class="text-[11px] text-slate-500">
+                                    Requested by <strong>@(selectedContract.UnlockRequestedByName ?? "HR")</strong>@(selectedContract.UnlockRequestedAtUtc.HasValue ? $" on {selectedContract.UnlockRequestedAtUtc.Value.AddHours(5):dd MMM yyyy HH:mm}" : "")
+                                </div>
+                                <div class="text-xs font-semibold text-slate-900">Reason: @selectedContract.UnlockRequestReason</div>
+                            </div>
+                            <label class="block text-[11px] font-semibold text-slate-700">
+                                Optional Note for HR
+                                <input type="text"
+                                       maxlength="300"
+                                       class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-900"
+                                       placeholder="Add an optional comment…"
+                                       @bind="contractDecisionNote"
+                                       @bind:event="oninput" />
+                            </label>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <button type="button"
+                                        class="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+                                        disabled="@contractActionBusy"
+                                        @onclick="() => RespondUnlockAsync(selectedContract.DocumentId, true)">
+                                    <i class="bi bi-unlock text-xs" aria-hidden="true"></i>
+                                    <span>@(contractActionBusy ? "Processing…" : "Unlock for HR Edit")</span>
+                                </button>
+                                <button type="button"
+                                        class="inline-flex items-center gap-1.5 rounded-lg border border-rose-300 bg-white px-3.5 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-50"
+                                        disabled="@contractActionBusy"
+                                        @onclick="() => RespondUnlockAsync(selectedContract.DocumentId, false)">
+                                    <i class="bi bi-lock text-xs" aria-hidden="true"></i>
+                                    <span>Decline &amp; Keep Locked</span>
+                                </button>
+                            </div>
+                        </div>
+                    }
+                    else if (string.Equals(selectedContract.WorkflowStatus, "Finalised", StringComparison.OrdinalIgnoreCase))
+                    {
+                        <div class="rounded-xl border border-emerald-200 bg-emerald-50/60 p-4 text-xs text-emerald-900 space-y-1">
+                            <div class="font-bold inline-flex items-center gap-1.5">
+                                <i class="bi bi-shield-lock-fill text-emerald-600" aria-hidden="true"></i>
+                                <span>Finalised &amp; Locked</span>
+                            </div>
+                            <p class="text-emerald-800">
+                                Accepted by <strong>@(selectedContract.AcceptedByName ?? "You")</strong>@(selectedContract.AcceptedAtUtc.HasValue ? $" on {selectedContract.AcceptedAtUtc.Value.AddHours(5):dd MMM yyyy HH:mm}" : ""). HR cannot change this contract without sending you an unlock request.
+                            </p>
+                        </div>
+                    }
+                    else if (string.Equals(selectedContract.WorkflowStatus, "UnlockedForEdit", StringComparison.OrdinalIgnoreCase))
+                    {
+                        <div class="rounded-xl border border-blue-200 bg-blue-50/60 p-4 text-xs text-blue-900 space-y-1">
+                            <div class="font-bold inline-flex items-center gap-1.5">
+                                <i class="bi bi-unlock-fill text-blue-600" aria-hidden="true"></i>
+                                <span>Unlocked for HR Revision</span>
+                            </div>
+                            <p class="text-blue-800">
+                                You unlocked this contract@(selectedContract.UnlockedAtUtc.HasValue ? $" on {selectedContract.UnlockedAtUtc.Value.AddHours(5):dd MMM yyyy HH:mm}" : ""). Once HR attaches the updated contract, it will appear here for your acceptance.
+                            </p>
+                        </div>
+                    }
+                    else if (string.Equals(selectedContract.WorkflowStatus, "Superseded", StringComparison.OrdinalIgnoreCase))
+                    {
+                        <div class="rounded-xl border border-slate-200 bg-slate-50 p-4 text-xs text-slate-700">
+                            This contract version has been superseded by a newer revision.
+                        </div>
+                    }
+                }
                 else if (selectedDetail != null)
                 {
                     <!-- SELECTED DOCUMENT DETAIL & PREVIEW -->
@@ -309,7 +438,37 @@
 
             <!-- RIGHT PANEL: List of Documents or Requests for Active Tab -->
             <aside class="page-panel-right min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-xs flex flex-col gap-3">
-                @if (activeTab == "my-requests")
+                @if (activeTab == "contracts")
+                {
+                    <h3 class="text-xs font-bold text-slate-800 p-1">My Position Contracts (@myPositionContracts.Count)</h3>
+                    @if (myPositionContracts.Count == 0)
+                    {
+                        <div class="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center text-xs text-slate-500">
+                            No position contracts have been attached to your positions yet.
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="space-y-2 max-h-[600px] overflow-y-auto pr-1">
+                            @foreach (var c in myPositionContracts)
+                            {
+                                var isSel = selectedContract?.DocumentId == c.DocumentId;
+                                <div class="rounded-xl border p-2.5 text-xs transition cursor-pointer hover:shadow-xs flex flex-col gap-1 @(isSel ? "border-blue-500 bg-blue-50/70 ring-1 ring-blue-500" : "border-slate-200 bg-white hover:border-slate-300")"
+                                     @onclick="() => SelectContract(c)">
+                                    <div class="flex items-center justify-between gap-1.5 flex-wrap">
+                                        <span class="font-mono text-[11px] font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md">@c.DocumentNumber</span>
+                                        <span class="rounded-full border px-2 py-0.5 text-[10px] font-semibold @ContractStatusBadgeClass(c.WorkflowStatus)">
+                                            @ContractStatusLabel(c.WorkflowStatus)
+                                        </span>
+                                    </div>
+                                    <div class="font-bold text-slate-900 mt-0.5">@c.Title</div>
+                                    <div class="text-[11px] text-slate-500">@c.PositionName • v@(c.CurrentVersionNumber).0 • @c.CreatedAtUtc.AddHours(5).ToString("dd MMM yyyy")</div>
+                                </div>
+                            }
+                        </div>
+                    }
+                }
+                else if (activeTab == "my-requests")
                 {
                     <h3 class="text-xs font-bold text-slate-800 p-1">My Official Document Requests (@myRequests.Count)</h3>
                     @if (myRequests.Count == 0)
@@ -375,7 +534,101 @@
             </aside>
         </div>
     </section>
+
+    @if (modalContract != null)
+    {
+        <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-2 sm:p-3"
+             role="dialog"
+             aria-modal="true"
+             aria-label="Position contract preview"
+             @onclick="CloseContractModal">
+            <div class="my-contract-preview-modal w-full max-w-6xl rounded-2xl border border-slate-200 bg-white shadow-2xl overflow-hidden flex flex-col"
+                 @onclick:stopPropagation="true">
+                <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-slate-50/90 px-4 py-2.5 shrink-0">
+                    <div class="min-w-0">
+                        <h4 class="text-sm font-bold text-slate-900 truncate">@modalContract.Title</h4>
+                        <p class="text-[11px] text-slate-500 font-mono">
+                            @modalContract.DocumentNumber · @modalContract.PositionName · v@(modalContract.CurrentVersionNumber).0@(string.IsNullOrWhiteSpace(modalFileName) ? "" : $" · {modalFileName}")
+                        </p>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-1.5">
+                        @if (!loadingContractPreview && string.IsNullOrWhiteSpace(modalPreviewError) && (IsModalPdf || IsModalImage))
+                        {
+                            <div class="inline-flex items-center rounded-lg border border-slate-300 bg-white overflow-hidden">
+                                <button type="button" class="px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-40" title="Zoom out" disabled="@(modalZoom <= 50)" @onclick="ModalZoomOut">
+                                    <i class="bi bi-zoom-out" aria-hidden="true"></i>
+                                </button>
+                                <button type="button" class="px-2 py-1 text-[11px] font-mono font-semibold text-slate-700 border-x border-slate-200 hover:bg-slate-100" title="Reset zoom" @onclick="ModalResetZoom">
+                                    @modalZoom%
+                                </button>
+                                <button type="button" class="px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-40" title="Zoom in" disabled="@(modalZoom >= 250)" @onclick="ModalZoomIn">
+                                    <i class="bi bi-zoom-in" aria-hidden="true"></i>
+                                </button>
+                            </div>
+                        }
+                        <button type="button" class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50" @onclick="() => DownloadDocAsync(modalContract.DocumentId)">
+                            <i class="bi bi-download text-xs" aria-hidden="true"></i> Download
+                        </button>
+                        <button type="button" class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50" @onclick="CloseContractModal">
+                            Close
+                        </button>
+                    </div>
+                </div>
+                <div class="my-contract-preview-body p-3 overflow-auto flex-1 bg-slate-100/70">
+                    @if (loadingContractPreview)
+                    {
+                        <div class="flex items-center justify-center gap-2 py-16 text-xs text-slate-500">
+                            <span class="h-4 w-4 rounded-full border-2 border-blue-600 border-t-transparent animate-spin"></span>
+                            <span>Loading contract preview…</span>
+                        </div>
+                    }
+                    else if (!string.IsNullOrWhiteSpace(modalPreviewError))
+                    {
+                        <div role="alert" class="rounded-xl border border-rose-200 bg-rose-50 p-4 text-xs text-rose-800">@modalPreviewError</div>
+                    }
+                    else if (IsModalPdf && !string.IsNullOrWhiteSpace(modalPreviewDataUrl))
+                    {
+                        <div class="my-contract-preview-stage" style="width: @(modalZoom)%; height: @(Math.Max(100, modalZoom))%;">
+                            <iframe @key="@($"my-pdf-{modalContract.DocumentId}-{modalZoom}")"
+                                    src="@($"{modalPreviewDataUrl}#zoom={modalZoom}")"
+                                    title="@modalContract.Title"
+                                    class="w-full h-full rounded-lg border border-slate-200 bg-white"></iframe>
+                        </div>
+                    }
+                    else if (IsModalImage && !string.IsNullOrWhiteSpace(modalPreviewDataUrl))
+                    {
+                        <div class="flex justify-center">
+                            <img src="@modalPreviewDataUrl" alt="@modalContract.Title" style="width: @(modalZoom)%; max-width: none;" class="rounded-lg border border-slate-200 shadow-sm bg-white" />
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center text-xs text-slate-600 space-y-3">
+                            <p class="font-semibold text-slate-800">Inline preview is not available for this file format (@modalContentType).</p>
+                            <button type="button" class="rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-blue-700" @onclick="() => DownloadDocAsync(modalContract.DocumentId)">Download File</button>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    }
 </div>
+
+<style>
+    .my-contract-preview-modal {
+        height: calc(100vh - 1.5rem);
+        max-height: calc(100vh - 1.5rem);
+    }
+
+    .my-contract-preview-body {
+        min-height: 0;
+    }
+
+    .my-contract-preview-stage {
+        min-width: 100%;
+        min-height: 100%;
+    }
+</style>
 
 @code {
     private const string FullWidthStorageKey = "hrm.online-dms.full-width";
@@ -386,13 +639,33 @@
     private int currentUserId;
 
     private List<DmsDocumentSummaryDto> myDocuments = [];
+    private List<PositionContractDto> myPositionContracts = [];
     private List<DmsDocumentSummaryDto> orgPublications = [];
     private List<DmsDocumentRequestDto> myRequests = [];
     private List<DmsDocumentTemplateDto> requestableTemplates = [];
     private List<DmsDocumentTypeDto> employeeUploadableTypes = [];
 
     private DmsDocumentDetailDto? selectedDetail;
+    private PositionContractDto? selectedContract;
+    private PositionContractDto? modalContract;
     private string? previewDataUrl;
+    private string? modalPreviewDataUrl, modalContentType, modalFileName, modalPreviewError;
+    private int modalZoom = 100;
+    private bool loadingContractPreview;
+    private bool contractActionBusy;
+    private string contractDecisionNote = "";
+
+    private int PendingContractActionsCount =>
+        myPositionContracts.Count(c =>
+            string.Equals(c.WorkflowStatus, "PendingAcceptance", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(c.WorkflowStatus, "UnlockRequested", StringComparison.OrdinalIgnoreCase));
+
+    private bool IsModalPdf =>
+        string.Equals(modalContentType, "application/pdf", StringComparison.OrdinalIgnoreCase)
+        || (modalFileName?.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase) == true);
+
+    private bool IsModalImage =>
+        modalContentType?.StartsWith("image/", StringComparison.OrdinalIgnoreCase) == true;
 
     private bool showRequestModal;
     private bool showUploadModal;
@@ -407,6 +680,24 @@
 
     protected override async Task OnInitializedAsync()
     {
+        var uri = Navigation.ToAbsoluteUri(Navigation.Uri);
+        if (!string.IsNullOrWhiteSpace(uri.Query))
+        {
+            var query = uri.Query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries);
+            foreach (var part in query)
+            {
+                var kv = part.Split('=', 2);
+                if (kv.Length == 2 && string.Equals(kv[0], "tab", StringComparison.OrdinalIgnoreCase))
+                {
+                    var tabVal = Uri.UnescapeDataString(kv[1]).Trim().ToLowerInvariant();
+                    if (tabVal is "contracts" or "my-docs" or "my-requests" or "my-issued" or "awaiting" or "publications")
+                    {
+                        activeTab = tabVal;
+                    }
+                }
+            }
+        }
+
         var ctx = await Access.GetContextAsync();
         currentIndividualId = ctx?.IndividualId ?? 0;
         currentUserId = ctx?.UserId ?? 0;
@@ -449,6 +740,26 @@
             {
                 myDocuments = await DmsService.GetStaffDocumentsAsync(currentIndividualId);
             }
+            try
+            {
+                myPositionContracts = await ContractApi.GetMyContractsAsync();
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning(ex, "Error loading position contracts for employee.");
+            }
+            if (selectedContract != null)
+            {
+                selectedContract = myPositionContracts.FirstOrDefault(c => c.DocumentId == selectedContract.DocumentId)
+                    ?? myPositionContracts.FirstOrDefault();
+            }
+            else if (myPositionContracts.Count > 0)
+            {
+                selectedContract = myPositionContracts.FirstOrDefault(c =>
+                        string.Equals(c.WorkflowStatus, "PendingAcceptance", StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(c.WorkflowStatus, "UnlockRequested", StringComparison.OrdinalIgnoreCase))
+                    ?? myPositionContracts[0];
+            }
             orgPublications = await DmsService.GetOrganisationLibraryAsync();
             myRequests = await DmsService.GetMyDocumentRequestsAsync();
             var allTemplates = await DmsService.GetTemplatesAsync();
@@ -475,7 +786,153 @@
         showRequestModal = false;
         showUploadModal = false;
         previewDataUrl = null;
+        if (tab == "contracts" && selectedContract == null && myPositionContracts.Count > 0)
+        {
+            selectedContract = myPositionContracts.FirstOrDefault(c =>
+                    string.Equals(c.WorkflowStatus, "PendingAcceptance", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(c.WorkflowStatus, "UnlockRequested", StringComparison.OrdinalIgnoreCase))
+                ?? myPositionContracts[0];
+        }
     }
+
+    private void SelectContract(PositionContractDto contract)
+    {
+        showRequestModal = false;
+        showUploadModal = false;
+        selectedContract = contract;
+        contractDecisionNote = "";
+    }
+
+    private async Task AcceptContractAsync(long documentId)
+    {
+        if (contractActionBusy) return;
+        contractActionBusy = true;
+        errorMessage = null;
+        try
+        {
+            var res = await ContractApi.AcceptAsync(documentId);
+            if (res.Success)
+            {
+                Toasts.Success(res.Message);
+                await LoadPortalDataAsync();
+            }
+            else
+            {
+                errorMessage = res.Message;
+                Toasts.Error(res.Message);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error accepting position contract {DocumentId}", documentId);
+            errorMessage = "Could not finalise contract. Please try again.";
+        }
+        finally
+        {
+            contractActionBusy = false;
+        }
+    }
+
+    private async Task RespondUnlockAsync(long documentId, bool approve)
+    {
+        if (contractActionBusy) return;
+        contractActionBusy = true;
+        errorMessage = null;
+        try
+        {
+            var res = await ContractApi.RespondUnlockAsync(new RespondContractUnlockInput(documentId, approve, string.IsNullOrWhiteSpace(contractDecisionNote) ? null : contractDecisionNote.Trim()));
+            if (res.Success)
+            {
+                Toasts.Success(res.Message);
+                contractDecisionNote = "";
+                await LoadPortalDataAsync();
+            }
+            else
+            {
+                errorMessage = res.Message;
+                Toasts.Error(res.Message);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error responding to contract unlock {DocumentId}", documentId);
+            errorMessage = "Could not process unlock response. Please try again.";
+        }
+        finally
+        {
+            contractActionBusy = false;
+        }
+    }
+
+    private async Task OpenContractModalAsync(PositionContractDto contract)
+    {
+        modalContract = contract;
+        modalPreviewDataUrl = null;
+        modalContentType = null;
+        modalFileName = null;
+        modalPreviewError = null;
+        modalZoom = 100;
+        loadingContractPreview = true;
+        try
+        {
+            var dl = await DmsService.DownloadDocumentVersionAsync(contract.DocumentId, null, isPreview: true);
+            if (!dl.Success)
+            {
+                modalPreviewError = dl.ErrorMessage ?? "Contract preview could not be loaded.";
+                return;
+            }
+            modalFileName = dl.FileName;
+            modalContentType = string.IsNullOrWhiteSpace(dl.ContentType) ? "application/octet-stream" : dl.ContentType;
+            if (dl.Content.Length > 0)
+            {
+                modalPreviewDataUrl = $"data:{modalContentType};base64,{Convert.ToBase64String(dl.Content)}";
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Previewing contract {DocumentId}", contract.DocumentId);
+            modalPreviewError = "Contract preview could not be loaded. Try downloading instead.";
+        }
+        finally
+        {
+            loadingContractPreview = false;
+        }
+    }
+
+    private void ModalZoomIn() => modalZoom = Math.Min(250, modalZoom + 25);
+    private void ModalZoomOut() => modalZoom = Math.Max(50, modalZoom - 25);
+    private void ModalResetZoom() => modalZoom = 100;
+
+    private void CloseContractModal()
+    {
+        modalContract = null;
+        modalPreviewDataUrl = null;
+        modalContentType = null;
+        modalFileName = null;
+        modalPreviewError = null;
+        modalZoom = 100;
+        loadingContractPreview = false;
+    }
+
+    private static string ContractStatusLabel(string status) => status switch
+    {
+        "PendingAcceptance" => "Awaiting Your Acceptance",
+        "Finalised" => "Finalised & Locked",
+        "UnlockRequested" => "HR Unlock Requested",
+        "UnlockedForEdit" => "Unlocked for HR Edit",
+        "Superseded" => "Superseded",
+        _ => status
+    };
+
+    private static string ContractStatusBadgeClass(string status) => status switch
+    {
+        "PendingAcceptance" => "bg-amber-50 text-amber-800 border-amber-200",
+        "Finalised" => "bg-emerald-50 text-emerald-800 border-emerald-200",
+        "UnlockRequested" => "bg-orange-50 text-orange-800 border-orange-200",
+        "UnlockedForEdit" => "bg-blue-50 text-blue-800 border-blue-200",
+        "Superseded" => "bg-slate-100 text-slate-600 border-slate-200",
+        _ => "bg-slate-100 text-slate-700 border-slate-200"
+    };
 
     private List<DmsDocumentSummaryDto> GetCurrentDocumentList() => activeTab switch
     {
