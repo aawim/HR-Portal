@@ -55,11 +55,6 @@ else
                 <h1 class="text-2xl font-bold text-slate-800">My Profile</h1>
                 <p class="text-slate-500 text-sm mt-1">View and manage your employee information.</p>
             </div>
-
-            @if (canManageAccount)
-            {
-                <a href="@($"/admin/settings/user/account?userId={userProfile.UserId}")" class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">Manage account</a>
-            }
         </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -267,7 +262,6 @@ else
 
     private UserProfileDto? userProfile;
     private bool isLoading = true;
-    private bool canManageAccount;
     private bool isPhotoModalOpen;
 
     private void HandlePhotoUpdated(string? newUrl)
@@ -281,9 +275,6 @@ else
     protected override async Task OnInitializedAsync()
     {
         userProfile = await UserService.GetMyProfileAsync();
-        var context = await UserAccess.GetContextAsync();
-        canManageAccount = context?.IsSuperAdministrator == true || await UserAccess.HasPermissionAsync("Admin") ||
-            await UserAccess.HasPermissionAsync("Users.Edit") && await UserAccess.HasPermissionAsync("Users.View");
         isLoading = false;
     }
 

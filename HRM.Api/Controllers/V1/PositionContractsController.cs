@@ -194,16 +194,17 @@ public sealed class PositionContractsController(
         doc.IsLockedForEdit = false;
         doc.IsImmutable = false;
 
-        var targetUserId = await db.Users.AsNoTracking()
+        var targetUserIds = await db.Users.AsNoTracking()
             .Where(u => u.BusinessEntityID == doc.SubjectIndividualId.Value && u.IsActive)
-            .Select(u => (int?)u.UserId)
-            .FirstOrDefaultAsync(ct);
+            .Select(u => u.UserId)
+            .Distinct()
+            .ToListAsync(ct);
 
-        if (targetUserId.HasValue)
+        foreach (var targetUserId in targetUserIds)
         {
             db.StaffNotifications.Add(new StaffNotification
             {
-                UserId = targetUserId.Value,
+                UserId = targetUserId,
                 IndividualId = doc.SubjectIndividualId.Value,
                 OrganisationId = org > 0 ? org : doc.OrganisationId,
                 Kind = "PositionContract",
@@ -247,6 +248,20 @@ public sealed class PositionContractsController(
         doc.VerifiedByUserName = actorName;
         doc.VerifiedAtUtc = DateTime.UtcNow;
 
+        if (doc.CreatedByUserId > 0 && doc.CreatedByUserId != actor.UserId)
+        {
+            db.StaffNotifications.Add(new StaffNotification
+            {
+                UserId = doc.CreatedByUserId,
+                IndividualId = actor.IndividualId,
+                OrganisationId = doc.OrganisationId,
+                Kind = "PositionContract",
+                Message = $"{actorName} accepted and finalised their position contract ({meta.PositionName}).",
+                Url = $"/admin/my/workspace/staff/{actor.IndividualId}/position",
+                CreatedAtUtc = DateTime.UtcNow
+            });
+        }
+
         await db.SaveChangesAsync(ct);
         return Ok(ServiceResult.Ok("Contract accepted, finalised, and locked."));
     }
@@ -281,16 +296,17 @@ public sealed class PositionContractsController(
 
         doc.CustomMetadataJson = JsonSerializer.Serialize(meta);
 
-        var targetUserId = await db.Users.AsNoTracking()
+        var targetUserIds = await db.Users.AsNoTracking()
             .Where(u => u.BusinessEntityID == doc.SubjectIndividualId.Value && u.IsActive)
-            .Select(u => (int?)u.UserId)
-            .FirstOrDefaultAsync(ct);
+            .Select(u => u.UserId)
+            .Distinct()
+            .ToListAsync(ct);
 
-        if (targetUserId.HasValue)
+        foreach (var targetUserId in targetUserIds)
         {
             db.StaffNotifications.Add(new StaffNotification
             {
-                UserId = targetUserId.Value,
+                UserId = targetUserId,
                 IndividualId = doc.SubjectIndividualId.Value,
                 OrganisationId = org > 0 ? org : doc.OrganisationId,
                 Kind = "PositionContractUnlock",
@@ -340,6 +356,24 @@ public sealed class PositionContractsController(
         }
 
         doc.CustomMetadataJson = JsonSerializer.Serialize(meta);
+
+        var notifyHrUserId = meta.UnlockRequestedByUserId ?? (doc.CreatedByUserId > 0 ? doc.CreatedByUserId : null);
+        if (notifyHrUserId.HasValue && notifyHrUserId.Value != actor.UserId)
+        {
+            db.StaffNotifications.Add(new StaffNotification
+            {
+                UserId = notifyHrUserId.Value,
+                IndividualId = actor.IndividualId,
+                OrganisationId = doc.OrganisationId,
+                Kind = "PositionContractUnlock",
+                Message = input.Approve
+                    ? $"{actorName} unlocked their position contract ({meta.PositionName}) for HR edits."
+                    : $"{actorName} declined the unlock request for their position contract ({meta.PositionName}).",
+                Url = $"/admin/my/workspace/staff/{actor.IndividualId}/position",
+                CreatedAtUtc = DateTime.UtcNow
+            });
+        }
+
         await db.SaveChangesAsync(ct);
         return Ok(ServiceResult.Ok(input.Approve
             ? "Contract unlocked for HR to upload a revised agreement."

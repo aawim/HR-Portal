@@ -14,6 +14,7 @@
 @using HRM.Services.Interfaces.Leave
 @using HRM.Components.Pages.Online.Dashboard
 @using HRM.Services.Attendance.AttendancePlan
+@using HRM.Application.Contracts.Positions
 @using HRM.UI.Services.Developer
 @using Microsoft.AspNetCore.Components.Authorization
 @implements IDisposable
@@ -29,6 +30,7 @@
 @inject ILogger<Index> Logger
 @inject IWorkTypeService WorkTypes
 @inject DeveloperTestClockService TestClockPreference
+@inject HRM.UI.Services.Positions.IPositionContractApiClient ContractApi
 @inject PortalContext PortalContext
 
 
@@ -71,6 +73,16 @@
                             </p>
                         </div>
                         <div class="flex items-center gap-2">
+                            <a href="/online/documents?tab=contracts"
+                               class="inline-flex items-center gap-1.5 rounded-lg border @(PendingContractActionsCount > 0 ? "border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100" : "border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700") px-3 py-1.5 text-xs font-semibold shadow-xs transition"
+                               title="View and accept your position contracts">
+                                <i class="bi bi-file-earmark-check text-xs" aria-hidden="true"></i>
+                                <span>Position Contracts</span>
+                                @if (PendingContractActionsCount > 0)
+                                {
+                                    <span class="rounded-full bg-amber-500 px-1.5 py-0.2 text-[10px] font-bold text-white">@PendingContractActionsCount</span>
+                                }
+                            </a>
                             @if (PortalContext.CanAccessAdminPortal)
                             {
                                 <a href="/admin/my/workspace"
@@ -120,6 +132,24 @@
 
 
 
+
+                @if (PendingContractActionsCount > 0)
+                {
+                    <div class="rounded-xl border border-amber-300 bg-amber-50/90 p-3 text-xs text-amber-950 flex flex-wrap items-center justify-between gap-2 shadow-2xs">
+                        <div class="flex items-center gap-2 min-w-0">
+                            <i class="bi bi-file-earmark-check-fill text-base text-amber-600 shrink-0" aria-hidden="true"></i>
+                            <div>
+                                <strong class="font-bold">Position Contract Action Required:</strong>
+                                <span>You have @PendingContractActionsCount position @(PendingContractActionsCount == 1 ? "contract" : "contracts") awaiting your acceptance or unlock response.</span>
+                            </div>
+                        </div>
+                        <a href="/online/documents?tab=contracts"
+                           class="inline-flex items-center gap-1 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700 transition-colors shrink-0">
+                            <span>Review &amp; Respond</span>
+                            <span aria-hidden="true">&rarr;</span>
+                        </a>
+                    </div>
+                }
 
                 @{
                     var expiryAlert = GetIdentityExpiryAlert();
@@ -333,10 +363,29 @@
             // Mount independent cards immediately; annual attendance must not block the shell.
             loading = false;
             await InvokeAsync(StateHasChanged);
-            await Task.WhenAll(LoadAttendance(), LoadYearlyAttendance(DateTime.Today.Year), LoadTestClockPermissionAsync());
+            await Task.WhenAll(LoadAttendance(), LoadYearlyAttendance(DateTime.Today.Year), LoadTestClockPermissionAsync(), LoadPendingContractsAsync());
         }
         catch (UnauthorizedAccessException) { ClearDashboardContext(); }
         finally { loading = false; }
+    }
+
+    private List<PositionContractDto> myPositionContracts = [];
+
+    private int PendingContractActionsCount =>
+        myPositionContracts.Count(c =>
+            string.Equals(c.WorkflowStatus, "PendingAcceptance", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(c.WorkflowStatus, "UnlockRequested", StringComparison.OrdinalIgnoreCase));
+
+    private async Task LoadPendingContractsAsync()
+    {
+        try
+        {
+            myPositionContracts = await ContractApi.GetMyContractsAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Could not load pending position contracts for dashboard");
+        }
     }
 
     private async Task LoadTestClockPermissionAsync()
