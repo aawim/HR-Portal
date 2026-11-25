@@ -4,93 +4,117 @@
 @page "/admin/budget/{CategoryName}/{Section}"
 @inject NavigationManager Navigation
 @inject IUserAccessService UserAccess
+@inject IJSRuntime JS
 @using HRM.Models
 @using HRM.Services
 @using HRM.Services.Interfaces
 @using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.JSInterop
 @rendermode RenderMode.InteractiveServer
 
-<PageTitle>Budget - HR Portal</PageTitle>
+<PageTitle>Budget Management - HR Portal</PageTitle>
 
 <AuthorizeView>
     <Authorized>
         @if (checkingAccess)
         {
-            <div class="rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-500">Checking budget permissions…</div>
+            <div class="m-2 flex items-center justify-center gap-2 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-8 text-xs text-slate-500">
+                <span class="h-4 w-4 rounded-full border-2 border-blue-600 border-t-transparent animate-spin"></span>
+                <span>Checking budget permissions…</span>
+            </div>
         }
         else if (!canAccess)
         {
-            <div class="rounded-xl border border-amber-200 bg-amber-50 p-6 text-sm text-amber-900">
+            <div role="alert" class="m-2 rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 p-6 text-xs text-amber-900 dark:text-amber-200">
                 You do not have permission to access Budget Management.
             </div>
         }
         else
         {
-        <div class="max-w-12xl mx-auto py-0 px-4">
-            <!-- Back Button -->
-            <a href="/admin/budget" class="text-slate-400 hover:text-slate-600 text-sm mb-2 flex items-center gap-1 transition-colors w-fit">
-                <AppIcon Name="arrow_back" Class="w-4 h-4 text-base" />
-                Back to Budget Hub
-            </a>
-
-            <!-- Main Responsive Layout: Stacks vertically on mobile, side-by-side on md+ screens -->
-            <div class="flex flex-col md:flex-row gap-2 items-start">
-                <!-- LEFT: Sidebar Menu (Responsive width) -->
-                <div class="flex-shrink-0 flex flex-col gap-1.5 transition-all duration-300 ease-in-out overflow-hidden @(isSidebarExpanded ? "w-full md:w-80" : "w-20")">
-
-                    <div class="flex items-center @(isSidebarExpanded ? "justify-between" : "justify-center") px-1 mb-2">
-                        <h2 class="text-lg font-bold text-slate-800 truncate transition-opacity duration-300 @(isSidebarExpanded ? "opacity-100 block" : "opacity-0 hidden")">
-                            Budget Modules
-                        </h2>
-
-                        <button @onclick="ToggleSidebar" class="p-2 rounded-lg text-slate-500 hover:bg-slate-100 hover:text-blue-600 transition-colors flex-shrink-0" title="@(isSidebarExpanded ? "Collapse Sidebar" : "Expand Sidebar")">
-                            <AppIcon Name="menu" Class="w-6 h-6 transition-transform duration-300 text-2xl " />
+            <section class="w-full min-w-0 p-2 flex flex-col gap-3 text-slate-900 dark:text-slate-100">
+                <!-- Compact Transparent Borderless Header (always full width) -->
+                <header class="staff-overview-no-print bg-transparent flex flex-wrap items-center justify-between gap-2 px-1 py-0.5">
+                    <div class="min-w-0">
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <h1 class="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 truncate">Budget Management</h1>
+                            <span class="inline-flex items-center gap-1 rounded-full bg-teal-50 dark:bg-teal-950/60 border border-teal-200/80 dark:border-teal-800 px-2 py-0.5 text-[10px] font-semibold text-teal-700 dark:text-teal-300">
+                                <span class="h-1.5 w-1.5 rounded-full bg-teal-500"></span>
+                                Public Finance &amp; Emoluments
+                            </span>
+                        </div>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">
+                            @(activeItem?.Description ?? "Manage state budget execution, fiscal year allocations, virements, and payroll budget solvency.")
+                        </p>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-1.5">
+                        <button type="button"
+                                class="app-button app-button-neutral app-button-sm"
+                                title="@(isFullWidth ? "Shrink to standard layout" : "Expand to full page width")"
+                                @onclick="ToggleFullWidthAsync">
+                            <AppIcon Name="@(isFullWidth ? "fullscreen_exit" : "fullscreen")" Class="text-xs" />
+                            <span>@(isFullWidth ? "Shrink View" : "Full Width")</span>
+                        </button>
+                        <button type="button"
+                                class="app-button app-button-secondary app-button-sm"
+                                @onclick="RefreshActiveView">
+                            <AppIcon Name="refresh" Class="text-xs" />
+                            <span>Refresh</span>
                         </button>
                     </div>
+                </header>
 
-                    @foreach (var item in budgetItems)
-                    {
-                        <button @onclick="() => SelectItem(item)"
-                                title="@(!isSidebarExpanded ? item.Title : null)"
-                                class="text-left p-2 rounded-xl border shadow-xs transition-all duration-200 group flex items-center gap-3 overflow-hidden
-                       @(activeItem?.Key == item.Key ? "bg-blue-50 border-blue-200 ring-1 ring-blue-500/20" : "bg-white border-slate-200 hover:shadow-md hover:border-blue-200 hover:bg-slate-50")">
-
-                            <div class="w-10 h-12 flex items-center justify-center rounded-lg text-xl flex-shrink-0 transition-colors duration-300 mx-auto
-                        @(activeItem?.Key == item.Key ? "bg-blue-600 text-white" : "bg-blue-50 text-blue-600 group-hover:bg-blue-100")">
-                                @item.Icon
-                            </div>
-
-                            <div class="flex-grow min-w-0 transition-all duration-300 @(isSidebarExpanded ? "opacity-100 w-auto" : "opacity-0 w-0 hidden")">
-                                <h3 class="font-bold text-sm mb-0.5 truncate @(activeItem?.Key == item.Key ? "text-blue-800" : "text-slate-800 group-hover:text-blue-700")">
-                                    @item.Title
-                                </h3>
-                                <p class="text-slate-500 text-xs leading-tight line-clamp-2">
-                                    @item.Description
-                                </p>
-                            </div>
-
-                            <div class="flex-shrink-0 transition-all duration-300 @(isSidebarExpanded ? "opacity-100 block" : "opacity-0 hidden") @(activeItem?.Key == item.Key ? "text-blue-600" : "text-slate-300 group-hover:text-blue-600")">
-                                <AppIcon Name="chevron_right" Class="w-5 h-5 text-xl" />
-                            </div>
-                        </button>
-                    }
+                <!-- Full-Width Folder Navigation Tabs -->
+                <div class="org-workspace-tabs my-workspace-tabs w-full border-b-2 border-teal-700 dark:border-teal-600 overflow-x-auto">
+                    <nav class="flex items-end gap-1 min-w-max pb-0" aria-label="Budget Management Sections">
+                        @foreach (var item in budgetItems)
+                        {
+                            var isActive = activeItem?.Key == item.Key;
+                            <button type="button"
+                                    aria-current="@(isActive ? "page" : null)"
+                                    class="rounded-t-xl px-4 py-2 font-bold text-xs md:text-sm transition-all border-t border-l border-r inline-flex items-center gap-1.5 @(isActive ? "bg-teal-700 dark:bg-teal-600 text-white border-teal-700 dark:border-teal-600 shadow-sm" : "bg-[#86b0be]/30 text-slate-700 hover:text-slate-900 hover:bg-[#86b0be]/50 dark:bg-slate-800/90 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-700 border-slate-300 dark:border-slate-700")"
+                                    @onclick="() => SelectItem(item)">
+                                <i class="bi @item.Icon text-xs" aria-hidden="true"></i>
+                                <span>@item.Title</span>
+                            </button>
+                        }
+                    </nav>
                 </div>
 
-                <!-- RIGHT: Dynamic Data Display -->
-                <div class="w-full md:w-2/3 lg:w-3/4 flex-grow bg-white rounded-2xl border border-slate-200 shadow-xs p-2 md:p-4 min-h-[600px]">
+                <!-- Content Shell (shrinks in Shrink View; header & tabs remain full width) -->
+                <div class="budget-ws-shell @(isFullWidth ? "budget-ws-shell-full" : "budget-ws-shell-standard")">
                     @if (activeItem?.ComponentType != null)
                     {
-                        <DynamicComponent Type="@activeItem.ComponentType" />
+                        <DynamicComponent @key="(activeItem.Key, refreshKey)" Type="@activeItem.ComponentType" />
                     }
                 </div>
-            </div>
-        </div>
+            </section>
+
+            <style>
+                .budget-ws-shell {
+                    width: 100%;
+                    min-width: 0;
+                    display: flex;
+                    flex-direction: column;
+                    gap: 0.75rem;
+                    transition: max-width 200ms ease;
+                }
+
+                .budget-ws-shell-standard {
+                    max-width: 80rem;
+                    margin-left: auto;
+                    margin-right: auto;
+                }
+
+                .budget-ws-shell-full {
+                    max-width: none;
+                }
+            </style>
         }
     </Authorized>
 
     <NotAuthorized>
         <div class="p-6 text-center mt-12">
-            <p class="text-slate-500 text-lg">
+            <p class="text-slate-500 text-sm">
                 Please log in to view the budget dashboard.
             </p>
         </div>
@@ -98,6 +122,8 @@
 </AuthorizeView>
 
 @code {
+    private const string FullWidthStorageKey = "hrm.budget.full-width";
+
     [Parameter] public string CategoryName { get; set; } = string.Empty;
     [Parameter] public string? Section { get; set; }
 
@@ -105,13 +131,14 @@
 
     private static readonly List<SubItem> budgetItems = new()
     {
-        new("overview", "Overview & Execution Reports", "📊", "High-level summary of budget allocations, personal emoluments, and MoF CSV/PDF exports.", typeof(HRM.Components.Admin.Budget.BudgetOverviewPanel)),
-        new("manage", "Budget Operations & Fiscal Years", "🏛️", "Configure Fiscal Years, Allocations, MoF Economic Codes, Virements, and Ledger Transactions.", typeof(HRM.Components.Admin.Budget.BudgetManagementHub)),
-        new("payroll-bridge", "Payroll Budget Bridge", "🔗", "Pre-payroll budget solvency check and MoF COA component mappings.", typeof(HRM.Components.Admin.Budget.PayrollBudgetBridgePanel))
+        new("overview", "Overview & Execution Reports", "bi-pie-chart", "High-level summary of budget allocations, personal emoluments, and MoF CSV/PDF exports.", typeof(HRM.Components.Admin.Budget.BudgetOverviewPanel)),
+        new("manage", "Budget Operations & Fiscal Years", "bi-bank", "Configure Fiscal Years, Allocations, MoF Economic Codes, Virements, and Ledger Transactions.", typeof(HRM.Components.Admin.Budget.BudgetManagementHub)),
+        new("payroll-bridge", "Payroll Budget Bridge", "bi-link-45deg", "Pre-payroll budget solvency check and MoF COA component mappings.", typeof(HRM.Components.Admin.Budget.PayrollBudgetBridgePanel))
     };
 
     private SubItem? activeItem;
-    private bool isSidebarExpanded = true;
+    private bool isFullWidth;
+    private int refreshKey;
     private bool checkingAccess = true;
     private bool canAccess;
 
@@ -134,6 +161,23 @@
         }
     }
 
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                var saved = await JS.InvokeAsync<string?>("localStorage.getItem", FullWidthStorageKey);
+                if (bool.TryParse(saved, out var parsed) && parsed != isFullWidth)
+                {
+                    isFullWidth = parsed;
+                    StateHasChanged();
+                }
+            }
+            catch { }
+        }
+    }
+
     protected override void OnParametersSet()
     {
         var key = (Section ?? CategoryName ?? "overview").Trim().ToLowerInvariant();
@@ -153,8 +197,15 @@
         Navigation.NavigateTo($"/admin/budget/{item.Key}");
     }
 
-    private void ToggleSidebar()
+    private async Task ToggleFullWidthAsync()
     {
-        isSidebarExpanded = !isSidebarExpanded;
+        isFullWidth = !isFullWidth;
+        try
+        {
+            await JS.InvokeVoidAsync("localStorage.setItem", FullWidthStorageKey, isFullWidth.ToString().ToLowerInvariant());
+        }
+        catch { }
     }
+
+    private void RefreshActiveView() => refreshKey++;
 }

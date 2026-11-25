@@ -6,6 +6,7 @@
 @using HRM.Services.Interfaces
 @inject AttendanceDeductionClient Client
 @inject IUserContextService UserContext
+@inject IUserAccessService UserAccess
 @inject HRM.Services.ToastService Toasts
 
 <div class="attendance-deductions-panel flex flex-col gap-3 w-full">
@@ -154,8 +155,27 @@
                     @if (filteredAdjustments.Count == 0)
                     {
                         <tr>
-                            <td colspan="11" class="px-3 py-8 text-center text-slate-400">
-                                @(isLoading ? "Loading adjustments..." : "No attendance deductions found for the selected filter.")
+                            <td colspan="11" class="px-3 py-8 text-center text-slate-500">
+                                @if (isLoading)
+                                {
+                                    <span>Loading adjustments…</span>
+                                }
+                                else if (adjustments.Count == 0)
+                                {
+                                    <div class="flex flex-col items-center gap-2">
+                                        <span>No attendance deductions have been evaluated for <strong>@startDate.ToString("dd MMM yyyy") – @endDate.ToString("dd MMM yyyy")</strong> yet.</span>
+                                        <button type="button"
+                                                class="app-button app-button-primary app-button-sm"
+                                                disabled="@(isLoading || effectiveOrganisationId <= 0)"
+                                                @onclick="RunEvaluationAsync">
+                                            <span>Evaluate Period Now</span>
+                                        </button>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <span>No attendance deductions match the selected status or search filter.</span>
+                                }
                             </td>
                         </tr>
                     }
@@ -240,7 +260,14 @@
 </div>
 
 @code {
-    [Parameter] public int OrganisationId { get; set; } = 1;
+    [Parameter] public int OrganisationId { get; set; }
+    [Parameter] public DateOnly? PeriodStartDate { get; set; }
+    [Parameter] public DateOnly? PeriodEndDate { get; set; }
+
+    private int effectiveOrganisationId;
+    private int? loadedOrgId;
+    private DateOnly? loadedPeriodStart;
+    private DateOnly? loadedPeriodEnd;
 
     private bool isLoading = false;
     private DateOnly startDate = new DateOnly(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1);
@@ -267,20 +294,52 @@
         }
     }
 
-    protected override async Task OnInitializedAsync()
+    protected override async Task OnParametersSetAsync()
     {
-        try
+        var resolvedOrgId = OrganisationId;
+        if (resolvedOrgId <= 0)
         {
-            var user = await UserContext.GetCurrentAsync();
-            int orgId = user?.Organisation?.OrganisationBusinessEntityId
-                ?? user?.ActiveJob?.OrganisationId
-                ?? 0;
-            if (orgId > 0)
+            try
             {
-                OrganisationId = orgId;
+                resolvedOrgId = await UserAccess.GetCurrentOrganisationIdAsync();
             }
+            catch { }
         }
-        catch { }
+        if (resolvedOrgId <= 0)
+        {
+            try
+            {
+                var user = await UserContext.GetCurrentAsync();
+                resolvedOrgId = user?.Organisation?.OrganisationBusinessEntityId
+                    ?? user?.ActiveJob?.OrganisationId
+                    ?? 0;
+            }
+            catch { }
+        }
+
+        var paramsChanged = loadedOrgId != resolvedOrgId
+            || loadedPeriodStart != PeriodStartDate
+            || loadedPeriodEnd != PeriodEndDate;
+
+        if (!paramsChanged) return;
+
+        effectiveOrganisationId = resolvedOrgId;
+        loadedOrgId = resolvedOrgId;
+        loadedPeriodStart = PeriodStartDate;
+        loadedPeriodEnd = PeriodEndDate;
+
+        if (PeriodStartDate.HasValue && PeriodEndDate.HasValue)
+        {
+            startDate = PeriodStartDate.Value;
+            endDate = PeriodEndDate.Value;
+        }
+
+        if (effectiveOrganisationId <= 0)
+        {
+            currentPolicy = null;
+            adjustments = new();
+            return;
+        }
 
         await LoadPolicyAsync();
         await LoadAdjustmentsAsync();
@@ -288,9 +347,10 @@
 
     private async Task LoadPolicyAsync()
     {
+        if (effectiveOrganisationId <= 0) return;
         try
         {
-            currentPolicy = await Client.GetEffectivePolicyAsync(OrganisationId, DateOnly.FromDateTime(DateTime.UtcNow));
+            currentPolicy = await Client.GetEffectivePolicyAsync(effectiveOrganisationId, endDate);
         }
         catch (Exception ex)
         {
@@ -300,11 +360,16 @@
 
     private async Task LoadAdjustmentsAsync()
     {
+        if (effectiveOrganisationId <= 0)
+        {
+            Toasts.Error("No organisation is selected. Select a payroll period or switch organisation first.");
+            return;
+        }
         isLoading = true;
         try
         {
             adjustments = await Client.GetAdjustmentsAsync(
-                OrganisationId,
+                effectiveOrganisationId,
                 startDate,
                 endDate,
                 string.IsNullOrWhiteSpace(selectedStatus) ? null : selectedStatus);
@@ -321,11 +386,16 @@
 
     private async Task RunEvaluationAsync()
     {
+        if (effectiveOrganisationId <= 0)
+        {
+            Toasts.Error("No organisation is selected. Select a payroll period or switch organisation first.");
+            return;
+        }
         isLoading = true;
         try
         {
-            var results = await Client.EvaluateRangeAsync(OrganisationId, startDate, endDate);
-            Toasts.Success($"Successfully evaluated attendance for {results.Count} items.");
+            var results = await Client.EvaluateRangeAsync(effectiveOrganisationId, startDate, endDate);
+            Toasts.Success($"Evaluated attendance for {startDate:dd MMM yyyy} – {endDate:dd MMM yyyy}: {results.Count} deduction item(s) found.");
             await LoadAdjustmentsAsync();
         }
         catch (Exception ex)

@@ -56,7 +56,12 @@ public sealed class AttendanceDeductionService : IAttendanceDeductionService
     public async Task<AttendanceDeductionPolicy> GetEffectivePolicyAsync(int organisationId, DateOnly workDate)
     {
         await RequireAuthorisedActorAsync(organisationId, requireManage: false);
-        await using var db = await _factory.CreateDbContextAsync();
+        return await GetEffectivePolicyInternalAsync(organisationId, workDate, CancellationToken.None);
+    }
+
+    private async Task<AttendanceDeductionPolicy> GetEffectivePolicyInternalAsync(int organisationId, DateOnly workDate, CancellationToken ct)
+    {
+        await using var db = await _factory.CreateDbContextAsync(ct);
 
         var policy = await db.AttendanceDeductionPolicies
             .AsNoTracking()
@@ -64,7 +69,7 @@ public sealed class AttendanceDeductionService : IAttendanceDeductionService
                         p.EffectiveFrom <= workDate &&
                         (!p.EffectiveTo.HasValue || p.EffectiveTo.Value >= workDate))
             .OrderByDescending(p => p.EffectiveFrom)
-            .FirstOrDefaultAsync();
+            .FirstOrDefaultAsync(ct);
 
         if (policy != null) return policy;
 
@@ -100,9 +105,15 @@ public sealed class AttendanceDeductionService : IAttendanceDeductionService
         int organisationId, int individualId, int jobId, DateOnly workDate, CancellationToken ct = default)
     {
         await RequireAuthorisedActorAsync(organisationId, requireManage: true);
+        return await EvaluateDailyDeductionInternalAsync(organisationId, individualId, jobId, workDate, ct);
+    }
+
+    private async Task<AttendanceAdjustment?> EvaluateDailyDeductionInternalAsync(
+        int organisationId, int individualId, int jobId, DateOnly workDate, CancellationToken ct)
+    {
         await using var db = await _factory.CreateDbContextAsync(ct);
 
-        var policy = await GetEffectivePolicyAsync(organisationId, workDate);
+        var policy = await GetEffectivePolicyInternalAsync(organisationId, workDate, ct);
         var leadershipPolicy = await HRM.Services.LeadershipAttendancePolicyResolver.ResolveAsync(db, individualId, organisationId, workDate, ct);
         if (leadershipPolicy is { AttendanceRequired: false }) return null;
         var workDateDt = workDate.ToDateTime(TimeOnly.MinValue);
@@ -476,6 +487,39 @@ public sealed class AttendanceDeductionService : IAttendanceDeductionService
         }
 
         return results;
+    }
+
+    internal async Task<int> RunScheduledEvaluationForOrganisationAsync(
+        int organisationId, DateOnly fromDate, DateOnly toDate, CancellationToken ct = default)
+    {
+        if (organisationId <= 0 || toDate < fromDate) return 0;
+
+        await using var db = await _factory.CreateDbContextAsync(ct);
+        var activeJobs = await db.Jobs.AsNoTracking()
+            .Where(j => j.OrganisationID == organisationId && j.JobStateId == 4)
+            .Select(j => new { j.JobId, j.IndividualID })
+            .ToListAsync(ct);
+
+        var count = 0;
+        for (var d = fromDate; d <= toDate; d = d.AddDays(1))
+        {
+            if (ct.IsCancellationRequested) break;
+            foreach (var j in activeJobs)
+            {
+                if (ct.IsCancellationRequested) break;
+                try
+                {
+                    var adj = await EvaluateDailyDeductionInternalAsync(organisationId, j.IndividualID, j.JobId, d, ct);
+                    if (adj != null) count++;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Scheduled attendance deduction evaluation failed for Org {OrgId}, Job {JobId}, Date {Date}", organisationId, j.JobId, d);
+                }
+            }
+        }
+
+        return count;
     }
 
     public async Task<List<AttendanceAdjustmentDto>> GetAdjustmentsAsync(
