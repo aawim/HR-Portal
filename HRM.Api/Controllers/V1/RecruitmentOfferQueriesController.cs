@@ -1,23 +1,165 @@
 using HRM.Api.Infrastructure;
 using HRM.Application.Contracts.Recruitment;
 using HRM.Models;
+using HRM.Services;
 using HRM.Services.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+
 namespace HRM.Api.Controllers.V1;
+
 [Route("api/v1/recruitment/offer-workspace")]
-public sealed class RecruitmentOfferQueriesController(IDbContextFactory<HrmTeContext> factory,IUserAccessService access):HrmApiController
+public sealed class RecruitmentOfferQueriesController(
+    IDbContextFactory<HrmTeContext> factory,
+    IUserAccessService access) : HrmApiController
 {
     [HttpGet("{vacancyId:int}")]
-    public async Task<ActionResult<RecruitmentOfferWorkspace>> Load(int vacancyId,CancellationToken ct)
+    public async Task<ActionResult<RecruitmentOfferWorkspace>> Load(int vacancyId, CancellationToken ct)
     {
-        var org=await access.GetCurrentOrganisationIdAsync();
-        if(org<=0||!await access.HasOrganisationAccessAsync(org)||!await access.HasPermissionAsync("Recruitment.Manage"))return Forbid();
-        await using var db=await factory.CreateDbContextAsync(ct);
-        var v=await db.RecruitmentVacancies.AsNoTracking().SingleOrDefaultAsync(x=>x.Id==vacancyId&&x.OrganisationId==org,ct);
-        if(v is null)return NotFound();
-        var candidates=await(from m in db.RecruitmentMeritResults join p in db.RecruitmentResultPublications on m.RecruitmentResultPublicationId equals p.Id join a in db.RecruitmentApplications on m.RecruitmentApplicationId equals a.Id join person in db.RecruitmentApplicants on a.RecruitmentApplicantId equals person.Id where p.RecruitmentVacancyId==v.Id&&p.OrganisationId==org&&p.IsFinal&&a.OrganisationId==org&&m.Rank<=v.VacancySlots&&!db.RecruitmentOffers.Any(x=>x.RecruitmentMeritResultId==m.Id) orderby m.Rank select new RecruitmentOfferCandidateRow(m.Id,a.Reference,person.FullName,m.Rank)).ToListAsync(ct);
-        var offers=await(from o in db.RecruitmentOffers join m in db.RecruitmentMeritResults on o.RecruitmentMeritResultId equals m.Id join a in db.RecruitmentApplications on m.RecruitmentApplicationId equals a.Id join person in db.RecruitmentApplicants on a.RecruitmentApplicantId equals person.Id where o.OrganisationId==org&&a.OrganisationId==org&&a.RecruitmentVacancyId==v.Id select new RecruitmentOfferRow(o.Id,a.Reference,person.FullName,o.Status,o.OnboardingRequestId)).ToListAsync(ct);
-        return Ok(new RecruitmentOfferWorkspace(candidates,offers));
+        var org = await access.GetCurrentOrganisationIdAsync();
+        var canManage = await access.HasUserGroupAsync("SuperAdministrator")
+            || await access.HasUserGroupAsync("Admin")
+            || await access.HasPermissionAsync("Recruitment.Manage");
+        if (org <= 0 || !await access.HasOrganisationAccessAsync(org) || !canManage) return Forbid();
+
+        await using var db = await factory.CreateDbContextAsync(ct);
+        var v = await (from vac in db.RecruitmentVacancies.AsNoTracking()
+                       join req in db.RecruitmentRequisitions.AsNoTracking() on vac.RecruitmentRequisitionId equals req.Id into reqs
+                       from req in reqs.DefaultIfEmpty()
+                       join pm in db.PositionMatrices.AsNoTracking() on vac.PositionMatrixId equals pm.PositionMatrixId into pms
+                       from pm in pms.DefaultIfEmpty()
+                       join jt in db.FrameworkJobTitles.AsNoTracking() on pm.JobTitleId equals jt.JobTitleId into jts
+                       from jt in jts.DefaultIfEmpty()
+                       join jm in db.FrameworkJobMatrices.AsNoTracking() on pm.JobMatrixId equals jm.JobMatrixId into jms
+                       from jm in jms.DefaultIfEmpty()
+                       where vac.Id == vacancyId && vac.OrganisationId == org
+                       select new
+                       {
+                           vac.Id,
+                           vac.Reference,
+                           vac.VacancySlots,
+                           vac.PositionMatrixId,
+                           EmploymentType = req != null ? req.EmploymentType : null,
+                           PositionName = jt != null ? jt.Name : (jm != null ? jm.Name : vac.Reference),
+                           BasicSalary = jm != null ? (decimal?)jm.BasicSalary : null,
+                           DefaultStructureId = pm != null ? pm.OrganisationStructureId : null
+                       }).SingleOrDefaultAsync(ct);
+
+        if (v is null) return NotFound();
+
+        var isFinal = await db.RecruitmentResultPublications.AsNoTracking()
+            .AnyAsync(p => p.RecruitmentVacancyId == v.Id && p.OrganisationId == org && p.IsFinal, ct);
+
+        var rawOffers = await (from o in db.RecruitmentOffers.AsNoTracking()
+                               join m in db.RecruitmentMeritResults.AsNoTracking() on o.RecruitmentMeritResultId equals m.Id
+                               join a in db.RecruitmentApplications.AsNoTracking() on m.RecruitmentApplicationId equals a.Id
+                               join person in db.RecruitmentApplicants.AsNoTracking() on a.RecruitmentApplicantId equals person.Id
+                               where o.OrganisationId == org && a.OrganisationId == org && a.RecruitmentVacancyId == v.Id
+                               orderby o.OfferedAtUtc descending
+                               select new
+                               {
+                                   o.Id,
+                                   a.Reference,
+                                   person.FullName,
+                                   o.Status,
+                                   o.OnboardingRequestId,
+                                   person.EfaasIdNumber,
+                                   o.OfferedAtUtc,
+                                   o.AcceptedAtUtc,
+                                   o.TermsSnapshotJson
+                               }).ToListAsync(ct);
+
+        var efaasIds = rawOffers
+            .Where(x => !string.IsNullOrWhiteSpace(x.EfaasIdNumber))
+            .Select(x => x.EfaasIdNumber!)
+            .Distinct()
+            .ToList();
+
+        var individualByIdCard = efaasIds.Count == 0
+            ? new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+            : (await db.Idcards.AsNoTracking()
+                .Where(c => efaasIds.Contains(c.IdcardNumber))
+                .Select(c => new { c.IdcardNumber, c.BusinessEntityId })
+                .ToListAsync(ct))
+                .GroupBy(c => c.IdcardNumber, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => g.First().BusinessEntityId, StringComparer.OrdinalIgnoreCase);
+
+        var offers = rawOffers.Select(o => new RecruitmentOfferRow(
+            o.Id,
+            o.Reference,
+            o.FullName,
+            o.Status,
+            o.OnboardingRequestId,
+            o.EfaasIdNumber,
+            !string.IsNullOrWhiteSpace(o.EfaasIdNumber) && individualByIdCard.TryGetValue(o.EfaasIdNumber, out var indId) ? indId : null,
+            o.OfferedAtUtc,
+            o.AcceptedAtUtc,
+            o.TermsSnapshotJson)).ToList();
+
+        var activeOffersCount = offers.Count(x => x.Status != "Declined");
+        var candidates = activeOffersCount >= v.VacancySlots
+            ? new List<RecruitmentOfferCandidateRow>()
+            : await (from m in db.RecruitmentMeritResults.AsNoTracking()
+                     join p in db.RecruitmentResultPublications.AsNoTracking() on m.RecruitmentResultPublicationId equals p.Id
+                     join a in db.RecruitmentApplications.AsNoTracking() on m.RecruitmentApplicationId equals a.Id
+                     join person in db.RecruitmentApplicants.AsNoTracking() on a.RecruitmentApplicantId equals person.Id
+                     where p.RecruitmentVacancyId == v.Id
+                         && p.OrganisationId == org
+                         && p.IsFinal
+                         && a.OrganisationId == org
+                         && !db.RecruitmentOffers.Any(x => x.RecruitmentMeritResultId == m.Id)
+                     orderby m.Rank
+                     select new RecruitmentOfferCandidateRow(m.Id, a.Reference, person.FullName, m.Rank, m.Score)).ToListAsync(ct);
+
+        // Load onboarding lookup options (approved structures, active job types, vacant positions with pay steps)
+        var structures = await db.OrganisationStructures.AsNoTracking()
+            .Where(x => x.OrganisationBusinessEntityID == org
+                && x.OrganisationStructureStateId == 3
+                && db.OrganisationStructureTypes.Any(t => t.OrganisationStructureTypeId == x.OrganisationStructureTypeId))
+            .OrderBy(x => x.Name)
+            .Select(x => new RecruitmentOnboardingLookupOption(x.OrganisationStructureId, x.Name))
+            .ToListAsync(ct);
+
+        var jobTypes = await db.JobTypes.AsNoTracking()
+            .Where(x => x.IsActive != false)
+            .OrderBy(x => x.TypeName)
+            .Select(x => new RecruitmentOnboardingLookupOption(x.JobTypeId, x.TypeName))
+            .ToListAsync(ct);
+
+        var today = DateTime.UtcNow.AddHours(5).Date;
+        var rawPositions = await PositionVacancy.Vacant(db, today)
+            .Where(x => x.IsActive != false && (x.IsGlobal || x.OrganisationId == org))
+            .OrderBy(x => x.Name)
+            .Select(x => new { x.PositionId, x.Name, x.PositionMatrixId })
+            .ToListAsync(ct);
+
+        var vacantPositions = new List<RecruitmentVacantPositionOption>(rawPositions.Count);
+        foreach (var p in rawPositions)
+        {
+            var steps = new List<RecruitmentPayStepOption>();
+            if (p.PositionMatrixId.HasValue)
+            {
+                var summary = await PositionMatrixAssignments.SummaryAsync(db, p.PositionId);
+                if (summary?.Steps is not null)
+                {
+                    steps.AddRange(summary.Steps.Select(s => new RecruitmentPayStepOption(s.Id, $"Step {s.Number}", s.BasicSalary)));
+                }
+            }
+            vacantPositions.Add(new RecruitmentVacantPositionOption(p.PositionId, p.Name, p.PositionMatrixId, steps));
+        }
+
+        var defaultPosId = vacantPositions.FirstOrDefault(p => p.PositionMatrixId == v.PositionMatrixId)?.Id;
+
+        var context = new RecruitmentOfferContext(
+            v.PositionName,
+            v.BasicSalary,
+            v.EmploymentType,
+            v.DefaultStructureId,
+            defaultPosId,
+            structures,
+            jobTypes,
+            vacantPositions);
+
+        return Ok(new RecruitmentOfferWorkspace(candidates, offers, context, v.VacancySlots, isFinal));
     }
 }

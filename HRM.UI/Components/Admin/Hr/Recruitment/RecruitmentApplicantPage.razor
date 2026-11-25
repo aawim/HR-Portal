@@ -293,6 +293,16 @@
                                     </div>
 
                                     <div class="je-job-right">
+                                        @if (v.HasScreeningResults)
+                                        {
+                                            <a href="@($"/careers/screening-sheet/{v.Id}")"
+                                               target="_blank"
+                                               rel="noopener"
+                                               class="je-btn-outline">
+                                                <i class="bi bi-file-earmark-check" aria-hidden="true"></i>
+                                                <span>Screening Sheet</span>
+                                            </a>
+                                        }
                                         @if (v.HasPublishedResults && v.PublicationId.HasValue)
                                         {
                                             <button type="button"
@@ -400,19 +410,31 @@
                                                 }
                                             </td>
                                             <td class="px-4 py-3 text-right">
-                                                @if (correctionOpen)
-                                                {
-                                                    <button type="button" class="je-btn-primary" @onclick="() => BeginApply(a.VacancyReference)">
-                                                        <i class="bi bi-pencil-square" aria-hidden="true"></i>
-                                                        <span>Correct &amp; Resubmit</span>
-                                                    </button>
-                                                }
-                                                else if (a.Status == "Draft")
-                                                {
-                                                    <button type="button" class="je-btn-outline" @onclick="() => BeginApply(a.VacancyReference)">
-                                                        <span>Continue Draft</span>
-                                                    </button>
-                                                }
+                                                <div class="inline-flex flex-wrap items-center justify-end gap-1.5">
+                                                    @if (a.HasScreeningResults && a.VacancyId > 0)
+                                                    {
+                                                        <a href="@($"/careers/screening-sheet/{a.VacancyId}")"
+                                                           target="_blank"
+                                                           rel="noopener"
+                                                           class="je-btn-outline">
+                                                            <i class="bi bi-file-earmark-check" aria-hidden="true"></i>
+                                                            <span>Screening Sheet</span>
+                                                        </a>
+                                                    }
+                                                    @if (correctionOpen)
+                                                    {
+                                                        <button type="button" class="je-btn-primary" @onclick="() => BeginApply(a.VacancyReference)">
+                                                            <i class="bi bi-pencil-square" aria-hidden="true"></i>
+                                                            <span>Correct &amp; Resubmit</span>
+                                                        </button>
+                                                    }
+                                                    else if (a.Status == "Draft")
+                                                    {
+                                                        <button type="button" class="je-btn-outline" @onclick="() => BeginApply(a.VacancyReference)">
+                                                            <span>Continue Draft</span>
+                                                        </button>
+                                                    }
+                                                </div>
                                             </td>
                                         </tr>
                                     }
@@ -563,7 +585,7 @@
                             <div class="je-card p-4 text-xs space-y-3">
                                 <div class="flex items-center justify-between">
                                     <span class="font-mono font-bold text-slate-900">@o.VacancyReference</span>
-                                    <span class="rounded-full px-2.5 py-0.5 text-[11px] font-semibold @(o.Status == "Accepted" ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800")">@o.Status</span>
+                                    <span class="rounded-full px-2.5 py-0.5 text-[11px] font-semibold @(o.Status == "Accepted" ? "bg-emerald-100 text-emerald-800" : o.Status == "OnboardingSubmitted" ? "bg-blue-100 text-blue-800" : o.Status == "Declined" ? "bg-rose-100 text-rose-800" : "bg-amber-100 text-amber-800")">@(o.Status == "OnboardingSubmitted" ? "Onboarding In Progress" : o.Status)</span>
                                 </div>
                                 <p class="whitespace-pre-wrap rounded-xl border border-slate-200 bg-slate-50 p-3 text-slate-700">@Terms(o.TermsSnapshotJson)</p>
                                 @if (o.Status == "Offered")
@@ -578,9 +600,25 @@
                                             </div>
                                         </div>
                                     }
+                                    else if (decliningOfferId == o.Id)
+                                    {
+                                        <div class="rounded-xl border border-rose-200 bg-rose-50/50 p-3 space-y-2">
+                                            <label class="block text-xs font-semibold text-rose-900">
+                                                Reason for Declining (Optional)
+                                                <textarea rows="2" maxlength="1000" class="mt-1 w-full rounded-lg border border-rose-200 bg-white p-2 text-xs text-slate-800" @bind="declineOfferReason" @bind:event="oninput" placeholder="Optional note to HR..."></textarea>
+                                            </label>
+                                            <div class="flex gap-2">
+                                                <button type="button" class="rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-rose-700 disabled:opacity-50" disabled="@busy" @onclick="() => DeclineOfferAsync(o.Id)">Confirm Decline</button>
+                                                <button type="button" class="je-btn-outline" disabled="@busy" @onclick="() => { decliningOfferId = 0; declineOfferReason = string.Empty; }">Cancel</button>
+                                            </div>
+                                        </div>
+                                    }
                                     else
                                     {
-                                        <button type="button" class="je-btn-primary" disabled="@busy" @onclick="() => confirmation = o.Id">Review Acceptance</button>
+                                        <div class="flex flex-wrap gap-2">
+                                            <button type="button" class="je-btn-primary" disabled="@busy" @onclick="() => { decliningOfferId = 0; confirmation = o.Id; }">Accept Offer</button>
+                                            <button type="button" class="rounded-lg border border-rose-300 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-50" disabled="@busy" @onclick="() => { confirmation = 0; decliningOfferId = o.Id; }">Decline Offer</button>
+                                        </div>
                                     }
                                 }
                             </div>
@@ -1702,6 +1740,9 @@
         }
     }
 
+    private int decliningOfferId;
+    private string declineOfferReason = "";
+
     private async Task Accept(int id)
     {
         if (busy) return;
@@ -1719,6 +1760,31 @@
         catch (HttpRequestException)
         {
             message = "Offer acceptance failed. Refresh and check the offer status.";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task DeclineOfferAsync(int id)
+    {
+        if (busy) return;
+        busy = true;
+        try
+        {
+            var result = await Api.DeclineMyOfferAsync(id, declineOfferReason);
+            message = result.Message;
+            if (result.Success)
+            {
+                decliningOfferId = 0;
+                declineOfferReason = "";
+                await Load();
+            }
+        }
+        catch (HttpRequestException)
+        {
+            message = "Could not decline the offer. Refresh and check the offer status.";
         }
         finally
         {
@@ -1757,7 +1823,15 @@
         try
         {
             using var d = System.Text.Json.JsonDocument.Parse(json);
-            return d.RootElement.TryGetProperty("Terms", out var t) ? t.GetString() ?? "" : "Contact the recruitment office for your offer terms.";
+            var root = d.RootElement;
+            var lines = new List<string>();
+            if (root.TryGetProperty("ProbationPeriod", out var prob) && !string.IsNullOrWhiteSpace(prob.GetString()))
+                lines.Add($"Probation Period: {prob.GetString()}");
+            if (root.TryGetProperty("ProposedStartDate", out var start) && !string.IsNullOrWhiteSpace(start.GetString()))
+                lines.Add($"Proposed Start Date: {start.GetString()}");
+            if (root.TryGetProperty("Terms", out var t) && !string.IsNullOrWhiteSpace(t.GetString()))
+                lines.Add(t.GetString()!);
+            return lines.Count > 0 ? string.Join("\n", lines) : "Contact the recruitment office for your offer terms.";
         }
         catch (System.Text.Json.JsonException)
         {

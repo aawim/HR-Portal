@@ -16,6 +16,11 @@ public sealed class RecruitmentApplicantWorkspaceController(IDbContextFactory<Hr
         if(string.IsNullOrWhiteSpace(identity))return Forbid();
         await using var db=await factory.CreateDbContextAsync(ct);
         var rawApps=await(from a in db.RecruitmentApplications.AsNoTracking() join person in db.RecruitmentApplicants.AsNoTracking() on a.RecruitmentApplicantId equals person.Id join v in db.RecruitmentVacancies.AsNoTracking() on a.RecruitmentVacancyId equals v.Id where person.EfaasIdNumber==identity orderby a.SubmittedAtUtc descending select new { a.Id, a.Reference, VacancyReference=v.Reference, a.Status, a.SubmittedAtUtc, a.RecruitmentVacancyId }).ToListAsync(ct);
+        var appVacancyIds=rawApps.Select(x=>x.RecruitmentVacancyId).Distinct().ToList();
+        var screenedVacancies=appVacancyIds.Count==0?new HashSet<int>():(await(from app in db.RecruitmentApplications.AsNoTracking()
+            join dec in db.RecruitmentScreeningDecisions.AsNoTracking() on app.Id equals dec.RecruitmentApplicationId
+            where appVacancyIds.Contains(app.RecruitmentVacancyId)
+            select app.RecruitmentVacancyId).Distinct().ToListAsync(ct)).ToHashSet();
         var returnedIds=rawApps.Where(x=>x.Status=="ReturnedForCorrection").Select(x=>x.Id).ToList();
         var returnEvents=returnedIds.Count==0?[]:await db.Set<HRM.Models.Recruitment.RecruitmentApplicationEvent>().AsNoTracking()
             .Where(e=>returnedIds.Contains(e.ApplicationId)&&e.Kind=="ReturnedForCorrection")
@@ -44,7 +49,7 @@ public sealed class RecruitmentApplicantWorkspaceController(IDbContextFactory<Hr
                     }
                 }
             }
-            return new MyRecruitmentApplicationRow(a.Reference,a.VacancyReference,a.Status,a.SubmittedAtUtc,a.RecruitmentVacancyId,comment,deadline);
+            return new MyRecruitmentApplicationRow(a.Reference,a.VacancyReference,a.Status,a.SubmittedAtUtc,a.RecruitmentVacancyId,comment,deadline,screenedVacancies.Contains(a.RecruitmentVacancyId));
         }).ToList();
         var mine=await(from o in db.RecruitmentOffers join m in db.RecruitmentMeritResults on o.RecruitmentMeritResultId equals m.Id join a in db.RecruitmentApplications on m.RecruitmentApplicationId equals a.Id join person in db.RecruitmentApplicants on a.RecruitmentApplicantId equals person.Id join v in db.RecruitmentVacancies on a.RecruitmentVacancyId equals v.Id where person.EfaasIdNumber==identity select new MyRecruitmentOfferRow(o.Id,v.Reference,o.Status,o.TermsSnapshotJson)).ToListAsync(ct);
         var rawResults=await(from a in db.RecruitmentApplications.AsNoTracking()
@@ -158,6 +163,8 @@ public sealed class RecruitmentApplicantWorkspaceController(IDbContextFactory<Hr
     public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> SubmitObjection([FromBody]SubmitRecruitmentObjectionInput input,CancellationToken ct)=>Ok(await resultsService.SubmitObjectionAsync(input,ct));
     [HttpPost("offers/{id:int}/accept")]
     public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> Accept(int id,CancellationToken ct)=>Ok(await offers.AcceptMyOfferAsync(id,ct));
+    [HttpPost("offers/{id:int}/decline")]
+    public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> Decline(int id,[FromBody]DeclineRecruitmentOfferInput? input,CancellationToken ct)=>Ok(await offers.DeclineMyOfferAsync(id,input?.Reason,ct));
     [HttpPost("apply")]
     public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> Apply([FromBody]ApplyToRecruitmentVacancyInput input,CancellationToken ct)
     {

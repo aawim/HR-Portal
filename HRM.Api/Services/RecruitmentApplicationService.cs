@@ -50,6 +50,14 @@ public sealed class RecruitmentApplicationService(IDbContextFactory<HrmTeContext
                              FallbackTitle = jt != null ? jt.Name : (jm != null ? jm.Name : x.Reference)
                          }).ToListAsync(ct);
 
+        var vacancyIds = raw.Select(x => x.Id).Distinct().ToList();
+        var screenedVacancyIds = vacancyIds.Count == 0
+            ? new HashSet<int>()
+            : (await (from app in d.RecruitmentApplications.AsNoTracking()
+                      join dec in d.RecruitmentScreeningDecisions.AsNoTracking() on app.Id equals dec.RecruitmentApplicationId
+                      where vacancyIds.Contains(app.RecruitmentVacancyId)
+                      select app.RecruitmentVacancyId).Distinct().ToListAsync(ct)).ToHashSet();
+
         return raw.Select(x => new PublishedRecruitmentVacancyRow(
             x.Id,
             x.Reference,
@@ -62,7 +70,8 @@ public sealed class RecruitmentApplicationService(IDbContextFactory<HrmTeContext
             x.PublicationId.HasValue,
             x.PublicationId,
             x.IsResultFinal,
-            x.ObjectionClosesAtUtc)).ToList();
+            x.ObjectionClosesAtUtc,
+            screenedVacancyIds.Contains(x.Id))).ToList();
     }
 
     private static string? ExtractTitle(string? snapshotJson)

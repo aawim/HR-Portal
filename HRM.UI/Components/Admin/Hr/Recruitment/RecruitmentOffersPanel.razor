@@ -1,10 +1,13 @@
+@using System.Text.Json
 @using HRM.Application.Contracts.Recruitment
 @inject HRM.UI.Services.Recruitment.IRecruitmentApiClient Api
 
 <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs space-y-4">
-    <div>
-        <h2 class="text-sm font-bold text-slate-900">Offers &amp; Onboarding</h2>
-        <p class="mt-0.5 text-xs text-slate-500">Issue job offers to finalised merit candidates and initiate staff onboarding once accepted.</p>
+    <div class="flex flex-wrap items-center justify-between gap-2">
+        <div>
+            <h2 class="text-sm font-bold text-slate-900">Offers &amp; Onboarding</h2>
+            <p class="mt-0.5 text-xs text-slate-500">Issue job offers to finalised merit candidates and hand off accepted offers into the staff onboarding workflow.</p>
+        </div>
     </div>
 
     <label class="block text-xs font-medium text-slate-700 max-w-lg">
@@ -18,15 +21,32 @@
         </select>
     </label>
 
-    @if (SelectedVacancy is not null)
+    @if (SelectedVacancy is not null && workspace is not null)
     {
-        <div class="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-blue-100 bg-blue-50/50 px-3 py-2 text-xs">
+        var activeCount = workspace.Offers.Count(o => o.Status != "Declined");
+        var remainingSlots = Math.Max(0, workspace.VacancySlots - activeCount);
+        <div class="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-blue-100 bg-blue-50/50 px-3.5 py-2.5 text-xs">
             <div class="flex flex-wrap items-center gap-2">
                 <i class="bi bi-briefcase text-blue-600" aria-hidden="true"></i>
-                <span class="font-bold text-slate-900">@(string.IsNullOrWhiteSpace(SelectedVacancy.PositionName) ? SelectedVacancy.Reference : SelectedVacancy.PositionName)</span>
+                <span class="font-bold text-slate-900">@(workspace.Context?.PositionName ?? SelectedVacancy.PositionName)</span>
                 <span class="font-mono text-[11px] text-blue-700">@SelectedVacancy.Reference</span>
+                @if (!string.IsNullOrWhiteSpace(workspace.Context?.EmploymentType))
+                {
+                    <span class="rounded-full bg-white border border-slate-200 px-2 py-0.5 text-[10px] font-semibold text-slate-700">@workspace.Context.EmploymentType</span>
+                }
+                @if (workspace.Context?.BasicSalary is > 0)
+                {
+                    <span class="rounded-full bg-white border border-slate-200 px-2 py-0.5 text-[10px] font-semibold text-slate-700">MVR @workspace.Context.BasicSalary.Value.ToString("N2")</span>
+                }
             </div>
-            <span class="rounded-full bg-white border border-slate-200 px-2 py-0.5 text-[10px] font-semibold text-slate-700">@SelectedVacancy.Slots slot(s) · @SelectedVacancy.Status</span>
+            <div class="flex flex-wrap items-center gap-1.5">
+                <span class="rounded-full bg-white border border-slate-200 px-2.5 py-0.5 text-[10px] font-semibold text-slate-700">
+                    Slots: @activeCount / @workspace.VacancySlots filled (@remainingSlots open)
+                </span>
+                <span class="rounded-full px-2.5 py-0.5 text-[10px] font-semibold @(workspace.IsResultFinal ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800")">
+                    @(workspace.IsResultFinal ? "Final Results Locked" : "Results Not Finalised")
+                </span>
+            </div>
         </div>
     }
 
@@ -35,42 +55,62 @@
         <div class="grid items-start gap-4 lg:grid-cols-12">
             <!-- Left: Issue Offer -->
             <div class="lg:col-span-5 rounded-xl border border-slate-200 bg-slate-50/70 p-4 space-y-3">
-                <h3 class="text-xs font-bold uppercase tracking-wide text-slate-700">Issue Offer</h3>
+                <h3 class="text-xs font-bold uppercase tracking-wide text-slate-700">Issue Job Offer</h3>
 
-                @if (workspace.Candidates.Count == 0)
+                @if (!workspace.IsResultFinal)
+                {
+                    <div class="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+                        Merit results must be published and <strong>finalised</strong> (under the <strong>Results &amp; Objections</strong> tab) before offers can be issued.
+                    </div>
+                }
+                else if (workspace.Candidates.Count == 0)
                 {
                     <div class="rounded-xl border border-dashed border-slate-300 bg-white p-4 text-xs text-slate-500">
-                        No unoffered candidate within the available slots has finalised results.
+                        All available vacancy slots have active/accepted offers, or no unoffered merit candidates remain.
                     </div>
                 }
                 else
                 {
                     <label class="block text-xs font-medium text-slate-700">
-                        Selected Candidate
+                        Selected Candidate <span class="text-rose-600">*</span>
                         <select class="@InputClass" @bind="candidate">
                             <option value="0">-- Select candidate from final results --</option>
                             @foreach (var c in workspace.Candidates)
                             {
-                                <option value="@c.MeritResultId">@c.ApplicantName · @c.ApplicationReference · Rank #@c.Rank</option>
+                                <option value="@c.MeritResultId">Rank #@c.Rank · @c.ApplicantName (@c.ApplicationReference · @c.Score.ToString("0.##") pts)</option>
                             }
                         </select>
                     </label>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                        <label class="block text-xs font-medium text-slate-700">
+                            Proposed Start Date
+                            <input type="date" class="@InputClass" @bind="proposedStartDate" />
+                        </label>
+                        <label class="block text-xs font-medium text-slate-700">
+                            Probation Period
+                            <input class="@InputClass" maxlength="100" @bind="probationPeriod" @bind:event="oninput" placeholder="e.g. 3 months" />
+                        </label>
+                    </div>
+
                     <label class="block text-xs font-medium text-slate-700">
-                        Offer Terms
-                        <textarea rows="4" class="@InputClass" maxlength="8000" @bind="terms" placeholder="Specify grade, remuneration, probation period, and reporting details..."></textarea>
+                        Offer Terms &amp; Conditions <span class="text-rose-600">*</span>
+                        <textarea rows="4" class="@InputClass" maxlength="8000" @bind="terms" @bind:event="oninput" placeholder="Specify grade, remuneration, allowances, probation terms, and reporting details..."></textarea>
                     </label>
+
                     <div class="flex justify-end">
                         <button type="button"
-                                class="inline-flex items-center justify-center rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                                class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 disabled:opacity-50 transition-colors"
                                 disabled="@(busy || candidate <= 0 || string.IsNullOrWhiteSpace(terms))"
                                 @onclick="Issue">
-                            Issue Offer
+                            <i class="bi bi-send-check" aria-hidden="true"></i>
+                            <span>Issue Offer</span>
                         </button>
                     </div>
                 }
             </div>
 
-            <!-- Right: Issued Offers & Onboarding -->
+            <!-- Right: Issued Offers & Onboarding Handoff -->
             <div class="lg:col-span-7 space-y-3">
                 <h3 class="text-xs font-bold uppercase tracking-wide text-slate-700">Issued Offers (@workspace.Offers.Count)</h3>
                 @if (workspace.Offers.Count == 0)
@@ -84,71 +124,165 @@
                     <div class="space-y-2">
                         @foreach (var o in workspace.Offers)
                         {
-                            <div class="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white p-3 text-xs">
-                                <div>
-                                    <span class="font-semibold text-slate-900">@o.ApplicantName</span>
-                                    <span class="mx-1.5 text-slate-300">•</span>
-                                    <span class="font-mono text-[11px] text-blue-700">@o.ApplicationReference</span>
-                                    <span class="ml-2 rounded-full px-2.5 py-0.5 text-[11px] font-semibold @(o.Status == "Accepted" ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800")">@o.Status</span>
-                                </div>
-                                <div class="flex items-center gap-2">
-                                    @if (o.OnboardingRequestId.HasValue)
-                                    {
-                                        <a class="inline-flex items-center justify-center rounded-lg border border-blue-300 bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-800 hover:bg-blue-100"
-                                           href="@($"/admin/my/workspace/onboarding?requestId={o.OnboardingRequestId}")">
-                                            Open Onboarding Request
-                                        </a>
-                                    }
-                                    @if (o.Status == "Accepted" && !o.OnboardingRequestId.HasValue)
-                                    {
+                            var isExpanded = expandedOfferId == o.Id;
+                            <div class="rounded-xl border border-slate-200 bg-white p-3 text-xs space-y-2">
+                                <div class="flex flex-wrap items-center justify-between gap-2">
+                                    <div class="space-y-0.5">
+                                        <div class="flex flex-wrap items-center gap-1.5">
+                                            <span class="font-semibold text-slate-900">@o.ApplicantName</span>
+                                            <span class="text-slate-300">•</span>
+                                            <span class="font-mono text-[11px] text-blue-700">@o.ApplicationReference</span>
+                                            <span class="rounded-full px-2.5 py-0.5 text-[10px] font-semibold @OfferStatusBadge(o.Status)">@FormatOfferStatus(o.Status)</span>
+                                        </div>
+                                        <div class="text-[11px] text-slate-500 flex flex-wrap gap-x-3">
+                                            @if (!string.IsNullOrWhiteSpace(o.EfaasIdNumber))
+                                            {
+                                                <span>eFaas: <strong class="font-mono text-slate-700">@o.EfaasIdNumber</strong></span>
+                                            }
+                                            @if (o.OfferedAtUtc.HasValue)
+                                            {
+                                                <span>Offered: @o.OfferedAtUtc.Value.AddHours(5).ToString("dd MMM yyyy HH:mm") MVT</span>
+                                            }
+                                            @if (o.AcceptedAtUtc.HasValue)
+                                            {
+                                                <span class="text-emerald-700 font-medium">Accepted: @o.AcceptedAtUtc.Value.AddHours(5).ToString("dd MMM yyyy HH:mm") MVT</span>
+                                            }
+                                        </div>
+                                    </div>
+                                    <div class="flex flex-wrap items-center gap-1.5">
                                         <button type="button"
-                                                class="inline-flex items-center justify-center rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-emerald-700"
-                                                @onclick="() => offer = o.Id">
-                                            Prepare Onboarding
+                                                class="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50"
+                                                @onclick="() => expandedOfferId = isExpanded ? null : o.Id">
+                                            @(isExpanded ? "Hide Terms" : "View Terms")
                                         </button>
-                                    }
+                                        @if (o.OnboardingRequestId.HasValue)
+                                        {
+                                            <a class="inline-flex items-center gap-1 rounded-lg border border-blue-300 bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-800 hover:bg-blue-100"
+                                               href="@($"/admin/my/workspace/onboarding?requestId={o.OnboardingRequestId}")">
+                                                <i class="bi bi-box-arrow-up-right" aria-hidden="true"></i>
+                                                <span>Onboarding #@o.OnboardingRequestId</span>
+                                            </a>
+                                        }
+                                        @if (o.Status == "Accepted" && !o.OnboardingRequestId.HasValue)
+                                        {
+                                            <button type="button"
+                                                    class="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-emerald-700"
+                                                    @onclick="() => OpenOnboardingForm(o)">
+                                                <i class="bi bi-person-check" aria-hidden="true"></i>
+                                                <span>Prepare Onboarding</span>
+                                            </button>
+                                        }
+                                    </div>
                                 </div>
+
+                                @if (isExpanded && !string.IsNullOrWhiteSpace(o.TermsSnapshotJson))
+                                {
+                                    <div class="rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-[11px] text-slate-700 whitespace-pre-wrap">
+                                        @FormatOfferTerms(o.TermsSnapshotJson)
+                                    </div>
+                                }
                             </div>
                         }
                     </div>
                 }
 
-                @if (offer > 0)
+                <!-- Smart Onboarding Handoff Panel -->
+                @if (selectedOffer is not null && workspace.Context is not null)
                 {
+                    var selectedPos = workspace.Context.VacantPositions.FirstOrDefault(p => p.Id == positionId);
+                    var requiresStep = selectedPos is not null && selectedPos.PaySteps.Count > 0;
+
                     <div class="rounded-xl border border-blue-200 bg-blue-50/40 p-4 space-y-3">
-                        <div class="flex items-center justify-between">
-                            <h4 class="text-xs font-bold text-slate-900">Onboarding Request for Offer #@offer</h4>
-                            <button type="button" class="text-xs font-semibold text-slate-500 hover:text-slate-800" @onclick="() => offer = 0">Cancel</button>
+                        <div class="flex items-center justify-between gap-2 border-b border-blue-200/70 pb-2">
+                            <div>
+                                <h4 class="text-xs font-bold text-slate-900">Initiate Staff Onboarding: @selectedOffer.ApplicantName</h4>
+                                <p class="text-[11px] text-slate-600">Offer #@selectedOffer.Id · @selectedOffer.ApplicationReference</p>
+                            </div>
+                            <button type="button" class="text-xs font-semibold text-slate-500 hover:text-slate-800" @onclick="() => selectedOffer = null">Cancel</button>
                         </div>
+
+                        <!-- Auto-matched Individual Identity -->
+                        @if (selectedOffer.MatchedIndividualId is > 0)
+                        {
+                            <div class="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
+                                <i class="bi bi-patch-check-fill text-emerald-600" aria-hidden="true"></i>
+                                <span>Identity verified: <strong>@selectedOffer.ApplicantName</strong> (eFaas <span class="font-mono">@selectedOffer.EfaasIdNumber</span> · Individual #@selectedOffer.MatchedIndividualId)</span>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-950">
+                                <i class="bi bi-exclamation-triangle-fill text-amber-600 mr-1" aria-hidden="true"></i>
+                                <strong>No Individual registry record matched</strong> for eFaas ID <span class="font-mono">@(selectedOffer.EfaasIdNumber ?? "—")</span>. Ensure the applicant is registered in the Individual Registry before submitting onboarding.
+                            </div>
+                        }
+
                         <div class="grid gap-3 sm:grid-cols-2">
                             <label class="block text-xs font-medium text-slate-700">
-                                Individual Registry ID
-                                <input type="number" min="1" class="@InputClass" @bind="individual" />
+                                Department / Unit <span class="text-rose-600">*</span>
+                                <select class="@InputClass" @bind="structureId">
+                                    <option value="0">-- Select approved unit --</option>
+                                    @foreach (var s in workspace.Context.Structures)
+                                    {
+                                        <option value="@s.Id">@s.Name</option>
+                                    }
+                                </select>
                             </label>
+
                             <label class="block text-xs font-medium text-slate-700">
-                                Organisation Structure ID
-                                <input type="number" min="1" class="@InputClass" @bind="structure" />
+                                Job Type <span class="text-rose-600">*</span>
+                                <select class="@InputClass" @bind="jobTypeId">
+                                    <option value="0">-- Select job type --</option>
+                                    @foreach (var jt in workspace.Context.JobTypes)
+                                    {
+                                        <option value="@jt.Id">@jt.Name</option>
+                                    }
+                                </select>
                             </label>
+
                             <label class="block text-xs font-medium text-slate-700">
-                                Job Type ID
-                                <input type="number" min="1" class="@InputClass" @bind="jobType" />
+                                Vacant Position
+                                <select class="@InputClass" @bind="positionId" @bind:after="OnPositionChanged">
+                                    <option value="0">-- Assign later / None --</option>
+                                    @foreach (var p in workspace.Context.VacantPositions)
+                                    {
+                                        <option value="@p.Id">@p.Name</option>
+                                    }
+                                </select>
                             </label>
+
+                            @if (requiresStep)
+                            {
+                                <label class="block text-xs font-medium text-slate-700">
+                                    Job Pay Step <span class="text-rose-600">*</span>
+                                    <select class="@InputClass" @bind="jobMatrixStepId">
+                                        <option value="0">-- Select pay step --</option>
+                                        @foreach (var st in selectedPos!.PaySteps)
+                                        {
+                                            <option value="@st.Id">@st.Label@(st.BasicSalary.HasValue ? $" (MVR {st.BasicSalary.Value:N2})" : "")</option>
+                                        }
+                                    </select>
+                                </label>
+                            }
+
                             <label class="block text-xs font-medium text-slate-700">
-                                Position ID
-                                <input type="number" min="1" class="@InputClass" @bind="position" />
+                                Joining Date <span class="text-rose-600">*</span>
+                                <input type="date" class="@InputClass" @bind="joinedDate" />
                             </label>
-                            <label class="block text-xs font-medium text-slate-700 sm:col-span-2">
-                                Joining Date
-                                <input type="date" class="@InputClass" @bind="joined" />
+
+                            <label class="block text-xs font-medium text-slate-700 @(requiresStep ? "" : "sm:col-span-2")">
+                                Remarks
+                                <input class="@InputClass" maxlength="500" @bind="onboardingRemarks" placeholder="Recruitment offer onboarding remarks..." />
                             </label>
                         </div>
-                        <p class="text-[11px] text-slate-500">The applicant identity and existing onboarding approval requirements are checked when submitted.</p>
-                        <div class="flex justify-end">
+
+                        <div class="flex justify-end pt-1">
                             <button type="button"
-                                    class="inline-flex items-center justify-center rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 disabled:opacity-50 transition-colors"
-                                    disabled="@(busy || individual <= 0 || structure <= 0 || jobType <= 0 || position <= 0)"
-                                    @onclick="Onboard">
-                                Submit Onboarding Request
+                                    class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                                    disabled="@(busy || (selectedOffer.MatchedIndividualId ?? 0) <= 0 || structureId <= 0 || jobTypeId <= 0 || (requiresStep && jobMatrixStepId <= 0))"
+                                    @onclick="SubmitOnboarding">
+                                <i class="bi bi-check2-circle" aria-hidden="true"></i>
+                                <span>Submit Onboarding Request</span>
                             </button>
                         </div>
                     </div>
@@ -169,12 +303,15 @@
 @code {
     private IReadOnlyList<RecruitmentVacancyRow> vacancies = [];
     private RecruitmentOfferWorkspace? workspace;
-    private int vacancy, candidate, offer, individual, structure, jobType, position;
+    private RecruitmentOfferRow? selectedOffer;
+    private int? expandedOfferId;
+    private int vacancy, candidate, structureId, jobTypeId, positionId, jobMatrixStepId;
     private RecruitmentVacancyRow? SelectedVacancy => vacancies.FirstOrDefault(x => x.Id == vacancy);
-    private string terms = "";
+    private string terms = "", probationPeriod = "3 months", onboardingRemarks = "Recruitment offer onboarding";
+    private DateTime proposedStartDate = DateTime.UtcNow.AddHours(5).Date.AddDays(14);
+    private DateTime joinedDate = DateTime.UtcNow.AddHours(5).Date;
     private bool busy;
     private string? message;
-    private DateTime joined = DateTime.UtcNow.AddHours(5).Date;
     private const string InputClass = "mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500";
 
     protected override async Task OnInitializedAsync()
@@ -186,12 +323,22 @@
     private async Task Load()
     {
         workspace = null;
-        candidate = offer = 0;
-        individual = structure = jobType = position = 0;
+        selectedOffer = null;
+        expandedOfferId = null;
+        candidate = structureId = jobTypeId = positionId = jobMatrixStepId = 0;
         terms = "";
         try
         {
-            if (vacancy > 0) workspace = await Api.GetOfferWorkspaceAsync(vacancy);
+            if (vacancy > 0)
+            {
+                workspace = await Api.GetOfferWorkspaceAsync(vacancy);
+                if (workspace?.Context is not null)
+                {
+                    var salaryLine = workspace.Context.BasicSalary.HasValue ? $"Basic Salary: MVR {workspace.Context.BasicSalary.Value:N2}" : "";
+                    var typeLine = !string.IsNullOrWhiteSpace(workspace.Context.EmploymentType) ? $"Employment Type: {workspace.Context.EmploymentType}" : "";
+                    terms = string.Join("\n", new[] { $"Position: {workspace.Context.PositionName}", salaryLine, typeLine }.Where(s => !string.IsNullOrWhiteSpace(s)));
+                }
+            }
         }
         catch (HttpRequestException)
         {
@@ -199,8 +346,48 @@
         }
     }
 
-    private Task Issue() => Run(() => Api.CreateOfferAsync(new(candidate, System.Text.Json.JsonSerializer.Serialize(new { Terms = terms }))));
-    private Task Onboard() => Run(() => Api.SubmitOnboardingAsync(new(offer, individual, structure, jobType, position, joined, "Recruitment offer onboarding")));
+    private void OpenOnboardingForm(RecruitmentOfferRow offerRow)
+    {
+        selectedOffer = offerRow;
+        structureId = workspace?.Context?.DefaultOrganisationStructureId ?? 0;
+        positionId = workspace?.Context?.DefaultPositionId ?? 0;
+        jobTypeId = workspace?.Context?.JobTypes.FirstOrDefault()?.Id ?? 0;
+        joinedDate = proposedStartDate;
+        onboardingRemarks = $"Recruitment offer #{offerRow.Id} ({offerRow.ApplicationReference})";
+        OnPositionChanged();
+    }
+
+    private void OnPositionChanged()
+    {
+        jobMatrixStepId = 0;
+        var pos = workspace?.Context?.VacantPositions.FirstOrDefault(p => p.Id == positionId);
+        if (pos is not null && pos.PaySteps.Count > 0)
+            jobMatrixStepId = pos.PaySteps[0].Id;
+    }
+
+    private Task Issue()
+    {
+        var payload = JsonSerializer.Serialize(new
+        {
+            Position = workspace?.Context?.PositionName ?? SelectedVacancy?.PositionName ?? "",
+            BasicSalary = workspace?.Context?.BasicSalary,
+            EmploymentType = workspace?.Context?.EmploymentType,
+            ProbationPeriod = probationPeriod.Trim(),
+            ProposedStartDate = proposedStartDate.ToString("yyyy-MM-dd"),
+            Terms = terms.Trim()
+        });
+        return Run(() => Api.CreateOfferAsync(new(candidate, payload)));
+    }
+
+    private Task SubmitOnboarding() => Run(() => Api.SubmitOnboardingAsync(new(
+        selectedOffer!.Id,
+        selectedOffer.MatchedIndividualId ?? 0,
+        structureId,
+        jobTypeId,
+        positionId > 0 ? positionId : null,
+        joinedDate,
+        onboardingRemarks,
+        jobMatrixStepId > 0 ? jobMatrixStepId : null)));
 
     private async Task Run(Func<Task<HRM.DTOs.ServiceResult>> action)
     {
@@ -214,11 +401,46 @@
         }
         catch (HttpRequestException)
         {
-            message = "The action failed. Verify recruitment permissions, final results and onboarding requirements.";
+            message = "The action failed. Verify recruitment permissions, final results, and onboarding requirements.";
         }
         finally
         {
             busy = false;
+        }
+    }
+
+    private static string FormatOfferStatus(string status) => status switch
+    {
+        "OnboardingSubmitted" => "Onboarding Submitted",
+        _ => status
+    };
+
+    private static string OfferStatusBadge(string status) => status switch
+    {
+        "Accepted" => "bg-emerald-100 text-emerald-800",
+        "OnboardingSubmitted" => "bg-blue-100 text-blue-800",
+        "Declined" => "bg-rose-100 text-rose-800",
+        _ => "bg-amber-100 text-amber-800"
+    };
+
+    private static string FormatOfferTerms(string json)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+            var lines = new List<string>();
+            if (root.TryGetProperty("ProbationPeriod", out var prob) && !string.IsNullOrWhiteSpace(prob.GetString()))
+                lines.Add($"Probation Period: {prob.GetString()}");
+            if (root.TryGetProperty("ProposedStartDate", out var start) && !string.IsNullOrWhiteSpace(start.GetString()))
+                lines.Add($"Proposed Start Date: {start.GetString()}");
+            if (root.TryGetProperty("Terms", out var t) && !string.IsNullOrWhiteSpace(t.GetString()))
+                lines.Add(t.GetString()!);
+            return lines.Count > 0 ? string.Join("\n", lines) : json;
+        }
+        catch
+        {
+            return json;
         }
     }
 }

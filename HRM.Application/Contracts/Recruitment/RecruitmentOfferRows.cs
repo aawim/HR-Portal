@@ -1,4 +1,16 @@
 namespace HRM.Application.Contracts.Recruitment;
-public sealed record RecruitmentOfferCandidateRow(int MeritResultId,string ApplicationReference,string ApplicantName,int Rank);
-public sealed record RecruitmentOfferRow(int Id,string ApplicationReference,string ApplicantName,string Status,int? OnboardingRequestId);
-public sealed record RecruitmentOfferWorkspace(IReadOnlyList<RecruitmentOfferCandidateRow> Candidates,IReadOnlyList<RecruitmentOfferRow> Offers);
+public sealed record RecruitmentOnboardingLookupOption(int Id,string Name);
+public sealed record RecruitmentPayStepOption(int Id,string Label,decimal? BasicSalary);
+public sealed record RecruitmentVacantPositionOption(int Id,string Name,int? PositionMatrixId,IReadOnlyList<RecruitmentPayStepOption> PaySteps);
+public sealed record RecruitmentOfferContext(
+    string PositionName,
+    decimal? BasicSalary,
+    string? EmploymentType,
+    int? DefaultOrganisationStructureId,
+    int? DefaultPositionId,
+    IReadOnlyList<RecruitmentOnboardingLookupOption> Structures,
+    IReadOnlyList<RecruitmentOnboardingLookupOption> JobTypes,
+    IReadOnlyList<RecruitmentVacantPositionOption> VacantPositions);
+public sealed record RecruitmentOfferCandidateRow(int MeritResultId,string ApplicationReference,string ApplicantName,int Rank,decimal Score=0);
+public sealed record RecruitmentOfferRow(int Id,string ApplicationReference,string ApplicantName,string Status,int? OnboardingRequestId,string? EfaasIdNumber=null,int? MatchedIndividualId=null,DateTime? OfferedAtUtc=null,DateTime? AcceptedAtUtc=null,string? TermsSnapshotJson=null);
+public sealed record RecruitmentOfferWorkspace(IReadOnlyList<RecruitmentOfferCandidateRow> Candidates,IReadOnlyList<RecruitmentOfferRow> Offers,RecruitmentOfferContext? Context=null,int VacancySlots=0,bool IsResultFinal=false);
