@@ -1,140 +1,178 @@
 @page "/admin/attendance/{CategoryName}"
-@using HRM.Components.Admin.Attendance.Attendance
 @page "/admin/attendance/{CategoryName}/{Page}"
+@using HRM.Components.Admin.Attendance.Attendance
 @using HRM.Models
 @using HRM.Services
 @using HRM.Services.Interfaces
 @using HRM.Services.Interfaces.Leave
 @using Microsoft.AspNetCore.Components.Authorization
-
+@using Microsoft.JSInterop
 
 @inject NavigationManager Navigation
 @inject IUserAccessService UserAccess
 @inject HRM.Application.Contracts.Pages.ILeaveApplications LeaveService
+@inject IJSRuntime JS
 
 @rendermode RenderMode.InteractiveServer
 
-<PageTitle>Attendance - HR Portal</PageTitle>
+<PageTitle>@WorkspaceTitle - HR Portal</PageTitle>
 
 <AuthorizeView>
     <Authorized>
         @if (checkingAccess)
         {
-            <div class="rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-500">Checking attendance permissions…</div>
+            <div class="m-2 flex items-center justify-center gap-2 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-8 text-xs text-slate-500">
+                <span class="h-4 w-4 rounded-full border-2 border-blue-600 border-t-transparent animate-spin"></span>
+                <span>Checking attendance permissions…</span>
+            </div>
         }
         else if (!canAccess)
         {
-            <div class="rounded-xl border border-amber-200 bg-amber-50 p-6 text-sm text-amber-900">
+            <div role="alert" class="m-2 rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 p-6 text-xs text-amber-900 dark:text-amber-200">
                 You do not have permission to access Attendance Management.
             </div>
         }
         else
         {
-        <div class="min-w-0 w-full mx-auto">
-            <!-- Back Button -->
-            <a href="/admin/attendance" class="text-slate-400 hover:text-slate-600 text-sm mb-2 flex items-center gap-1 transition-colors w-fit">
-                <AppIcon Name="arrow_back" Class="w-4 h-4 text-base" />
-                Back to Attendance
-            </a>
-
-            <!-- Main Responsive Layout: Stacks vertically on mobile, side-by-side on md+ screens -->
-            <div class="flex min-w-0 flex-col 2xl:flex-row gap-4 items-start">
-                <!-- LEFT: Sidebar Menu (Responsive width) -->
-                <div class="flex-shrink-0 flex flex-col gap-1 transition-all duration-300 ease-in-out overflow-hidden @(isSidebarExpanded ? "w-full 2xl:w-56" : "w-[60px]")">
-
-                    <div class="flex items-center @(isSidebarExpanded ? "justify-between" : "justify-center") px-1 mb-3">
-
-                        <h2 class="text-xl font-bold text-slate-800 capitalize truncate transition-opacity duration-300 @(isSidebarExpanded ? "opacity-100 block" : "opacity-0 hidden")">
-                            @CategoryName Management
-                        </h2>
-
-                        <button @onclick="ToggleSidebar" class="p-2 rounded-lg text-slate-500 hover:bg-slate-100 hover:text-blue-600 transition-colors flex-shrink-0" title="@(isSidebarExpanded ? "Collapse Sidebar" : "Expand Sidebar")">
-                            <AppIcon Name="menu" Class="w-6 h-6 transition-transform duration-300 text-2xl " />
+            var items = GetSubItems(CategoryName);
+            <section class="w-full min-w-0 p-2 flex flex-col gap-3 text-slate-900 dark:text-slate-100">
+                <!-- Compact Transparent Borderless Header (always full width) -->
+                <header class="staff-overview-no-print bg-transparent flex flex-wrap items-center justify-between gap-2 px-1 py-0.5">
+                    <div class="min-w-0">
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <h1 class="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 truncate">@WorkspaceTitle</h1>
+                            <span class="inline-flex items-center gap-1 rounded-full bg-teal-50 dark:bg-teal-950/60 border border-teal-200/80 dark:border-teal-800 px-2 py-0.5 text-[10px] font-semibold text-teal-700 dark:text-teal-300">
+                                <span class="h-1.5 w-1.5 rounded-full bg-teal-500"></span>
+                                @WorkspaceBadge
+                            </span>
+                        </div>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">
+                            @(activeItem?.Description ?? "Review individual, department, and daily attendance logs, requests, and uneven punches.")
+                        </p>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-1.5">
+                        <button type="button"
+                                class="app-button app-button-neutral app-button-sm"
+                                title="@(isFullWidth ? "Shrink to standard layout" : "Expand to full page width")"
+                                @onclick="ToggleFullWidthAsync">
+                            <AppIcon Name="@(isFullWidth ? "fullscreen_exit" : "fullscreen")" Class="text-xs" />
+                            <span>@(isFullWidth ? "Shrink View" : "Full Width")</span>
+                        </button>
+                        <button type="button"
+                                class="app-button app-button-secondary app-button-sm"
+                                @onclick="RefreshActiveView">
+                            <AppIcon Name="refresh" Class="text-xs" />
+                            <span>Refresh</span>
                         </button>
                     </div>
+                </header>
 
-                    @foreach (var item in GetSubItems(CategoryName))
-                    {
-                    var currentPath = Navigation.ToBaseRelativePath(Navigation.Uri).ToLower();
- 
-                        <button @onclick="() => SelectItem(item)"title="@(!isSidebarExpanded ? item.Title : null)"
-                           
-                                class="text-left p-1 rounded-xl border shadow-sm transition-all duration-200 group flex items-center gap-3 overflow-hidden
-                                @(activeItem?.Title == item.Title ? "bg-blue-50 border-blue-200 ring-1 ring-blue-500/20" : "bg-white border-slate-200 hover:shadow-md hover:border-blue-200 hover:bg-slate-50")">
-                           <div class="w-10 h-12 flex items-center justify-center rounded-lg text-xl flex-shrink-0 transition-colors duration-300 mx-auto">
-                    
-                                @item.Icon
-                            </div>
+                <!-- Full-Width Folder Navigation Tabs -->
+                @if (items.Count > 1)
+                {
+                    <div class="org-workspace-tabs my-workspace-tabs w-full border-b-2 border-teal-700 dark:border-teal-600 overflow-x-auto">
+                        <nav class="flex items-end gap-1 min-w-max pb-0" aria-label="@($"{WorkspaceTitle} Sections")">
+                            @foreach (var item in items)
+                            {
+                                var isActive = activeItem?.Route == item.Route;
+                                <button type="button"
+                                        aria-current="@(isActive ? "page" : null)"
+                                        class="rounded-t-xl px-3.5 py-2 font-bold text-xs transition-all border-t border-l border-r inline-flex items-center gap-1.5 @(isActive ? "bg-teal-700 dark:bg-teal-600 text-white border-teal-700 dark:border-teal-600 shadow-sm" : "bg-[#86b0be]/30 text-slate-700 hover:text-slate-900 hover:bg-[#86b0be]/50 dark:bg-slate-800/90 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-700 border-slate-300 dark:border-slate-700")"
+                                        @onclick="() => SelectItem(item)">
+                                    <i class="bi @item.Icon text-xs" aria-hidden="true"></i>
+                                    <span>@item.Title</span>
+                                </button>
+                            }
+                        </nav>
+                    </div>
+                }
 
-                            <div class="flex-grow min-w-0 transition-all duration-300 @(isSidebarExpanded ? "opacity-100 w-auto" : "opacity-0 w-0 hidden")">
-                                <h3 class="font-bold text-sm mb-0.5 truncate @(activeItem?.Title == item.Title ? "text-blue-800" : "text-slate-800 group-hover:text-blue-700")">
-                                    @item.Title
-                                </h3>
-                                <p class="text-slate-500 text-xs leading-tight line-clamp-2">
-                                    @item.Description
-                                </p>
+                <!-- Content Shell (shrinks in Shrink View; header & tabs remain full width) -->
+                <div class="attendance-ws-shell @(isFullWidth ? "attendance-ws-shell-full" : "attendance-ws-shell-standard")">
+                    <div class="min-w-0 w-full rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs p-3 sm:p-4">
+                        @if (activeItem == null)
+                        {
+                            <div class="py-12 text-center text-xs text-slate-500">
+                                Select a section from the tabs above to view attendance data.
                             </div>
-
-                            <div class="flex-shrink-0 transition-all duration-300 @(isSidebarExpanded ? "opacity-100 block" : "opacity-0 hidden") @(activeItem?.Title == item.Title ? "text-blue-600" : "text-slate-300 group-hover:text-blue-600")">
-                                <AppIcon Name="chevron_right" Class="w-5 h-5 text-xl" />
-                            </div>
-                        </button>
                         }
-                </div>
-
-                <!-- RIGHT: Dynamic Data Display -->
-                <div class="min-w-0 w-full flex-1 bg-white rounded-2xl border border-slate-200 shadow-sm p-3 sm:p-4">
-                    @if (activeItem == null)
-                    {
-                        <div class="h-full flex flex-col items-center justify-center text-slate-400 opacity-60 min-h-[400px]">
-                            <div class="text-6xl mb-4">👈</div>
-                            <p class="text-lg font-medium">Select an item from the menu to view data.</p>
-                        </div>
-                    }
-                    else
-                    {
-                        <!-- Header for the selected data -->
-                     @*    <div class="border-b border-slate-100 pb-4 mb-6 flex justify-between items-end">
-                            <div>
-                                <h2 class="text-xl font-bold text-slate-800">@activeItem.Title</h2>
-                                <p class="text-sm text-slate-500 mt-1">@activeItem.Description</p>
+                        else if (activeItem.ComponentType != null)
+                        {
+                            <DynamicComponent @key="(CategoryName, activeItem.Route, refreshKey)" Type="@activeItem.ComponentType" />
+                        }
+                        else
+                        {
+                            <div class="rounded-xl border border-dashed border-slate-300 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800/40 p-8 text-center text-xs text-slate-500">
+                                <p><strong>@activeItem.Title</strong> is not available yet. Choose another tab above to view available attendance tools.</p>
                             </div>
-                        </div> *@
-
-                        <!-- Dynamic Component Rendering -->
-                        <div class="mt-4">
-                            @if (activeItem.ComponentType != null)
-                            {
-                                <DynamicComponent Type="@activeItem.ComponentType" />
-                            }
-                            else
-                            {
-                                <div class="bg-slate-50 border border-slate-100 rounded-xl p-8 text-center text-slate-500">
-                                    <p><strong>@activeItem.Title</strong> is not available yet. Return to the section menu to choose an available feature.</p>
-                                </div>
-                            }
-                        </div>
-                    }
+                        }
+                    </div>
                 </div>
-            </div>
-        </div>
+            </section>
+
+            <style>
+                .attendance-ws-shell {
+                    width: 100%;
+                    min-width: 0;
+                    display: flex;
+                    flex-direction: column;
+                    gap: 0.75rem;
+                    transition: max-width 200ms ease;
+                }
+
+                .attendance-ws-shell-standard {
+                    max-width: 80rem;
+                    margin-left: auto;
+                    margin-right: auto;
+                }
+
+                .attendance-ws-shell-full {
+                    max-width: none;
+                }
+            </style>
         }
     </Authorized>
 
     <NotAuthorized>
         <div class="p-6 text-center mt-12">
-            <p class="text-slate-500 text-lg">
-                Please log in to view the settings dashboard.
+            <p class="text-slate-500 text-sm">
+                Please log in to view the attendance dashboard.
             </p>
         </div>
     </NotAuthorized>
 </AuthorizeView>
 
 @code {
+    private const string FullWidthStorageKey = "hrm.attendance.full-width";
+
     [Parameter] public string CategoryName { get; set; } = string.Empty;
     [Parameter] public string? Page { get; set; }
+
     private bool checkingAccess = true;
     private bool canAccess;
+    private bool isFullWidth;
+    private int refreshKey;
+
+    private record SubItem(string Title, string Route, string Icon, string Description, Type? ComponentType = null);
+    private SubItem? activeItem;
+
+    private string WorkspaceTitle => (CategoryName ?? "").ToLowerInvariant() switch
+    {
+        "manage-attendance" => "Attendance Management",
+        "manage-leaves" => "Leave Management",
+        "overtimes" => "Overtime Management",
+        "reports" => "Attendance Reports",
+        _ => "Attendance Operations"
+    };
+
+    private string WorkspaceBadge => (CategoryName ?? "").ToLowerInvariant() switch
+    {
+        "manage-attendance" => "Attendance Operations",
+        "manage-leaves" => "Leave Administration",
+        "overtimes" => "Overtime & Approvals",
+        "reports" => "Time & Attendance Reports",
+        _ => "HR Attendance"
+    };
 
     protected override async Task OnInitializedAsync()
     {
@@ -154,6 +192,24 @@
             checkingAccess = false;
         }
     }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                var saved = await JS.InvokeAsync<string?>("localStorage.getItem", FullWidthStorageKey);
+                if (bool.TryParse(saved, out var parsed) && parsed != isFullWidth)
+                {
+                    isFullWidth = parsed;
+                    StateHasChanged();
+                }
+            }
+            catch { }
+        }
+    }
+
     protected override void OnParametersSet()
     {
         if (CategoryName.Equals("manage-leaves", StringComparison.OrdinalIgnoreCase) &&
@@ -162,97 +218,74 @@
             Navigation.NavigateTo("/admin/my/workspace/leave", replace: true);
             return;
         }
-        activeItem = string.IsNullOrWhiteSpace(Page) ? GetSubItems(CategoryName).FirstOrDefault() :
-            GetSubItems(CategoryName).FirstOrDefault(x => HRM.Helpers.SectionRoutes.Matches(Page, x.Route));
+        activeItem = string.IsNullOrWhiteSpace(Page)
+            ? GetSubItems(CategoryName).FirstOrDefault()
+            : GetSubItems(CategoryName).FirstOrDefault(x => HRM.Helpers.SectionRoutes.Matches(Page, x.Route));
     }
-
-    // Fixed Record: Replaced 'Url' with 'ComponentType' to match your dynamic rendering goals
-    private record SubItem(string Title, string Route, string Icon, string Description, Type? ComponentType = null);
-
-    private SubItem? activeItem;
 
     private void SelectItem(SubItem item)
     {
         Navigation.NavigateTo($"/admin/attendance/{CategoryName}/{item.Route}");
     }
-    private bool isSidebarExpanded = true;
 
-    private void ToggleSidebar()
+    private async Task ToggleFullWidthAsync()
     {
-        isSidebarExpanded = !isSidebarExpanded;
+        isFullWidth = !isFullWidth;
+        try
+        {
+            await JS.InvokeVoidAsync("localStorage.setItem", FullWidthStorageKey, isFullWidth.ToString().ToLowerInvariant());
+        }
+        catch { }
     }
- 
-    // protected override void OnInitialized()
-    // {
-    //     SetActiveItemFromUrl();
-    //     Navigation.LocationChanged += OnLocationChanged;
-    // }
 
+    private void RefreshActiveView() => refreshKey++;
 
-
-    // private void SetActiveItemFromUrl()
-    // {
-    //     var currentPath = Navigation.ToBaseRelativePath(Navigation.Uri)
-    //                                 .ToLower();
-
-    //     activeItem = GetSubItems(CategoryName)
-    //         .FirstOrDefault(x =>
-    //             currentPath.EndsWith(x.Route.ToLower()));
-    // }
-  
-     private List<SubItem> GetSubItems(string cat) => cat.ToLower() switch
+    private List<SubItem> GetSubItems(string cat) => (cat ?? "").ToLowerInvariant() switch
     {
-        "manage-attendance" => new() {
-            new("Individual Attendance","individual-attendance","🔍","Check detailed attendance records for specific employees.",typeof(IndividualAttendanceGrid)),
-            new("Department Attendance","department-attendance","👥","Review attendance for staff in approved departments.",typeof(TeamAttendanceGrid)),
-            new("Organisation Daily","organisation-daily","🏢","View the daily attendance overview for the entire organisation.",typeof(OrganisationDaily)),
-            new("Add Bulk Attendance","add-bulk-attendance","📋","Upload or manually enter attendance for multiple staff at once.",typeof(BulkAttendanceGrid)),
-            new("Attendance Requests","attendance-requests","✉️","Review and approve manual attendance entries and adjustments.",typeof(AttendanceRequestGrid)),
-            new("Attendance Invalidate Requests","attendance-invalidate-requests","🚫","Process requests to void or cancel incorrect attendance logs.",typeof(AttendanceInvalidateGrid)),
-            new("Out Of Office Requests","out-of-office-requests","🚶‍♂️","Manage requests for off-site work, meetings, or short absences.",typeof(OutOfOfficeRequestGrid)),
-            new("Uneven Logs","uneven-logs","⚠️","Resolve missing check-ins, check-outs, or incomplete shifts.",typeof(UnEvenLogGrid)),
-            new("Official Trip Requests","official-trip-requests","✈️","Review and manage approvals for business travel and duty trips.",typeof(OfficialTripRequestGrid)),
-            new("Former Staff", "former-staff","📁","Access historical attendance records for inactive or past employees.",typeof(FomerStaffGrid))
+        "manage-attendance" => new()
+        {
+            new("Individual Attendance", "individual-attendance", "bi-person-check", "Check detailed attendance records for specific employees.", typeof(IndividualAttendanceGrid)),
+            new("Department Attendance", "department-attendance", "bi-people", "Review attendance for staff in approved departments.", typeof(TeamAttendanceGrid)),
+            new("Organisation Daily", "organisation-daily", "bi-building", "View the daily attendance overview for the entire organisation.", typeof(OrganisationDaily)),
+            new("Add Bulk Attendance", "add-bulk-attendance", "bi-upload", "Upload or manually enter attendance for multiple staff at once.", typeof(BulkAttendanceGrid)),
+            new("Attendance Requests", "attendance-requests", "bi-envelope-check", "Review and approve manual attendance entries and adjustments.", typeof(AttendanceRequestGrid)),
+            new("Invalidate Requests", "attendance-invalidate-requests", "bi-slash-circle", "Process requests to void or cancel incorrect attendance logs.", typeof(AttendanceInvalidateGrid)),
+            new("Out Of Office", "out-of-office-requests", "bi-door-open", "Manage requests for off-site work, meetings, or short absences.", typeof(OutOfOfficeRequestGrid)),
+            new("Uneven Logs", "uneven-logs", "bi-exclamation-triangle", "Resolve missing check-ins, check-outs, or incomplete shifts.", typeof(UnEvenLogGrid)),
+            new("Official Trips", "official-trip-requests", "bi-airplane", "Review and manage approvals for business travel and duty trips.", typeof(OfficialTripRequestGrid)),
+            new("Former Staff", "former-staff", "bi-archive", "Access historical attendance records for inactive or past employees.", typeof(FomerStaffGrid))
         },
-        "manage-leaves" => new() {
-            new("Search", "search", "🔍", "Find and review past or pending leave applications.", null),
-            new("Leave Change Request", "leave-change-request", "🔄", "Request modifications or cancellations to approved leave.", null),
-            new("Staff Leave Report", "staff-leave-report", "📄", "Generate detailed leave balances and history for specific employees.", null),
-            new("Organisation Leave Report", "organisation-leave-report", "📊", "View high-level leave trends and balances across the entire organisation.", null),
-            new("Bulk Data Entry", "bulk-data-entry", "📑", "Import or manually enter multiple leave or attendance records simultaneously.", null)
+        "manage-leaves" => new()
+        {
+            new("Search", "search", "bi-search", "Find and review past or pending leave applications.", null),
+            new("Leave Change Request", "leave-change-request", "bi-arrow-repeat", "Request modifications or cancellations to approved leave.", null),
+            new("Staff Leave Report", "staff-leave-report", "bi-file-earmark-text", "Generate detailed leave balances and history for specific employees.", null),
+            new("Organisation Leave Report", "organisation-leave-report", "bi-bar-chart", "View high-level leave trends and balances across the entire organisation.", null),
+            new("Bulk Data Entry", "bulk-data-entry", "bi-upload", "Import or manually enter multiple leave or attendance records simultaneously.", null)
         },
-   
-        "overtimes" => new() {
-            new("OT Pre Approval","ot-pre-approval","⏳","Request or grant permission for upcoming overtime hours in advance.",null),
-            new("OT Request","ot-request","⏰","Submit completed overtime hours for final approval and payroll processing.",null),
-            new("Staff OT Report","staff-ot-report","📄","Generate detailed overtime summaries and costs for individual employees.",null),
-            new("Organisation OT Report","organisation-ot-report","📊","View high-level overtime hour trends and costs across the entire organisation.",null)
+        "overtimes" => new()
+        {
+            new("OT Pre Approval", "ot-pre-approval", "bi-hourglass-split", "Request or grant permission for upcoming overtime hours in advance.", null),
+            new("OT Request", "ot-request", "bi-stopwatch", "Submit completed overtime hours for final approval and payroll processing.", null),
+            new("Staff OT Report", "staff-ot-report", "bi-file-earmark-text", "Generate detailed overtime summaries and costs for individual employees.", null),
+            new("Organisation OT Report", "organisation-ot-report", "bi-bar-chart", "View high-level overtime hour trends and costs across the entire organisation.", null)
         },
-        "reports" => new() {
-            new("Daily Attendance Report","daily-attendance-report","📅","Review day-to-day clock-in and clock-out logs for all employees.",null),
-            new("Staff Attendance Report","staff-attendance-report","📋","Generate detailed time and attendance histories for specific individuals.",null),
-            new("Team Attendance Report","team-attendance-report","👥","Analyze attendance trends and daily presence for specific departments or groups.",null),
-            new("Staff OT Report","staff-ot-report","⏳","Review detailed overtime hours and summaries for individual employees.",null),
-            new("Staff Leave Report","staff-leave-report","🏖️","Generate detailed leave balances and history for specific employees.",null),
-            new("Staff Break Fine Report","staff-break-fine-report","☕","Track deductions and penalties for individuals exceeding allocated break times.",null),
-            new("Staff Late Fine Report","staff-late-fine-report","⏰","Monitor tardiness records and associated financial deductions for specific employees.",null),
-            new("Organisation OT Report","organisation-ot-report","📈","Analyze company-wide overtime hour trends and total compensation costs.",null),
-            new("Organisation Leave Report","organisation-leave-report","📊","View high-level leave trends, absenteeism, and balances across the entire organisation.",null),
-            new("Organisation Late Fine Report","organisation-late-fine-report","📉","Review aggregate tardiness data and total late fine deductions company-wide.",null)
+        "reports" => new()
+        {
+            new("Daily Attendance Report", "daily-attendance-report", "bi-calendar-day", "Review day-to-day clock-in and clock-out logs for all employees.", null),
+            new("Staff Attendance Report", "staff-attendance-report", "bi-clipboard-data", "Generate detailed time and attendance histories for specific individuals.", null),
+            new("Team Attendance Report", "team-attendance-report", "bi-people", "Analyze attendance trends and daily presence for specific departments or groups.", null),
+            new("Staff OT Report", "staff-ot-report", "bi-stopwatch", "Review detailed overtime hours and summaries for individual employees.", null),
+            new("Staff Leave Report", "staff-leave-report", "bi-calendar-event", "Generate detailed leave balances and history for specific employees.", null),
+            new("Staff Break Fine Report", "staff-break-fine-report", "bi-cup-hot", "Track deductions and penalties for individuals exceeding allocated break times.", null),
+            new("Staff Late Fine Report", "staff-late-fine-report", "bi-alarm", "Monitor tardiness records and associated financial deductions for specific employees.", null),
+            new("Organisation OT Report", "organisation-ot-report", "bi-graph-up", "Analyze company-wide overtime hour trends and total compensation costs.", null),
+            new("Organisation Leave Report", "organisation-leave-report", "bi-bar-chart", "View high-level leave trends, absenteeism, and balances across the entire organisation.", null),
+            new("Organisation Late Fine Report", "organisation-late-fine-report", "bi-graph-down", "Review aggregate tardiness data and total late fine deductions company-wide.", null)
         },
-        
-        _ => new() { new("General Configuration", "general", "🔧", "System level management.") }
+        _ => new() { new("General Configuration", "general", "bi-gear", "System level management.") }
     };
 
-    // --- Authentication and Service Logic ---
     [CascadingParameter]
     private Task<AuthenticationState>? AuthState { get; set; }
-
-    // private string UserName = "User";
-
-    // Variables for Dashboard Data
-
- 
-    // private List<HRM.DTOs.Contracts.LeafDto>? leaveRequests;
-
 }
