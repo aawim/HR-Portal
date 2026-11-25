@@ -369,17 +369,50 @@
                                         <th class="px-4 py-3">Vacancy Ref</th>
                                         <th class="px-4 py-3">Submitted (MVT)</th>
                                         <th class="px-4 py-3">Status</th>
+                                        <th class="px-4 py-3 text-right">Action</th>
                                     </tr>
                                 </thead>
                                 <tbody class="divide-y divide-slate-100">
                                     @foreach (var a in workspace.Applications)
                                     {
-                                        <tr class="hover:bg-slate-50/70">
+                                        var isReturned = a.Status == "ReturnedForCorrection";
+                                        var correctionOpen = isReturned && a.CorrectionDeadlineUtc.HasValue && a.CorrectionDeadlineUtc.Value > DateTime.UtcNow;
+                                        <tr class="hover:bg-slate-50/70 @(isReturned ? "bg-amber-50/40" : "")">
                                             <td class="px-4 py-3 font-mono font-semibold text-blue-700">@a.Reference</td>
                                             <td class="px-4 py-3 font-mono text-slate-700">@a.VacancyReference</td>
                                             <td class="px-4 py-3 text-slate-500">@(a.SubmittedAtUtc.HasValue ? a.SubmittedAtUtc.Value.AddHours(5).ToString("dd MMM yyyy HH:mm") : "Draft")</td>
-                                            <td class="px-4 py-3">
-                                                <span class="rounded-full bg-blue-50 border border-blue-200 px-2.5 py-0.5 text-[11px] font-semibold text-blue-800">@a.Status</span>
+                                            <td class="px-4 py-3 space-y-1">
+                                                <span class="inline-block rounded-full border px-2.5 py-0.5 text-[11px] font-semibold @(isReturned ? "bg-amber-100 border-amber-300 text-amber-900" : "bg-blue-50 border-blue-200 text-blue-800")">
+                                                    @(isReturned ? "Returned for Correction" : a.Status)
+                                                </span>
+                                                @if (isReturned)
+                                                {
+                                                    @if (!string.IsNullOrWhiteSpace(a.ReturnComment))
+                                                    {
+                                                        <p class="text-[11px] text-amber-900 max-w-md whitespace-pre-wrap">@a.ReturnComment</p>
+                                                    }
+                                                    @if (a.CorrectionDeadlineUtc.HasValue)
+                                                    {
+                                                        <p class="text-[10px] font-semibold @(correctionOpen ? "text-amber-700" : "text-rose-700")">
+                                                            @(correctionOpen ? "Resubmit before: " : "Correction deadline passed: ")@a.CorrectionDeadlineUtc.Value.AddHours(5).ToString("dd MMM yyyy HH:mm") MVT
+                                                        </p>
+                                                    }
+                                                }
+                                            </td>
+                                            <td class="px-4 py-3 text-right">
+                                                @if (correctionOpen)
+                                                {
+                                                    <button type="button" class="je-btn-primary" @onclick="() => BeginApply(a.VacancyReference)">
+                                                        <i class="bi bi-pencil-square" aria-hidden="true"></i>
+                                                        <span>Correct &amp; Resubmit</span>
+                                                    </button>
+                                                }
+                                                else if (a.Status == "Draft")
+                                                {
+                                                    <button type="button" class="je-btn-outline" @onclick="() => BeginApply(a.VacancyReference)">
+                                                        <span>Continue Draft</span>
+                                                    </button>
+                                                }
                                             </td>
                                         </tr>
                                     }

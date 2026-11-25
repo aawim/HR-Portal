@@ -15,7 +15,37 @@ public sealed class RecruitmentApplicantWorkspaceController(IDbContextFactory<Hr
         var identity=User.FindFirstValue("idnumber")?.Trim();
         if(string.IsNullOrWhiteSpace(identity))return Forbid();
         await using var db=await factory.CreateDbContextAsync(ct);
-        var applications=await(from a in db.RecruitmentApplications join person in db.RecruitmentApplicants on a.RecruitmentApplicantId equals person.Id join v in db.RecruitmentVacancies on a.RecruitmentVacancyId equals v.Id where person.EfaasIdNumber==identity orderby a.SubmittedAtUtc descending select new MyRecruitmentApplicationRow(a.Reference,v.Reference,a.Status,a.SubmittedAtUtc)).ToListAsync(ct);
+        var rawApps=await(from a in db.RecruitmentApplications.AsNoTracking() join person in db.RecruitmentApplicants.AsNoTracking() on a.RecruitmentApplicantId equals person.Id join v in db.RecruitmentVacancies.AsNoTracking() on a.RecruitmentVacancyId equals v.Id where person.EfaasIdNumber==identity orderby a.SubmittedAtUtc descending select new { a.Id, a.Reference, VacancyReference=v.Reference, a.Status, a.SubmittedAtUtc, a.RecruitmentVacancyId }).ToListAsync(ct);
+        var returnedIds=rawApps.Where(x=>x.Status=="ReturnedForCorrection").Select(x=>x.Id).ToList();
+        var returnEvents=returnedIds.Count==0?[]:await db.Set<HRM.Models.Recruitment.RecruitmentApplicationEvent>().AsNoTracking()
+            .Where(e=>returnedIds.Contains(e.ApplicationId)&&e.Kind=="ReturnedForCorrection")
+            .OrderByDescending(e=>e.CreatedAtUtc)
+            .ToListAsync(ct);
+        var applications=rawApps.Select(a=>
+        {
+            string? comment=null;
+            DateTime? deadline=null;
+            if(a.Status=="ReturnedForCorrection")
+            {
+                var evt=returnEvents.FirstOrDefault(e=>e.ApplicationId==a.Id);
+                if(evt is not null)
+                {
+                    comment=evt.Message;
+                    if(!string.IsNullOrWhiteSpace(evt.SnapshotJson))
+                    {
+                        try
+                        {
+                            using var doc=System.Text.Json.JsonDocument.Parse(evt.SnapshotJson);
+                            if(doc.RootElement.TryGetProperty("Comment",out var c))comment=c.GetString()??comment;
+                            if(doc.RootElement.TryGetProperty("CorrectionDeadlineUtc",out var d)&&d.ValueKind==System.Text.Json.JsonValueKind.String&&DateTime.TryParse(d.GetString(),null,System.Globalization.DateTimeStyles.RoundtripKind,out var parsed))
+                                deadline=parsed.Kind==DateTimeKind.Utc?parsed:DateTime.SpecifyKind(parsed,DateTimeKind.Utc);
+                        }
+                        catch(System.Text.Json.JsonException){}
+                    }
+                }
+            }
+            return new MyRecruitmentApplicationRow(a.Reference,a.VacancyReference,a.Status,a.SubmittedAtUtc,a.RecruitmentVacancyId,comment,deadline);
+        }).ToList();
         var mine=await(from o in db.RecruitmentOffers join m in db.RecruitmentMeritResults on o.RecruitmentMeritResultId equals m.Id join a in db.RecruitmentApplications on m.RecruitmentApplicationId equals a.Id join person in db.RecruitmentApplicants on a.RecruitmentApplicantId equals person.Id join v in db.RecruitmentVacancies on a.RecruitmentVacancyId equals v.Id where person.EfaasIdNumber==identity select new MyRecruitmentOfferRow(o.Id,v.Reference,o.Status,o.TermsSnapshotJson)).ToListAsync(ct);
         var rawResults=await(from a in db.RecruitmentApplications.AsNoTracking()
             join person in db.RecruitmentApplicants.AsNoTracking() on a.RecruitmentApplicantId equals person.Id

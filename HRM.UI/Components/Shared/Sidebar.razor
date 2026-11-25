@@ -8,6 +8,7 @@
 @inject NavigationManager Navigation
 @inject IUserAccessService UserAccess
 @inject HRM.Services.Contracts.LeadershipAuthorityServiceContracts.IOperations LeadershipAccess
+@inject HRM.UI.Services.Recruitment.IRecruitmentApiClient RecruitmentApi
 
 
 
@@ -81,7 +82,7 @@
                                     }
                                     @if (canViewRecruitment)
                                     {
-                                        <NavItem Compact="collapsed" Href="/admin/hr/recruitment" Icon="user-plus" Text="Recruitment" />
+                                        <NavItem Compact="collapsed" Href="/admin/hr/recruitment" Icon="user-plus" Text="Recruitment" BadgeCount="@pendingRecruitmentCount" />
                                     }
                                     @if (canViewTransfers)
                                     {
@@ -278,6 +279,7 @@
     private bool canViewRequests;
     private bool canViewStaff;
     private bool canViewRecruitment;
+    private int pendingRecruitmentCount;
     private bool canViewTransfers;
     private bool canViewSeparations;
     private bool canViewAttendance;
@@ -309,6 +311,7 @@
         canViewRequests = false;
         canViewStaff = false;
         canViewRecruitment = false;
+        pendingRecruitmentCount = 0;
         canViewTransfers = false;
         canViewSeparations = false;
         canViewAttendance = false;
@@ -392,11 +395,19 @@
 
             var nextIsDeveloper = CanAccessDeveloperPortal || await UserAccess.HasUserGroupAsync("Developer") || await UserAccess.HasPermissionAsync("Developer");
 
+            var nextPendingRecruitmentCount = 0;
+            if (nextRecruitment && IsAdminPortal)
+            {
+                try { nextPendingRecruitmentCount = await RecruitmentApi.GetPendingScreeningCountAsync(); }
+                catch { nextPendingRecruitmentCount = 0; }
+            }
+
             // Assign atomically after all awaits complete to prevent intermediate blank-menu flashes.
             canManageLeadership = nextManageLeadership;
             canViewRequests = nextRequests;
             canViewStaff = nextStaff;
             canViewRecruitment = nextRecruitment;
+            pendingRecruitmentCount = nextPendingRecruitmentCount;
             canViewTransfers = nextTransfers;
             canViewSeparations = nextSeparations;
             canViewAttendance = nextAttendance;
@@ -443,7 +454,20 @@
         var active = GetActiveGroupKey();
         if (!string.IsNullOrEmpty(active))
             collapsedGroups.Remove(active);
-        InvokeAsync(StateHasChanged);
+        if (canViewRecruitment && IsAdminPortal)
+            _ = InvokeAsync(RefreshPendingRecruitmentCountAsync);
+        else
+            InvokeAsync(StateHasChanged);
+    }
+
+    private async Task RefreshPendingRecruitmentCountAsync()
+    {
+        try
+        {
+            pendingRecruitmentCount = await RecruitmentApi.GetPendingScreeningCountAsync();
+        }
+        catch { }
+        StateHasChanged();
     }
 
     private void EnsurePortalGroupsInitialized()

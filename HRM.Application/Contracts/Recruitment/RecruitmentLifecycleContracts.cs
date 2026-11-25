@@ -3,4 +3,4 @@ public sealed record SaveRecruitmentDraftInput(int VacancyId,int ExpectedVersion
 public sealed record RecruitmentLifecycleActionInput(int ExpectedVersion,bool Confirmed);
 public sealed record RecruitmentDocumentRow(int Id,string Category,string FileName);
 public sealed record RecruitmentEventRow(string Kind,string Message,DateTime CreatedAtUtc);
-public sealed record RecruitmentDraftDetail(int Id,int VacancyId,string Reference,string Status,int Version,string SnapshotJson,IReadOnlyList<RecruitmentDocumentRow> Documents,IReadOnlyList<RecruitmentEventRow> Notifications);
+public sealed record RecruitmentDraftDetail(int Id,int VacancyId,string Reference,string Status,int Version,string SnapshotJson,IReadOnlyList<RecruitmentDocumentRow> Documents,IReadOnlyList<RecruitmentEventRow> Notifications,string? ReturnComment=null,DateTime? CorrectionDeadlineUtc=null);

@@ -1,5 +1,7 @@
 @using HRM.Application.Contracts.Recruitment
+@using Microsoft.JSInterop
 @inject HRM.UI.Services.Recruitment.IRecruitmentApiClient Api
+@inject IJSRuntime JS
 
 <style>
     .rsp-grid {
@@ -13,6 +15,39 @@
         .rsp-grid {
             grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
         }
+    }
+
+    .rsp-preview-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 70;
+        background: rgba(15, 23, 42, 0.72);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1rem;
+    }
+
+    .rsp-preview-modal {
+        width: 100%;
+        max-width: 64rem;
+        height: 90vh;
+        background: #ffffff;
+        border-radius: 1rem;
+        box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.45);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    .rsp-preview-body {
+        flex: 1 1 auto;
+        overflow: auto;
+        background: #f1f5f9;
+        display: flex;
+        align-items: flex-start;
+        justify-content: center;
+        padding: 1rem;
     }
 </style>
 
@@ -73,13 +108,13 @@
                                     <td class="p-2.5 font-mono text-[11px] font-semibold text-blue-700">@row.Reference</td>
                                     <td class="p-2.5 font-medium text-slate-800">@row.ApplicantName</td>
                                     <td class="p-2.5">
-                                        <span class="rounded-full px-2.5 py-0.5 text-[11px] font-semibold @StatusBadgeClass(row.Status)">@row.Status</span>
+                                        <span class="rounded-full px-2.5 py-0.5 text-[11px] font-semibold @StatusBadgeClass(row.Status)">@FormatStatus(row.Status)</span>
                                     </td>
                                     <td class="p-2.5 text-right">
                                         <button type="button"
                                                 class="inline-flex items-center justify-center rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
                                                 disabled="@busy"
-                                                @onclick="() => Select(row)">
+                                                @onclick="() => SelectAsync(row)">
                                             @(row.Status == "Submitted" ? "Review" : row.Status == "EligibleNotShortlisted" ? "Shortlist" : "View")
                                         </button>
                                     </td>
@@ -93,75 +128,247 @@
 
         @if (selected is not null)
         {
-            <div class="rounded-xl border border-blue-200 bg-blue-50/40 p-4 space-y-3">
-                <div class="flex items-center justify-between gap-2">
-                    <div class="flex items-center gap-2">
-                        <h3 class="text-xs font-bold text-slate-900">Screening Decision: @selected.ApplicantName (@selected.Reference)</h3>
-                        <span class="rounded-full px-2 py-0.5 text-[10px] font-semibold @StatusBadgeClass(selected.Status)">@selected.Status</span>
+            <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-xs space-y-4">
+                <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
+                    <div class="flex flex-wrap items-center gap-2">
+                        <h3 class="text-xs font-bold text-slate-900">Application Review: @selected.ApplicantName (@selected.Reference)</h3>
+                        <span class="rounded-full px-2 py-0.5 text-[10px] font-semibold @StatusBadgeClass(selected.Status)">@FormatStatus(selected.Status)</span>
                     </div>
-                    <button type="button" class="text-xs font-semibold text-slate-500 hover:text-slate-800" @onclick="() => selected = null">Close</button>
+                    <button type="button" class="text-xs font-semibold text-slate-500 hover:text-slate-800" @onclick="CloseSelected">Close</button>
                 </div>
 
-                @if (selected.Status == "EligibleNotShortlisted")
+                @if (loadingDetail)
                 {
-                    <div class="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-900">
-                        This candidate already passed eligibility screening (<strong>EligibleNotShortlisted</strong>). Provide a shortlisting reason and evidence below to promote them to <strong>Shortlisted</strong> for assessment.
+                    <div class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-4 text-center text-xs text-slate-500">
+                        Loading submitted application details and certificates...
                     </div>
                 }
-                else if (selected.Status == "Shortlisted")
+                else if (selectedDetail is not null)
                 {
-                    <div class="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
-                        This candidate is already <strong>Shortlisted</strong> and ready for scoring in the <strong>Assessments</strong> tab.
+                    <!-- Applicant Metadata -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 text-xs">
+                        <div class="rounded-lg border border-slate-200 bg-slate-50/70 p-2.5">
+                            <span class="block text-[10px] font-bold uppercase tracking-wide text-slate-500">eFaas ID</span>
+                            <span class="font-mono font-semibold text-slate-800">@(selectedDetail.EfaasIdNumber ?? "—")</span>
+                        </div>
+                        <div class="rounded-lg border border-slate-200 bg-slate-50/70 p-2.5">
+                            <span class="block text-[10px] font-bold uppercase tracking-wide text-slate-500">Email</span>
+                            <span class="font-medium text-slate-800 break-all">@(string.IsNullOrWhiteSpace(selectedDetail.ApplicantEmail) ? "—" : selectedDetail.ApplicantEmail)</span>
+                        </div>
+                        <div class="rounded-lg border border-slate-200 bg-slate-50/70 p-2.5">
+                            <span class="block text-[10px] font-bold uppercase tracking-wide text-slate-500">Mobile</span>
+                            <span class="font-medium text-slate-800">@(string.IsNullOrWhiteSpace(selectedDetail.ApplicantMobile) ? "—" : selectedDetail.ApplicantMobile)</span>
+                        </div>
+                        <div class="rounded-lg border border-slate-200 bg-slate-50/70 p-2.5">
+                            <span class="block text-[10px] font-bold uppercase tracking-wide text-slate-500">Submitted (MVT)</span>
+                            <span class="font-medium text-slate-800">@(selectedDetail.SubmittedAtUtc.HasValue ? selectedDetail.SubmittedAtUtc.Value.AddHours(5).ToString("dd MMM yyyy HH:mm") : "Draft")</span>
+                        </div>
                     </div>
-                }
-                else if (selected.Status != "Submitted")
-                {
-                    <div class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-                        Only applications in <strong>Submitted</strong> or <strong>EligibleNotShortlisted</strong> status can be processed here. This application is currently <strong>@selected.Status</strong>.
+
+                    @if (selectedDetail.Status == "ReturnedForCorrection")
+                    {
+                        <div class="rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs text-amber-950 space-y-1">
+                            <div class="flex flex-wrap items-center justify-between gap-2">
+                                <span class="font-bold"><i class="bi bi-arrow-return-left mr-1" aria-hidden="true"></i>Returned to Applicant for Correction</span>
+                                @if (selectedDetail.CorrectionDeadlineUtc.HasValue)
+                                {
+                                    var expired = selectedDetail.CorrectionDeadlineUtc.Value <= DateTime.UtcNow;
+                                    <span class="rounded-full px-2 py-0.5 text-[10px] font-semibold @(expired ? "bg-rose-100 text-rose-800" : "bg-amber-200 text-amber-900")">
+                                        @(expired ? "Deadline Passed: " : "Due: ")@selectedDetail.CorrectionDeadlineUtc.Value.AddHours(5).ToString("dd MMM yyyy HH:mm") MVT
+                                    </span>
+                                }
+                            </div>
+                            @if (!string.IsNullOrWhiteSpace(selectedDetail.ReturnComment))
+                            {
+                                <p class="whitespace-pre-wrap text-amber-900">@selectedDetail.ReturnComment</p>
+                            }
+                        </div>
+                    }
+
+                    <!-- Submitted Application Content -->
+                    <div class="space-y-2 text-xs">
+                        <div class="rounded-lg border border-slate-200 bg-slate-50/40 p-3">
+                            <span class="block text-[10px] font-bold uppercase tracking-wide text-slate-500">Qualifications</span>
+                            <p class="mt-1 whitespace-pre-wrap text-slate-800">@(string.IsNullOrWhiteSpace(detailQualifications) ? "—" : detailQualifications)</p>
+                        </div>
+                        <div class="rounded-lg border border-slate-200 bg-slate-50/40 p-3">
+                            <span class="block text-[10px] font-bold uppercase tracking-wide text-slate-500">Relevant Experience</span>
+                            <p class="mt-1 whitespace-pre-wrap text-slate-800">@(string.IsNullOrWhiteSpace(detailExperience) ? "—" : detailExperience)</p>
+                        </div>
+                        <div class="rounded-lg border border-slate-200 bg-slate-50/40 p-3">
+                            <span class="block text-[10px] font-bold uppercase tracking-wide text-slate-500">Supporting Statement</span>
+                            <p class="mt-1 whitespace-pre-wrap text-slate-800">@(string.IsNullOrWhiteSpace(detailStatement) ? "—" : detailStatement)</p>
+                        </div>
                     </div>
-                }
 
-                <div class="flex flex-wrap gap-4">
-                    <label class="inline-flex items-center gap-2 text-xs font-medium text-slate-700">
-                        <input type="checkbox" disabled="@(busy || selected.Status != "Submitted")" @bind="eligible" @bind:after="OnEligibleChanged" />
-                        Meets advertised eligibility requirements
-                    </label>
-                    <label class="inline-flex items-center gap-2 text-xs font-medium text-slate-700">
-                        <input type="checkbox" disabled="@(busy || !CanEditSelected || !eligible || selected.Status == "EligibleNotShortlisted")" @bind="shortlisted" />
-                        Shortlist for assessment
-                    </label>
-                </div>
-
-                <label class="block text-xs font-medium text-slate-700">
-                    @(selected.Status == "EligibleNotShortlisted" ? "Shortlisting Reason" : "Decision Reason") <span class="text-rose-600">*</span>
-                    <textarea rows="2" class="@InputClass" maxlength="2000" disabled="@(busy || !CanEditSelected)" @bind="reason" @bind:event="oninput" placeholder="Explain eligibility and shortlisting decision..."></textarea>
-                </label>
-                <label class="block text-xs font-medium text-slate-700">
-                    Evidence Reviewed <span class="text-rose-600">*</span>
-                    <textarea rows="3" class="@InputClass" maxlength="8000" disabled="@(busy || !CanEditSelected)" @bind="evidence" @bind:event="oninput" placeholder="List qualifications, experience letters, and certificates verified..."></textarea>
-                </label>
-
-                <div class="flex flex-wrap items-center justify-between gap-2">
-                    <p class="text-[11px] text-slate-500">
-                        @if (CanEditSelected && (string.IsNullOrWhiteSpace(reason) || string.IsNullOrWhiteSpace(evidence)))
+                    <!-- Uploaded Documents & Certifications -->
+                    <div class="rounded-xl border border-slate-200 bg-slate-50/60 p-3 space-y-2">
+                        <div class="flex items-center justify-between">
+                            <h4 class="text-[11px] font-bold uppercase tracking-wide text-slate-700">
+                                <i class="bi bi-paperclip mr-1" aria-hidden="true"></i>Uploaded Documents &amp; Certifications
+                            </h4>
+                            <span class="rounded-full bg-white border border-slate-200 px-2 py-0.5 text-[10px] font-semibold text-slate-700">@selectedDetail.Documents.Count file(s)</span>
+                        </div>
+                        @if (selectedDetail.Documents.Count == 0)
                         {
-                            <span>Enter both Reason and Evidence Reviewed to enable submission.</span>
-                        }
-                        else if (selected.Status == "EligibleNotShortlisted")
-                        {
-                            <span>Promoting this candidate moves them to Shortlisted so they can proceed to Assessments.</span>
+                            <p class="text-xs text-slate-500">No documents or certificates uploaded with this application.</p>
                         }
                         else
                         {
-                            <span>Submitting locks this decision. Verify evidence and eligibility before continuing.</span>
+                            <div class="space-y-1.5">
+                                @foreach (var doc in selectedDetail.Documents)
+                                {
+                                    <div class="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs">
+                                        <div class="flex items-center gap-2 min-w-0">
+                                            <span class="rounded-full bg-blue-50 border border-blue-200 px-2 py-0.5 text-[10px] font-semibold text-blue-800">@doc.Category</span>
+                                            <span class="font-medium text-slate-800 truncate">@doc.FileName</span>
+                                        </div>
+                                        <div class="flex items-center gap-1.5 shrink-0">
+                                            <button type="button"
+                                                    class="inline-flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700 hover:bg-blue-100 disabled:opacity-50"
+                                                    disabled="@(busy || loadingPreview)"
+                                                    @onclick="() => PreviewDocumentAsync(doc)">
+                                                <i class="bi bi-eye" aria-hidden="true"></i>
+                                                <span>View</span>
+                                            </button>
+                                            <button type="button"
+                                                    class="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                                                    disabled="@(busy || loadingPreview)"
+                                                    @onclick="() => DownloadDocumentAsync(doc)">
+                                                <i class="bi bi-download" aria-hidden="true"></i>
+                                                <span>Download</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
                         }
-                    </p>
-                    <button type="button"
-                            class="inline-flex items-center justify-center rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 disabled:opacity-50 transition-colors"
-                            disabled="@(busy || !CanEditSelected || string.IsNullOrWhiteSpace(reason) || string.IsNullOrWhiteSpace(evidence))"
-                            @onclick="Save">
-                        @(selected.Status == "EligibleNotShortlisted" ? "Shortlist for Assessment" : "Submit & Lock Screening")
-                    </button>
+                    </div>
+
+                    <!-- Return Application for Correction (Missing Info / Documents) -->
+                    @if (selected.Status == "Submitted")
+                    {
+                        <div class="rounded-xl border border-amber-200 bg-amber-50/50 p-3 space-y-2.5">
+                            <div class="flex flex-wrap items-center justify-between gap-2">
+                                <div>
+                                    <h4 class="text-xs font-bold text-amber-950">Missing Information or Certificate?</h4>
+                                    <p class="text-[11px] text-amber-800">Return this application with a comment and deadline so the applicant can correct and resubmit.</p>
+                                </div>
+                                <button type="button"
+                                        class="inline-flex items-center gap-1 rounded-lg border border-amber-300 bg-white px-2.5 py-1 text-xs font-semibold text-amber-900 hover:bg-amber-100"
+                                        @onclick="() => showReturnForm = !showReturnForm">
+                                    <i class="bi bi-arrow-return-left" aria-hidden="true"></i>
+                                    <span>@(showReturnForm ? "Hide Return Form" : "Return for Correction")</span>
+                                </button>
+                            </div>
+
+                            @if (showReturnForm)
+                            {
+                                <div class="space-y-2.5 border-t border-amber-200 pt-2.5">
+                                    <label class="block text-xs font-medium text-slate-700">
+                                        Comment to Applicant (Missing Info / Documents) <span class="text-rose-600">*</span>
+                                        <textarea rows="3"
+                                                  maxlength="2000"
+                                                  class="@InputClass"
+                                                  disabled="@busy"
+                                                  @bind="returnComment"
+                                                  @bind:event="oninput"
+                                                  placeholder="Specify which information, qualification certificate, or experience letter is missing or unclear..."></textarea>
+                                    </label>
+                                    <label class="block text-xs font-medium text-slate-700 max-w-xs">
+                                        Correction Deadline (Maldives Time · MVT) <span class="text-rose-600">*</span>
+                                        <input type="datetime-local"
+                                               class="@InputClass"
+                                               disabled="@busy"
+                                               @bind="returnDeadlineMvt" />
+                                    </label>
+                                    <div class="flex justify-end gap-2">
+                                        <button type="button"
+                                                class="inline-flex items-center justify-center rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                                                disabled="@busy"
+                                                @onclick="() => showReturnForm = false">
+                                            Cancel
+                                        </button>
+                                        <button type="button"
+                                                class="inline-flex items-center justify-center rounded-lg bg-amber-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-amber-700 disabled:opacity-50"
+                                                disabled="@(busy || string.IsNullOrWhiteSpace(returnComment))"
+                                                @onclick="ReturnApplication">
+                                            Send Back for Correction
+                                        </button>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                }
+
+                <!-- Screening Decision Section -->
+                <div class="rounded-xl border border-blue-200 bg-blue-50/40 p-4 space-y-3">
+                    <div class="flex items-center justify-between gap-2">
+                        <h4 class="text-xs font-bold text-slate-900">Screening Decision</h4>
+                    </div>
+
+                    @if (selected.Status == "EligibleNotShortlisted")
+                    {
+                        <div class="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-900">
+                            This candidate already passed eligibility screening (<strong>EligibleNotShortlisted</strong>). Provide a shortlisting reason and evidence below to promote them to <strong>Shortlisted</strong> for assessment.
+                        </div>
+                    }
+                    else if (selected.Status == "Shortlisted")
+                    {
+                        <div class="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
+                            This candidate is already <strong>Shortlisted</strong> and ready for scoring in the <strong>Assessments</strong> tab.
+                        </div>
+                    }
+                    else if (selected.Status != "Submitted")
+                    {
+                        <div class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                            Only applications in <strong>Submitted</strong> or <strong>EligibleNotShortlisted</strong> status can be processed here. This application is currently <strong>@FormatStatus(selected.Status)</strong>.
+                        </div>
+                    }
+
+                    <div class="flex flex-wrap gap-4">
+                        <label class="inline-flex items-center gap-2 text-xs font-medium text-slate-700">
+                            <input type="checkbox" disabled="@(busy || selected.Status != "Submitted")" @bind="eligible" @bind:after="OnEligibleChanged" />
+                            Meets advertised eligibility requirements
+                        </label>
+                        <label class="inline-flex items-center gap-2 text-xs font-medium text-slate-700">
+                            <input type="checkbox" disabled="@(busy || !CanEditSelected || !eligible || selected.Status == "EligibleNotShortlisted")" @bind="shortlisted" />
+                            Shortlist for assessment
+                        </label>
+                    </div>
+
+                    <label class="block text-xs font-medium text-slate-700">
+                        @(selected.Status == "EligibleNotShortlisted" ? "Shortlisting Reason" : "Decision Reason") <span class="text-rose-600">*</span>
+                        <textarea rows="2" class="@InputClass" maxlength="2000" disabled="@(busy || !CanEditSelected)" @bind="reason" @bind:event="oninput" placeholder="Explain eligibility and shortlisting decision..."></textarea>
+                    </label>
+                    <label class="block text-xs font-medium text-slate-700">
+                        Evidence Reviewed <span class="text-rose-600">*</span>
+                        <textarea rows="3" class="@InputClass" maxlength="8000" disabled="@(busy || !CanEditSelected)" @bind="evidence" @bind:event="oninput" placeholder="List qualifications, experience letters, and certificates verified..."></textarea>
+                    </label>
+
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <p class="text-[11px] text-slate-500">
+                            @if (CanEditSelected && (string.IsNullOrWhiteSpace(reason) || string.IsNullOrWhiteSpace(evidence)))
+                            {
+                                <span>Enter both Reason and Evidence Reviewed to enable submission.</span>
+                            }
+                            else if (selected.Status == "EligibleNotShortlisted")
+                            {
+                                <span>Promoting this candidate moves them to Shortlisted so they can proceed to Assessments.</span>
+                            }
+                            else
+                            {
+                                <span>Submitting locks this decision. Verify evidence and eligibility before continuing.</span>
+                            }
+                        </p>
+                        <button type="button"
+                                class="inline-flex items-center justify-center rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                                disabled="@(busy || !CanEditSelected || string.IsNullOrWhiteSpace(reason) || string.IsNullOrWhiteSpace(evidence))"
+                                @onclick="Save">
+                            @(selected.Status == "EligibleNotShortlisted" ? "Shortlist for Assessment" : "Submit & Lock Screening")
+                        </button>
+                    </div>
                 </div>
             </div>
         }
@@ -251,12 +458,61 @@
     </aside>
 </div>
 
+@if (previewDataUrl is not null)
+{
+    <div class="rsp-preview-backdrop" @onclick="ClosePreview">
+        <div class="rsp-preview-modal" @onclick:stopPropagation="true">
+            <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-slate-50 px-4 py-2.5">
+                <div class="min-w-0">
+                    <h4 class="text-xs font-bold text-slate-900 truncate">@previewFileName</h4>
+                    <span class="text-[11px] text-slate-500">@previewContentType</span>
+                </div>
+                <div class="flex items-center gap-1.5">
+                    @if (!previewIsPdf)
+                    {
+                        <button type="button" class="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100" @onclick="ZoomOut" title="Zoom Out">−</button>
+                        <span class="min-w-[3.2rem] text-center text-xs font-semibold text-slate-700">@previewZoom%</span>
+                        <button type="button" class="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100" @onclick="ZoomIn" title="Zoom In">+</button>
+                        <button type="button" class="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100" @onclick="() => previewZoom = 100">Reset</button>
+                    }
+                    <button type="button" class="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100" @onclick="DownloadCurrentPreviewAsync">
+                        <i class="bi bi-download mr-1" aria-hidden="true"></i>Download
+                    </button>
+                    <button type="button" class="rounded-lg bg-slate-800 px-2.5 py-1 text-xs font-semibold text-white hover:bg-slate-900" @onclick="ClosePreview">Close</button>
+                </div>
+            </div>
+            <div class="rsp-preview-body">
+                @if (previewIsPdf)
+                {
+                    <iframe src="@previewDataUrl" class="h-full w-full rounded-lg border border-slate-300 bg-white" title="@previewFileName"></iframe>
+                }
+                else
+                {
+                    <img src="@previewDataUrl"
+                         alt="@previewFileName"
+                         style="@($"max-width:none; width:{previewZoom}%; height:auto;")"
+                         class="rounded-lg border border-slate-300 bg-white shadow-sm" />
+                }
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     private IReadOnlyList<RecruitmentVacancyRow> vacancies = [];
     private IReadOnlyList<RecruitmentScreeningApplicationRow> applications = [];
     private IReadOnlyList<RecruitmentConflictDeclarationRow> conflictDeclarations = [];
     private RecruitmentConflictDeclarationRow? myDeclaration;
     private RecruitmentScreeningApplicationRow? selected;
+    private HrRecruitmentApplicationDetail? selectedDetail;
+    private string detailQualifications = "", detailExperience = "", detailStatement = "";
+    private bool loadingDetail, loadingPreview, showReturnForm;
+    private string returnComment = "";
+    private DateTime returnDeadlineMvt = DateTime.UtcNow.AddHours(5).AddDays(3);
+    private string? previewDataUrl, previewFileName, previewContentType;
+    private byte[]? previewBytes;
+    private bool previewIsPdf;
+    private int previewZoom = 100;
     private int vacancyId;
     private RecruitmentVacancyRow? SelectedVacancy => vacancies.FirstOrDefault(x => x.Id == vacancyId);
     private bool busy, eligible, shortlisted, conflict;
@@ -273,7 +529,7 @@
 
     private async Task Load()
     {
-        selected = null;
+        CloseSelected();
         applications = [];
         conflictDeclarations = [];
         myDeclaration = null;
@@ -313,13 +569,148 @@
 
     private bool CanEditSelected => selected?.Status is "Submitted" or "EligibleNotShortlisted";
 
-    private void Select(RecruitmentScreeningApplicationRow row)
+    private void CloseSelected()
+    {
+        selected = null;
+        selectedDetail = null;
+        detailQualifications = detailExperience = detailStatement = "";
+        showReturnForm = false;
+        returnComment = "";
+        ClosePreview();
+    }
+
+    private async Task SelectAsync(RecruitmentScreeningApplicationRow row)
     {
         selected = row;
+        selectedDetail = null;
+        detailQualifications = detailExperience = detailStatement = "";
         eligible = row.Status is "EligibleNotShortlisted" or "Shortlisted";
         shortlisted = row.Status is "EligibleNotShortlisted" or "Shortlisted";
         reason = "";
         evidence = "";
+        showReturnForm = false;
+        returnComment = "";
+        returnDeadlineMvt = DateTime.UtcNow.AddHours(5).AddDays(3);
+        loadingDetail = true;
+        try
+        {
+            selectedDetail = await Api.GetHrApplicationDetailAsync(row.Id);
+            if (selectedDetail is not null && !string.IsNullOrWhiteSpace(selectedDetail.ProfileSnapshotJson))
+            {
+                try
+                {
+                    using var doc = System.Text.Json.JsonDocument.Parse(selectedDetail.ProfileSnapshotJson);
+                    detailQualifications = ReadJsonString(doc, "Qualifications");
+                    detailExperience = ReadJsonString(doc, "Experience");
+                    detailStatement = ReadJsonString(doc, "SupportingStatement");
+                }
+                catch (System.Text.Json.JsonException) { }
+            }
+        }
+        catch (HttpRequestException)
+        {
+            message = "Application details could not be loaded.";
+        }
+        finally
+        {
+            loadingDetail = false;
+        }
+    }
+
+    private static string ReadJsonString(System.Text.Json.JsonDocument doc, string property) =>
+        doc.RootElement.TryGetProperty(property, out var val) && val.ValueKind == System.Text.Json.JsonValueKind.String
+            ? val.GetString() ?? ""
+            : "";
+
+    private async Task PreviewDocumentAsync(RecruitmentDocumentRow doc)
+    {
+        if (loadingPreview) return;
+        loadingPreview = true;
+        try
+        {
+            var res = await Api.DownloadScreeningDocumentAsync(doc.Id);
+            if (!res.Success)
+            {
+                message = res.Error ?? "Could not load document preview.";
+                return;
+            }
+            previewBytes = res.Content;
+            previewFileName = string.IsNullOrWhiteSpace(res.FileName) ? doc.FileName : res.FileName;
+            previewContentType = res.ContentType;
+            previewIsPdf = res.ContentType.Contains("pdf", StringComparison.OrdinalIgnoreCase)
+                || previewFileName.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase);
+            previewZoom = 100;
+            previewDataUrl = $"data:{res.ContentType};base64,{Convert.ToBase64String(res.Content)}";
+        }
+        catch (HttpRequestException)
+        {
+            message = "Could not load document preview.";
+        }
+        finally
+        {
+            loadingPreview = false;
+        }
+    }
+
+    private async Task DownloadDocumentAsync(RecruitmentDocumentRow doc)
+    {
+        if (loadingPreview) return;
+        loadingPreview = true;
+        try
+        {
+            var res = await Api.DownloadScreeningDocumentAsync(doc.Id);
+            if (!res.Success)
+            {
+                message = res.Error ?? "Could not download document.";
+                return;
+            }
+            await TriggerBrowserDownloadAsync(string.IsNullOrWhiteSpace(res.FileName) ? doc.FileName : res.FileName, res.ContentType, res.Content);
+        }
+        catch (HttpRequestException)
+        {
+            message = "Could not download document.";
+        }
+        finally
+        {
+            loadingPreview = false;
+        }
+    }
+
+    private async Task DownloadCurrentPreviewAsync()
+    {
+        if (previewBytes is null || string.IsNullOrWhiteSpace(previewFileName)) return;
+        await TriggerBrowserDownloadAsync(previewFileName, previewContentType ?? "application/octet-stream", previewBytes);
+    }
+
+    private async Task TriggerBrowserDownloadAsync(string fileName, string contentType, byte[] content)
+    {
+        var base64 = Convert.ToBase64String(content);
+        await JS.InvokeVoidAsync("eval", $@"(function(){{
+            const a = document.createElement('a');
+            a.href = 'data:{contentType};base64,{base64}';
+            a.download = {System.Text.Json.JsonSerializer.Serialize(fileName)};
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+        }})();");
+    }
+
+    private void ClosePreview()
+    {
+        previewDataUrl = null;
+        previewFileName = null;
+        previewContentType = null;
+        previewBytes = null;
+        previewZoom = 100;
+    }
+
+    private void ZoomIn() => previewZoom = Math.Min(250, previewZoom + 25);
+    private void ZoomOut() => previewZoom = Math.Max(50, previewZoom - 25);
+
+    private Task ReturnApplication()
+    {
+        var deadlineUtc = DateTime.SpecifyKind(returnDeadlineMvt.AddHours(-5), DateTimeKind.Utc);
+        return Run(() => Api.ReturnApplicationForCorrectionAsync(new(selected!.Id, returnComment.Trim(), deadlineUtc)), isConflict: false);
     }
 
     private void OnEligibleChanged()
@@ -328,9 +719,17 @@
             shortlisted = false;
     }
 
+    private static string FormatStatus(string status) => status switch
+    {
+        "ReturnedForCorrection" => "Returned for Correction",
+        "EligibleNotShortlisted" => "Eligible (Not Shortlisted)",
+        _ => status
+    };
+
     private static string StatusBadgeClass(string status) => status switch
     {
         "Submitted" => "bg-blue-100 text-blue-800",
+        "ReturnedForCorrection" => "bg-amber-100 text-amber-900",
         "Shortlisted" => "bg-emerald-100 text-emerald-800",
         "EligibleNotShortlisted" => "bg-amber-100 text-amber-800",
         "Ineligible" => "bg-rose-100 text-rose-800",

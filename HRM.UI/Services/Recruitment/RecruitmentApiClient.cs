@@ -16,6 +16,10 @@ public interface IRecruitmentApiClient {
     Task<HRM.DTOs.ServiceResult> CreateVacancyAsync(RecruitmentVacancyInput input);
     Task<HRM.DTOs.ServiceResult> PublishVacancyAsync(int id);
     Task<IReadOnlyList<RecruitmentScreeningApplicationRow>> GetScreeningApplicationsAsync(int vacancyId);
+    Task<int> GetPendingScreeningCountAsync(CancellationToken ct = default);
+    Task<HrRecruitmentApplicationDetail?> GetHrApplicationDetailAsync(int applicationId);
+    Task<(bool Success, string FileName, string ContentType, byte[] Content, string? Error)> DownloadScreeningDocumentAsync(int documentId);
+    Task<HRM.DTOs.ServiceResult> ReturnApplicationForCorrectionAsync(ReturnRecruitmentApplicationInput input);
     Task<IReadOnlyList<RecruitmentConflictDeclarationRow>> GetConflictDeclarationsAsync(int vacancyId);
     Task<HRM.DTOs.ServiceResult> RecordScreeningAsync(RecordScreeningInput input);
     Task<HRM.DTOs.ServiceResult> DeclareConflictAsync(DeclareRecruitmentConflictInput input);
@@ -90,6 +94,33 @@ public sealed class RecruitmentApiClient(HttpClient http, HttpClient? publicHttp
     public Task<HRM.DTOs.ServiceResult> CreateAssessmentAsync(CreateRecruitmentAssessmentInput input)=>PostAsync("/api/v1/recruitment/assessments",input,default);
     public Task<HRM.DTOs.ServiceResult> SubmitScorecardAsync(SubmitPanelScorecardInput input)=>PostAsync("/api/v1/recruitment/assessments/scorecards",input,default);
     public async Task<IReadOnlyList<RecruitmentScreeningApplicationRow>> GetScreeningApplicationsAsync(int vacancyId)=>await http.GetFromJsonAsync<List<RecruitmentScreeningApplicationRow>>($"/api/v1/recruitment/screening/applications/{vacancyId}")??[];
+    public async Task<int> GetPendingScreeningCountAsync(CancellationToken ct = default)
+    {
+        using var r = await http.GetAsync("/api/v1/recruitment/screening/pending-count", ct);
+        if (!r.IsSuccessStatusCode) return 0;
+        return await r.Content.ReadFromJsonAsync<int>(cancellationToken: ct);
+    }
+    public async Task<HrRecruitmentApplicationDetail?> GetHrApplicationDetailAsync(int applicationId)
+    {
+        using var r = await http.GetAsync($"/api/v1/recruitment/screening/applications/{applicationId}/detail");
+        if (r.StatusCode == System.Net.HttpStatusCode.NotFound) return null;
+        r.EnsureSuccessStatusCode();
+        return await r.Content.ReadFromJsonAsync<HrRecruitmentApplicationDetail>();
+    }
+    public async Task<(bool Success, string FileName, string ContentType, byte[] Content, string? Error)> DownloadScreeningDocumentAsync(int documentId)
+    {
+        using var r = await http.GetAsync($"/api/v1/recruitment/screening/applications/documents/{documentId}");
+        if (!r.IsSuccessStatusCode)
+        {
+            var err = await r.Content.ReadAsStringAsync();
+            return (false, string.Empty, string.Empty, [], string.IsNullOrWhiteSpace(err) ? $"Download failed ({(int)r.StatusCode})." : err);
+        }
+        var bytes = await r.Content.ReadAsByteArrayAsync();
+        var contentType = r.Content.Headers.ContentType?.MediaType ?? "application/octet-stream";
+        var fileName = r.Content.Headers.ContentDisposition?.FileNameStar ?? r.Content.Headers.ContentDisposition?.FileName?.Trim('"') ?? $"document-{documentId}";
+        return (true, fileName, contentType, bytes, null);
+    }
+    public Task<HRM.DTOs.ServiceResult> ReturnApplicationForCorrectionAsync(ReturnRecruitmentApplicationInput input) => PostAsync($"/api/v1/recruitment/screening/applications/{input.ApplicationId}/return", input, default);
     public async Task<IReadOnlyList<RecruitmentConflictDeclarationRow>> GetConflictDeclarationsAsync(int vacancyId)=>await http.GetFromJsonAsync<List<RecruitmentConflictDeclarationRow>>($"/api/v1/recruitment/screening/conflicts/{vacancyId}")??[];
     public Task<HRM.DTOs.ServiceResult> RecordScreeningAsync(RecordScreeningInput input)=>PostAsync("/api/v1/recruitment/screening",input,default);
     public Task<HRM.DTOs.ServiceResult> DeclareConflictAsync(DeclareRecruitmentConflictInput input)=>PostAsync("/api/v1/recruitment/screening/conflicts",input,default);

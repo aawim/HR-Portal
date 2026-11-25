@@ -102,10 +102,13 @@ public sealed class RecruitmentApplicationService(IDbContextFactory<HrmTeContext
         if (string.IsNullOrWhiteSpace(i.ProfileSnapshotJson) || i.ProfileSnapshotJson.Length > 16000) return ServiceResult.Fail("A complete applicant profile snapshot is required.");
         await using var d = await factory.CreateDbContextAsync(ct);
         var v = await d.RecruitmentVacancies.SingleOrDefaultAsync(x => x.Id == i.VacancyId && x.Status == "Published" && x.ClosingAtUtc > DateTime.UtcNow, ct) ?? throw new InvalidOperationException("This vacancy is not accepting applications.");
-        if (!await d.RecruitmentApplicants.AnyAsync(x => x.Id == i.ApplicantId && x.EfaasIdNumber == id && x.Status == "Active", ct)) return ServiceResult.Fail("Applicant profile is unavailable.");
+        var applicant = await d.RecruitmentApplicants.AsNoTracking().SingleOrDefaultAsync(x => x.Id == i.ApplicantId && x.EfaasIdNumber == id && x.Status == "Active", ct);
+        if (applicant is null) return ServiceResult.Fail("Applicant profile is unavailable.");
         if (await d.RecruitmentApplications.AnyAsync(x => x.RecruitmentApplicantId == i.ApplicantId && x.RecruitmentVacancyId == i.VacancyId, ct)) return ServiceResult.Fail("An application already exists for this vacancy.");
         var l = await logs.CreateAsync(d, SharedConfig.OperationLogActionTypes.REQUESTS_CREATE, $"Recruitment application submitted for vacancy {v.Reference}.");
-        d.Add(new RecruitmentApplication { Reference = $"RA-{Guid.NewGuid():N}"[..24], RecruitmentApplicantId = i.ApplicantId, RecruitmentVacancyId = v.Id, OrganisationId = v.OrganisationId, Status = "Submitted", ProfileSnapshotJson = i.ProfileSnapshotJson, SubmittedAtUtc = DateTime.UtcNow, OperationLogId = l.OperationLogId });
+        var reference = $"RA-{Guid.NewGuid():N}"[..24];
+        d.Add(new RecruitmentApplication { Reference = reference, RecruitmentApplicantId = i.ApplicantId, RecruitmentVacancyId = v.Id, OrganisationId = v.OrganisationId, Status = "Submitted", ProfileSnapshotJson = i.ProfileSnapshotJson, SubmittedAtUtc = DateTime.UtcNow, OperationLogId = l.OperationLogId });
+        await RecruitmentNotificationHelper.NotifyHrApplicationSubmittedAsync(d, v.OrganisationId, reference, v.Reference, applicant.FullName, isResubmission: false, ct);
         await d.SaveChangesAsync(ct);
         return ServiceResult.Ok("Application submitted.");
     }
