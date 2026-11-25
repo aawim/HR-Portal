@@ -49,6 +49,90 @@ public sealed class RecruitmentScreeningQueriesController(
         }
     }
 
+    [HttpGet("/api/v1/recruitment/screening/result-sheet/{vacancyId:int}")]
+    public async Task<ActionResult<ScreeningResultSheetDto>> ResultSheet(int vacancyId, CancellationToken ct)
+    {
+        var org = await access.GetCurrentOrganisationIdAsync();
+        if (org <= 0 || !await access.HasOrganisationAccessAsync(org) || !await CanViewRecruitmentAsync()) return Forbid();
+        await using var db = await factory.CreateDbContextAsync(ct);
+
+        var vacancy = await (from v in db.RecruitmentVacancies.AsNoTracking()
+                             join o in db.Organisations.AsNoTracking() on v.OrganisationId equals o.BusinessEntityID into os
+                             from o in os.DefaultIfEmpty()
+                             join pm in db.PositionMatrices.AsNoTracking() on v.PositionMatrixId equals pm.PositionMatrixId into pms
+                             from pm in pms.DefaultIfEmpty()
+                             join jt in db.FrameworkJobTitles.AsNoTracking() on pm.JobTitleId equals jt.JobTitleId into jts
+                             from jt in jts.DefaultIfEmpty()
+                             join jm in db.FrameworkJobMatrices.AsNoTracking() on pm.JobMatrixId equals jm.JobMatrixId into jms
+                             from jm in jms.DefaultIfEmpty()
+                             where v.Id == vacancyId && v.OrganisationId == org
+                             select new
+                             {
+                                 v.Id,
+                                 v.Reference,
+                                 v.ClosingAtUtc,
+                                 v.AdvertisementSnapshotJson,
+                                 AgencyName = o != null ? o.OrganisationName : "",
+                                 AgencyNameDhivehi = o != null ? o.OrganisationNameDhivehi : null,
+                                 FallbackTitle = jt != null ? jt.Name : (jm != null ? jm.Name : v.Reference),
+                                 BasicSalary = jm != null ? (decimal?)jm.BasicSalary : null
+                             }).SingleOrDefaultAsync(ct);
+
+        if (vacancy is null) return NotFound();
+
+        string positionTitle = vacancy.FallbackTitle;
+        if (!string.IsNullOrWhiteSpace(vacancy.AdvertisementSnapshotJson))
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(vacancy.AdvertisementSnapshotJson);
+                if (doc.RootElement.ValueKind == JsonValueKind.Object
+                    && doc.RootElement.TryGetProperty("Title", out var t)
+                    && t.ValueKind == JsonValueKind.String
+                    && !string.IsNullOrWhiteSpace(t.GetString()))
+                {
+                    positionTitle = t.GetString()!.Trim();
+                }
+            }
+            catch (JsonException) { }
+        }
+
+        var rawApps = await (from app in db.RecruitmentApplications.AsNoTracking()
+                             join dec in db.RecruitmentScreeningDecisions.AsNoTracking() on app.Id equals dec.RecruitmentApplicationId into decs
+                             from dec in decs.DefaultIfEmpty()
+                             where app.RecruitmentVacancyId == vacancyId
+                                 && app.OrganisationId == org
+                                 && app.Status != "Draft"
+                                 && app.Status != "Withdrawn"
+                             orderby app.SubmittedAtUtc, app.Id
+                             select new
+                             {
+                                 app.Reference,
+                                 app.Status,
+                                 HasDecision = dec != null,
+                                 IsEligible = dec != null && dec.IsEligible
+                             }).ToListAsync(ct);
+
+        var rows = rawApps.Select((a, i) =>
+        {
+            var meets = a.HasDecision ? a.IsEligible : a.Status is "Shortlisted" or "EligibleNotShortlisted";
+            var doesNotMeet = a.HasDecision ? !a.IsEligible : a.Status == "Ineligible";
+            return new ScreeningResultSheetRow(i + 1, a.Reference, meets, doesNotMeet, a.Status);
+        }).ToList();
+
+        return Ok(new ScreeningResultSheetDto(
+            vacancy.Id,
+            vacancy.Reference,
+            positionTitle,
+            vacancy.BasicSalary,
+            vacancy.ClosingAtUtc,
+            vacancy.AgencyName,
+            vacancy.AgencyNameDhivehi,
+            null,
+            null,
+            rows));
+    }
+
     [HttpGet("/api/v1/recruitment/screening/pending-count")]
     public async Task<ActionResult<int>> PendingCount(CancellationToken ct)
     {

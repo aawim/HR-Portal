@@ -16,6 +16,7 @@ public interface IRecruitmentApiClient {
     Task<HRM.DTOs.ServiceResult> CreateVacancyAsync(RecruitmentVacancyInput input);
     Task<HRM.DTOs.ServiceResult> PublishVacancyAsync(int id);
     Task<IReadOnlyList<RecruitmentScreeningApplicationRow>> GetScreeningApplicationsAsync(int vacancyId);
+    Task<ScreeningResultSheetDto?> GetScreeningResultSheetAsync(int vacancyId, CancellationToken ct = default);
     Task<int> GetPendingScreeningCountAsync(CancellationToken ct = default);
     Task<HrRecruitmentApplicationDetail?> GetHrApplicationDetailAsync(int applicationId);
     Task<(bool Success, string FileName, string ContentType, byte[] Content, string? Error)> DownloadScreeningDocumentAsync(int documentId);
@@ -50,6 +51,10 @@ public interface IRecruitmentApiClient {
     Task<HRM.DTOs.ServiceResult> UploadAsync(int id,string category,string fileName,byte[] content);
     Task<IReadOnlyList<RecruitmentOfficialTemplateRow>> GetOfficialTemplatesAsync(int policyVersionId, CancellationToken ct = default);
     Task<HRM.DTOs.ServiceResult> RegisterOfficialTemplateAsync(RegisterRecruitmentOfficialTemplateInput input, CancellationToken ct = default);
+    Task<HRM.DTOs.ServiceResult> UploadOfficialTemplateAsync(UploadRecruitmentOfficialTemplateInput input, CancellationToken ct = default);
+    Task<HRM.DTOs.ServiceResult> AttachOfficialTemplateFileAsync(int templateId, string fileName, string? contentType, byte[] content, CancellationToken ct = default);
+    Task<HRM.DTOs.ServiceResult> VerifyOfficialTemplateAsync(int templateId, CancellationToken ct = default);
+    Task<RecruitmentOfficialTemplateFileResult> DownloadOfficialTemplateFileAsync(int templateId, CancellationToken ct = default);
 }
 public sealed class RecruitmentApiClient(HttpClient http, HttpClient? publicHttp = null) : IRecruitmentApiClient
 {
@@ -71,6 +76,53 @@ public sealed class RecruitmentApiClient(HttpClient http, HttpClient? publicHttp
     }
     public async Task<IReadOnlyList<RecruitmentOfficialTemplateRow>> GetOfficialTemplatesAsync(int policyVersionId, CancellationToken ct = default) => await http.GetFromJsonAsync<List<RecruitmentOfficialTemplateRow>>($"/api/v1/recruitment/official-templates/{policyVersionId}", ct) ?? [];
     public Task<HRM.DTOs.ServiceResult> RegisterOfficialTemplateAsync(RegisterRecruitmentOfficialTemplateInput input, CancellationToken ct = default) => PostAsync("/api/v1/recruitment/official-templates", input, ct);
+    public async Task<HRM.DTOs.ServiceResult> UploadOfficialTemplateAsync(UploadRecruitmentOfficialTemplateInput input, CancellationToken ct = default)
+    {
+        using var form = new MultipartFormDataContent();
+        form.Add(new StringContent(input.RecruitmentPolicyVersionId.ToString()), "policyVersionId");
+        form.Add(new StringContent(input.TemplateCode), "templateCode");
+        form.Add(new StringContent(input.Name), "name");
+        form.Add(new StringContent(input.SourceUrl ?? ""), "sourceUrl");
+        form.Add(new StringContent(input.PositionCategory), "positionCategory");
+        form.Add(new StringContent(input.TemplateDefinitionJson), "templateDefinitionJson");
+        form.Add(new StringContent(input.Language ?? "en"), "language");
+        form.Add(new StringContent(input.Direction ?? "ltr"), "direction");
+        form.Add(new StringContent(input.VerifyImmediately ? "true" : "false"), "verifyImmediately");
+        var fileContent = new ByteArrayContent(input.FileContent);
+        if (!string.IsNullOrWhiteSpace(input.ContentType))
+            fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(input.ContentType);
+        form.Add(fileContent, "file", input.FileName);
+        using var r = await http.PostAsync("/api/v1/recruitment/official-templates/upload", form, ct);
+        if (r.StatusCode == System.Net.HttpStatusCode.Forbidden) return HRM.DTOs.ServiceResult.Fail("Recruitment.Manage permission is required.");
+        r.EnsureSuccessStatusCode();
+        return await r.Content.ReadFromJsonAsync<HRM.DTOs.ServiceResult>(cancellationToken: ct) ?? HRM.DTOs.ServiceResult.Fail("No result returned.");
+    }
+    public async Task<HRM.DTOs.ServiceResult> AttachOfficialTemplateFileAsync(int templateId, string fileName, string? contentType, byte[] content, CancellationToken ct = default)
+    {
+        using var form = new MultipartFormDataContent();
+        var fileContent = new ByteArrayContent(content);
+        if (!string.IsNullOrWhiteSpace(contentType))
+            fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(contentType);
+        form.Add(fileContent, "file", fileName);
+        using var r = await http.PostAsync($"/api/v1/recruitment/official-templates/{templateId}/file", form, ct);
+        if (r.StatusCode == System.Net.HttpStatusCode.Forbidden) return HRM.DTOs.ServiceResult.Fail("Recruitment.Manage permission is required.");
+        r.EnsureSuccessStatusCode();
+        return await r.Content.ReadFromJsonAsync<HRM.DTOs.ServiceResult>(cancellationToken: ct) ?? HRM.DTOs.ServiceResult.Fail("No result returned.");
+    }
+    public Task<HRM.DTOs.ServiceResult> VerifyOfficialTemplateAsync(int templateId, CancellationToken ct = default) => PostAsync($"/api/v1/recruitment/official-templates/{templateId}/verify", new { }, ct);
+    public async Task<RecruitmentOfficialTemplateFileResult> DownloadOfficialTemplateFileAsync(int templateId, CancellationToken ct = default)
+    {
+        using var r = await http.GetAsync($"/api/v1/recruitment/official-templates/{templateId}/file", ct);
+        if (!r.IsSuccessStatusCode)
+        {
+            var err = await r.Content.ReadAsStringAsync(ct);
+            return new RecruitmentOfficialTemplateFileResult(false, string.Empty, string.Empty, [], string.IsNullOrWhiteSpace(err) ? $"Download failed ({(int)r.StatusCode})." : err);
+        }
+        var bytes = await r.Content.ReadAsByteArrayAsync(ct);
+        var contentType = r.Content.Headers.ContentType?.MediaType ?? "application/octet-stream";
+        var fileName = r.Content.Headers.ContentDisposition?.FileNameStar ?? r.Content.Headers.ContentDisposition?.FileName?.Trim('"') ?? $"template-{templateId}";
+        return new RecruitmentOfficialTemplateFileResult(true, fileName, contentType, bytes);
+    }
     public async Task<RecruitmentDraftDetail?> GetDraftAsync(int vacancy){using var r=await http.GetAsync($"/api/v1/recruitment/my-applications/vacancy/{vacancy}");if(r.StatusCode==System.Net.HttpStatusCode.NoContent)return null;r.EnsureSuccessStatusCode();return await r.Content.ReadFromJsonAsync<RecruitmentDraftDetail>();}
     public Task<HRM.DTOs.ServiceResult> SaveDraftAsync(SaveRecruitmentDraftInput input)=>PostAsync("/api/v1/recruitment/my-applications/draft",input,default);
     public Task<HRM.DTOs.ServiceResult> SubmitDraftAsync(int id,RecruitmentLifecycleActionInput input)=>PostAsync($"/api/v1/recruitment/my-applications/{id}/submit",input,default);
@@ -94,6 +146,13 @@ public sealed class RecruitmentApiClient(HttpClient http, HttpClient? publicHttp
     public Task<HRM.DTOs.ServiceResult> CreateAssessmentAsync(CreateRecruitmentAssessmentInput input)=>PostAsync("/api/v1/recruitment/assessments",input,default);
     public Task<HRM.DTOs.ServiceResult> SubmitScorecardAsync(SubmitPanelScorecardInput input)=>PostAsync("/api/v1/recruitment/assessments/scorecards",input,default);
     public async Task<IReadOnlyList<RecruitmentScreeningApplicationRow>> GetScreeningApplicationsAsync(int vacancyId)=>await http.GetFromJsonAsync<List<RecruitmentScreeningApplicationRow>>($"/api/v1/recruitment/screening/applications/{vacancyId}")??[];
+    public async Task<ScreeningResultSheetDto?> GetScreeningResultSheetAsync(int vacancyId, CancellationToken ct = default)
+    {
+        using var r = await http.GetAsync($"/api/v1/recruitment/screening/result-sheet/{vacancyId}", ct);
+        if (r.StatusCode == System.Net.HttpStatusCode.NotFound) return null;
+        r.EnsureSuccessStatusCode();
+        return await r.Content.ReadFromJsonAsync<ScreeningResultSheetDto>(cancellationToken: ct);
+    }
     public async Task<int> GetPendingScreeningCountAsync(CancellationToken ct = default)
     {
         using var r = await http.GetAsync("/api/v1/recruitment/screening/pending-count", ct);

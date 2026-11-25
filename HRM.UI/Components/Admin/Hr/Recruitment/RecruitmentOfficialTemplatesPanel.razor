@@ -1,132 +1,492 @@
+@using System.Text.Json
 @using HRM.Application.Contracts.Recruitment
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.JSInterop
 @inject HRM.UI.Services.Recruitment.IRecruitmentApiClient Api
+@inject IJSRuntime JS
 
-<section class="w-full min-w-0">
+<style>
+    .rot-preview-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 70;
+        background: rgba(15, 23, 42, 0.72);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1rem;
+    }
+
+    .rot-preview-modal {
+        width: 100%;
+        max-width: 64rem;
+        height: 90vh;
+        background: #ffffff;
+        border-radius: 1rem;
+        box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.45);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+</style>
+
+<section class="w-full min-w-0 space-y-4">
     <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs space-y-4">
-        <div class="flex flex-wrap items-center justify-between gap-2">
+        <div class="flex flex-wrap items-center justify-between gap-3">
             <div>
-                <h2 class="text-sm font-bold text-slate-900">Official Recruitment Templates</h2>
-                <p class="text-xs text-slate-500">List and register CSC official templates linked to a recruitment policy version.</p>
+                <h2 class="text-sm font-bold text-slate-900">Verified Official Recruitment Templates</h2>
+                <p class="text-xs text-slate-500">View verified CSC Form A2 scoring templates, attach official source files to GHR DMS, or upload new templates.</p>
             </div>
             <div class="flex flex-wrap items-center gap-2">
-                <label class="flex items-center gap-1.5 text-xs font-medium text-slate-700">
-                    Policy Version ID
-                    <input type="number" min="1" class="w-24 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-800 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" @bind="policyVersionId" />
-                </label>
-                <button type="button" class="inline-flex items-center justify-center rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 disabled:opacity-50" disabled="@(busy || policyVersionId <= 0)" @onclick="LoadAsync">Load Templates</button>
+                @if (policyVersions.Count > 0)
+                {
+                    <select class="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-800 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            @bind="policyVersionId"
+                            @bind:after="LoadTemplatesAsync">
+                        @foreach (var v in policyVersions)
+                        {
+                            <option value="@v.Id">@v.VersionCode · @v.ProfileName (@v.VerificationStatus)</option>
+                        }
+                    </select>
+                }
+                else
+                {
+                    <label class="flex items-center gap-1.5 text-xs font-medium text-slate-700">
+                        Policy Version ID
+                        <input type="number" min="1" class="w-20 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-800" @bind="policyVersionId" />
+                    </label>
+                }
+                <button type="button"
+                        class="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 disabled:opacity-50"
+                        disabled="@(busy || policyVersionId <= 0)"
+                        @onclick="LoadTemplatesAsync">
+                    <i class="bi bi-arrow-clockwise" aria-hidden="true"></i>
+                    <span>Refresh</span>
+                </button>
+                @if (CanManage)
+                {
+                    <button type="button"
+                            class="inline-flex items-center gap-1 rounded-lg bg-teal-700 px-3 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-teal-800 disabled:opacity-50"
+                            @onclick="() => showUploadForm = !showUploadForm">
+                        <i class="bi @(showUploadForm ? "bi-chevron-up" : "bi-cloud-upload")" aria-hidden="true"></i>
+                        <span>@(showUploadForm ? "Hide Upload Form" : "Upload New Template")</span>
+                    </button>
+                }
             </div>
         </div>
 
         @if (!string.IsNullOrWhiteSpace(message))
         {
-            <div role="status" class="rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-800">@message</div>
+            <div role="status" class="flex items-center justify-between gap-2 rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-800">
+                <span>@message</span>
+                <button type="button" class="font-bold text-slate-500 hover:text-slate-800" @onclick="() => message = null">✕</button>
+            </div>
         }
 
+        <!-- Upload & Register New Official Template Form -->
+        @if (CanManage && showUploadForm)
+        {
+            <div class="rounded-xl border border-teal-200 bg-teal-50/30 p-4 space-y-3">
+                <div class="flex items-center justify-between gap-2">
+                    <div>
+                        <h3 class="text-xs font-bold text-slate-900">Upload New Official Template to GHR DMS</h3>
+                        <p class="text-[11px] text-slate-500">Uploads the official template file into GHR DMS as an immutable record and registers its scoring criteria.</p>
+                    </div>
+                </div>
+
+                <div class="grid gap-3 md:grid-cols-3">
+                    <label class="block text-xs font-medium text-slate-700">
+                        Template Code <span class="text-rose-600">*</span>
+                        <input class="@InputClass" maxlength="100" @bind="newCode" @bind:event="oninput" placeholder="e.g. A2-CUSTOM-2026" />
+                    </label>
+                    <label class="block text-xs font-medium text-slate-700 md:col-span-2">
+                        Template Name <span class="text-rose-600">*</span>
+                        <input class="@InputClass" maxlength="200" @bind="newName" @bind:event="oninput" placeholder="e.g. CSC Form A2 — Specialist Technical Grade" />
+                    </label>
+                    <label class="block text-xs font-medium text-slate-700">
+                        Position Category <span class="text-rose-600">*</span>
+                        <input class="@InputClass" maxlength="150" @bind="newCategory" @bind:event="oninput" placeholder="All" />
+                    </label>
+                    <label class="block text-xs font-medium text-slate-700">
+                        Source URL
+                        <input class="@InputClass" maxlength="500" @bind="newSourceUrl" placeholder="https://www.csc.gov.mv/" />
+                    </label>
+                    <div class="grid grid-cols-2 gap-2">
+                        <label class="block text-xs font-medium text-slate-700">
+                            Total Marks
+                            <input type="number" min="1" max="1000" class="@InputClass" @bind="newTotal" />
+                        </label>
+                        <label class="block text-xs font-medium text-slate-700">
+                            Pass Mark
+                            <input type="number" min="0" max="1000" class="@InputClass" @bind="newPassMark" />
+                        </label>
+                    </div>
+                </div>
+
+                <!-- File Upload -->
+                <div class="rounded-lg border border-slate-200 bg-white p-3 space-y-1.5">
+                    <label class="block text-xs font-semibold text-slate-700">
+                        Official Template File (PDF, DOCX, XLSX, PNG, JPG · max 15 MB) <span class="text-rose-600">*</span>
+                    </label>
+                    <InputFile OnChange="OnNewTemplateFileSelected" accept=".pdf,.docx,.xlsx,.png,.jpg,.jpeg" class="block w-full text-xs text-slate-600" />
+                    @if (!string.IsNullOrWhiteSpace(newFileName))
+                    {
+                        <p class="text-[11px] font-medium text-emerald-700">
+                            <i class="bi bi-check-circle-fill mr-1" aria-hidden="true"></i>Selected: @newFileName (@(newFileBytes.Length / 1024) KB)
+                        </p>
+                    }
+                </div>
+
+                <!-- Scoring Criteria Builder -->
+                <div class="rounded-lg border border-slate-200 bg-white p-3 space-y-2">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                            <h4 class="text-xs font-bold text-slate-800">Scoring Criteria</h4>
+                            <p class="text-[11px] text-slate-500">Component max scores must add up to Total Marks (@newTotal).</p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="rounded-full px-2.5 py-0.5 text-[11px] font-semibold @(CriteriaSum == newTotal ? "bg-emerald-100 text-emerald-800" : "bg-rose-100 text-rose-800")">
+                                Sum: @CriteriaSum / @newTotal
+                            </span>
+                            <button type="button"
+                                    class="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50"
+                                    @onclick="AddCriterionRow">
+                                <i class="bi bi-plus-lg" aria-hidden="true"></i>Add Criterion
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="space-y-1.5">
+                        @for (var idx = 0; idx < newCriteria.Count; idx++)
+                        {
+                            var rowIndex = idx;
+                            var item = newCriteria[rowIndex];
+                            <div class="grid grid-cols-12 gap-2 items-center">
+                                <input class="col-span-7 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-800"
+                                       placeholder="Criterion key (e.g. basicQualification)"
+                                       @bind="item.Key"
+                                       @bind:event="oninput" />
+                                <input type="number"
+                                       min="1"
+                                       max="1000"
+                                       class="col-span-3 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-800"
+                                       @bind="item.MaxScore"
+                                       @bind:event="oninput" />
+                                <div class="col-span-2 flex justify-end">
+                                    <button type="button"
+                                            class="rounded-lg border border-rose-200 bg-rose-50 px-2 py-1 text-[11px] font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-40"
+                                            disabled="@(newCriteria.Count <= 1)"
+                                            @onclick="() => RemoveCriterionRow(rowIndex)">
+                                        Remove
+                                    </button>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <div class="flex flex-wrap items-center justify-between gap-2 pt-1">
+                    <label class="inline-flex items-center gap-2 text-xs font-medium text-slate-700">
+                        <input type="checkbox" @bind="verifyImmediately" />
+                        Verify &amp; activate immediately for Assessments
+                    </label>
+                    <div class="flex items-center gap-2">
+                        <button type="button"
+                                class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                                disabled="@busy"
+                                @onclick="() => showUploadForm = false">
+                            Cancel
+                        </button>
+                        <button type="button"
+                                class="inline-flex items-center gap-1.5 rounded-lg bg-teal-700 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-teal-800 disabled:opacity-50"
+                                disabled="@(busy || !CanSubmitNewTemplate)"
+                                @onclick="UploadNewTemplateAsync">
+                            <i class="bi bi-cloud-upload" aria-hidden="true"></i>
+                            <span>Upload &amp; Save Template</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <!-- Templates Table -->
         <div class="overflow-x-auto rounded-xl border border-slate-200">
             <table class="w-full text-left text-xs">
-                <thead class="border-b border-slate-200 bg-slate-50 font-semibold text-slate-700">
+                <thead class="border-b border-slate-200 bg-slate-50 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
                     <tr>
                         <th class="p-2.5">Code</th>
-                        <th class="p-2.5">Name</th>
-                        <th class="p-2.5">Position Category</th>
-                        <th class="p-2.5">Verification</th>
-                        <th class="p-2.5">Active</th>
+                        <th class="p-2.5">Template Name</th>
+                        <th class="p-2.5">Scoring</th>
+                        <th class="p-2.5">GHR Source File</th>
+                        <th class="p-2.5">Status</th>
+                        <th class="p-2.5 text-right">Actions</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100">
                     @if (templates.Count == 0)
                     {
                         <tr>
-                            <td colspan="5" class="p-3 text-slate-500">No official templates loaded for this policy version.</td>
+                            <td colspan="6" class="p-6 text-center text-slate-500">
+                                @(busy ? "Loading templates..." : "No official templates found for this policy version.")
+                            </td>
                         </tr>
                     }
                     else
                     {
                         @foreach (var row in templates)
                         {
-                            <tr class="hover:bg-slate-50/50">
-                                <td class="p-2.5 font-mono text-[11px] text-blue-700">@row.TemplateCode</td>
-                                <td class="p-2.5">@row.Name</td>
-                                <td class="p-2.5">@row.PositionCategory</td>
+                            var parsed = ParseDefinition(row.TemplateDefinitionJson);
+                            var isExpanded = inspectingTemplateId == row.Id;
+                            <tr class="hover:bg-slate-50/70 @(isExpanded ? "bg-blue-50/30" : "")">
+                                <td class="p-2.5 font-mono text-[11px] font-semibold text-blue-700 whitespace-nowrap">@row.TemplateCode</td>
                                 <td class="p-2.5">
-                                    <span class="rounded-full bg-amber-100 px-2.5 py-0.5 text-[11px] font-semibold text-amber-800">@row.VerificationStatus</span>
+                                    <div class="font-semibold text-slate-900">@row.Name</div>
+                                    <div class="text-[10px] text-slate-500">Category: @row.PositionCategory · DMS #@row.SourceDocumentId</div>
                                 </td>
-                                <td class="p-2.5">@(row.IsActive ? "Active" : "Inactive")</td>
+                                <td class="p-2.5 whitespace-nowrap">
+                                    @if (parsed is not null)
+                                    {
+                                        <span class="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-700">
+                                            Pass @parsed.PassMark / @parsed.Total · @parsed.Components.Count criteria
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-slate-400">—</span>
+                                    }
+                                </td>
+                                <td class="p-2.5">
+                                    @if (row.HasUploadedFile)
+                                    {
+                                        <div class="flex flex-wrap items-center gap-1.5">
+                                            <span class="inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-[10px] font-semibold text-emerald-800">
+                                                <i class="bi bi-file-earmark-check" aria-hidden="true"></i>
+                                                <span class="max-w-[10rem] truncate">@(row.SourceFileName ?? "Uploaded")</span>
+                                            </span>
+                                            <button type="button"
+                                                    class="text-[11px] font-semibold text-blue-700 hover:underline"
+                                                    disabled="@busy"
+                                                    @onclick="() => PreviewOrDownloadFileAsync(row)">
+                                                View
+                                            </button>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <span class="rounded-full bg-slate-100 border border-slate-200 px-2 py-0.5 text-[10px] font-medium text-slate-600">
+                                            Criteria Only (No file)
+                                        </span>
+                                    }
+                                </td>
+                                <td class="p-2.5 whitespace-nowrap">
+                                    <span class="rounded-full px-2.5 py-0.5 text-[10px] font-semibold @(row.VerificationStatus == "Verified" ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800")">
+                                        @row.VerificationStatus
+                                    </span>
+                                </td>
+                                <td class="p-2.5 text-right whitespace-nowrap">
+                                    <div class="inline-flex items-center gap-1.5">
+                                        <button type="button"
+                                                class="rounded-lg border border-slate-300 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50"
+                                                @onclick="() => ToggleInspect(row.Id)">
+                                            @(isExpanded ? "Hide" : "Criteria")
+                                        </button>
+                                        @if (CanManage)
+                                        {
+                                            <label class="cursor-pointer rounded-lg border border-blue-200 bg-blue-50 px-2 py-1 text-[11px] font-semibold text-blue-700 hover:bg-blue-100">
+                                                <span>@(row.HasUploadedFile ? "Replace File" : "Upload File")</span>
+                                                <InputFile OnChange="e => AttachFileToTemplateAsync(row, e)" accept=".pdf,.docx,.xlsx,.png,.jpg,.jpeg" class="hidden" />
+                                            </label>
+                                            @if (row.VerificationStatus != "Verified")
+                                            {
+                                                <button type="button"
+                                                        class="rounded-lg bg-emerald-600 px-2 py-1 text-[11px] font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+                                                        disabled="@busy"
+                                                        @onclick="() => VerifyTemplateAsync(row.Id)">
+                                                    Verify
+                                                </button>
+                                            }
+                                        }
+                                    </div>
+                                </td>
                             </tr>
+
+                            @if (isExpanded)
+                            {
+                                <tr>
+                                    <td colspan="6" class="bg-slate-50/80 p-3">
+                                        <div class="grid gap-3 md:grid-cols-2 text-xs">
+                                            <div class="rounded-xl border border-slate-200 bg-white p-3 space-y-2">
+                                                <div class="flex items-center justify-between">
+                                                    <h4 class="font-bold text-slate-900">Scoring Criteria Breakdown</h4>
+                                                    @if (parsed is not null)
+                                                    {
+                                                        <span class="text-[11px] font-semibold text-teal-700">Total: @parsed.Total · Pass Mark: @parsed.PassMark</span>
+                                                    }
+                                                </div>
+                                                @if (parsed is not null && parsed.Components.Count > 0)
+                                                {
+                                                    <div class="divide-y divide-slate-100 rounded-lg border border-slate-200">
+                                                        @foreach (var c in parsed.Components)
+                                                        {
+                                                            <div class="flex items-center justify-between px-3 py-1.5">
+                                                                <span class="font-medium text-slate-800">@FormatCriterionLabel(c.Key) <span class="font-mono text-[10px] text-slate-400">(@c.Key)</span></span>
+                                                                <span class="font-mono font-bold text-slate-900">@c.MaxScore pts</span>
+                                                            </div>
+                                                        }
+                                                    </div>
+                                                }
+                                                else
+                                                {
+                                                    <pre class="overflow-x-auto rounded-lg bg-slate-100 p-2 font-mono text-[11px] text-slate-700">@row.TemplateDefinitionJson</pre>
+                                                }
+                                            </div>
+                                            <div class="rounded-xl border border-slate-200 bg-white p-3 space-y-2">
+                                                <h4 class="font-bold text-slate-900">GHR DMS Record &amp; Integrity</h4>
+                                                <div class="space-y-1 text-[11px] text-slate-700">
+                                                    <div><strong>DMS Document ID:</strong> #@row.SourceDocumentId</div>
+                                                    <div><strong>Source File:</strong> @(row.HasUploadedFile ? (row.SourceFileName ?? "Uploaded") : "Not yet uploaded to GHR DMS")</div>
+                                                    <div><strong>Source URL:</strong> @(string.IsNullOrWhiteSpace(row.SourceUrl) ? "—" : row.SourceUrl)</div>
+                                                    <div><strong>SHA-256:</strong> <span class="font-mono text-[10px] break-all text-slate-600">@row.SourceSha256</span></div>
+                                                </div>
+                                                @if (row.HasUploadedFile)
+                                                {
+                                                    <div class="pt-1 flex gap-2">
+                                                        <button type="button"
+                                                                class="rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700 hover:bg-blue-100"
+                                                                disabled="@busy"
+                                                                @onclick="() => PreviewOrDownloadFileAsync(row)">
+                                                            <i class="bi bi-eye mr-1" aria-hidden="true"></i>View File
+                                                        </button>
+                                                        <button type="button"
+                                                                class="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50"
+                                                                disabled="@busy"
+                                                                @onclick="() => DownloadFileAsync(row)">
+                                                            <i class="bi bi-download mr-1" aria-hidden="true"></i>Download
+                                                        </button>
+                                                    </div>
+                                                }
+                                            </div>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
                         }
                     }
                 </tbody>
             </table>
         </div>
-
-        <details class="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
-            <summary class="cursor-pointer text-xs font-semibold text-slate-800">Register official template</summary>
-            <div class="mt-3 grid gap-2 md:grid-cols-3">
-                <label class="block text-xs text-slate-700">
-                    Source Document ID
-                    <input type="number" min="1" class="@InputClass" @bind="sourceDocumentId" />
-                </label>
-                <label class="block text-xs text-slate-700">
-                    Template Code
-                    <input class="@InputClass" maxlength="100" @bind="templateCode" />
-                </label>
-                <label class="block text-xs text-slate-700">
-                    Name
-                    <input class="@InputClass" maxlength="200" @bind="name" />
-                </label>
-                <label class="block text-xs text-slate-700">
-                    Source URL
-                    <input class="@InputClass" maxlength="500" @bind="sourceUrl" />
-                </label>
-                <label class="block text-xs text-slate-700">
-                    Position Category
-                    <input class="@InputClass" maxlength="150" @bind="positionCategory" />
-                </label>
-                <div class="grid grid-cols-2 gap-2">
-                    <label class="block text-xs text-slate-700">
-                        Language
-                        <input class="@InputClass" maxlength="10" @bind="language" />
-                    </label>
-                    <label class="block text-xs text-slate-700">
-                        Direction
-                        <select class="@InputClass" @bind="direction">
-                            <option value="rtl">rtl</option>
-                            <option value="ltr">ltr</option>
-                        </select>
-                    </label>
-                </div>
-                <label class="block text-xs text-slate-700 md:col-span-3">
-                    Template Definition JSON
-                    <textarea rows="3" class="@InputClass font-mono" @bind="templateDefinitionJson"></textarea>
-                </label>
-            </div>
-            <div class="mt-3 flex justify-end">
-                <button class="app-button app-button-primary app-button-sm"
-                        disabled="@(busy || policyVersionId <= 0 || sourceDocumentId <= 0 || string.IsNullOrWhiteSpace(templateCode) || string.IsNullOrWhiteSpace(name))"
-                        @onclick="RegisterAsync">
-                    Register template
-                </button>
-            </div>
-        </details>
     </div>
 </section>
 
+@if (previewDataUrl is not null)
+{
+    <div class="rot-preview-backdrop" @onclick="ClosePreview">
+        <div class="rot-preview-modal" @onclick:stopPropagation="true">
+            <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-slate-50 px-4 py-2.5">
+                <div class="min-w-0">
+                    <h4 class="text-xs font-bold text-slate-900 truncate">@previewFileName</h4>
+                    <span class="text-[11px] text-slate-500">@previewContentType</span>
+                </div>
+                <div class="flex items-center gap-1.5">
+                    <button type="button" class="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100" @onclick="DownloadCurrentPreviewAsync">
+                        <i class="bi bi-download mr-1" aria-hidden="true"></i>Download
+                    </button>
+                    <button type="button" class="rounded-lg bg-slate-800 px-2.5 py-1 text-xs font-semibold text-white hover:bg-slate-900" @onclick="ClosePreview">Close</button>
+                </div>
+            </div>
+            <div class="flex-1 overflow-auto bg-slate-100 p-4 flex items-center justify-center">
+                @if (previewIsPdf)
+                {
+                    <iframe src="@previewDataUrl" class="h-full w-full rounded-lg border border-slate-300 bg-white" title="@previewFileName"></iframe>
+                }
+                else
+                {
+                    <img src="@previewDataUrl" alt="@previewFileName" class="max-h-full max-w-full rounded-lg border border-slate-300 bg-white shadow-sm" />
+                }
+            </div>
+        </div>
+    </div>
+}
+
 @code {
-    private const string InputClass = "mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500";
+    [Parameter] public bool CanManage { get; set; } = true;
+
+    private const string InputClass = "mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-800 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500";
+    private IReadOnlyList<RecruitmentPolicyVersionRow> policyVersions = [];
     private IReadOnlyList<RecruitmentOfficialTemplateRow> templates = [];
-    private int policyVersionId = 1;
-    private long sourceDocumentId;
-    private string templateCode = "";
-    private string name = "";
-    private string sourceUrl = "";
-    private string positionCategory = "";
-    private string templateDefinitionJson = "{}";
-    private string language = "dv";
-    private string direction = "rtl";
-    private bool busy;
+    private int policyVersionId;
+    private int? inspectingTemplateId;
+    private bool busy, showUploadForm;
     private string? message;
 
-    private async Task LoadAsync()
+    // New template upload form
+    private string newCode = "", newName = "", newCategory = "All", newSourceUrl = "https://www.csc.gov.mv/";
+    private decimal newTotal = 100, newPassMark = 60;
+    private bool verifyImmediately = true;
+    private string newFileName = "", newFileContentType = "";
+    private byte[] newFileBytes = [];
+    private List<CriterionDraft> newCriteria =
+    [
+        new("basicQualification", 30),
+        new("higherQualification", 5),
+        new("additionalExperience", 5),
+        new("assessment", 25),
+        new("interview", 35)
+    ];
+
+    // Preview modal
+    private string? previewDataUrl, previewFileName, previewContentType;
+    private byte[]? previewBytes;
+    private bool previewIsPdf;
+
+    private sealed class CriterionDraft(string key, decimal maxScore)
+    {
+        public string Key { get; set; } = key;
+        public decimal MaxScore { get; set; } = maxScore;
+    }
+
+    private sealed record ParsedTemplateDefinition(decimal Total, decimal PassMark, IReadOnlyList<(string Key, decimal MaxScore)> Components);
+
+    private decimal CriteriaSum => newCriteria.Sum(c => c.MaxScore);
+
+    private bool CanSubmitNewTemplate =>
+        policyVersionId > 0
+        && !string.IsNullOrWhiteSpace(newCode)
+        && !string.IsNullOrWhiteSpace(newName)
+        && !string.IsNullOrWhiteSpace(newCategory)
+        && newFileBytes.Length > 0
+        && newCriteria.Count > 0
+        && newCriteria.All(c => !string.IsNullOrWhiteSpace(c.Key) && c.MaxScore > 0)
+        && CriteriaSum == newTotal;
+
+    protected override async Task OnInitializedAsync()
+    {
+        busy = true;
+        try
+        {
+            var policyWorkspace = await Api.GetPoliciesAsync();
+            policyVersions = policyWorkspace.Versions;
+            var preferred = policyVersions.FirstOrDefault(v => v.IsApprovedForUse && v.VerificationStatus == "Verified")
+                ?? policyVersions.FirstOrDefault();
+            if (preferred is not null)
+                policyVersionId = preferred.Id;
+            else
+                policyVersionId = 1;
+
+            if (policyVersionId > 0)
+                templates = await Api.GetOfficialTemplatesAsync(policyVersionId);
+        }
+        catch (HttpRequestException)
+        {
+            message = "Official templates could not be loaded. Check your recruitment permissions.";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task LoadTemplatesAsync()
     {
         if (busy || policyVersionId <= 0) return;
         busy = true;
@@ -137,7 +497,7 @@
         }
         catch (HttpRequestException)
         {
-            message = "Official templates could not be loaded. Check your recruitment permissions and policy version ID.";
+            message = "Official templates could not be loaded for this policy version.";
         }
         finally
         {
@@ -145,42 +505,245 @@
         }
     }
 
-    private async Task RegisterAsync()
+    private void ToggleInspect(int id) => inspectingTemplateId = inspectingTemplateId == id ? null : id;
+    private void AddCriterionRow() => newCriteria.Add(new("", 10));
+    private void RemoveCriterionRow(int index) { if (newCriteria.Count > 1) newCriteria.RemoveAt(index); }
+
+    private async Task OnNewTemplateFileSelected(InputFileChangeEventArgs e)
     {
-        if (busy) return;
+        try
+        {
+            using var stream = e.File.OpenReadStream(15 * 1024 * 1024);
+            using var ms = new MemoryStream();
+            await stream.CopyToAsync(ms);
+            newFileBytes = ms.ToArray();
+            newFileName = e.File.Name;
+            newFileContentType = e.File.ContentType;
+        }
+        catch (IOException)
+        {
+            message = "Maximum template file size is 15 MB.";
+            newFileBytes = [];
+            newFileName = "";
+        }
+    }
+
+    private async Task UploadNewTemplateAsync()
+    {
+        if (busy || !CanSubmitNewTemplate) return;
         busy = true;
         message = null;
         try
         {
-            var input = new RegisterRecruitmentOfficialTemplateInput(
+            var definitionObj = new
+            {
+                total = newTotal,
+                passMark = newPassMark,
+                components = newCriteria.Select(c => new object[] { c.Key.Trim(), c.MaxScore }).ToArray()
+            };
+            var json = JsonSerializer.Serialize(definitionObj);
+
+            var result = await Api.UploadOfficialTemplateAsync(new UploadRecruitmentOfficialTemplateInput(
                 policyVersionId,
-                sourceDocumentId,
-                templateCode.Trim(),
-                name.Trim(),
-                sourceUrl.Trim(),
-                positionCategory.Trim(),
-                templateDefinitionJson,
-                language,
-                direction);
-            var result = await Api.RegisterOfficialTemplateAsync(input);
+                newCode.Trim(),
+                newName.Trim(),
+                string.IsNullOrWhiteSpace(newSourceUrl) ? "https://www.csc.gov.mv/" : newSourceUrl.Trim(),
+                newCategory.Trim(),
+                json,
+                newFileName,
+                newFileContentType,
+                newFileBytes,
+                "en",
+                "ltr",
+                verifyImmediately));
+
             message = result.Message;
             if (result.Success)
             {
-                templateCode = "";
-                name = "";
-                sourceUrl = "";
-                positionCategory = "";
-                templateDefinitionJson = "{}";
+                newCode = "";
+                newName = "";
+                newFileName = "";
+                newFileBytes = [];
+                showUploadForm = false;
                 templates = await Api.GetOfficialTemplatesAsync(policyVersionId);
             }
         }
         catch (HttpRequestException)
         {
-            message = "Official template could not be registered. Check the input values and permissions.";
+            message = "Failed to upload template to GHR DMS.";
         }
         finally
         {
             busy = false;
         }
     }
+
+    private async Task AttachFileToTemplateAsync(RecruitmentOfficialTemplateRow row, InputFileChangeEventArgs e)
+    {
+        if (busy) return;
+        busy = true;
+        message = null;
+        try
+        {
+            using var stream = e.File.OpenReadStream(15 * 1024 * 1024);
+            using var ms = new MemoryStream();
+            await stream.CopyToAsync(ms);
+            var res = await Api.AttachOfficialTemplateFileAsync(row.Id, e.File.Name, e.File.ContentType, ms.ToArray());
+            message = res.Message;
+            if (res.Success)
+                templates = await Api.GetOfficialTemplatesAsync(policyVersionId);
+        }
+        catch (IOException)
+        {
+            message = "Maximum template file size is 15 MB.";
+        }
+        catch (HttpRequestException)
+        {
+            message = "Could not attach file to template.";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task VerifyTemplateAsync(int templateId)
+    {
+        if (busy) return;
+        busy = true;
+        message = null;
+        try
+        {
+            var res = await Api.VerifyOfficialTemplateAsync(templateId);
+            message = res.Message;
+            if (res.Success)
+                templates = await Api.GetOfficialTemplatesAsync(policyVersionId);
+        }
+        catch (HttpRequestException)
+        {
+            message = "Could not verify template.";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task PreviewOrDownloadFileAsync(RecruitmentOfficialTemplateRow row)
+    {
+        if (busy) return;
+        busy = true;
+        try
+        {
+            var res = await Api.DownloadOfficialTemplateFileAsync(row.Id);
+            if (!res.Success)
+            {
+                message = res.Error ?? "Could not retrieve template file.";
+                return;
+            }
+            var isPdf = res.ContentType.Contains("pdf", StringComparison.OrdinalIgnoreCase) || res.FileName.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase);
+            var isImg = res.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase);
+            if (isPdf || isImg)
+            {
+                previewBytes = res.Content;
+                previewFileName = res.FileName;
+                previewContentType = res.ContentType;
+                previewIsPdf = isPdf;
+                previewDataUrl = $"data:{res.ContentType};base64,{Convert.ToBase64String(res.Content)}";
+            }
+            else
+            {
+                await TriggerDownloadAsync(res.FileName, res.ContentType, res.Content);
+            }
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task DownloadFileAsync(RecruitmentOfficialTemplateRow row)
+    {
+        if (busy) return;
+        busy = true;
+        try
+        {
+            var res = await Api.DownloadOfficialTemplateFileAsync(row.Id);
+            if (!res.Success)
+            {
+                message = res.Error ?? "Could not download template file.";
+                return;
+            }
+            await TriggerDownloadAsync(res.FileName, res.ContentType, res.Content);
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task DownloadCurrentPreviewAsync()
+    {
+        if (previewBytes is null || string.IsNullOrWhiteSpace(previewFileName)) return;
+        await TriggerDownloadAsync(previewFileName, previewContentType ?? "application/octet-stream", previewBytes);
+    }
+
+    private async Task TriggerDownloadAsync(string fileName, string contentType, byte[] content)
+    {
+        var base64 = Convert.ToBase64String(content);
+        await JS.InvokeVoidAsync("eval", $@"(function(){{
+            const a = document.createElement('a');
+            a.href = 'data:{contentType};base64,{base64}';
+            a.download = {JsonSerializer.Serialize(fileName)};
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+        }})();");
+    }
+
+    private void ClosePreview()
+    {
+        previewDataUrl = null;
+        previewFileName = null;
+        previewContentType = null;
+        previewBytes = null;
+    }
+
+    private static ParsedTemplateDefinition? ParseDefinition(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return null;
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+            var total = root.TryGetProperty("total", out var t) && t.TryGetDecimal(out var tv) ? tv : 0;
+            var pass = root.TryGetProperty("passMark", out var p) && p.TryGetDecimal(out var pv) ? pv : 0;
+            var list = new List<(string, decimal)>();
+            if (root.TryGetProperty("components", out var comps) && comps.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var c in comps.EnumerateArray())
+                {
+                    if (c.ValueKind == JsonValueKind.Array && c.GetArrayLength() == 2 && c[1].TryGetDecimal(out var w))
+                        list.Add((c[0].GetString() ?? "", w));
+                }
+            }
+            return new ParsedTemplateDefinition(total, pass, list);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    private static string FormatCriterionLabel(string key) => key switch
+    {
+        "basicQualification" => "Basic Qualification",
+        "higherQualification" => "Higher Qualification",
+        "coreDiscipline" => "Core Discipline",
+        "additionalExperience" => "Additional Experience",
+        "assessment" => "Assessment / Practical Exam",
+        "presentation" => "Presentation",
+        "interview" => "Interview",
+        _ => System.Text.RegularExpressions.Regex.Replace(key, "([a-z])([A-Z])", "$1 $2")
+    };
 }
