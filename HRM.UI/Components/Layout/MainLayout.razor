@@ -16,7 +16,6 @@
 @inject PortalContext PortalContext
 @inject AuthenticationStateProvider AuthenticationProvider
 @inject IUserContextService EmployeeContext
-@inject IUserAccessService UserAccess
 
 <div class="app-shell flex h-screen bg-slate-50 @ShellContextClass">
 
@@ -43,12 +42,19 @@
             }
             else if (_isAuthenticated && !HasSystemAccess && !IsPublicRecruitmentRoute)
             {
-                <section role="alert" class="rounded-xl border border-slate-200 bg-white p-6 space-y-3 shadow-card">
-                    <h1 class="text-lg font-semibold text-slate-900">HRM access is not enabled for your account.</h1>
-                    <p class="text-sm text-slate-600">You have signed in successfully through eFaas. You can still browse and apply for open government vacancies, or contact your organisation's HR team to enable employee portal access.</p>
-                    <p class="text-sm text-slate-500">The employee menu will remain disabled until your HRM access is enabled.</p>
+                <section role="alert" class="rounded-xl border border-slate-200 bg-white p-6 space-y-3 shadow-card max-w-2xl mx-auto mt-4">
+                    @if (_session is { UserId: > 0 } && !IsActiveStaff)
+                    {
+                        <h1 class="text-lg font-semibold text-slate-900">No active employment found for your account.</h1>
+                        <p class="text-sm text-slate-600">Your HRM account does not currently have an active job assignment in an organisation. You can still browse and apply for open vacancies through the Careers Portal, or contact HR if you believe this is an error.</p>
+                    }
+                    else
+                    {
+                        <h1 class="text-lg font-semibold text-slate-900">Signed in with eFaas (External Applicant)</h1>
+                        <p class="text-sm text-slate-600">You have signed in successfully through eFaas. You can browse open vacancies, submit applications, view published merit results, and respond to job offers in the Careers Portal.</p>
+                    }
                     <div class="flex flex-wrap items-center gap-3 pt-1">
-                        <a href="/careers" class="app-button app-button-primary app-button-sm">Browse Open Vacancies &amp; Apply</a>
+                        <a href="/careers" class="app-button app-button-primary app-button-sm">Open Careers Portal</a>
                         <a href="/Online/Auth/NoAccessLogout" class="inline-flex items-center text-sm font-semibold text-blue-600 hover:text-blue-700 underline">Sign out</a>
                     </div>
                 </section>
@@ -82,10 +88,11 @@
     private bool _isAuthenticated;
     private bool mobileNavOpen;
     private int _accessLoadVersion;
-    private bool _isDeveloper;
-    private bool HasSystemAccess => !_checkingAccess && _session?.CanAccessSystem == true;
+    private bool IsActiveStaff => _session is { CanAccessSystem: true, UserId: > 0, OrganisationId: > 0, JobId: > 0 };
+    private bool HasManagementPortalAccess => _session is { CanAccessSystem: true } && (_session.CanAccessAdminPortal || _session.CanAccessDeveloperPortal || _session.CanAccessAuditPortal);
+    private bool HasSystemAccess => !_checkingAccess && (IsActiveStaff || HasManagementPortalAccess);
     private bool CanAccessAdminPortal => HasSystemAccess && _session?.CanAccessAdminPortal == true;
-    private bool CanAccessDeveloperPortal => HasSystemAccess && (_session?.CanAccessDeveloperPortal == true || _isDeveloper);
+    private bool CanAccessDeveloperPortal => HasSystemAccess && _session?.CanAccessDeveloperPortal == true;
     private bool CanAccessAuditPortal => HasSystemAccess && _session?.CanAccessAuditPortal == true;
     [CascadingParameter]
     private Task<AuthenticationState>? AuthenticationState { get; set; }
@@ -158,11 +165,9 @@
             await EmployeeContext.GetCurrentAsync();
         if (version != _accessLoadVersion) return;
         _session = session;
-        try { _isDeveloper = await UserAccess.HasUserGroupAsync("Developer") || await UserAccess.HasPermissionAsync("Developer"); }
-        catch { _isDeveloper = false; }
         PortalContext.Initialize(_session?.OrganisationId, _session?.OrganisationName ?? "",
             _session?.CanAccessAdminPortal == true,
-            _session?.CanAccessDeveloperPortal == true || _isDeveloper,
+            _session?.CanAccessDeveloperPortal == true,
             _session?.CanAccessAuditPortal == true);
 
         if (IsAdminPortal) PortalContext.SwitchToAdmin();
@@ -171,6 +176,16 @@
         else PortalContext.SwitchToEmployee();
 
         _checkingAccess = false;
+
+        // Route non-staff eFaas applicants landing on root or /online directly to the Careers Portal.
+        if (_isAuthenticated && _session is null && !IsPublicRecruitmentRoute)
+        {
+            var path = new Uri(Navigation.Uri).AbsolutePath;
+            if (path == "/" || path.Equals("/online", StringComparison.OrdinalIgnoreCase))
+            {
+                Navigation.NavigateTo("/careers", replace: true);
+            }
+        }
     }
 
     public void Dispose() => Navigation.LocationChanged -= OnLocationChanged;
