@@ -28,28 +28,51 @@ namespace HRM.Services
 
         public async Task<OperationLog> CreateAsync(HrmTeContext dbContext, int actionId,string remarks)
         {
-
-            var userContext = await _access.RequireContextAsync();
+            var userContext = await _access.GetContextAsync();
             var ip =
                 _httpContextAccessor.HttpContext?
                 .Connection
                 .RemoteIpAddress?
                 .ToString();
-            var organisationId = userContext.Organisation?.OrganisationBusinessEntityId ?? userContext.ActiveJob?.OrganisationId;
-            var userOrganisationId = organisationId.HasValue
-                ? await dbContext.UserOrganisations.Where(x => x.BusinessEntityID == organisationId.Value)
-                    .Select(x => (int?)x.UserOrganisationID).SingleOrDefaultAsync()
-                : await dbContext.Users.Where(x => x.UserId == userContext.UserId).Select(x => x.UserOrganisationId).SingleOrDefaultAsync();
+
+            int? individualId = null;
+            int? userId = null;
+            int? userOrganisationId = null;
+
+            if (userContext is { UserId: > 0 })
+            {
+                individualId = userContext.IndividualId > 0 ? userContext.IndividualId : null;
+                userId = userContext.UserId;
+                var organisationId = userContext.Organisation?.OrganisationBusinessEntityId ?? userContext.ActiveJob?.OrganisationId;
+                userOrganisationId = organisationId.HasValue
+                    ? await dbContext.UserOrganisations.Where(x => x.BusinessEntityID == organisationId.Value)
+                        .Select(x => (int?)x.UserOrganisationID).SingleOrDefaultAsync()
+                    : await dbContext.Users.Where(x => x.UserId == userContext.UserId).Select(x => x.UserOrganisationId).SingleOrDefaultAsync();
+            }
+            else
+            {
+                var principal = _httpContextAccessor.HttpContext?.User;
+                var idNumber = principal?.Identity?.IsAuthenticated == true
+                    ? principal.FindFirstValue("idnumber")?.Trim()
+                    : null;
+                if (string.IsNullOrWhiteSpace(idNumber))
+                    throw new UnauthorizedAccessException("User is not authenticated.");
+
+                individualId = await dbContext.Idcards.AsNoTracking()
+                    .Where(c => c.IdcardNumber == idNumber)
+                    .Select(c => (int?)c.BusinessEntityId)
+                    .FirstOrDefaultAsync();
+            }
 
             var log = new OperationLog
             {
                 OperationLogActionId = actionId,
 
-                CreatedByIndividualId = userContext.IndividualId > 0 ? userContext.IndividualId : null,
-                UpdatedByIndividualId = userContext.IndividualId > 0 ? userContext.IndividualId : null,
+                CreatedByIndividualId = individualId,
+                UpdatedByIndividualId = individualId,
 
-                CreatedByUserId = userContext.UserId,
-                UpdatedByUserId = userContext.UserId,
+                CreatedByUserId = userId,
+                UpdatedByUserId = userId,
 
                 CreatedByUserOrganisationId = userOrganisationId,
                 UpdatedByUserOrganisationId = userOrganisationId,
