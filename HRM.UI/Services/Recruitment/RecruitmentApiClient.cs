@@ -36,6 +36,7 @@ public interface IRecruitmentApiClient {
     Task<IReadOnlyList<PublishedRecruitmentVacancyRow>> BrowseVacanciesAsync();
     Task<IReadOnlyList<PublishedRecruitmentVacancyRow>> BrowsePublicVacanciesAsync();
     Task<OfficeVacanciesResponse?> GetOfficeVacanciesAsync(string officeSlug);
+    Task<PublicMeritSheetResponse?> GetPublicMeritSheetAsync(int publicationId);
     Task<HRM.DTOs.ServiceResult> RegisterApplicantAsync(ApplicantRegistrationInput input);
     Task<HRM.DTOs.ServiceResult> ApplyAsync(ApplyToRecruitmentVacancyInput input);
     Task<RecruitmentDraftDetail?> GetDraftAsync(int vacancy);
@@ -56,6 +57,13 @@ public sealed class RecruitmentApiClient(HttpClient http, HttpClient? publicHttp
         if (r.StatusCode == System.Net.HttpStatusCode.NotFound) return null;
         r.EnsureSuccessStatusCode();
         return await r.Content.ReadFromJsonAsync<OfficeVacanciesResponse>();
+    }
+    public async Task<PublicMeritSheetResponse?> GetPublicMeritSheetAsync(int publicationId)
+    {
+        using var r = await PublicClient.GetAsync($"/api/v1/public/recruitment/results/{publicationId}");
+        if (r.StatusCode == System.Net.HttpStatusCode.NotFound) return null;
+        r.EnsureSuccessStatusCode();
+        return await r.Content.ReadFromJsonAsync<PublicMeritSheetResponse>();
     }
     public async Task<IReadOnlyList<RecruitmentOfficialTemplateRow>> GetOfficialTemplatesAsync(int policyVersionId, CancellationToken ct = default) => await http.GetFromJsonAsync<List<RecruitmentOfficialTemplateRow>>($"/api/v1/recruitment/official-templates/{policyVersionId}", ct) ?? [];
     public Task<HRM.DTOs.ServiceResult> RegisterOfficialTemplateAsync(RegisterRecruitmentOfficialTemplateInput input, CancellationToken ct = default) => PostAsync("/api/v1/recruitment/official-templates", input, ct);

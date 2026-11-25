@@ -198,7 +198,9 @@
     [Parameter] public EventCallback Changed { get; set; }
     private IReadOnlyList<PublishedRecruitmentVacancyRow> vacancies = [];
     private IReadOnlyList<PublishedRecruitmentVacancyRow> VisibleVacancies =>
-        OrganisationIdFilter is > 0 ? vacancies.Where(v => v.OrganisationId == OrganisationIdFilter.Value).ToList() : vacancies;
+        (OrganisationIdFilter is > 0 ? vacancies.Where(v => v.OrganisationId == OrganisationIdFilter.Value) : vacancies)
+        .Where(v => v.ClosingAtUtc > DateTime.UtcNow)
+        .ToList();
     private int vacancy;
     private string name = "", email = "", mobile = "", qualifications = "", experience = "", statement = "";
     private bool busy, confirmed, review;

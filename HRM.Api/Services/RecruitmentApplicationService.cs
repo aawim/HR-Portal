@@ -20,16 +20,20 @@ public sealed class RecruitmentApplicationService(IDbContextFactory<HrmTeContext
         await using var d = await factory.CreateDbContextAsync(ct);
         var now = DateTime.UtcNow;
         var raw = await (from x in d.RecruitmentVacancies.AsNoTracking()
+                         join req in d.RecruitmentRequisitions.AsNoTracking() on x.RecruitmentRequisitionId equals req.Id into reqs
+                         from req in reqs.DefaultIfEmpty()
                          join org in d.Organisations.AsNoTracking() on x.OrganisationId equals org.BusinessEntityID into orgs
                          from org in orgs.DefaultIfEmpty()
+                         join pub in d.RecruitmentResultPublications.AsNoTracking() on x.Id equals pub.RecruitmentVacancyId into pubs
+                         from pub in pubs.DefaultIfEmpty()
                          join pm in d.PositionMatrices.AsNoTracking() on x.PositionMatrixId equals pm.PositionMatrixId into pms
                          from pm in pms.DefaultIfEmpty()
                          join jt in d.FrameworkJobTitles.AsNoTracking() on pm.JobTitleId equals jt.JobTitleId into jts
                          from jt in jts.DefaultIfEmpty()
                          join jm in d.FrameworkJobMatrices.AsNoTracking() on pm.JobMatrixId equals jm.JobMatrixId into jms
                          from jm in jms.DefaultIfEmpty()
-                         where x.Status == "Published" && x.ClosingAtUtc > now
-                         orderby x.ClosingAtUtc
+                         where x.Status == "Published" && x.ClosingAtUtc.HasValue
+                         orderby x.ClosingAtUtc <= now, x.ClosingAtUtc
                          select new
                          {
                              x.Id,
@@ -39,6 +43,10 @@ public sealed class RecruitmentApplicationService(IDbContextFactory<HrmTeContext
                              x.AdvertisementSnapshotJson,
                              x.OrganisationId,
                              OrganisationName = org != null ? org.OrganisationName : null,
+                             EmploymentType = req != null ? req.EmploymentType : null,
+                             PublicationId = pub != null ? (int?)pub.Id : null,
+                             IsResultFinal = pub != null && pub.IsFinal,
+                             ObjectionClosesAtUtc = pub != null ? (DateTime?)pub.ObjectionClosesAtUtc : null,
                              FallbackTitle = jt != null ? jt.Name : (jm != null ? jm.Name : x.Reference)
                          }).ToListAsync(ct);
 
@@ -49,7 +57,12 @@ public sealed class RecruitmentApplicationService(IDbContextFactory<HrmTeContext
             x.ClosingAtUtc,
             ExtractTitle(x.AdvertisementSnapshotJson) ?? x.FallbackTitle,
             x.OrganisationId,
-            x.OrganisationName)).ToList();
+            x.OrganisationName,
+            x.EmploymentType,
+            x.PublicationId.HasValue,
+            x.PublicationId,
+            x.IsResultFinal,
+            x.ObjectionClosesAtUtc)).ToList();
     }
 
     private static string? ExtractTitle(string? snapshotJson)

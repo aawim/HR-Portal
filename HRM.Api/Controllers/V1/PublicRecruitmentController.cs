@@ -52,6 +52,52 @@ public sealed class PublicRecruitmentController(
             filtered));
     }
 
+    [HttpGet("results/{publicationId:int}")]
+    public async Task<ActionResult<PublicMeritSheetResponse>> PublicResultSheet(int publicationId, CancellationToken ct)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        var pub = await (from p in db.RecruitmentResultPublications.AsNoTracking()
+                         join v in db.RecruitmentVacancies.AsNoTracking() on p.RecruitmentVacancyId equals v.Id
+                         join org in db.Organisations.AsNoTracking() on v.OrganisationId equals org.BusinessEntityID into orgs
+                         from org in orgs.DefaultIfEmpty()
+                         join pm in db.PositionMatrices.AsNoTracking() on v.PositionMatrixId equals pm.PositionMatrixId into pms
+                         from pm in pms.DefaultIfEmpty()
+                         join jt in db.FrameworkJobTitles.AsNoTracking() on pm.JobTitleId equals jt.JobTitleId into jts
+                         from jt in jts.DefaultIfEmpty()
+                         join jm in db.FrameworkJobMatrices.AsNoTracking() on pm.JobMatrixId equals jm.JobMatrixId into jms
+                         from jm in jms.DefaultIfEmpty()
+                         where p.Id == publicationId
+                         select new
+                         {
+                             p.Id,
+                             VacancyReference = v.Reference,
+                             PositionName = jt != null ? jt.Name : (jm != null ? jm.Name : v.Reference),
+                             OrganisationName = org != null ? org.OrganisationName : null,
+                             p.IsFinal,
+                             p.PublishedAtUtc,
+                             p.ObjectionClosesAtUtc
+                         }).SingleOrDefaultAsync(ct);
+
+        if (pub is null) return NotFound();
+
+        var sheet = await (from m in db.RecruitmentMeritResults.AsNoTracking()
+                           join a in db.RecruitmentApplications.AsNoTracking() on m.RecruitmentApplicationId equals a.Id
+                           where m.RecruitmentResultPublicationId == publicationId
+                           orderby m.Rank
+                           select new PublishedMeritSheetEntry(m.Rank, a.Reference, m.Score, false))
+            .ToListAsync(ct);
+
+        return Ok(new PublicMeritSheetResponse(
+            pub.Id,
+            pub.VacancyReference,
+            pub.PositionName,
+            pub.OrganisationName,
+            pub.IsFinal,
+            pub.PublishedAtUtc,
+            pub.ObjectionClosesAtUtc,
+            sheet));
+    }
+
     private static string NormalizeSlug(string value)
     {
         var sb = new StringBuilder(value.Length);
