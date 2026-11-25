@@ -28,6 +28,8 @@ public interface IRecruitmentApiClient {
     Task<HRM.DTOs.ServiceResult> CreateAssessmentAsync(CreateRecruitmentAssessmentInput input);
     Task<HRM.DTOs.ServiceResult> SubmitScorecardAsync(SubmitPanelScorecardInput input);
     Task<RecruitmentResultWorkspace> GetResultWorkspaceAsync(int vacancyId);
+    Task<A2EvaluationSheetDto?> GetA2EvaluationSheetAsync(int vacancyId, CancellationToken ct = default);
+    Task<A2EvaluationSheetDto?> GetPublicA2EvaluationSheetAsync(int vacancyId, CancellationToken ct = default);
     Task<HRM.DTOs.ServiceResult> PublishResultsAsync(PublishRecruitmentResultsInput input);
     Task<HRM.DTOs.ServiceResult> ResolveObjectionAsync(ResolveRecruitmentObjectionInput input);
     Task<HRM.DTOs.ServiceResult> FinalizeResultsAsync(int id);
@@ -149,6 +151,20 @@ public sealed class RecruitmentApiClient(HttpClient http, HttpClient? publicHttp
     public Task<HRM.DTOs.ServiceResult> CreateOfferAsync(CreateRecruitmentOfferInput input)=>PostAsync("/api/v1/recruitment/offers",input,default);
     public Task<HRM.DTOs.ServiceResult> SubmitOnboardingAsync(SubmitRecruitmentOnboardingInput input)=>PostAsync("/api/v1/recruitment/onboarding",input,default);
     public async Task<RecruitmentResultWorkspace> GetResultWorkspaceAsync(int vacancyId)=>await http.GetFromJsonAsync<RecruitmentResultWorkspace>($"/api/v1/recruitment/result-workspace/{vacancyId}")??new(null,false,null,[],[]);
+    public async Task<A2EvaluationSheetDto?> GetA2EvaluationSheetAsync(int vacancyId, CancellationToken ct = default)
+    {
+        using var r = await http.GetAsync($"/api/v1/recruitment/result-workspace/{vacancyId}/a2-sheet", ct);
+        if (r.StatusCode == System.Net.HttpStatusCode.NotFound) return null;
+        r.EnsureSuccessStatusCode();
+        return await r.Content.ReadFromJsonAsync<A2EvaluationSheetDto>(cancellationToken: ct);
+    }
+    public async Task<A2EvaluationSheetDto?> GetPublicA2EvaluationSheetAsync(int vacancyId, CancellationToken ct = default)
+    {
+        using var r = await PublicClient.GetAsync($"/api/v1/public/recruitment/a2-sheet/{vacancyId}", ct);
+        if (r.StatusCode == System.Net.HttpStatusCode.NotFound) return null;
+        r.EnsureSuccessStatusCode();
+        return await r.Content.ReadFromJsonAsync<A2EvaluationSheetDto>(cancellationToken: ct);
+    }
     public Task<HRM.DTOs.ServiceResult> PublishResultsAsync(PublishRecruitmentResultsInput input)=>PostAsync("/api/v1/recruitment/results/publish",input,default);
     public Task<HRM.DTOs.ServiceResult> ResolveObjectionAsync(ResolveRecruitmentObjectionInput input)=>PostAsync("/api/v1/recruitment/results/objections/resolve",input,default);
     public Task<HRM.DTOs.ServiceResult> FinalizeResultsAsync(int id)=>PostAsync($"/api/v1/recruitment/results/{id}/finalize",new{},default);

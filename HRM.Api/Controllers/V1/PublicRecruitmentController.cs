@@ -182,6 +182,14 @@ public sealed class PublicRecruitmentController(
             rows));
     }
 
+    [HttpGet("a2-sheet/{vacancyId:int}")]
+    public async Task<ActionResult<A2EvaluationSheetDto>> PublicA2Sheet(int vacancyId, CancellationToken ct)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        var dto = await RecruitmentResultQueriesController.BuildA2SheetAsync(db, vacancyId, expectedOrgId: null, anonymizeNames: true, requirePublished: true, ct);
+        return dto is null ? NotFound() : Ok(dto);
+    }
+
     private static string NormalizeSlug(string value)
     {
         var sb = new StringBuilder(value.Length);
