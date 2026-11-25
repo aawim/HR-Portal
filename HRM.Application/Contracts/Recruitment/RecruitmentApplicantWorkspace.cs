@@ -1,6 +1,9 @@
 namespace HRM.Application.Contracts.Recruitment;
 public sealed record MyRecruitmentApplicationRow(string Reference,string VacancyReference,string Status,DateTime? SubmittedAtUtc);
 public sealed record MyRecruitmentOfferRow(int Id,string VacancyReference,string Status,string TermsSnapshotJson);
-public sealed record MyRecruitmentResultRow(int PublicationId,int ApplicationId,string ApplicationReference,string VacancyReference,string? PositionName,int Rank,decimal Score,bool IsFinal,DateTime ObjectionClosesAtUtc,int? ObjectionId,string? ObjectionStatus,string? ObjectionGrounds,string? ObjectionResolution);
-public sealed record MyRecruitmentWorkspace(IReadOnlyList<MyRecruitmentApplicationRow> Applications,IReadOnlyList<MyRecruitmentOfferRow> Offers,int? ApplicantId=null,IReadOnlyList<MyRecruitmentResultRow>? Results=null);
+public sealed record MyRecruitmentResultRow(int PublicationId,int ApplicationId,string ApplicationReference,string VacancyReference,string? PositionName,string ApplicationStatus,int? Rank,decimal? Score,bool IsFinal,DateTime PublishedAtUtc,DateTime ObjectionClosesAtUtc,int? ObjectionId,string? ObjectionStatus,string? ObjectionGrounds,string? ObjectionResolution);
+public sealed record PublishedMeritSheetEntry(int Rank,string ApplicationReference,decimal Score,bool IsMine);
+public sealed record MyScorecardBreakdownRow(string AssessmentKind,decimal TotalScore,string CriterionScoresJson,DateTime SubmittedAtUtc);
+public sealed record MyPublishedResultDetail(int PublicationId,int ApplicationId,string ApplicationReference,string VacancyReference,string? PositionName,string ApplicationStatus,int? MyRank,decimal? MyScore,bool IsFinal,DateTime PublishedAtUtc,DateTime ObjectionClosesAtUtc,IReadOnlyList<PublishedMeritSheetEntry> MeritSheet,IReadOnlyList<MyScorecardBreakdownRow> MyScorecards,int? ObjectionId,string? ObjectionStatus,string? ObjectionGrounds,string? ObjectionResolution);
+public sealed record MyRecruitmentWorkspace(IReadOnlyList<MyRecruitmentApplicationRow> Applications,IReadOnlyList<MyRecruitmentOfferRow> Offers,int? ApplicantId=null,IReadOnlyList<MyRecruitmentResultRow>? Results=null,string? ProfileFullName=null,string? ProfileEmail=null,string? ProfileMobile=null);
 public sealed record ApplyToRecruitmentVacancyInput(int VacancyId,string Qualifications,string Experience,string SupportingStatement);

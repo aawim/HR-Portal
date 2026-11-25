@@ -136,10 +136,16 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
 }
 // This creates the Login route without needing a Controller file
-app.MapGet("/Online/Auth/login", () =>
+app.MapGet("/Online/Auth/login", (string? returnUrl) =>
 {
+    var safeRedirect = !string.IsNullOrWhiteSpace(returnUrl)
+        && returnUrl.StartsWith('/')
+        && !returnUrl.StartsWith("//")
+        && !returnUrl.StartsWith("/\\")
+        ? returnUrl
+        : "/";
     return Results.Challenge(
-        new AuthenticationProperties { RedirectUri = "/" },
+        new AuthenticationProperties { RedirectUri = safeRedirect },
         new[] { OpenIdConnectDefaults.AuthenticationScheme }
     );
 }).AllowAnonymous().RequireRateLimiting(HrmRateLimitPolicies.Auth);

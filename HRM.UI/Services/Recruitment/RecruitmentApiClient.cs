@@ -30,9 +30,12 @@ public interface IRecruitmentApiClient {
     Task<HRM.DTOs.ServiceResult> CreateOfferAsync(CreateRecruitmentOfferInput input);
     Task<HRM.DTOs.ServiceResult> SubmitOnboardingAsync(SubmitRecruitmentOnboardingInput input);
     Task<MyRecruitmentWorkspace> GetMyWorkspaceAsync();
+    Task<MyPublishedResultDetail?> GetMyPublishedResultAsync(int publicationId, int applicationId);
     Task<HRM.DTOs.ServiceResult> AcceptMyOfferAsync(int id);
     Task<HRM.DTOs.ServiceResult> SubmitMyObjectionAsync(SubmitRecruitmentObjectionInput input);
     Task<IReadOnlyList<PublishedRecruitmentVacancyRow>> BrowseVacanciesAsync();
+    Task<IReadOnlyList<PublishedRecruitmentVacancyRow>> BrowsePublicVacanciesAsync();
+    Task<OfficeVacanciesResponse?> GetOfficeVacanciesAsync(string officeSlug);
     Task<HRM.DTOs.ServiceResult> RegisterApplicantAsync(ApplicantRegistrationInput input);
     Task<HRM.DTOs.ServiceResult> ApplyAsync(ApplyToRecruitmentVacancyInput input);
     Task<RecruitmentDraftDetail?> GetDraftAsync(int vacancy);
@@ -43,8 +46,17 @@ public interface IRecruitmentApiClient {
     Task<IReadOnlyList<RecruitmentOfficialTemplateRow>> GetOfficialTemplatesAsync(int policyVersionId, CancellationToken ct = default);
     Task<HRM.DTOs.ServiceResult> RegisterOfficialTemplateAsync(RegisterRecruitmentOfficialTemplateInput input, CancellationToken ct = default);
 }
-public sealed class RecruitmentApiClient(HttpClient http) : IRecruitmentApiClient
+public sealed class RecruitmentApiClient(HttpClient http, HttpClient? publicHttp = null) : IRecruitmentApiClient
 {
+    private HttpClient PublicClient => publicHttp ?? http;
+    public async Task<IReadOnlyList<PublishedRecruitmentVacancyRow>> BrowsePublicVacanciesAsync() => await PublicClient.GetFromJsonAsync<List<PublishedRecruitmentVacancyRow>>("/api/v1/public/recruitment/vacancies") ?? [];
+    public async Task<OfficeVacanciesResponse?> GetOfficeVacanciesAsync(string officeSlug)
+    {
+        using var r = await PublicClient.GetAsync($"/api/v1/public/recruitment/office/{Uri.EscapeDataString(officeSlug)}/vacancies");
+        if (r.StatusCode == System.Net.HttpStatusCode.NotFound) return null;
+        r.EnsureSuccessStatusCode();
+        return await r.Content.ReadFromJsonAsync<OfficeVacanciesResponse>();
+    }
     public async Task<IReadOnlyList<RecruitmentOfficialTemplateRow>> GetOfficialTemplatesAsync(int policyVersionId, CancellationToken ct = default) => await http.GetFromJsonAsync<List<RecruitmentOfficialTemplateRow>>($"/api/v1/recruitment/official-templates/{policyVersionId}", ct) ?? [];
     public Task<HRM.DTOs.ServiceResult> RegisterOfficialTemplateAsync(RegisterRecruitmentOfficialTemplateInput input, CancellationToken ct = default) => PostAsync("/api/v1/recruitment/official-templates", input, ct);
     public async Task<RecruitmentDraftDetail?> GetDraftAsync(int vacancy){using var r=await http.GetAsync($"/api/v1/recruitment/my-applications/vacancy/{vacancy}");if(r.StatusCode==System.Net.HttpStatusCode.NoContent)return null;r.EnsureSuccessStatusCode();return await r.Content.ReadFromJsonAsync<RecruitmentDraftDetail>();}
@@ -56,6 +68,7 @@ public sealed class RecruitmentApiClient(HttpClient http) : IRecruitmentApiClien
     public Task<HRM.DTOs.ServiceResult> RegisterApplicantAsync(ApplicantRegistrationInput input)=>PostAsync("/api/v1/recruitment/applications/applicants",input,default);
     public Task<HRM.DTOs.ServiceResult> ApplyAsync(ApplyToRecruitmentVacancyInput input)=>PostAsync("/api/v1/recruitment/my-workspace/apply",input,default);
     public async Task<MyRecruitmentWorkspace> GetMyWorkspaceAsync()=>await http.GetFromJsonAsync<MyRecruitmentWorkspace>("/api/v1/recruitment/my-workspace")??new([],[]);
+    public async Task<MyPublishedResultDetail?> GetMyPublishedResultAsync(int publicationId,int applicationId){using var r=await http.GetAsync($"/api/v1/recruitment/my-workspace/results/{publicationId}/{applicationId}");if(r.StatusCode==System.Net.HttpStatusCode.NotFound)return null;r.EnsureSuccessStatusCode();return await r.Content.ReadFromJsonAsync<MyPublishedResultDetail>();}
     public Task<HRM.DTOs.ServiceResult> AcceptMyOfferAsync(int id)=>PostAsync($"/api/v1/recruitment/my-workspace/offers/{id}/accept",new{},default);
     public Task<HRM.DTOs.ServiceResult> SubmitMyObjectionAsync(SubmitRecruitmentObjectionInput input)=>PostAsync("/api/v1/recruitment/my-workspace/objections",input,default);
     public async Task<RecruitmentOfferWorkspace> GetOfferWorkspaceAsync(int vacancyId)=>await http.GetFromJsonAsync<RecruitmentOfferWorkspace>($"/api/v1/recruitment/offer-workspace/{vacancyId}")??new([],[]);

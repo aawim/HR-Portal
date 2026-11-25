@@ -11,16 +11,21 @@
             </div>
             <div class="grid gap-3 sm:grid-cols-3">
                 <label class="block text-xs font-medium text-slate-700">
-                    Full Name
-                    <input class="@InputClass" maxlength="250" @bind="name" />
+                    Full Name <span class="text-[10px] font-normal text-slate-400">(eFaas verified)</span>
+                    <input class="@(IsNameLocked ? LockedInputClass : InputClass)"
+                           maxlength="250"
+                           disabled="@IsNameLocked"
+                           readonly="@IsNameLocked"
+                           @bind="name"
+                           @bind:event="oninput" />
                 </label>
                 <label class="block text-xs font-medium text-slate-700">
                     Email
-                    <input type="email" class="@InputClass" maxlength="320" @bind="email" />
+                    <input type="email" class="@InputClass" maxlength="320" @bind="email" @bind:event="oninput" />
                 </label>
                 <label class="block text-xs font-medium text-slate-700">
                     Mobile
-                    <input type="tel" class="@InputClass" maxlength="40" @bind="mobile" />
+                    <input type="tel" class="@InputClass" maxlength="40" @bind="mobile" @bind:event="oninput" />
                 </label>
             </div>
             <div class="flex justify-end">
@@ -41,17 +46,17 @@
         </div>
 
         <label class="block text-xs font-medium text-slate-700">
-            Vacancy
+            Vacancy@(string.IsNullOrWhiteSpace(OrganisationNameFilter) ? "" : $" ({OrganisationNameFilter})")
             <select class="@InputClass" @bind="vacancy" @bind:after="Resume">
                 <option value="0">-- Select vacancy --</option>
-                @foreach (var v in vacancies)
+                @foreach (var v in VisibleVacancies)
                 {
                     <option value="@v.Id">@(string.IsNullOrWhiteSpace(v.PositionName) ? v.Reference : v.PositionName) · closes @v.ClosingAtUtc.AddHours(5).ToString("dd MMM yyyy HH:mm") MVT</option>
                 }
             </select>
         </label>
 
-        @if (vacancies.Count == 0)
+        @if (VisibleVacancies.Count == 0)
         {
             <div class="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-xs text-slate-500">
                 No open vacancies are currently available.
@@ -183,19 +188,51 @@
 
 @code {
     [Parameter] public bool Registered { get; set; }
+    [Parameter] public string? InitialFullName { get; set; }
+    [Parameter] public string? InitialEmail { get; set; }
+    [Parameter] public string? InitialMobile { get; set; }
+    [Parameter] public int? OrganisationIdFilter { get; set; }
+    [Parameter] public string? OrganisationNameFilter { get; set; }
+    [Parameter] public string? InitialVacancyRef { get; set; }
     [Parameter] public EventCallback Changed { get; set; }
     private IReadOnlyList<PublishedRecruitmentVacancyRow> vacancies = [];
+    private IReadOnlyList<PublishedRecruitmentVacancyRow> VisibleVacancies =>
+        OrganisationIdFilter is > 0 ? vacancies.Where(v => v.OrganisationId == OrganisationIdFilter.Value).ToList() : vacancies;
     private int vacancy;
     private string name = "", email = "", mobile = "", qualifications = "", experience = "", statement = "";
     private bool busy, confirmed, review;
     private string? message;
     private RecruitmentDraftDetail? draft;
     private string category = "Identity";
+    private bool IsNameLocked => !string.IsNullOrWhiteSpace(InitialFullName);
     private const string InputClass = "mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500";
+    private const string LockedInputClass = "mt-1 w-full rounded-lg border border-slate-200 bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-600 cursor-not-allowed";
+
+    protected override void OnParametersSet()
+    {
+        if (!string.IsNullOrWhiteSpace(InitialFullName))
+            name = InitialFullName.Trim();
+        if (string.IsNullOrWhiteSpace(email) && !string.IsNullOrWhiteSpace(InitialEmail))
+            email = InitialEmail.Trim();
+        if (string.IsNullOrWhiteSpace(mobile) && !string.IsNullOrWhiteSpace(InitialMobile))
+            mobile = InitialMobile.Trim();
+    }
 
     protected override async Task OnInitializedAsync()
     {
-        try { vacancies = await Api.BrowseVacanciesAsync(); }
+        try
+        {
+            vacancies = await Api.BrowseVacanciesAsync();
+            if (vacancy == 0 && !string.IsNullOrWhiteSpace(InitialVacancyRef))
+            {
+                var target = VisibleVacancies.FirstOrDefault(v => string.Equals(v.Reference, InitialVacancyRef.Trim(), StringComparison.OrdinalIgnoreCase));
+                if (target is not null)
+                {
+                    vacancy = target.Id;
+                    if (Registered) await Resume();
+                }
+            }
+        }
         catch (HttpRequestException) { message = "Vacancies could not be loaded. Try again shortly."; }
     }
 

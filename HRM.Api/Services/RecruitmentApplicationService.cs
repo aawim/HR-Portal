@@ -20,6 +20,8 @@ public sealed class RecruitmentApplicationService(IDbContextFactory<HrmTeContext
         await using var d = await factory.CreateDbContextAsync(ct);
         var now = DateTime.UtcNow;
         var raw = await (from x in d.RecruitmentVacancies.AsNoTracking()
+                         join org in d.Organisations.AsNoTracking() on x.OrganisationId equals org.BusinessEntityID into orgs
+                         from org in orgs.DefaultIfEmpty()
                          join pm in d.PositionMatrices.AsNoTracking() on x.PositionMatrixId equals pm.PositionMatrixId into pms
                          from pm in pms.DefaultIfEmpty()
                          join jt in d.FrameworkJobTitles.AsNoTracking() on pm.JobTitleId equals jt.JobTitleId into jts
@@ -35,6 +37,8 @@ public sealed class RecruitmentApplicationService(IDbContextFactory<HrmTeContext
                              x.VacancySlots,
                              ClosingAtUtc = x.ClosingAtUtc!.Value,
                              x.AdvertisementSnapshotJson,
+                             x.OrganisationId,
+                             OrganisationName = org != null ? org.OrganisationName : null,
                              FallbackTitle = jt != null ? jt.Name : (jm != null ? jm.Name : x.Reference)
                          }).ToListAsync(ct);
 
@@ -43,7 +47,9 @@ public sealed class RecruitmentApplicationService(IDbContextFactory<HrmTeContext
             x.Reference,
             x.VacancySlots,
             x.ClosingAtUtc,
-            ExtractTitle(x.AdvertisementSnapshotJson) ?? x.FallbackTitle)).ToList();
+            ExtractTitle(x.AdvertisementSnapshotJson) ?? x.FallbackTitle,
+            x.OrganisationId,
+            x.OrganisationName)).ToList();
     }
 
     private static string? ExtractTitle(string? snapshotJson)
