@@ -70,6 +70,23 @@ public sealed class RecruitmentResultService(
         await db.SaveChangesAsync(ct); return ServiceResult.Ok("Objection resolution recorded.");
     }
 
+    public async Task<ServiceResult> UpdateObjectionClosingDateAsync(int publicationId, DateTime objectionClosesAtUtc, CancellationToken ct = default)
+    {
+        var organisationId = await OrganisationAsync();
+        await using var db = await factory.CreateDbContextAsync(ct);
+        var publication = await db.RecruitmentResultPublications.SingleOrDefaultAsync(x => x.Id == publicationId && x.OrganisationId == organisationId, ct)
+            ?? throw new UnauthorizedAccessException();
+        if (publication.IsFinal) return ServiceResult.Fail("Results are already finalised; objection closing date cannot be changed.");
+        var utc = objectionClosesAtUtc.Kind == DateTimeKind.Utc
+            ? objectionClosesAtUtc
+            : DateTime.SpecifyKind(objectionClosesAtUtc, DateTimeKind.Utc);
+        var log = await logs.CreateAsync(db, SharedConfig.OperationLogActionTypes.REQUESTS_UPDATE, $"Updated objection closing date for publication {publication.Id} to {utc:O}.");
+        publication.ObjectionClosesAtUtc = utc;
+        publication.OperationLogId = log.OperationLogId;
+        await db.SaveChangesAsync(ct);
+        return ServiceResult.Ok($"Objection closing date updated to {utc.AddHours(5):dd MMM yyyy HH:mm} MVT.");
+    }
+
     public async Task<ServiceResult> FinalizeAsync(int publicationId, CancellationToken ct = default)
     {
         var organisationId = await OrganisationAsync(); await using var db = await factory.CreateDbContextAsync(ct);

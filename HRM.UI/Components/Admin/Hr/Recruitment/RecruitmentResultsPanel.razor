@@ -99,12 +99,29 @@
                     </span>
                     <span class="text-slate-600">Objections close: <strong>@(workspace.ObjectionClosesAtUtc?.AddHours(5).ToString("dd MMM yyyy HH:mm") ?? "—") MVT</strong></span>
                 </div>
-                <button type="button"
-                        class="inline-flex items-center justify-center rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 disabled:opacity-50 transition-colors"
-                        disabled="@(busy || workspace.IsFinal || workspace.Objections.Any(x => x.Status is "Submitted" or "Upheld"))"
-                        @onclick="FinalizeResults">
-                    @(workspace.ObjectionClosesAtUtc > DateTime.UtcNow && !workspace.IsFinal ? "Finalise Results Now (Testing)" : "Finalise Results")
-                </button>
+                <div class="flex flex-wrap items-center gap-2">
+                    @if (!workspace.IsFinal)
+                    {
+                        <div class="flex flex-wrap items-center gap-1.5">
+                            <input type="datetime-local"
+                                   class="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs text-slate-800 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                   disabled="@busy"
+                                   @bind="editObjectionCloses" />
+                            <button type="button"
+                                    class="inline-flex items-center justify-center rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-50 transition-colors"
+                                    disabled="@busy"
+                                    @onclick="UpdateObjectionClosingDate">
+                                Update Date
+                            </button>
+                        </div>
+                    }
+                    <button type="button"
+                            class="inline-flex items-center justify-center rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                            disabled="@(busy || workspace.IsFinal || workspace.Objections.Any(x => x.Status is "Submitted" or "Upheld"))"
+                            @onclick="FinalizeResults">
+                        @(workspace.ObjectionClosesAtUtc > DateTime.UtcNow && !workspace.IsFinal ? "Finalise Results Now (Testing)" : "Finalise Results")
+                    </button>
+                </div>
             </div>
 
             <div class="rrp-grid">
@@ -211,6 +228,7 @@
     private bool upheld, busy;
     private string? message;
     private DateTime objectionCloses = DateTime.UtcNow.AddHours(5).AddDays(3);
+    private DateTime editObjectionCloses = DateTime.UtcNow.AddHours(5).AddDays(3);
     private const string InputClass = "mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500";
 
     protected override async Task OnInitializedAsync()
@@ -227,7 +245,12 @@
         upheld = false;
         try
         {
-            if (vacancy > 0) workspace = await Api.GetResultWorkspaceAsync(vacancy);
+            if (vacancy > 0)
+            {
+                workspace = await Api.GetResultWorkspaceAsync(vacancy);
+                if (workspace?.ObjectionClosesAtUtc.HasValue == true)
+                    editObjectionCloses = workspace.ObjectionClosesAtUtc.Value.AddHours(5);
+            }
         }
         catch (HttpRequestException)
         {
@@ -236,6 +259,7 @@
     }
 
     private Task PublishResults() => Run(() => Api.PublishResultsAsync(new(vacancy, DateTime.SpecifyKind(objectionCloses.AddHours(-5), DateTimeKind.Utc))));
+    private Task UpdateObjectionClosingDate() => Run(() => Api.UpdateObjectionClosingDateAsync(workspace!.PublicationId!.Value, DateTime.SpecifyKind(editObjectionCloses.AddHours(-5), DateTimeKind.Utc)));
     private Task Resolve() => Run(() => Api.ResolveObjectionAsync(new(selected, resolution, upheld)));
     private Task FinalizeResults() => Run(() => Api.FinalizeResultsAsync(workspace!.PublicationId!.Value));
 
