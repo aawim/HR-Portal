@@ -1,6 +1,8 @@
 @using System.Text.Json
 @using HRM.Application.Contracts.Recruitment
+@using HRM.Application.Contracts.Signatures
 @inject HRM.UI.Services.Recruitment.IRecruitmentApiClient Api
+@inject HRM.UI.Services.Signatures.IDocumentSignatureApiClient SignatureApi
 
 <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs space-y-4">
     <div class="flex flex-wrap items-center justify-between gap-2">
@@ -106,13 +108,14 @@
                         <textarea rows="4" class="@InputClass" maxlength="8000" @bind="terms" @bind:event="oninput" placeholder="Specify grade, remuneration, allowances, probation terms, and reporting details..."></textarea>
                     </label>
 
-                    <div class="flex justify-end">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <span class="text-[11px] text-slate-500">Creates a <strong>Draft</strong> offer. Sign the offer letter before publishing to the applicant.</span>
                         <button type="button"
                                 class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 disabled:opacity-50 transition-colors"
                                 disabled="@(busy || candidate <= 0 || string.IsNullOrWhiteSpace(terms))"
                                 @onclick="Issue">
-                            <i class="bi bi-send-check" aria-hidden="true"></i>
-                            <span>Issue Offer</span>
+                            <i class="bi bi-file-earmark-plus" aria-hidden="true"></i>
+                            <span>Create Offer Draft</span>
                         </button>
                     </div>
                 }
@@ -140,7 +143,7 @@
                                             <span class="font-semibold text-slate-900">@o.ApplicantName</span>
                                             <span class="text-slate-300">•</span>
                                             <span class="font-mono text-[11px] text-blue-700">@o.ApplicationReference</span>
-                                            <span class="rounded-full px-2.5 py-0.5 text-[10px] font-semibold @OfferStatusBadge(o.Status)">@FormatOfferStatus(o.Status)</span>
+                                            <span class="rounded-full px-2.5 py-0.5 text-[10px] font-semibold @OfferStatusBadge(o.Status, o.IsAgencySigned)">@FormatOfferStatus(o.Status, o.IsAgencySigned)</span>
                                         </div>
                                         <div class="text-[11px] text-slate-500 flex flex-wrap gap-x-3">
                                             @if (!string.IsNullOrWhiteSpace(o.EfaasIdNumber))
@@ -172,6 +175,37 @@
                                             <i class="bi bi-printer" aria-hidden="true"></i>
                                             <span>Form (EN)</span>
                                         </a>
+                                        @if (o.Status == "Draft")
+                                        {
+                                            @if (!o.IsAgencySigned)
+                                            {
+                                                <button type="button"
+                                                        class="inline-flex items-center gap-1 rounded-lg bg-amber-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
+                                                        disabled="@busy"
+                                                        @onclick="() => signingOffer = o">
+                                                    <i class="bi bi-pen" aria-hidden="true"></i>
+                                                    <span>Sign Offer Letter</span>
+                                                </button>
+                                                <button type="button"
+                                                        class="inline-flex items-center gap-1 rounded-lg bg-slate-200 px-2.5 py-1 text-[11px] font-semibold text-slate-500 cursor-not-allowed"
+                                                        disabled
+                                                        title="Digitally sign the offer letter before publishing to the applicant">
+                                                    <i class="bi bi-lock" aria-hidden="true"></i>
+                                                    <span>Publish Offer</span>
+                                                </button>
+                                            }
+                                            else
+                                            {
+                                                <button type="button"
+                                                        class="inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-[11px] font-semibold text-white hover:opacity-90 disabled:opacity-50"
+                                                        style="background-color:#075985; color:#ffffff;"
+                                                        disabled="@busy"
+                                                        @onclick="() => PublishOffer(o.Id)">
+                                                    <i class="bi bi-send-check" aria-hidden="true"></i>
+                                                    <span>Publish Offer</span>
+                                                </button>
+                                            }
+                                        }
                                         @if (o.Status is "Accepted" or "OnboardingSubmitted")
                                         {
                                             <button type="button"
@@ -359,6 +393,11 @@
                                     OnHrDecisionSubmitted="HandleHrDecisionSubmittedAsync"
                                     OnClosed="() => viewingSignedOffer = null" />
     }
+
+    <HRM.Components.Shared.SignaturePinModal IsOpen="@(signingOffer is not null)"
+                                             SlotLabel="@(signingOffer is null ? "Agency Issuer" : $"Offer Letter · {signingOffer.ApplicantName}")"
+                                             OnConfirmed="ConfirmSignOfferAsync"
+                                             OnCancelled="() => signingOffer = null" />
 </section>
 
 @code {
@@ -366,6 +405,7 @@
     private RecruitmentOfferWorkspace? workspace;
     private RecruitmentOfferRow? selectedOffer;
     private RecruitmentOfferRow? viewingSignedOffer;
+    private RecruitmentOfferRow? signingOffer;
     private int? expandedOfferId;
     private int vacancy, candidate, structureId, jobTypeId, positionId, jobMatrixStepId;
     private RecruitmentVacancyRow? SelectedVacancy => vacancies.FirstOrDefault(x => x.Id == vacancy);
@@ -473,6 +513,38 @@
         return Run(() => Api.CreateOfferAsync(new(candidate, payload)));
     }
 
+    private Task PublishOffer(int offerId) => Run(() => Api.PublishOfferAsync(offerId));
+
+    private async Task ConfirmSignOfferAsync(string verifiedPin)
+    {
+        if (signingOffer is null || busy) return;
+        var target = signingOffer;
+        signingOffer = null;
+        busy = true;
+        try
+        {
+            var result = await SignatureApi.SignDocumentAsync(new SignDocumentInput(
+                DocumentType: "RecruitmentOffer",
+                DocumentId: target.Id.ToString(),
+                SlotKey: "AgencyIssuer",
+                SlotLabel: "Agency Issuer",
+                DocumentContentSnapshot: target.TermsSnapshotJson ?? $"Offer:{target.Id}:{target.ApplicationReference}",
+                Pin: verifiedPin));
+            message = result.Success
+                ? "Offer letter signed. You can now click 'Publish Offer' to send it to the applicant."
+                : result.Message;
+            if (result.Success) await Load();
+        }
+        catch (HttpRequestException)
+        {
+            message = "Could not sign the offer letter. Please ensure your signature and PIN are saved in My Profile.";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
     private Task SubmitOnboarding() => Run(() => Api.SubmitOnboardingAsync(new(
         selectedOffer!.Id,
         selectedOffer.MatchedIndividualId ?? 0,
@@ -503,14 +575,16 @@
         }
     }
 
-    private static string FormatOfferStatus(string status) => status switch
+    private static string FormatOfferStatus(string status, bool isAgencySigned) => status switch
     {
+        "Draft" => isAgencySigned ? "Signed Draft · Ready to Publish" : "Unsigned Draft",
         "OnboardingSubmitted" => "Onboarding Submitted",
         _ => status
     };
 
-    private static string OfferStatusBadge(string status) => status switch
+    private static string OfferStatusBadge(string status, bool isAgencySigned) => status switch
     {
+        "Draft" => isAgencySigned ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800",
         "Accepted" => "bg-emerald-100 text-emerald-800",
         "OnboardingSubmitted" => "bg-blue-100 text-blue-800",
         "Declined" => "bg-rose-100 text-rose-800",

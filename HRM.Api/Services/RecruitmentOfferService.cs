@@ -60,23 +60,59 @@ public sealed class RecruitmentOfferService(
         if (await d.RecruitmentOffers.AnyAsync(x => x.RecruitmentMeritResultId == r.m.Id, ct))
             return ServiceResult.Fail("An offer already exists for this merit result.");
 
-        var l = await logs.CreateAsync(d, SharedConfig.OperationLogActionTypes.REQUESTS_CREATE, $"Recruitment offer issued for merit result {r.m.Id} ({r.app.Reference}).");
+        var l = await logs.CreateAsync(d, SharedConfig.OperationLogActionTypes.REQUESTS_CREATE, $"Recruitment offer draft created for merit result {r.m.Id} ({r.app.Reference}).");
         d.RecruitmentOffers.Add(new RecruitmentOffer
         {
             RecruitmentMeritResultId = r.m.Id,
             OrganisationId = o,
             AppointmentAuthorityUserId = u,
             TermsSnapshotJson = i.TermsSnapshotJson,
-            Status = "Offered",
-            OfferedAtUtc = DateTime.UtcNow,
+            Status = "Draft",
+            OfferedAtUtc = null,
             OperationLogId = l.OperationLogId
         });
 
-        // Notify the applicant if they have an active user account
-        if (!string.IsNullOrWhiteSpace(r.applicant.EfaasIdNumber))
+        await d.SaveChangesAsync(ct);
+        return ServiceResult.Ok($"Job offer draft created for {r.applicant.FullName} ({r.app.Reference}). Sign the offer letter before publishing to the applicant.");
+    }
+
+    public async Task<ServiceResult> PublishAsync(int offerId, CancellationToken ct = default)
+    {
+        var (o, _) = await Auth();
+        await using var d = await factory.CreateDbContextAsync(ct);
+
+        var info = await (from x in d.RecruitmentOffers
+                          join m in d.RecruitmentMeritResults on x.RecruitmentMeritResultId equals m.Id
+                          join app in d.RecruitmentApplications on m.RecruitmentApplicationId equals app.Id
+                          join v in d.RecruitmentVacancies on app.RecruitmentVacancyId equals v.Id
+                          join applicant in d.RecruitmentApplicants on app.RecruitmentApplicantId equals applicant.Id
+                          where x.Id == offerId && x.OrganisationId == o
+                          select new { Offer = x, ApplicantName = applicant.FullName, applicant.EfaasIdNumber, VacancyRef = v.Reference, AppRef = app.Reference }).SingleOrDefaultAsync(ct);
+
+        if (info is null) return ServiceResult.Fail("Offer not found.");
+        if (info.Offer.Status != "Draft") return ServiceResult.Fail($"Only Draft offers can be published (current status: {info.Offer.Status}).");
+
+        await HRM.Api.Controllers.V1.DocumentSignaturesController.EnsureTablesPublicAsync(d, ct);
+        var isAgencySigned = await d.DocumentSignatures.AsNoTracking()
+            .AnyAsync(s => s.OrganisationId == o
+                && s.DocumentType == "RecruitmentOffer"
+                && s.DocumentId == info.Offer.Id.ToString()
+                && s.SlotKey == "AgencyIssuer"
+                && s.Status == "Signed", ct);
+
+        if (!isAgencySigned)
+            return ServiceResult.Fail("The Job Offer Letter must be digitally signed by the agency before it can be published to the applicant.");
+
+        var now = DateTime.UtcNow;
+        var l = await logs.CreateAsync(d, SharedConfig.OperationLogActionTypes.REQUESTS_UPDATE, $"Published signed recruitment offer #{info.Offer.Id} to {info.ApplicantName} ({info.AppRef}).");
+        info.Offer.Status = "Offered";
+        info.Offer.OfferedAtUtc = now;
+        info.Offer.OperationLogId = l.OperationLogId;
+
+        if (!string.IsNullOrWhiteSpace(info.EfaasIdNumber))
         {
             var targetUsers = await d.Users.AsNoTracking()
-                .Where(usr => usr.Username == r.applicant.EfaasIdNumber && usr.IsActive)
+                .Where(usr => usr.Username == info.EfaasIdNumber && usr.IsActive)
                 .Select(usr => new { usr.UserId, usr.BusinessEntityID })
                 .ToListAsync(ct);
 
@@ -88,15 +124,15 @@ public sealed class RecruitmentOfferService(
                     IndividualId = target.BusinessEntityID,
                     OrganisationId = o,
                     Kind = "RecruitmentOffer",
-                    Message = $"You have received a job offer for vacancy {r.v.Reference}. Review and respond under My Offers.",
+                    Message = $"You have received a signed Job Offer Letter for vacancy {info.VacancyRef}. View, sign, and submit your decision from your Profile or Careers portal.",
                     Url = "/online/recruitment",
-                    CreatedAtUtc = DateTime.UtcNow
+                    CreatedAtUtc = now
                 });
             }
         }
 
         await d.SaveChangesAsync(ct);
-        return ServiceResult.Ok($"Job offer issued to {r.applicant.FullName} ({r.app.Reference}).");
+        return ServiceResult.Ok($"Signed Job Offer Letter published to {info.ApplicantName} ({info.AppRef}).");
     }
 
     public async Task<ServiceResult> AcceptMyOfferAsync(int offerId, AcceptRecruitmentOfferInput? input = null, CancellationToken ct = default)

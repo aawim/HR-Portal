@@ -258,8 +258,8 @@ public sealed class RecruitmentScreeningQueriesController(
         var app = await db.RecruitmentApplications.SingleOrDefaultAsync(x => x.Id == applicationId && x.OrganisationId == org, ct);
         if (app is null) return NotFound();
 
-        if (app.Status != "Submitted")
-            return Ok(ServiceResult.Fail($"Only Submitted applications can be returned for correction. Current status is {app.Status}."));
+        if (app.Status is not ("Submitted" or "Withdrawn"))
+            return Ok(ServiceResult.Fail($"Only Submitted or Withdrawn applications can be returned/re-enabled. Current status is {app.Status}."));
 
         if (await db.RecruitmentScreeningDecisions.AnyAsync(x => x.RecruitmentApplicationId == app.Id, ct))
             return Ok(ServiceResult.Fail("Screening has already been locked for this application; it cannot be returned."));

@@ -64,7 +64,7 @@ public sealed class RecruitmentApplicantWorkspaceController(IDbContextFactory<Hr
             from jt in jts.DefaultIfEmpty()
             join jm in db.FrameworkJobMatrices.AsNoTracking() on pm.JobMatrixId equals jm.JobMatrixId into jms
             from jm in jms.DefaultIfEmpty()
-            where person.EfaasIdNumber==identity
+            where person.EfaasIdNumber==identity && o.Status!="Draft"
             orderby o.OfferedAtUtc descending
             select new { o.Id, VacancyReference=v.Reference, o.Status, o.TermsSnapshotJson, PositionName=jt!=null?jt.Name:(jm!=null?jm.Name:null), OrganisationName=org!=null?org.OrganisationName:null, o.OfferedAtUtc, o.AcceptedAtUtc }).ToListAsync(ct);
 

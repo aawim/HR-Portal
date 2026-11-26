@@ -87,14 +87,19 @@ public sealed class RecruitmentOfferQueriesController(
 
         var offerIdStrings = rawOffers.Select(x => x.Id.ToString()).ToList();
         var offerSigs = new Dictionary<string, (string Img, string Code)>();
+        var agencySignedOffers = new HashSet<string>();
         if (offerIdStrings.Count > 0)
         {
             await DocumentSignaturesController.EnsureTablesPublicAsync(db, ct);
             var sigs = await db.DocumentSignatures.AsNoTracking()
-                .Where(s => s.OrganisationId == org && s.DocumentType == "RecruitmentOffer" && s.SlotKey == "AppointeeAcceptance" && s.Status == "Signed" && offerIdStrings.Contains(s.DocumentId))
-                .Select(s => new { s.DocumentId, s.SignatureImageDataUrl, s.VerificationCode })
+                .Where(s => s.OrganisationId == org && s.DocumentType == "RecruitmentOffer" && s.Status == "Signed" && offerIdStrings.Contains(s.DocumentId))
+                .Select(s => new { s.DocumentId, s.SlotKey, s.SignatureImageDataUrl, s.VerificationCode })
                 .ToListAsync(ct);
-            foreach (var s in sigs) offerSigs[s.DocumentId] = (s.SignatureImageDataUrl, s.VerificationCode);
+            foreach (var s in sigs)
+            {
+                if (s.SlotKey == "AppointeeAcceptance") offerSigs[s.DocumentId] = (s.SignatureImageDataUrl, s.VerificationCode);
+                if (s.SlotKey == "AgencyIssuer") agencySignedOffers.Add(s.DocumentId);
+            }
         }
 
         var offers = rawOffers.Select(o =>
@@ -112,7 +117,8 @@ public sealed class RecruitmentOfferQueriesController(
                 o.AcceptedAtUtc,
                 o.TermsSnapshotJson,
                 sig.Img,
-                sig.Code);
+                sig.Code,
+                agencySignedOffers.Contains(o.Id.ToString()));
         }).ToList();
 
         var activeOffersCount = offers.Count(x => x.Status != "Declined");
@@ -238,6 +244,8 @@ public sealed class RecruitmentOfferQueriesController(
         // Authorize either the eFaas-bound appointee OR HR with organisation access
         var idNumber = User.FindFirstValue("idnumber")?.Trim();
         var isAppointee = !string.IsNullOrWhiteSpace(idNumber) && string.Equals(idNumber, row.EfaasIdNumber, StringComparison.OrdinalIgnoreCase);
+        if (isAppointee && row.Status == "Draft")
+            return Forbid();
         if (!isAppointee)
         {
             var canManage = await access.HasOrganisationAccessAsync(row.OrganisationId)

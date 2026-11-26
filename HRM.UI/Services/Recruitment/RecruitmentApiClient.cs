@@ -37,6 +37,7 @@ public interface IRecruitmentApiClient {
     Task<RecruitmentOfferWorkspace> GetOfferWorkspaceAsync(int vacancyId);
     Task<JobOfferLetterDetailDto?> GetOfferLetterDetailAsync(int offerId, CancellationToken ct = default);
     Task<HRM.DTOs.ServiceResult> CreateOfferAsync(CreateRecruitmentOfferInput input);
+    Task<HRM.DTOs.ServiceResult> PublishOfferAsync(int offerId);
     Task<HRM.DTOs.ServiceResult> RecordHrOfferDecisionAsync(int offerId, HrOfferDecisionInput input);
     Task<HRM.DTOs.ServiceResult> SubmitOnboardingAsync(SubmitRecruitmentOnboardingInput input);
     Task<MyRecruitmentWorkspace> GetMyWorkspaceAsync();
@@ -159,6 +160,7 @@ public sealed class RecruitmentApiClient(HttpClient http, HttpClient? publicHttp
         return await r.Content.ReadFromJsonAsync<JobOfferLetterDetailDto>(cancellationToken: ct);
     }
     public Task<HRM.DTOs.ServiceResult> CreateOfferAsync(CreateRecruitmentOfferInput input)=>PostAsync("/api/v1/recruitment/offers",input,default);
+    public Task<HRM.DTOs.ServiceResult> PublishOfferAsync(int offerId)=>PostAsync($"/api/v1/recruitment/offers/{offerId}/publish",new{},default);
     public Task<HRM.DTOs.ServiceResult> RecordHrOfferDecisionAsync(int offerId, HrOfferDecisionInput input)=>PostAsync($"/api/v1/recruitment/offers/{offerId}/hr-decision",input,default);
     public Task<HRM.DTOs.ServiceResult> SubmitOnboardingAsync(SubmitRecruitmentOnboardingInput input)=>PostAsync("/api/v1/recruitment/onboarding",input,default);
     public async Task<RecruitmentResultWorkspace> GetResultWorkspaceAsync(int vacancyId)=>await http.GetFromJsonAsync<RecruitmentResultWorkspace>($"/api/v1/recruitment/result-workspace/{vacancyId}")??new(null,false,null,[],[]);

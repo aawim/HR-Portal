@@ -250,7 +250,13 @@
                             @foreach (var v in FilteredVacancies)
                             {
                                 var isExpired = v.ClosingAtUtc <= DateTime.UtcNow;
-                                var alreadyApplied = isAuthenticated && workspace?.Applications.Any(a => string.Equals(a.VacancyReference, v.Reference, StringComparison.OrdinalIgnoreCase)) == true;
+                                var myApp = isAuthenticated
+                                    ? workspace?.Applications.FirstOrDefault(a => string.Equals(a.VacancyReference, v.Reference, StringComparison.OrdinalIgnoreCase))
+                                    : null;
+                                var canCorrectReturned = myApp is not null
+                                    && myApp.Status == "ReturnedForCorrection"
+                                    && myApp.CorrectionDeadlineUtc.HasValue
+                                    && myApp.CorrectionDeadlineUtc.Value > DateTime.UtcNow;
                                 <article class="je-job-item @(isExpired ? "je-job-expired" : "")">
                                     <div class="je-job-left">
                                         <div class="je-job-logo @(isExpired ? "is-expired" : "")" aria-hidden="true">
@@ -321,18 +327,35 @@
                                             </a>
                                         }
 
-                                        @if (isExpired)
+                                        @if (myApp is not null)
+                                        {
+                                            @if (canCorrectReturned)
+                                            {
+                                                <button type="button" class="je-btn-primary" @onclick="() => BeginApply(v.Reference)">
+                                                    <i class="bi bi-arrow-repeat" aria-hidden="true"></i>
+                                                    <span>Re-Apply / Correct</span>
+                                                </button>
+                                            }
+                                            else if (myApp.Status == "Draft" && !isExpired)
+                                            {
+                                                <button type="button" class="je-btn-outline" @onclick="() => BeginApply(v.Reference)">
+                                                    <i class="bi bi-pencil-square" aria-hidden="true"></i>
+                                                    <span>Continue Draft</span>
+                                                </button>
+                                            }
+                                            else
+                                            {
+                                                <span class="je-btn-disabled" title="You have already applied for this vacancy">
+                                                    <i class="bi bi-check-circle-fill" aria-hidden="true"></i>
+                                                    <span>Applied</span>
+                                                </span>
+                                            }
+                                        }
+                                        else if (isExpired)
                                         {
                                             <button type="button" class="je-btn-disabled" disabled>
                                                 <i class="bi bi-lock" aria-hidden="true"></i>
                                                 <span>Closed</span>
-                                            </button>
-                                        }
-                                        else if (alreadyApplied)
-                                        {
-                                            <button type="button" class="je-btn-outline" @onclick="() => BeginApply(v.Reference)">
-                                                <i class="bi bi-pencil-square" aria-hidden="true"></i>
-                                                <span>View / Edit Application</span>
                                             </button>
                                         }
                                         else if (isAuthenticated)
@@ -616,6 +639,13 @@
                                     else
                                     {
                                         <div class="flex flex-wrap gap-2">
+                                            <a href="@($"/careers/offer-letter/{o.Id}")"
+                                               target="_blank"
+                                               rel="noopener"
+                                               class="je-btn-outline">
+                                                <i class="bi bi-file-earmark-text" aria-hidden="true"></i>
+                                                <span>View Offer Letter</span>
+                                            </a>
                                             <button type="button" class="je-btn-primary" disabled="@busy" @onclick="() => { decliningOfferId = 0; activeOfferModal = o; }">
                                                 <i class="bi bi-pen" aria-hidden="true"></i>
                                                 <span>Open, Sign &amp; Submit Offer Form</span>
@@ -631,10 +661,19 @@
                                             <i class="bi bi-check-circle-fill mr-1 text-emerald-600" aria-hidden="true"></i>
                                             Offer form signed &amp; submitted. HR will follow up with onboarding.
                                         </span>
-                                        <button type="button" class="je-btn-outline" @onclick="() => activeOfferModal = o">
-                                            <i class="bi bi-file-earmark-check" aria-hidden="true"></i>
-                                            <span>View Signed Offer Form</span>
-                                        </button>
+                                        <div class="flex flex-wrap items-center gap-2">
+                                            <a href="@($"/careers/offer-letter/{o.Id}")"
+                                               target="_blank"
+                                               rel="noopener"
+                                               class="je-btn-outline">
+                                                <i class="bi bi-file-earmark-text" aria-hidden="true"></i>
+                                                <span>View Offer Letter</span>
+                                            </a>
+                                            <button type="button" class="je-btn-outline" @onclick="() => activeOfferModal = o">
+                                                <i class="bi bi-file-earmark-check" aria-hidden="true"></i>
+                                                <span>View Signed Offer Form</span>
+                                            </button>
+                                        </div>
                                     </div>
                                 }
                             </div>
@@ -706,12 +745,21 @@
                                                     <span class="ml-1.5 rounded-full px-2 py-0.5 text-[10px] font-semibold @(offer.Status == "Accepted" ? "bg-emerald-100 text-emerald-800" : offer.Status == "OnboardingSubmitted" ? "bg-blue-100 text-blue-800" : offer.Status == "Declined" ? "bg-rose-100 text-rose-800" : "bg-amber-100 text-amber-800")">@offer.Status</span>
                                                 </div>
                                             </div>
-                                            <button type="button"
-                                                    class="@(offer.Status == "Offered" ? "je-btn-primary" : "je-btn-outline")"
-                                                    @onclick="() => activeOfferModal = offer">
-                                                <i class="bi @(offer.Status == "Offered" ? "bi-pen" : "bi-file-earmark-check")" aria-hidden="true"></i>
-                                                <span>@(offer.Status == "Offered" ? "Open, Sign & Submit Offer" : "View Signed Offer")</span>
-                                            </button>
+                                            <div class="flex flex-wrap items-center gap-1.5">
+                                                <a href="@($"/careers/offer-letter/{offer.Id}")"
+                                                   target="_blank"
+                                                   rel="noopener"
+                                                   class="je-btn-outline">
+                                                    <i class="bi bi-file-earmark-text" aria-hidden="true"></i>
+                                                    <span>View Offer Letter</span>
+                                                </a>
+                                                <button type="button"
+                                                        class="@(offer.Status == "Offered" ? "je-btn-primary" : "je-btn-outline")"
+                                                        @onclick="() => activeOfferModal = offer">
+                                                    <i class="bi @(offer.Status == "Offered" ? "bi-pen" : "bi-file-earmark-check")" aria-hidden="true"></i>
+                                                    <span>@(offer.Status == "Offered" ? "Open, Sign & Submit Offer" : "View Signed Offer")</span>
+                                                </button>
+                                            </div>
                                         </div>
                                     }
                                 </div>

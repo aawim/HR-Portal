@@ -33,7 +33,17 @@
             </button>
         </div>
 
-        @if (searched && result is null)
+        @if (!string.IsNullOrWhiteSpace(errorMessage))
+        {
+            <div class="rounded-xl border border-amber-300 bg-amber-50 p-4 text-xs text-amber-950 flex items-start gap-2.5">
+                <i class="bi bi-exclamation-triangle-fill text-amber-600 text-base shrink-0" aria-hidden="true"></i>
+                <div>
+                    <div class="font-bold">Verification Service Unavailable</div>
+                    <p class="mt-0.5">@errorMessage</p>
+                </div>
+            </div>
+        }
+        else if (searched && result is null)
         {
             <div class="rounded-xl border border-rose-200 bg-rose-50 p-4 text-xs text-rose-900 flex items-start gap-2.5">
                 <i class="bi bi-x-circle-fill text-rose-600 text-base shrink-0" aria-hidden="true"></i>
@@ -112,6 +122,7 @@
 
     private string lookupCode = "";
     private VerifySignatureDto? result;
+    private string? errorMessage;
     private bool loading, searched;
 
     protected override async Task OnParametersSetAsync()
@@ -128,15 +139,21 @@
         if (loading || string.IsNullOrWhiteSpace(lookupCode)) return;
         loading = true;
         searched = false;
+        errorMessage = null;
         try
         {
             result = await SignatureApi.VerifySignatureAsync(lookupCode.Trim());
             searched = true;
         }
+        catch (HttpRequestException)
+        {
+            result = null;
+            errorMessage = "Could not reach the verification service. Please try again in a moment.";
+        }
         catch
         {
             result = null;
-            searched = true;
+            errorMessage = "An unexpected error occurred while verifying this signature.";
         }
         finally
         {

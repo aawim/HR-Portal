@@ -13,7 +13,7 @@ public sealed record RecruitmentOfferContext(
     IReadOnlyList<RecruitmentVacantPositionOption> VacantPositions,
     int? DefaultJobTypeId=null);
 public sealed record RecruitmentOfferCandidateRow(int MeritResultId,string ApplicationReference,string ApplicantName,int Rank,decimal Score=0);
-public sealed record RecruitmentOfferRow(int Id,string ApplicationReference,string ApplicantName,string Status,int? OnboardingRequestId,string? EfaasIdNumber=null,int? MatchedIndividualId=null,DateTime? OfferedAtUtc=null,DateTime? AcceptedAtUtc=null,string? TermsSnapshotJson=null,string? AppointeeSignatureDataUrl=null,string? SignatureVerificationCode=null);
+public sealed record RecruitmentOfferRow(int Id,string ApplicationReference,string ApplicantName,string Status,int? OnboardingRequestId,string? EfaasIdNumber=null,int? MatchedIndividualId=null,DateTime? OfferedAtUtc=null,DateTime? AcceptedAtUtc=null,string? TermsSnapshotJson=null,string? AppointeeSignatureDataUrl=null,string? SignatureVerificationCode=null,bool IsAgencySigned=false);
 public sealed record RecruitmentOfferWorkspace(IReadOnlyList<RecruitmentOfferCandidateRow> Candidates,IReadOnlyList<RecruitmentOfferRow> Offers,RecruitmentOfferContext? Context=null,int VacancySlots=0,bool IsResultFinal=false);
 public sealed record JobOfferLetterDetailDto(
     int OfferId,

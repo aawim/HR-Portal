@@ -21,6 +21,7 @@ public sealed record HrOfferDecisionInput(string Decision,string? Comment);
 public interface IRecruitmentOfferService
 {
     Task<ServiceResult> CreateAsync(CreateRecruitmentOfferInput input,CancellationToken ct=default);
+    Task<ServiceResult> PublishAsync(int offerId,CancellationToken ct=default);
     Task<ServiceResult> AcceptMyOfferAsync(int offerId,AcceptRecruitmentOfferInput? input=null,CancellationToken ct=default);
     Task<ServiceResult> DeclineMyOfferAsync(int offerId,string? reason=null,CancellationToken ct=default);
     Task<ServiceResult> RecordHrDecisionAsync(int offerId,HrOfferDecisionInput input,CancellationToken ct=default);
