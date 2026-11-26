@@ -1,0 +1,54 @@
+@using HRM.Application.Contracts.Signatures
+@using HRM.UI.Services.Signatures
+@inject NavigationManager Navigation
+
+@if (PrimaryCode is not null)
+{
+    var verifyUrl = $"{Navigation.BaseUri.TrimEnd('/')}/verify/{PrimaryCode}";
+    var qrUri = QrCodeSvgHelper.GenerateSvgDataUri(verifyUrl, pixelsPerModule: 3);
+    var sizePx = Compact ? 46 : 58;
+
+    <div style="margin-top:@(Compact ? "8px" : "12px"); border:1px solid #111827; padding:@(Compact ? "4px 8px" : "6px 10px"); display:flex; align-items:center; justify-content:space-between; gap:10px; background:#ffffff;">
+        <div style="flex:1; min-width:0; font-size:@(Compact ? "7.2pt" : "8pt"); line-height:1.35;">
+            <div style="font-weight:700; color:#000000;">
+                @(IsDhivehi
+                    ? "އިލެކްޓްރޯނިކް ސޮއި ކަށަވަރުކުރުން (GHR e-Sign)"
+                    : "Electronic Document Verification (GHR e-Sign)")
+            </div>
+            <div style="color:#1f2937;">
+                @(IsDhivehi
+                    ? "މި ލިޔުމުގެ ސައްޙަކަން ކަށަވަރުކުރުމަށް QR ކޯޑު ސްކޭން ކުރައްވާ ނުވަތަ ތިރީގައިވާ ކޯޑު ބޭނުންކުރައްވާ:"
+                    : "Scan the QR code or visit the verification link to confirm authenticity:")
+                <span dir="ltr" style="font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-weight:700; margin-inline:4px;">@verifyUrl</span>
+            </div>
+            @if (Signatures is { Count: > 0 })
+            {
+                <div dir="ltr" style="margin-top:2px; font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:@(Compact ? "6.8pt" : "7.2pt"); color:#334155;">
+                    @foreach (var s in Signatures)
+                    {
+                        <span style="margin-right:10px;">@s.SlotLabel: <strong>@s.VerificationCode</strong> (@s.SignedAtUtc.AddHours(5).ToString("dd MMM yyyy HH:mm") MVT)</span>
+                    }
+                    <span>SHA-256: @ShortHash(Signatures[0].DocumentContentHash)</span>
+                </div>
+            }
+        </div>
+        <a href="@($"/verify/{PrimaryCode}")" target="_blank" rel="noopener" title="Verify Document Signature" style="flex-shrink:0; display:block; line-height:0;">
+            <img src="@qrUri" alt="@($"QR Code for {PrimaryCode}")" style="@($"width:{sizePx}px; height:{sizePx}px; display:block;")" />
+        </a>
+    </div>
+}
+
+@code {
+    [Parameter] public IReadOnlyList<DocumentSignatureDto>? Signatures { get; set; }
+    [Parameter] public string? VerificationCode { get; set; }
+    [Parameter] public bool IsDhivehi { get; set; }
+    [Parameter] public bool Compact { get; set; }
+
+    private string? PrimaryCode =>
+        !string.IsNullOrWhiteSpace(VerificationCode)
+            ? VerificationCode.Trim()
+            : Signatures?.LastOrDefault()?.VerificationCode;
+
+    private static string ShortHash(string? hash) =>
+        string.IsNullOrWhiteSpace(hash) ? "—" : (hash.Length > 16 ? $"{hash[..16]}…" : hash);
+}

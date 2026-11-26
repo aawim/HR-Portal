@@ -3,8 +3,10 @@
 @layout HRM.Components.Layout.ReceiptLayout
 @rendermode RenderMode.InteractiveServer
 @using HRM.Application.Contracts.Recruitment
+@using HRM.Application.Contracts.Signatures
 @using Microsoft.JSInterop
 @inject HRM.UI.Services.Recruitment.IRecruitmentApiClient Api
+@inject HRM.UI.Services.Signatures.IDocumentSignatureApiClient SignatureApi
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
 
@@ -329,6 +331,46 @@
             <div class="flex flex-wrap items-center gap-2">
                 @if (IsAdminRoute)
                 {
+                    @if (PreparedSig is null)
+                    {
+                        <button type="button"
+                                class="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+                                disabled="@signBusy"
+                                @onclick='() => OpenSignModal("PreparedBy", "Sheet Prepared by")'>
+                            <i class="bi bi-shield-lock" aria-hidden="true"></i>
+                            <span>Sign: Prepared By</span>
+                        </button>
+                    }
+                    else if (PreparedSig.CanRevoke)
+                    {
+                        <button type="button"
+                                class="inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-50"
+                                disabled="@signBusy"
+                                @onclick="() => RevokeSlotAsync(PreparedSig.Id)">
+                            <span>Revoke Prepared</span>
+                        </button>
+                    }
+
+                    @if (CheckedSig is null)
+                    {
+                        <button type="button"
+                                class="inline-flex items-center gap-1 rounded-lg bg-teal-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-teal-800 disabled:opacity-50"
+                                disabled="@signBusy"
+                                @onclick='() => OpenSignModal("CheckedBy", "Sheet Checked by")'>
+                            <i class="bi bi-shield-lock" aria-hidden="true"></i>
+                            <span>Sign: Checked By</span>
+                        </button>
+                    }
+                    else if (CheckedSig.CanRevoke)
+                    {
+                        <button type="button"
+                                class="inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-50"
+                                disabled="@signBusy"
+                                @onclick="() => RevokeSlotAsync(CheckedSig.Id)">
+                            <span>Revoke Checked</span>
+                        </button>
+                    }
+
                     <button type="button"
                             class="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
                             @onclick="() => showEditor = !showEditor">
@@ -344,6 +386,20 @@
                 </button>
             </div>
         </div>
+
+        @if (!string.IsNullOrWhiteSpace(signMessage))
+        {
+            <div class="flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-800">
+                <span>
+                    @signMessage
+                    @if (signMessage.Contains("My Profile", StringComparison.OrdinalIgnoreCase))
+                    {
+                        <a href="/profile" class="ml-1.5 font-bold text-blue-700 underline">Open My Profile</a>
+                    }
+                </span>
+                <button type="button" class="font-bold text-slate-500 hover:text-slate-800" @onclick="() => signMessage = null">✕</button>
+            </div>
+        }
 
         @if (IsAdminRoute && showEditor)
         {
@@ -602,37 +658,57 @@
                     <tr>
                         <td>
                             <span class="a2-field-label">@(IsDv ? "ޝީޓު ފުރިހަމަކުރި މުވައްޒަފުގެ ނަން" : "Sheet Prepared by (Name)")</span>
-                            <span class="a2-field-value">@preparedByName</span>
+                            <span class="a2-field-value">@(PreparedSig?.SignerName ?? preparedByName)</span>
                         </td>
                         <td>
                             <span class="a2-field-label">@(IsDv ? "މަޤާމު" : "Position")</span>
-                            <span class="a2-field-value">@preparedByPosition</span>
+                            <span class="a2-field-value">@(PreparedSig?.SignerPosition ?? preparedByPosition)</span>
                         </td>
                         <td>
                             <span class="a2-field-label">@(IsDv ? "ތާރީޚު" : "Date")</span>
-                            <span class="a2-field-value">@preparedDate</span>
+                            <span class="a2-field-value">@(PreparedSig is not null ? PreparedSig.SignedAtUtc.AddHours(5).ToString("dd MMM yyyy") : preparedDate)</span>
                         </td>
                         <td>
                             <span class="a2-field-label">@(IsDv ? "ސޮއި" : "Signature")</span>
-                            <span class="a2-field-value"></span>
+                            @if (PreparedSig is not null)
+                            {
+                                <div style="display:flex; flex-direction:column; align-items:center; gap:1px;">
+                                    <img src="@PreparedSig.SignatureImageDataUrl" alt="Prepared By Signature" style="max-height:28px; max-width:110px; object-fit:contain;" />
+                                    <a href="@($"/verify/{PreparedSig.VerificationCode}")" target="_blank" style="font-family:monospace; font-size:6.5pt; color:#334155; text-decoration:none;">@PreparedSig.VerificationCode</a>
+                                </div>
+                            }
+                            else
+                            {
+                                <span class="a2-field-value"></span>
+                            }
                         </td>
                     </tr>
                     <tr>
                         <td>
                             <span class="a2-field-label">@(IsDv ? "ޝީޓު ޗެކްކުރި މުވައްޒަފުގެ ނަން" : "Sheet Checked by (Name)")</span>
-                            <span class="a2-field-value">@checkedByName</span>
+                            <span class="a2-field-value">@(CheckedSig?.SignerName ?? checkedByName)</span>
                         </td>
                         <td>
                             <span class="a2-field-label">@(IsDv ? "މަޤާމު" : "Position")</span>
-                            <span class="a2-field-value">@checkedByPosition</span>
+                            <span class="a2-field-value">@(CheckedSig?.SignerPosition ?? checkedByPosition)</span>
                         </td>
                         <td>
                             <span class="a2-field-label">@(IsDv ? "ތާރީޚު" : "Date")</span>
-                            <span class="a2-field-value">@checkedDate</span>
+                            <span class="a2-field-value">@(CheckedSig is not null ? CheckedSig.SignedAtUtc.AddHours(5).ToString("dd MMM yyyy") : checkedDate)</span>
                         </td>
                         <td>
                             <span class="a2-field-label">@(IsDv ? "ސޮއި" : "Signature")</span>
-                            <span class="a2-field-value"></span>
+                            @if (CheckedSig is not null)
+                            {
+                                <div style="display:flex; flex-direction:column; align-items:center; gap:1px;">
+                                    <img src="@CheckedSig.SignatureImageDataUrl" alt="Checked By Signature" style="max-height:28px; max-width:110px; object-fit:contain;" />
+                                    <a href="@($"/verify/{CheckedSig.VerificationCode}")" target="_blank" style="font-family:monospace; font-size:6.5pt; color:#334155; text-decoration:none;">@CheckedSig.VerificationCode</a>
+                                </div>
+                            }
+                            else
+                            {
+                                <span class="a2-field-value"></span>
+                            }
                         </td>
                     </tr>
                 </tbody>
@@ -656,8 +732,15 @@
                     </div>
                 </div>
             </div>
+
+            <HRM.Components.Shared.DocumentQrVerificationBar Signatures="signatures" IsDhivehi="IsDv" Compact="true" />
         </article>
     }
+
+    <HRM.Components.Shared.SignaturePinModal IsOpen="@(pendingSignSlotKey is not null)"
+                                             SlotLabel="@(pendingSignSlotLabel ?? "Document Signature")"
+                                             OnConfirmed="ConfirmSignWithPinAsync"
+                                             OnCancelled="() => { pendingSignSlotKey = null; pendingSignSlotLabel = null; }" />
 </div>
 
 @code {
@@ -668,11 +751,14 @@
     private const string TinyInput = "w-16 rounded border border-slate-300 bg-white px-1.5 py-1 text-[11px] text-slate-800";
 
     private A2EvaluationSheetDto? sheet;
+    private IReadOnlyList<DocumentSignatureDto> signatures = [];
+    private DocumentSignatureDto? PreparedSig => signatures.FirstOrDefault(s => s.SlotKey == "PreparedBy");
+    private DocumentSignatureDto? CheckedSig => signatures.FirstOrDefault(s => s.SlotKey == "CheckedBy");
     private List<EditableCandidate> editableRows = [];
     private string lang = "en";
     private bool loading = true;
-    private bool showEditor;
-    private string? error;
+    private bool showEditor, signBusy;
+    private string? error, signMessage;
 
     private string positionTitle = "";
     private string basicSalaryText = "";
@@ -772,6 +858,8 @@
                 DirectExamScore = c.DirectExamScore,
                 DirectInterviewScore = c.DirectInterviewScore
             }).ToList();
+
+            await LoadSignaturesAsync();
         }
         catch (HttpRequestException)
         {
@@ -780,6 +868,94 @@
         finally
         {
             loading = false;
+        }
+    }
+
+    private async Task LoadSignaturesAsync()
+    {
+        try
+        {
+            signatures = IsAdminRoute
+                ? await SignatureApi.GetDocumentSignaturesAsync("RecruitmentA2Sheet", VacancyId.ToString())
+                : await SignatureApi.GetPublicDocumentSignaturesAsync("RecruitmentA2Sheet", VacancyId.ToString());
+        }
+        catch { signatures = []; }
+    }
+
+    private string? pendingSignSlotKey, pendingSignSlotLabel;
+
+    private void OpenSignModal(string slotKey, string slotLabel)
+    {
+        pendingSignSlotKey = slotKey;
+        pendingSignSlotLabel = slotLabel;
+        signMessage = null;
+    }
+
+    private async Task ConfirmSignWithPinAsync(string verifiedPin)
+    {
+        var slotKey = pendingSignSlotKey;
+        var slotLabel = pendingSignSlotLabel ?? slotKey ?? "";
+        pendingSignSlotKey = null;
+        pendingSignSlotLabel = null;
+        if (string.IsNullOrWhiteSpace(slotKey)) return;
+        await SignSlotAsync(slotKey, slotLabel, verifiedPin);
+    }
+
+    private async Task SignSlotAsync(string slotKey, string slotLabel, string pin)
+    {
+        if (signBusy || sheet is null) return;
+        signBusy = true;
+        signMessage = null;
+        try
+        {
+            var computed = ComputeRankedRows().Where(r => !r.IsBlank);
+            var canonical = System.Text.Json.JsonSerializer.Serialize(new
+            {
+                sheet.VacancyId,
+                AnnouncementNumber = announcementNumber,
+                PositionTitle = positionTitle,
+                Rows = computed.Select(r => new { r.FullName, r.MeetsBasicRequirements, r.BasicReqPoints, r.CoreDisciplinePoints, r.HigherQualPoints, r.AdditionalExpPoints, r.ExamScore, r.InterviewScore, r.TotalScore, r.Rank })
+            });
+            var posOverride = slotKey == "PreparedBy" ? preparedByPosition : checkedByPosition;
+            var res = await SignatureApi.SignDocumentAsync(new SignDocumentInput(
+                "RecruitmentA2Sheet",
+                VacancyId.ToString(),
+                slotKey,
+                slotLabel,
+                canonical,
+                string.IsNullOrWhiteSpace(posOverride) ? null : posOverride,
+                Pin: pin));
+            signMessage = res.Message;
+            if (res.Success) await LoadSignaturesAsync();
+        }
+        catch
+        {
+            signMessage = "Could not apply digital signature. Ensure your signature and Signing PIN are saved in My Profile.";
+        }
+        finally
+        {
+            signBusy = false;
+        }
+    }
+
+    private async Task RevokeSlotAsync(int signatureId)
+    {
+        if (signBusy) return;
+        signBusy = true;
+        signMessage = null;
+        try
+        {
+            var res = await SignatureApi.RevokeSignatureAsync(signatureId, "Revoked by signer/admin for A2 sheet revision.");
+            signMessage = res.Message;
+            if (res.Success) await LoadSignaturesAsync();
+        }
+        catch
+        {
+            signMessage = "Could not revoke signature.";
+        }
+        finally
+        {
+            signBusy = false;
         }
     }
 

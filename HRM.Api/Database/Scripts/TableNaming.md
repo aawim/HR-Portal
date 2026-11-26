@@ -43,6 +43,7 @@ The rename preserves table object IDs, row counts, foreign keys, indexes and con
 Entity class and DbSet names remain descriptive C# names. Physical names are set explicitly in EF mappings; handwritten SQL must use those same physical names. Existing unrelated legacy tables are outside this rename. Future table creation scripts, migrations and documentation must follow this convention.
 
 - `WH_OrganisationWorkingHourRequirements`: tenant and optional Job Type temporary daily working-hour increases; `FromDate`, `ToDate`, `RequiredDailyMinutes`, `Reason`, `IsActive`, `Version`, `OperationLogId`.
+- `DS_` is the Document Signatures (e-Sign) feature prefix. `DS_UserSignatures` stores each user's saved profile signature (PNG/WebP data URL + SHA-256 hash), and `DS_DocumentSignatures` stores immutable, tamper-evident document signature records with `DocumentType`, `DocumentId`, `SlotKey`, frozen signature image snapshot, `DocumentContentHash` (SHA-256), `VerificationCode`, timestamp, IP address, and revocation audit trail.
 
 - `WP_` is the feature prefix for new shared work-planning configuration. `WP_ScopeScheduleAssignments` stores organisation, approved structure and staff-group template assignments. Existing legacy scheduling tables retain their physical names.
 

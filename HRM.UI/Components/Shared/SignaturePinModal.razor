@@ -1,0 +1,172 @@
+@using HRM.Application.Contracts.Signatures
+@inject HRM.UI.Services.Signatures.IDocumentSignatureApiClient SignatureApi
+
+@if (IsOpen)
+{
+    <div class="no-print" style="position:fixed; inset:0; z-index:80; background:rgba(15,23,42,0.65); display:flex; align-items:center; justify-content:center; padding:1rem;" @onclick="CancelAsync">
+        <div style="width:100%; max-width:26rem; background:#ffffff; border-radius:1rem; box-shadow:0 20px 45px rgba(15,23,42,0.3); overflow:hidden;" @onclick:stopPropagation="true">
+            <div class="flex items-center justify-between gap-2 border-b border-slate-200 bg-slate-50 px-4 py-3">
+                <div class="flex items-center gap-2">
+                    <span class="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-[#075985] text-white text-xs">
+                        <i class="bi bi-shield-lock-fill" aria-hidden="true"></i>
+                    </span>
+                    <div>
+                        <h4 class="text-xs font-bold text-slate-900">@(unlocked ? "Confirm & Apply Signature" : "Enter Signing PIN")</h4>
+                        <p class="text-[11px] text-slate-500">@SlotLabel</p>
+                    </div>
+                </div>
+                <button type="button" class="text-xs font-bold text-slate-500 hover:text-slate-800" @onclick="CancelAsync">✕</button>
+            </div>
+
+            <div class="p-4 space-y-3 text-xs">
+                @if (!unlocked)
+                {
+                    <p class="text-slate-600">
+                        Enter your personal 4–8 digit <strong>Signing PIN</strong> to unlock the signature panel and authorize signing this document.
+                    </p>
+                    <label class="block font-medium text-slate-700">
+                        Signing PIN
+                        <input type="password"
+                               inputmode="numeric"
+                               autocomplete="one-time-code"
+                               maxlength="8"
+                               class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-center font-mono text-base tracking-[0.35em] text-slate-900 focus:border-[#075985] focus:outline-none focus:ring-1 focus:ring-[#075985]"
+                               placeholder="••••"
+                               disabled="@busy"
+                               @bind="pin"
+                               @bind:event="oninput" />
+                    </label>
+                    <div class="flex items-center justify-between pt-1">
+                        <a href="/profile" class="text-[11px] font-semibold text-[#075985] hover:underline">Set / Manage PIN in Profile</a>
+                        <div class="flex items-center gap-2">
+                            <button type="button" class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 font-semibold text-slate-700 hover:bg-slate-50" disabled="@busy" @onclick="CancelAsync">Cancel</button>
+                            <button type="button"
+                                    class="inline-flex items-center gap-1 rounded-lg bg-[#075985] hover:bg-[#0c4a6e] px-3.5 py-1.5 font-semibold text-white disabled:opacity-50"
+                                    disabled="@(busy || pin.Length < 4)"
+                                    @onclick="UnlockAsync">
+                                <i class="bi bi-unlock-fill" aria-hidden="true"></i>
+                                <span>@(busy ? "Verifying..." : "Unlock Panel")</span>
+                            </button>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <div class="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-emerald-900 flex items-center gap-2">
+                        <i class="bi bi-check-circle-fill text-emerald-600" aria-hidden="true"></i>
+                        <span>PIN verified. Review your signature below and confirm to sign <strong>@SlotLabel</strong>.</span>
+                    </div>
+
+                    @if (mySig is not null)
+                    {
+                        <div class="rounded-xl border border-slate-200 bg-slate-50 p-3 flex flex-col items-center gap-1.5">
+                            <div class="rounded-lg border border-slate-200 bg-white px-5 py-2.5 w-full flex items-center justify-center">
+                                <img src="@mySig.SignatureDataUrl" alt="Your Signature" class="max-h-16 max-w-full object-contain" />
+                            </div>
+                            <span class="text-[10px] text-slate-500">A tamper-evident SHA-256 hash &amp; QR verification code will be attached.</span>
+                        </div>
+                    }
+
+                    <div class="flex justify-end gap-2 pt-1">
+                        <button type="button" class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 font-semibold text-slate-700 hover:bg-slate-50" disabled="@busy" @onclick="CancelAsync">Cancel</button>
+                        <button type="button"
+                                class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 px-3.5 py-1.5 font-semibold text-white disabled:opacity-50"
+                                disabled="@busy"
+                                @onclick="ConfirmSignAsync">
+                            <i class="bi bi-pen" aria-hidden="true"></i>
+                            <span>@(busy ? "Signing..." : "Apply Signature")</span>
+                        </button>
+                    </div>
+                }
+
+                @if (!string.IsNullOrWhiteSpace(error))
+                {
+                    <div role="alert" class="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[11px] text-rose-800">
+                        @error
+                        @if (error.Contains("My Profile", StringComparison.OrdinalIgnoreCase))
+                        {
+                            <a href="/profile" class="ml-1 font-bold underline">Go to My Profile</a>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public string SlotLabel { get; set; } = "Document Signature";
+    [Parameter] public EventCallback<string> OnConfirmed { get; set; }
+    [Parameter] public EventCallback OnCancelled { get; set; }
+
+    private string pin = "";
+    private bool busy, unlocked;
+    private string? error;
+    private UserSignatureDto? mySig;
+    private bool wasOpen;
+
+    protected override void OnParametersSet()
+    {
+        if (IsOpen && !wasOpen)
+        {
+            pin = "";
+            unlocked = false;
+            error = null;
+            mySig = null;
+        }
+        wasOpen = IsOpen;
+    }
+
+    private async Task UnlockAsync()
+    {
+        if (busy || pin.Length < 4) return;
+        busy = true;
+        error = null;
+        try
+        {
+            var res = await SignatureApi.VerifySignaturePinAsync(pin.Trim());
+            if (!res.Success)
+            {
+                error = res.Message;
+                pin = "";
+                return;
+            }
+            mySig = await SignatureApi.GetMySignatureAsync();
+            unlocked = true;
+        }
+        catch
+        {
+            error = "Could not verify Signing PIN. Please try again.";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task ConfirmSignAsync()
+    {
+        if (busy || !unlocked) return;
+        busy = true;
+        try
+        {
+            var verifiedPin = pin.Trim();
+            pin = "";
+            unlocked = false;
+            await OnConfirmed.InvokeAsync(verifiedPin);
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task CancelAsync()
+    {
+        pin = "";
+        unlocked = false;
+        error = null;
+        await OnCancelled.InvokeAsync();
+    }
+}
