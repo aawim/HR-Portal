@@ -12,6 +12,7 @@
 @attribute [Authorize]
 @inject HRM.Services.Interfaces.IUserService UserService
 @inject HRM.Services.Interfaces.IUserAccessService UserAccess
+@inject HRM.UI.Services.Recruitment.IRecruitmentApiClient RecruitmentApi
 
 <PageTitle>My Profile - HR Portal</PageTitle>
 
@@ -151,6 +152,44 @@ else
             <!-- ========================================== -->
             <div class="col-span-1 lg:col-span-2 space-y-6">
 
+                @if (myOffers.Count > 0)
+                {
+                    <div class="bg-white rounded-xl shadow-sm border border-amber-200 p-5 space-y-3">
+                        <div class="flex items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
+                            <div>
+                                <h2 class="text-sm font-bold text-slate-900 flex items-center gap-2">
+                                    <i class="bi bi-envelope-paper-heart text-[#075985]" aria-hidden="true"></i>
+                                    <span>My Job Offer Letters</span>
+                                </h2>
+                                <p class="text-xs text-slate-500 mt-0.5">Review, sign, and submit your Job Offer Acceptance Form for HR to proceed with onboarding.</p>
+                            </div>
+                        </div>
+                        <div class="space-y-2">
+                            @foreach (var offer in myOffers)
+                            {
+                                <div class="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-slate-50/70 px-3.5 py-2.5 text-xs">
+                                    <div>
+                                        <div class="font-bold text-slate-900">@(string.IsNullOrWhiteSpace(offer.PositionName) ? offer.VacancyReference : offer.PositionName)</div>
+                                        <div class="text-[11px] text-slate-500">
+                                            @(string.IsNullOrWhiteSpace(offer.OrganisationName) ? "" : $"{offer.OrganisationName} · ")
+                                            <span class="font-mono">@offer.VacancyReference</span>
+                                            <span class="ml-1.5 rounded-full px-2 py-0.5 text-[10px] font-semibold @(offer.Status == "Accepted" ? "bg-emerald-100 text-emerald-800" : offer.Status == "OnboardingSubmitted" ? "bg-blue-100 text-blue-800" : offer.Status == "Declined" ? "bg-rose-100 text-rose-800" : "bg-amber-100 text-amber-800")">
+                                                @(offer.Status == "OnboardingSubmitted" ? "Onboarding In Progress" : offer.Status)
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <button type="button"
+                                            class="inline-flex items-center gap-1 rounded-lg @(offer.Status == "Offered" ? "bg-[#075985] hover:bg-[#0c4a6e] text-white" : "border border-slate-300 bg-white hover:bg-slate-100 text-slate-700") px-3 py-1.5 text-xs font-semibold"
+                                            @onclick="() => activeOffer = offer">
+                                        <i class="bi @(offer.Status == "Offered" ? "bi-pen" : "bi-file-earmark-check")" aria-hidden="true"></i>
+                                        <span>@(offer.Status == "Offered" ? "Open & Sign Offer Letter" : "View Signed Offer")</span>
+                                    </button>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+
                 <!-- Job Information (Approved Job Only) -->
                 <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-6">
                     <h2 class="font-semibold text-slate-800 mb-4 pb-2 border-b border-slate-100">Active Job</h2>
@@ -257,6 +296,25 @@ else
                               OnClose="() => isPhotoModalOpen = false" />
     }
 
+    @if (activeOffer is not null)
+    {
+        <HRM.Components.Admin.Hr.Recruitment.OfferLetterAcceptanceModal IsOpen="true"
+                                                                        OfferId="@activeOffer.Id"
+                                                                        VacancyReference="@activeOffer.VacancyReference"
+                                                                        Status="@activeOffer.Status"
+                                                                        TermsSnapshotJson="@activeOffer.TermsSnapshotJson"
+                                                                        PositionName="@activeOffer.PositionName"
+                                                                        OrganisationName="@activeOffer.OrganisationName"
+                                                                        ApplicantName="@userProfile?.FullName"
+                                                                        OfferedAtUtc="@activeOffer.OfferedAtUtc"
+                                                                        AcceptedAtUtc="@activeOffer.AcceptedAtUtc"
+                                                                        AppointeeSignatureDataUrl="@activeOffer.AppointeeSignatureDataUrl"
+                                                                        SignatureVerificationCode="@activeOffer.SignatureVerificationCode"
+                                                                        ReadOnly="@(activeOffer.Status != "Offered")"
+                                                                        OnSubmitted="HandleOfferSubmittedAsync"
+                                                                        OnClosed="() => activeOffer = null" />
+    }
+
 }
 
 @code {
@@ -264,6 +322,8 @@ else
     private Task<AuthenticationState>? AuthState { get; set; }
 
     private UserProfileDto? userProfile;
+    private IReadOnlyList<HRM.Application.Contracts.Recruitment.MyRecruitmentOfferRow> myOffers = [];
+    private HRM.Application.Contracts.Recruitment.MyRecruitmentOfferRow? activeOffer;
     private bool isLoading = true;
     private bool isPhotoModalOpen;
 
@@ -278,7 +338,24 @@ else
     protected override async Task OnInitializedAsync()
     {
         userProfile = await UserService.GetMyProfileAsync();
+        await LoadOffersAsync();
         isLoading = false;
+    }
+
+    private async Task LoadOffersAsync()
+    {
+        try
+        {
+            var ws = await RecruitmentApi.GetMyWorkspaceAsync();
+            myOffers = ws.Offers;
+        }
+        catch { myOffers = []; }
+    }
+
+    private async Task HandleOfferSubmittedAsync()
+    {
+        activeOffer = null;
+        await LoadOffersAsync();
     }
 
 }

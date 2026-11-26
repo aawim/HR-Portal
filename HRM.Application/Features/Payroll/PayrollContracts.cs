@@ -196,8 +196,19 @@ public sealed record EmployeePayrollInputItem(
     List<InputAdjustmentItem> Adjustments,
     List<InputAttendanceDeductionItem>? AttendanceDeductions = null,
     bool IsMaldivianCitizen = true,
-    DateOnly? DateOfBirth = null
+    DateOnly? DateOfBirth = null,
+    PayrollStatutoryPolicy? FrozenPolicy = null,
+    PayrollTaxContext? TaxContext = null,
+    bool NationalityVerified = true,
+    IReadOnlyList<string>? ValidationErrors = null,
+    string BankIdentityNumber = ""
 );
+
+public sealed record PayrollTaxMonth(int Month, decimal TaxableRemuneration, decimal TaxWithheld);
+public sealed record PayrollTaxContext(
+    HRM.Application.Contracts.Pages.PayrollEmployeeTaxProfile? Profile = null,
+    IReadOnlyList<PayrollTaxMonth>? PreviousMonths = null,
+    bool HistoryComplete = false);
 
 public sealed record InputAttendanceDeductionItem(
     long AttendanceAdjustmentId,
@@ -278,7 +289,10 @@ public sealed record PayrollStatutoryPolicy(
     string UnpaidLeaveDivisorMode = "CalendarDays",
     bool RequireBankAccountForPayment = true,
     string DefaultCurrencyCode = "MVR",
-    IReadOnlyList<HRM.Application.Contracts.Pages.PayrollTaxBracketDto>? TaxBrackets = null
+    IReadOnlyList<HRM.Application.Contracts.Pages.PayrollTaxBracketDto>? TaxBrackets = null,
+    string EmploymentSector = "CivilService",
+    bool MinimumWageMaldiviansOnly = true,
+    IReadOnlyList<HRM.Application.Contracts.Pages.PayrollEmployeeTaxProfile>? EmployeeTaxProfiles = null
 )
 {
     public static IReadOnlyList<HRM.Application.Contracts.Pages.PayrollTaxBracketDto> MaldivesDefaultTaxBrackets { get; } =

@@ -176,7 +176,12 @@
                             @foreach (var d in selectedPayslip.Deductions)
                             {
                                 <tr>
-                                    <td class="p-2 text-slate-800">@d.ComponentName</td>
+                                    <td class="p-2 text-slate-800">@d.ComponentName
+                                        @if (d.ComponentCode is "TAX_WHT" or "PEN_EMP")
+                                        {
+                                            <div class="text-[11px] text-slate-500">@d.SourceReference</div>
+                                        }
+                                    </td>
                                     <td class="p-2 text-right font-semibold text-amber-700">@d.CalculatedAmount.ToString("N2")</td>
                                 </tr>
                             }
@@ -185,11 +190,19 @@
                 </div>
             </div>
 
+            <div class="rounded-xl border border-slate-200 p-3 text-xs dark:border-slate-700">
+                <h3 class="font-semibold">Employer contributions</h3>
+                @foreach (var item in selectedPayslip.EmployerItems)
+                {
+                    <div class="flex justify-between gap-3 py-1"><span>@item.ComponentName</span><span>@item.CalculatedAmount.ToString("N2") MVR</span></div>
+                }
+                <p class="text-slate-500">Employer contributions are additional to your net salary.</p>
+            </div>
             <!-- Net Salary Summary Box -->
             <div class="rounded-xl bg-blue-50 border border-blue-200 p-4 flex items-center justify-between">
                 <div>
                     <div class="text-xs font-bold text-blue-900 uppercase tracking-wide">Net Salary Payable</div>
-                    <div class="text-[11px] text-blue-700">Transferred via bank instruction · Ref: @selectedPayslip.PaymentReference</div>
+                    <div class="text-[11px] text-blue-700">Payment reference: @selectedPayslip.PaymentReference. This payslip does not confirm bank settlement.</div>
                 </div>
                 <div class="text-xl font-black text-blue-800">
                     @selectedPayslip.NetSalary.ToString("N2") <span class="text-xs font-semibold">MVR</span>

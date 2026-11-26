@@ -28,6 +28,15 @@ public sealed class PayrollSnapshotService : IPayrollSnapshotService
         int organisationId, int payrollRunId, DateOnly periodStart, DateOnly periodEnd)
     {
         await using var db = await _factory.CreateDbContextAsync();
+        var currentRun = await db.PayrollRuns.Include(r => r.PayrollPeriod)
+            .SingleOrDefaultAsync(r => r.PayrollRunId == payrollRunId && r.OrganisationId == organisationId)
+            ?? throw new InvalidOperationException("Payroll run not found in this organisation.");
+        if (currentRun.RunType != PayrollRunType.RegularMonthly)
+            throw new InvalidOperationException("Supplementary, arrears and final-settlement runs need incremental earnings and same-month tax aggregation; automatic full monthly calculation is not supported for these run types.");
+        if (await db.PayrollRuns.AnyAsync(r => r.OrganisationId == organisationId && r.PayrollRunId != payrollRunId &&
+            r.PayrollPeriod!.PeriodYear == periodStart.Year && r.PayrollPeriod.PeriodMonth == periodStart.Month &&
+            r.Status >= PayrollRunStatus.Finalised && r.Status <= PayrollRunStatus.Closed))
+            throw new InvalidOperationException("A finalised payroll already exists for this month. Do not pay the full monthly salary again.");
 
         // 1. Check if snapshots already exist for this run
         var existingSnapshots = await db.PayrollInputSnapshots
@@ -71,13 +80,18 @@ public sealed class PayrollSnapshotService : IPayrollSnapshotService
             .ToList();
 
         var jobIds = jobs.Select(j => j.JobId).ToList();
+        var individualIds = jobs.Select(j => j.IndividualID).Distinct().ToList();
+        var identityCards = await db.Idcards.AsNoTracking().Where(c => individualIds.Contains(c.BusinessEntityId))
+            .OrderByDescending(c => c.ExpiryDate).ThenByDescending(c => c.IdcardId).ToListAsync();
+        var passports = await db.Passports.AsNoTracking().Where(c => individualIds.Contains(c.BusinessEntityId))
+            .OrderByDescending(c => c.ExpiryDate).ThenByDescending(c => c.PassportId).ToListAsync();
 
         // 3. Compensation and position framework info
         var compensations = await db.EmployeeCompensations
             .AsNoTracking()
             .Where(c => c.OrganisationId == organisationId && jobIds.Contains(c.JobId) && c.IsActive &&
                         c.EffectiveFrom <= periodEnd && (!c.EffectiveTo.HasValue || c.EffectiveTo.Value >= periodStart))
-            .ToDictionaryAsync(c => c.JobId);
+            .ToListAsync();
 
         var stepHistories = await db.FrameworkJobStepHistories
             .AsNoTracking()
@@ -103,6 +117,12 @@ public sealed class PayrollSnapshotService : IPayrollSnapshotService
             .ToDictionaryAsync(t => t.Id, t => t.Name);
 
         var statutoryPolicy = await PayrollStatutoryPolicyLoader.LoadAsync(db, organisationId, periodEnd);
+        var previousEmployees = await db.PayrollEmployees.AsNoTracking()
+            .Include(e => e.Lines).Include(e => e.PayrollRun).ThenInclude(r => r!.PayrollPeriod)
+            .Where(e => e.PayrollRun!.OrganisationId == organisationId &&
+                e.PayrollRun.Status >= PayrollRunStatus.Finalised && e.PayrollRun.Status <= PayrollRunStatus.Closed &&
+                e.PayrollRun.PayrollPeriod!.PeriodYear == periodStart.Year &&
+                e.PayrollRun.PayrollPeriod.PeriodMonth < periodStart.Month).ToListAsync();
         decimal overtimeMultiplier = statutoryPolicy.NormalOvertimeMultiplier;
         decimal holidayOvertimeMultiplier = statutoryPolicy.HolidayOvertimeMultiplier;
         decimal overtimeHourlyDivisor = statutoryPolicy.OvertimeHourlyDivisor;
@@ -209,7 +229,26 @@ public sealed class PayrollSnapshotService : IPayrollSnapshotService
             string employeeName = individual != null ? $"{individual.FirstNameEnglish} {individual.LastNameEnglish}".Trim() : $"Staff #{job.IndividualID}";
             string employeeNumber = $"EMP-{job.IndividualID}";
 
-            var comp = compensations.GetValueOrDefault(job.JobId);
+            var employeeCompensations = compensations.Where(c => c.JobId == job.JobId).OrderByDescending(c => c.EffectiveFrom).ToList();
+            var comp = employeeCompensations.FirstOrDefault();
+            var validationErrors = new List<string>();
+            if (employeeCompensations.Count > 1 || (comp != null && comp.EffectiveFrom > periodStart && job.JoinedDate < comp.EffectiveFrom.ToDateTime(TimeOnly.MinValue)))
+                validationErrors.Add("Compensation changes within the period require salary segment calculation; review before payroll.");
+            var taxProfiles = statutoryPolicy.EmployeeTaxProfiles?.Where(p => p.IndividualId == job.IndividualID &&
+                p.EffectiveFrom <= periodEnd && (!p.EffectiveTo.HasValue || p.EffectiveTo >= periodEnd)).ToList() ?? [];
+            if (taxProfiles.Count > 1) validationErrors.Add("Overlapping employee tax declarations.");
+            var taxProfile = taxProfiles.FirstOrDefault();
+            var openingThrough = taxProfile?.OpeningBalanceThrough;
+            if (openingThrough.HasValue && (openingThrough.Value.Year != periodStart.Year || openingThrough >= periodStart))
+                validationErrors.Add("Tax opening balances must be in the payroll tax year and end before this payroll month.");
+            var taxHistory = previousEmployees.Where(e => e.IndividualId == job.IndividualID &&
+                    (!openingThrough.HasValue || e.PayrollRun!.PayrollPeriod!.PeriodMonth > openingThrough.Value.Month))
+                .GroupBy(e => e.PayrollRun!.PayrollPeriod!.PeriodMonth)
+                .Select(g => new PayrollTaxMonth(g.Key, g.Sum(PayrollReportValues.TaxableBase),
+                    g.Sum(e => e.Lines.Where(l => l.ComponentCode == "TAX_WHT").Sum(l => l.CalculatedAmount)))).ToList();
+            var firstHistoryMonth = openingThrough?.AddDays(1).Month ?? 1;
+            bool historyComplete = Enumerable.Range(firstHistoryMonth, Math.Max(0, periodStart.Month - firstHistoryMonth))
+                .All(month => taxHistory.Any(h => h.Month == month));
             var step = stepHistories.FirstOrDefault(s => s.JobId == job.JobId);
             var jp = jobPositions.FirstOrDefault(p => p.JobId == job.JobId);
 
@@ -278,8 +317,12 @@ public sealed class PayrollSnapshotService : IPayrollSnapshotService
             {
                 var from = DateOnly.FromDateTime(l.FromDate) < periodStart ? periodStart : DateOnly.FromDateTime(l.FromDate);
                 var to = DateOnly.FromDateTime(l.ToDate) > periodEnd ? periodEnd : DateOnly.FromDateTime(l.ToDate);
-                int days = (to.Day - from.Day) + 1;
-                if (days < 1) days = 1;
+                var employmentStart = DateOnly.FromDateTime(job.JoinedDate);
+                var employmentEnd = job.TerminatedDate.HasValue ? DateOnly.FromDateTime(job.TerminatedDate.Value) : periodEnd;
+                if (from < employmentStart) from = employmentStart;
+                if (to > employmentEnd) to = employmentEnd;
+                if (to < from) continue;
+                int days = to.DayNumber - from.DayNumber + 1;
 
                 decimal payRatio = l.LeaveType.PayPercentage.HasValue ? (decimal)l.LeaveType.PayPercentage.Value / 100m : 0m;
                 decimal deductionRate = 1.0m - payRatio;
@@ -323,18 +366,17 @@ public sealed class PayrollSnapshotService : IPayrollSnapshotService
                 ));
             }
 
-            // Adjustments (Ramadan Allowance is statutory tax-exempt under Employment Act Sec. 51)
+            // Cash adjustments, including Ramadan allowance, are taxable remuneration.
             var empAdjustments = new List<InputAdjustmentItem>();
             foreach (var adj in adjustments.Where(x => x.JobId == job.JobId))
             {
-                bool isTaxExempt = adj.ComponentCode.Contains("RAMADAN", StringComparison.OrdinalIgnoreCase);
                 empAdjustments.Add(new InputAdjustmentItem(
                     AdjustmentId: adj.PayrollAdjustmentId,
                     ComponentCode: adj.ComponentCode,
                     Description: adj.Description,
                     Amount: adj.Amount,
                     IsAddition: adj.IsAddition,
-                    IsTaxable: !isTaxExempt
+                    IsTaxable: true
                 ));
             }
 
@@ -409,7 +451,13 @@ public sealed class PayrollSnapshotService : IPayrollSnapshotService
                 Adjustments: empAdjustments,
                 AttendanceDeductions: empAttDeductions,
                 IsMaldivianCitizen: isMaldivian,
-                DateOfBirth: individual?.DateOfBirth.HasValue == true ? DateOnly.FromDateTime(individual.DateOfBirth.Value) : null
+                DateOfBirth: individual?.DateOfBirth.HasValue == true ? DateOnly.FromDateTime(individual.DateOfBirth.Value) : null,
+                FrozenPolicy: statutoryPolicy with { EmployeeTaxProfiles = null },
+                TaxContext: new PayrollTaxContext(taxProfile, taxHistory, historyComplete),
+                NationalityVerified: individual?.Country != null,
+                ValidationErrors: validationErrors,
+                BankIdentityNumber: isMaldivian ? identityCards.FirstOrDefault(c => c.BusinessEntityId == job.IndividualID)?.IdcardNumber ?? "" :
+                    passports.FirstOrDefault(c => c.BusinessEntityId == job.IndividualID)?.PassportNumber ?? ""
             );
 
             inputItems.Add(inputItem);

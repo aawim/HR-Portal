@@ -334,9 +334,9 @@
                                 <label class="block text-[11px] font-semibold text-slate-600">
                                     Bank / MMA Format
                                     <select class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-800" @bind="selectedBankFormat">
-                                        <option value="BML_BULK">Bank of Maldives (BML Bulk CSV)</option>
-                                        <option value="MIB_BULK">Maldives Islamic Bank (MIB Bulk CSV)</option>
-                                        <option value="MMA_FAVARA_XML">MMA Favara (ISO 20022 pain.001 XML)</option>
+                                        <option value="BML_BULK">BML bulk transfer (BML credit accounts)</option>
+                                        <option value="MIB_BULK" disabled>MIB — awaiting bank template verification</option>
+                                        <option value="MMA_FAVARA_XML" disabled>Favara — use your bank's verified template</option>
                                         <option value="STANDARD_CSV">Standard Payroll CSV</option>
                                     </select>
                                 </label>
@@ -363,10 +363,10 @@
                                 <p class="text-[11px] font-bold uppercase tracking-wide text-slate-600">Maldives Statutory Exports</p>
                                 <div class="grid grid-cols-1 gap-1.5">
                                     <button type="button" class="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100" @onclick='() => ExportStatutoryAsync("MPAO_KOSHAARU")'>
-                                        MPAO Koshaaru Pension CSV
+                                        Pension review worksheet (CSV)
                                     </button>
                                     <button type="button" class="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100" @onclick='() => ExportStatutoryAsync("MIRA_601_EWT")'>
-                                        MIRA 601 Income Tax (EWT) CSV
+                                        EWT review worksheet (CSV)
                                     </button>
                                     <button type="button" class="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100" @onclick='() => ExportStatutoryAsync("PAYROLL_REGISTER_CSV")'>
                                         Full Payroll Register CSV
@@ -736,7 +736,17 @@
                     </div>
                 </div>
 
-                <!-- Future-Resistant MIRA Progressive Income Tax Brackets -->
+                <div class="grid grid-cols-1 gap-3 md:grid-cols-2 rounded-xl border border-slate-200 p-3 text-xs dark:border-slate-700">
+                    <label class="p-1">Employment sector
+                        <select class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100" @bind="configEmploymentSector">
+                            <option value="CivilService">Maldives civil service</option><option value="PrivateSector">Private sector</option>
+                        </select>
+                    </label>
+                    <label class="flex items-center gap-2 p-1"><input type="checkbox" @bind="configMinimumWageMaldiviansOnly" />Apply the configured minimum wage to Maldivians only</label>
+                    <p class="text-slate-500 md:col-span-2">Private-sector attendance deductions require a verified contractual policy in Attendance Deductions. Set minimum wage for the organisation's classification and working hours; MVR 7,000 is not a universal private-sector rate. Bank and statutory CSV reports are review worksheets; use the authority's current submission template.</p>
+                </div>
+                <EmployeeTaxDeclarations Profiles="configEmployeeTaxProfiles" />
+                <!-- MIRA progressive income tax brackets -->
                 <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-3 space-y-2.5 text-xs">
                     <div class="flex flex-wrap items-center justify-between gap-2">
                         <div>
@@ -1133,6 +1143,9 @@
     private PayrollEmployeeRow? activeInspectionEmployee;
 
     private PayrollConfigurationDto? payrollConfig;
+    private string configEmploymentSector = "CivilService";
+    private bool configMinimumWageMaldiviansOnly = true;
+    private List<PayrollEmployeeTaxProfile> configEmployeeTaxProfiles = [];
     private decimal configEmployeePension = 7.00m;
     private decimal configEmployerPension = 7.00m;
     private decimal configOvertimeMultiplier = 1.25m;
@@ -1213,6 +1226,9 @@
                 if (payrollConfig != null)
                 {
                     configEmployeePension = payrollConfig.EmployeePensionPercentage;
+                    configEmploymentSector = payrollConfig.EmploymentSector;
+                    configMinimumWageMaldiviansOnly = payrollConfig.MinimumWageMaldiviansOnly;
+                    configEmployeeTaxProfiles = payrollConfig.EmployeeTaxProfiles?.ToList() ?? [];
                     configEmployerPension = payrollConfig.EmployerPensionPercentage;
                     configOvertimeMultiplier = payrollConfig.OvertimeMultiplier;
                     configHolidayOvertimeMultiplier = payrollConfig.HolidayOvertimeMultiplier;
@@ -1551,7 +1567,10 @@
                 configUnpaidLeaveDivisorMode,
                 configRequireBankAccount,
                 configDefaultCurrency,
-                configTaxBrackets.Select(b => new PayrollTaxBracketDto(b.MinAmount, b.MaxAmount, b.RatePercentage)).ToList()
+                configTaxBrackets.Select(b => new PayrollTaxBracketDto(b.MinAmount, b.MaxAmount, b.RatePercentage)).ToList(),
+                configEmploymentSector,
+                configMinimumWageMaldiviansOnly,
+                configEmployeeTaxProfiles
             );
             var res = await Payroll.SaveConfigurationAsync(input);
             if (res.Success)

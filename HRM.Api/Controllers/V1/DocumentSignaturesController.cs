@@ -22,6 +22,8 @@ public sealed class DocumentSignaturesController(
     private static volatile bool _tablesReady;
     private static readonly SemaphoreSlim _initLock = new(1, 1);
 
+    public static Task EnsureTablesPublicAsync(HrmTeContext db, CancellationToken ct) => EnsureTablesAsync(db, ct);
+
     private static async Task EnsureTablesAsync(HrmTeContext db, CancellationToken ct)
     {
         if (_tablesReady) return;

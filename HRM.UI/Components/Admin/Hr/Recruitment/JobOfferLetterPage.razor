@@ -1,0 +1,687 @@
+@page "/admin/hr/recruitment/offer-letter/{OfferId:int}"
+@page "/careers/offer-letter/{OfferId:int}"
+@layout HRM.Components.Layout.ReceiptLayout
+@rendermode RenderMode.InteractiveServer
+@using System.Text.Json
+@using HRM.Application.Contracts.Recruitment
+@using HRM.Application.Contracts.Signatures
+@using HRM.UI.Services.Signatures
+@using Microsoft.JSInterop
+@inject HRM.UI.Services.Recruitment.IRecruitmentApiClient Api
+@inject HRM.UI.Services.Signatures.IDocumentSignatureApiClient SignatureApi
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<PageTitle>@(IsDv ? "ވަޒީފާ ހުށަހަޅާ ލިޔުން" : "Job Offer Letter")</PageTitle>
+
+<HeadContent>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thaana:wght@400;600;700&display=swap" rel="stylesheet" />
+</HeadContent>
+
+<style>
+    .jol-screen-bg {
+        min-height: 100vh;
+        background: #e2e8f0;
+        padding: 1rem;
+    }
+
+    .jol-toolbar {
+        max-width: 210mm;
+        margin: 0 auto 1rem auto;
+        background: #ffffff;
+        border: 1px solid #cbd5e1;
+        border-radius: 0.75rem;
+        padding: 0.75rem 1rem;
+        box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+    }
+
+    .jol-page {
+        width: 210mm;
+        min-height: 297mm;
+        margin: 0 auto 1rem auto;
+        background: #ffffff;
+        color: #000000;
+        padding: 14mm 14mm;
+        box-shadow: 0 10px 30px rgba(15, 23, 42, 0.14);
+        border-radius: 0;
+        box-sizing: border-box;
+    }
+
+    .jol-page.jol-ltr {
+        direction: ltr;
+        text-align: left;
+        font-family: "Segoe UI", Arial, Helvetica, sans-serif;
+        font-size: 9.5pt;
+        line-height: 1.4;
+    }
+
+    .jol-page.jol-rtl {
+        direction: rtl;
+        text-align: right;
+        font-family: "Faruma", "MV Faseyha", "Noto Sans Thaana", sans-serif;
+        font-size: 10pt;
+        line-height: 1.65;
+    }
+
+    .jol-top-bismillah {
+        text-align: center;
+        font-size: 11pt;
+        margin-bottom: 4px;
+    }
+
+    .jol-agency-line {
+        font-size: 9.5pt;
+        font-weight: 600;
+        color: #334155;
+        margin-bottom: 6px;
+    }
+
+    .jol-main-title {
+        text-align: center;
+        font-size: 14pt;
+        font-weight: 700;
+        margin: 4px 0 10px 0;
+    }
+
+    .jol-section-title {
+        font-size: 11pt;
+        font-weight: 700;
+        margin: 8px 0 6px 0;
+        text-decoration: underline;
+    }
+
+    .jol-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 10px;
+        border-radius: 0;
+    }
+
+    .jol-table th,
+    .jol-table td {
+        border: 1px solid #334155;
+        padding: 5px 8px;
+        vertical-align: middle;
+        border-radius: 0;
+    }
+
+    .jol-table th.jol-subhdr {
+        background: #f8fafc;
+        font-weight: 700;
+        text-align: start;
+    }
+
+    .jol-table td.jol-lbl {
+        font-weight: 700;
+        white-space: nowrap;
+        width: 24%;
+        background: #ffffff;
+    }
+
+    .jol-bullets {
+        margin: 4px 0 10px 0;
+        padding-inline-start: 18px;
+        list-style-type: disc;
+    }
+
+    .jol-bullets li {
+        margin-bottom: 4px;
+    }
+
+    .jol-check {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 14px;
+        height: 14px;
+        border: 1px solid #111827;
+        font-size: 10pt;
+        font-weight: 700;
+        line-height: 1;
+        vertical-align: middle;
+        margin-inline: 4px;
+    }
+
+    .jol-page-break {
+        page-break-before: always;
+        break-before: page;
+    }
+
+    @@page {
+        size: A4 portrait;
+        margin: 10mm;
+    }
+
+    @@media print {
+        html, body {
+            background: #ffffff !important;
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+
+        .no-print {
+            display: none !important;
+        }
+
+        .jol-screen-bg {
+            background: #ffffff !important;
+            padding: 0 !important;
+        }
+
+        .jol-page {
+            width: 100% !important;
+            min-height: auto !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            box-shadow: none !important;
+        }
+
+        .jol-table th.jol-subhdr {
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+    }
+</style>
+
+<div class="jol-screen-bg">
+    <!-- Non-printing Toolbar -->
+    <div class="jol-toolbar no-print space-y-3">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+            <div class="flex flex-wrap items-center gap-2">
+                <a href="@(IsAdminRoute ? "/admin/hr/recruitment" : "/careers")" class="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">
+                    <i class="bi bi-arrow-left" aria-hidden="true"></i>
+                    <span>@(IsAdminRoute ? "Back to Recruitment" : "Back to Careers")</span>
+                </a>
+                <div class="inline-flex rounded-lg border border-slate-300 bg-slate-100 p-0.5 text-xs">
+                    <button type="button"
+                            class="rounded-md px-3 py-1 font-semibold transition @(IsDv ? "text-slate-600 hover:text-slate-900" : "bg-white text-[#075985] shadow-xs")"
+                            @onclick='() => lang = "en"'>
+                        English (LTR)
+                    </button>
+                    <button type="button"
+                            class="rounded-md px-3 py-1 font-semibold transition @(IsDv ? "bg-white text-[#075985] shadow-xs" : "text-slate-600 hover:text-slate-900")"
+                            @onclick='() => lang = "dv"'>
+                        ދިވެހި (RTL)
+                    </button>
+                </div>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-2">
+                @if (IsAdminRoute && detail is not null && string.IsNullOrWhiteSpace(detail.AgencySignatureDataUrl))
+                {
+                    <button type="button"
+                            class="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+                            disabled="@signBusy"
+                            @onclick="() => showAgencyPinModal = true">
+                        <i class="bi bi-shield-lock" aria-hidden="true"></i>
+                        <span>Sign as Agency Issuer</span>
+                    </button>
+                }
+                @if (!IsAdminRoute && detail is not null && detail.Status == "Offered")
+                {
+                    <button type="button"
+                            class="inline-flex items-center gap-1 rounded-lg bg-[#075985] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#0c4a6e]"
+                            @onclick="() => showAcceptanceModal = true">
+                        <i class="bi bi-pen" aria-hidden="true"></i>
+                        <span>Fill, Sign &amp; Submit Offer Form</span>
+                    </button>
+                }
+                <button type="button"
+                        class="inline-flex items-center gap-1.5 rounded-lg bg-slate-800 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-slate-900"
+                        @onclick="PrintAsync">
+                    <i class="bi bi-printer" aria-hidden="true"></i>
+                    <span>Print / Export PDF</span>
+                </button>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(signMessage))
+        {
+            <div class="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-800">
+                <span>@signMessage</span>
+                <button type="button" class="font-bold text-slate-500" @onclick="() => signMessage = null">✕</button>
+            </div>
+        }
+    </div>
+
+    @if (loading)
+    {
+        <div class="jol-page jol-ltr flex items-center justify-center text-sm text-slate-500">
+            Loading Job Offer Letter...
+        </div>
+    }
+    else if (!string.IsNullOrWhiteSpace(error) || detail is null)
+    {
+        <div class="jol-page jol-ltr">
+            <div class="border border-rose-300 bg-rose-50 p-4 text-xs text-rose-800">@(error ?? "Job offer letter not found.")</div>
+        </div>
+    }
+    else
+    {
+        var agencyHeading = IsDv
+            ? (!string.IsNullOrWhiteSpace(detail.AgencyNameDhivehi) ? detail.AgencyNameDhivehi : detail.AgencyName)
+            : detail.AgencyName;
+        var accepted = detail.Status is "Accepted" or "OnboardingSubmitted";
+        var declined = detail.Status == "Declined";
+        var offerDateText = detail.OfferedAtUtc?.AddHours(5).ToString("dd MMM yyyy") ?? "";
+        var acceptDateText = detail.AcceptedAtUtc?.AddHours(5).ToString("dd-MM-yyyy") ?? "";
+        var acceptTimeText = detail.AcceptedAtUtc?.AddHours(5).ToString("HH:mm") ?? "";
+        var primaryQrCode = detail.AppointeeVerificationCode ?? detail.AgencyVerificationCode;
+
+        <!-- PAGE 1: SECTION 1 — JOB OFFER -->
+        <article class="jol-page @(IsDv ? "jol-rtl" : "jol-ltr")" dir="@(IsDv ? "rtl" : "ltr")">
+            <div class="jol-top-bismillah">بِسْمِ اللّٰهِ الرَّحْمٰنِ الرَّحِيْمِ</div>
+            <div class="jol-agency-line">@agencyHeading</div>
+            <h1 class="jol-main-title">@(IsDv ? "ވަޒީފާ ހުށަހަޅާ ލިޔުން" : "Job Offer Letter")</h1>
+
+            <h2 class="jol-section-title">@(IsDv ? "1. ވަޒީފާ ހުށަހެޅުން" : "1. Job Offer")</h2>
+
+            <!-- 1A. Selected Candidate Details -->
+            <table class="jol-table">
+                <thead>
+                    <tr><th colspan="4" class="jol-subhdr">@(IsDv ? "ވަޒީފާއަށް ހޮވާލެވުނު ފަރާތުގެ މަޢުލޫމާތު:" : "Selected Candidate Details:")</th></tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="jol-lbl">@(IsDv ? "ފުރިހަމަ ނަން:" : "Full Name:")</td>
+                        <td colspan="3" style="font-weight:700;">@detail.ApplicantName</td>
+                    </tr>
+                    <tr>
+                        <td class="jol-lbl">@(IsDv ? "އައި.ޑީ.ކާޑު ނަންބަރު:" : "ID Card Number:")</td>
+                        <td style="font-family:monospace;">@(detail.EfaasIdNumber ?? "—")</td>
+                        <td class="jol-lbl">@(IsDv ? "އެޕްލިކޭޝަން ކޯޑު ނަންބަރު:" : "Application Code:")</td>
+                        <td style="font-family:monospace;">@detail.ApplicationCodeNumber</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <!-- 1B. Offered Position Details -->
+            <table class="jol-table">
+                <thead>
+                    <tr><th colspan="4" class="jol-subhdr">@(IsDv ? "ހުށަހަޅާ މަޤާމުގެ ތަފްޞީލު:" : "Offered Position Details:")</th></tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="jol-lbl">@(IsDv ? "މަޤާމުގެ ނަން:" : "Position Title:")</td>
+                        <td colspan="3" style="font-weight:700;">@(parsedPosition ?? detail.PositionTitle)</td>
+                    </tr>
+                    <tr>
+                        <td class="jol-lbl">@(IsDv ? "އަސާސީ މުސާރަ:" : "Basic Salary:")</td>
+                        <td>@(parsedSalary ?? (detail.BasicSalary.HasValue ? $"MVR {detail.BasicSalary.Value:N2}" : "—"))</td>
+                        <td class="jol-lbl">@(IsDv ? "އިޢުލާނު ނަންބަރު:" : "Announcement Number:")</td>
+                        <td style="font-family:monospace;">@detail.AnnouncementNumber</td>
+                    </tr>
+                    <tr>
+                        <td class="jol-lbl">@(IsDv ? "މަޤާމުގެ އެލަވަންސް:" : "Position Allowance:")</td>
+                        <td colspan="3">@(parsedPositionAllowance ?? "—")</td>
+                    </tr>
+                    <tr>
+                        <td class="jol-lbl">@(IsDv ? "ޙާޟިރީ އެލަވަންސް:" : "Attendance Allowance:")</td>
+                        <td colspan="3">@(parsedAttendanceAllowance ?? "—")</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <!-- 1C. Official Terms & Agency Issuer Block -->
+            <table class="jol-table">
+                <tbody>
+                    <tr>
+                        <td colspan="4" style="padding:8px 10px;">
+                            @if (IsDv)
+                            {
+                                <ul class="jol-bullets">
+                                    <li>މަތީގައިވާ މަޤާމަށް ކުރިމަތިލި ފަރާތްތަކުގެ ތެރެއިން ވަޒީފާއަށް އެންމެ ޤާބިލު ފަރާތެއް ހޮވުމުގެ މަރުޙަލާތަކުގެ ތެރެއިން އެންމެ މަތިން ޕޮއިންޓު ލިބި، އެ މަޤާމަށް ހޮވާލެވިފައިވާތީ، ތިޔަ ފަރާތަށް މި ވަޒީފާ ހުށަހަޅަމެވެ.</li>
+                                    <li>ފޯމު ޙަވާލުވާތާ 72 ގަޑިއިރުގެ ތެރޭގައި (ބަންދުދުވަސްތައް ފިޔަވައި) ހުށަހެޅިފައިވާ ވަޒީފާއާ މެދު ނިންމާގޮތް ބަޔާންކޮށް މި ފޯމު އިދާރާއަށް ހުށަހަޅަންވާނެއެވެ.</li>
+                                    <li>މި މުއްދަތުގައި ފޯމު އިދާރާއަށް ހުށަނާޅައިފި ނަމަ، ތިޔަ ފަރާތަށް މަތީގައިވާ ވަޒީފާ ހަމަޖައްސައި ނުދިނުމުގެ އިޚްތިޔާރު ކޮމިޝަނަށް ލިބިގެންވެއެވެ.</li>
+                                    <li>މި ލިޔުމުން ލިބިދޭނީ މިހާރު ވަޒީފާ އަދާކުރާ އިދާރާއަށް ނޯޓިސް އެއް ދޭންޖެހޭނަމަ ނޯޓިސް ދިނުމުގެ ހުއްދައެވެ.</li>
+                                    <li>ވަޒީފާ އަދާކުރާ އިދާރާއަށް ނޯޓިސް ދިނުމަށްޓަކައި ނޯޓިސްގެ މުއްދަތު ފުރިހަމަކުރުމަށް ގިނަވެގެން ދެވޭނީ 30 ދުވަހުގެ މުއްދަތެކެވެ.</li>
+                                </ul>
+                            }
+                            else
+                            {
+                                <ul class="jol-bullets">
+                                    <li>Having achieved the highest points in the selection process for the above position, we are pleased to offer you this appointment.</li>
+                                    <li>Within 72 hours of receiving this form (excluding public holidays), you must state your decision regarding the offered position and return this completed form to the agency.</li>
+                                    <li>If this form is not submitted within the stipulated period, the Commission/Agency reserves the right not to proceed with the appointment.</li>
+                                    <li>This letter serves as authorization to submit resignation/notice to your current employer where applicable.</li>
+                                    <li>A maximum of 30 days is granted to serve notice to your current employer (extendable up to an additional 30 days by mutual agreement with the agency).</li>
+                                </ul>
+                            }
+                        </td>
+                    </tr>
+                    <tr>
+                        <td colspan="2" style="width:58%; vertical-align:top;">
+                            <div style="font-weight:700; margin-bottom:6px;">@(IsDv ? "އިދާރާއިން ފުރިހަމަކުރާބައި:" : "To be completed by the Agency:")</div>
+                            <div><strong>@(IsDv ? "ހުށަހަޅާ ފަރާތުގެ ނަން:" : "Issued by:")</strong> @(detail.IssuedByName ?? "—")</div>
+                            <div style="margin:6px 0;">
+                                <strong>@(IsDv ? "ސޮއި:" : "Signature:")</strong>
+                                @if (!string.IsNullOrWhiteSpace(detail.AgencySignatureDataUrl))
+                                {
+                                    <div style="margin-top:3px;">
+                                        <img src="@detail.AgencySignatureDataUrl" alt="Agency Signature" style="max-height:36px; max-width:140px; object-fit:contain;" />
+                                    </div>
+                                }
+                            </div>
+                            <div style="margin-top:6px;">
+                                <strong>@(IsDv ? "ތާރީޚު:" : "Date:")</strong> @offerDateText
+                                @if (!string.IsNullOrWhiteSpace(detail.AgencyVerificationCode))
+                                {
+                                    <span style="margin-inline-start:12px; font-family:monospace; font-size:8pt;">@detail.AgencyVerificationCode</span>
+                                }
+                            </div>
+                        </td>
+                        <td colspan="2" style="width:42%; vertical-align:top; text-align:center;">
+                            <div style="font-weight:700; margin-bottom:8px;">@(IsDv ? "އޮފީހުގެ ތައްގަނޑު:" : "Official Stamp:")</div>
+                            <div style="height:68px;"></div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <!-- 1D. Appointee Receipt Acknowledgement -->
+            <table class="jol-table">
+                <thead>
+                    <tr><th colspan="4" class="jol-subhdr">@(IsDv ? "ވަޒީފާ ހުށަހެޅޭ ފަރާތުން ފުރިހަމަކުރާބައި:" : "Acknowledgement of Receipt by Candidate:")</th></tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td colspan="4" style="padding:7px 9px;">
+                            @(IsDv
+                                ? "މަތީގައިވާ ހުށަހެޅުމުގެ މަޢުލޫމާތުތައް ބަލައި ލިބިގަތީމެވެ. އަދި ފޯމު ލިބޭތާ 72 ގަޑިއިރުގެ ތެރޭގައި މި ވަޒީފާއާ މެދު ނިންމާގޮތް ބަޔާންކޮށް ފުރިހަމަކޮށްފައިވާ މި ފޯމު އިދާރާއަށް ހުށަހަޅާނެކަމަށާއި، އެ މުއްދަތުގައި ހުށަނާޅައިފި ނަމަ، މި ހުށަހެޅުން ބާޠިލުކޮށް މި ވަޒީފާ ހަމަޖައްސައިނުދިނުމަށް އަޅުގަނޑު އިޢުތިރާޟް ނުކުރާނެކަމަށް އިޤްރާރުވަމެވެ."
+                                : "I acknowledge receipt of this Job Offer Letter and agree to submit my completed decision form within 72 hours; failing which I have no objection to the cancellation of this offer.")
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><strong>@(IsDv ? "ނަން:" : "Name:")</strong> @(accepted ? detail.ApplicantName : "")</td>
+                        <td>
+                            <strong>@(IsDv ? "ސޮއި:" : "Signature:")</strong>
+                            @if (!string.IsNullOrWhiteSpace(detail.AppointeeSignatureDataUrl))
+                            {
+                                <img src="@detail.AppointeeSignatureDataUrl" alt="Candidate Signature" style="max-height:28px; max-width:110px; object-fit:contain; display:inline-block; vertical-align:middle;" />
+                            }
+                        </td>
+                        <td><strong>@(IsDv ? "ތާރީޚު:" : "Date:")</strong> @acceptDateText</td>
+                        <td><strong>@(IsDv ? "ގަޑި:" : "Time:")</strong> @acceptTimeText</td>
+                    </tr>
+                </tbody>
+            </table>
+        </article>
+
+        <!-- PAGE 2: SECTION 2 — CANDIDATE DECISION ON JOB OFFER -->
+        <article class="jol-page jol-page-break @(IsDv ? "jol-rtl" : "jol-ltr")" dir="@(IsDv ? "rtl" : "ltr")">
+            <h2 class="jol-section-title">@(IsDv ? "2. ވަޒީފާއާ މެދު ނިންމާގޮތް ބަޔާންކުރާ ބައި" : "2. Candidate's Decision on Job Offer")</h2>
+
+            <!-- 2A. Acceptance / Decline Decision -->
+            <table class="jol-table">
+                <thead>
+                    <tr><th colspan="4" class="jol-subhdr">@(IsDv ? "ވަޒީފާއަށް ހޮވާލެވުނު ފަރާތުން ހުށަހަޅާފައިވާ ވަޒީފާ ޤަބޫލުކުރާނަމަ ނުވަތަ ޤަބޫލުނުކުރާނަމަ، އެކަން ބަޔާންކުރުން:" : "State whether you accept or decline the offered position:")</th></tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td style="width:6%; text-align:center; font-weight:700; font-size:12pt;">@(accepted ? "✓" : "")</td>
+                        <td style="width:44%;">@(IsDv ? "ހުށަހެޅިފައިވާ ވަޒީފާ ޤަބޫލުކުރަމެވެ." : "I accept the offered position.")</td>
+                        <td style="width:6%; text-align:center; font-weight:700; font-size:12pt;">@(declined ? "✓" : "")</td>
+                        <td style="width:44%;">@(IsDv ? "ހުށަހެޅިފައިވާ ވަޒީފާ ޤަބޫލެއްނުކުރަމެވެ." : "I decline the offered position.")</td>
+                    </tr>
+                    <tr>
+                        <td colspan="4" style="height:54px; vertical-align:top;">
+                            <strong>@(IsDv ? "ވަޒީފާ ޤަބޫލުނުކުރާނަމަ، ސަބަބު:" : "If declining, state reason:")</strong>
+                            <div>@(declined ? (parsedNotes ?? "") : "")</div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <!-- 2B. Current Employment & Joining Date -->
+            <table class="jol-table">
+                <thead>
+                    <tr><th colspan="2" class="jol-subhdr">@(IsDv ? "ތިޔަ ފަރާތުން މި ވަޒީފާ ޤަބޫލުކުރާނަމަ ތިރީގައިވާ މަޢުލޫމާތު ފުރިހަމަކުރައްވާށެވެ:" : "If accepting this offer, please complete the following:")</th></tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="jol-lbl" style="width:48%;">@(IsDv ? "މިހާރު އެއްވެސް ވަޒީފާއެއް އަދާކުރައްވަންތޯ؟" : "Are you currently employed?")</td>
+                        <td>
+                            @(IsDv ? "އާން" : "Yes") <span class="jol-check">@(accepted && parsedEmployed == true ? "✓" : "")</span>
+                            &nbsp;&nbsp;
+                            @(IsDv ? "ނޫން" : "No") <span class="jol-check">@(accepted && parsedEmployed == false ? "✓" : "")</span>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="jol-lbl">@(IsDv ? "ވަޒީފާއަށް ޚިދުމަތަށް ނުކުމެވޭނެ ތާރީޚު:" : "Confirmed Joining / Reporting Date:")</td>
+                        <td style="font-weight:700;">@(parsedJoiningDate ?? "")</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <!-- 2C. Current Employer Details -->
+            <table class="jol-table">
+                <thead>
+                    <tr><th colspan="2" class="jol-subhdr">@(IsDv ? "މިހާރު ވަޒީފާއެއް އަދާކުރައްވާނަމަ މި ބައި ފުރިހަމަކުރައްވާށެވެ:" : "Complete this section if currently employed:")</th></tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="jol-lbl" style="width:48%;">@(IsDv ? "ވަޒީފާ އަދާކުރާތަން:" : "Current Workplace / Employer:")</td>
+                        <td>@(parsedCurrentEmployer ?? "")</td>
+                    </tr>
+                    <tr>
+                        <td class="jol-lbl">@(IsDv ? "ވަޒީފާދޭތަނަށް ލިޔުމުން ނޯޓިސްދޭންޖެހޭތޯ؟" : "Are you required to give written notice?")</td>
+                        <td>
+                            @(IsDv ? "އާން" : "Yes") <span class="jol-check">@(accepted && parsedEmployed == true && parsedRequiresNotice == true ? "✓" : "")</span>
+                            &nbsp;&nbsp;
+                            @(IsDv ? "ނޫން" : "No") <span class="jol-check">@(accepted && parsedEmployed == true && parsedRequiresNotice == false ? "✓" : "")</span>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="jol-lbl">@(IsDv ? "ދޭންޖެހޭ ނޯޓިސްގެ މުއްދަތު:" : "Required Notice Period:")</td>
+                        <td>@(parsedNoticePeriod ?? "")</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <!-- 2D. Candidate Declaration & Signature -->
+            <table class="jol-table">
+                <thead>
+                    <tr><th colspan="4" class="jol-subhdr">@(IsDv ? "ފޯމު ފުރިހަމަކުރި ފަރާތުގެ އިޤްރާރު:" : "Candidate's Declaration:")</th></tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td colspan="4" style="padding:7px 9px;">
+                            @(IsDv
+                                ? "މަތީގައިވާ މަޢުލޫމާތުތަކަކީ ތެދު މަޢުލޫމާތުކަމަށާއި، މި ވަޒީފާ އަދާކުރުމަށް ހަމަޖެހިފައިވާ ތާރީޚަށް ޚިދުމަތަށް ނުކުތުމަށް އިޤްރާރުވަމެވެ. އަދި ވަޒީފާ ހަމަޖައްސައިދިނުމަށްފަހު، ވަޒީފާއަށް ނުނިކުމެފިނަމަ ނުވަތަ މި ވަޒީފާ ޤަބޫލުނުކުރާކަމަށް ނިންމައިފިނަމަ، ދިވެހި ސިވިލް ސަރވިސްގެ ޤަވާޢިދުގައިވާ ގޮތުގެމަތިން ޢަމަލުކުރުމަށް އިޢުތިރާޟް ނުކުރާނެކަމަށް އިޤްރާރުވަމެވެ."
+                                : "I declare that the information provided above is true and accurate, and I undertake to report for duty on the confirmed joining date. I acknowledge that failure to report for duty or withdrawal after acceptance will be handled in accordance with Civil Service Regulations.")
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><strong>@(IsDv ? "ނަން:" : "Name:")</strong> @(accepted ? detail.ApplicantName : "")</td>
+                        <td>
+                            <strong>@(IsDv ? "ސޮއި:" : "Signature:")</strong>
+                            @if (!string.IsNullOrWhiteSpace(detail.AppointeeSignatureDataUrl))
+                            {
+                                <img src="@detail.AppointeeSignatureDataUrl" alt="Candidate Signature" style="max-height:28px; max-width:110px; object-fit:contain; display:inline-block; vertical-align:middle;" />
+                            }
+                        </td>
+                        <td><strong>@(IsDv ? "ތާރީޚު:" : "Date:")</strong> @acceptDateText</td>
+                        <td><strong>@(IsDv ? "ގަޑި:" : "Time:")</strong> @acceptTimeText</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <!-- 2E. Current Employer Verification (Civil Service) -->
+            <table class="jol-table">
+                <thead>
+                    <tr><th colspan="4" class="jol-subhdr">@(IsDv ? "މިހާރު ވަޒީފާ އަދާކުރާ އިދާރާއިން މި ބައި ފުރިހަމަކުރައްވާށެވެ (މިބައި ފުރިހަމަކުރަންޖެހޭނީ ސިވިލް ސަރވިސް އިދާރާއެއްގައި ވަޒީފާ އަދާކުރާނަމަ):" : "To be completed by Current Employer (applicable to Civil Service employees):")</th></tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="jol-lbl" colspan="1">@(IsDv ? "ވަޒީފާ އަދާކުރާތަން:" : "Current Agency:")</td>
+                        <td colspan="3"></td>
+                    </tr>
+                    <tr>
+                        <td class="jol-lbl" colspan="2">@(IsDv ? "މި މުވައްޒަފު ޚިދުމަތުން ވަކިވުމަށް ނޯޓިސްދޭންޖެހޭތޯ؟" : "Is this employee required to serve a notice period?")</td>
+                        <td colspan="2">@(IsDv ? "އާން" : "Yes") <span class="jol-check"></span> &nbsp;&nbsp; @(IsDv ? "ނޫން" : "No") <span class="jol-check"></span></td>
+                    </tr>
+                    <tr>
+                        <td class="jol-lbl" colspan="2">@(IsDv ? "ނޯޓިސްގެ މުއްދަތުގެ ގޮތުގައި އިދާރާއިން ދީފައިވާ މުއްދަތު:" : "Notice Period Granted:")</td>
+                        <td colspan="2">@(IsDv ? "( ............................ އިން ............................ އަށް )" : "( From ............................ to ............................ )")</td>
+                    </tr>
+                    <tr>
+                        <td colspan="4">@(IsDv ? "ނޯޓިސްގެ މުއްދަތުގެ ތެރޭގައި މުވައްޒަފުގެ \"ވަކިކުރުމުގެ ލިޔުން\" ދޫކުރެވޭނެއެވެ." : "Release letter will be issued within the notice period.") <span class="jol-check"></span></td>
+                    </tr>
+                    <tr>
+                        <td colspan="4" style="font-weight:700;">@(IsDv ? "މިބައި ފުރިހަމަކުރި ޤާނޫނީ ފަރާތް:" : "Completed by Authorized Officer:")</td>
+                    </tr>
+                    <tr>
+                        <td><strong>@(IsDv ? "ނަން:" : "Name:")</strong></td>
+                        <td><strong>@(IsDv ? "ސޮއި:" : "Signature:")</strong></td>
+                        <td><strong>@(IsDv ? "ތާރީޚު:" : "Date:")</strong></td>
+                        <td><strong>@(IsDv ? "ގަޑި:" : "Time:")</strong></td>
+                    </tr>
+                </tbody>
+            </table>
+
+            @if (!string.IsNullOrWhiteSpace(primaryQrCode))
+            {
+                <HRM.Components.Shared.DocumentQrVerificationBar VerificationCode="@primaryQrCode" IsDhivehi="IsDv" Compact="true" />
+            }
+        </article>
+    }
+
+    <HRM.Components.Shared.SignaturePinModal IsOpen="showAgencyPinModal"
+                                             SlotLabel="Agency Issuer (Job Offer Letter)"
+                                             OnConfirmed="SignAgencyIssuerAsync"
+                                             OnCancelled="() => showAgencyPinModal = false" />
+
+    @if (showAcceptanceModal && detail is not null)
+    {
+        <OfferLetterAcceptanceModal IsOpen="true"
+                                    OfferId="@detail.OfferId"
+                                    VacancyReference="@detail.AnnouncementNumber"
+                                    Status="@detail.Status"
+                                    TermsSnapshotJson="@detail.TermsSnapshotJson"
+                                    PositionName="@detail.PositionTitle"
+                                    OrganisationName="@detail.AgencyName"
+                                    ApplicantName="@detail.ApplicantName"
+                                    OfferedAtUtc="@detail.OfferedAtUtc"
+                                    AcceptedAtUtc="@detail.AcceptedAtUtc"
+                                    AppointeeSignatureDataUrl="@detail.AppointeeSignatureDataUrl"
+                                    SignatureVerificationCode="@detail.AppointeeVerificationCode"
+                                    ReadOnly="false"
+                                    OnSubmitted="HandleAppointeeSubmittedAsync"
+                                    OnClosed="() => showAcceptanceModal = false" />
+    }
+</div>
+
+@code {
+    [Parameter] public int OfferId { get; set; }
+    [SupplyParameterFromQuery(Name = "lang")] public string? LangQuery { get; set; }
+
+    private JobOfferLetterDetailDto? detail;
+    private string lang = "dv";
+    private bool loading = true, signBusy, showAgencyPinModal, showAcceptanceModal;
+    private string? error, signMessage;
+
+    private string? parsedPosition, parsedSalary, parsedPositionAllowance, parsedAttendanceAllowance, parsedJoiningDate, parsedCurrentEmployer, parsedNoticePeriod, parsedNotes;
+    private bool? parsedEmployed, parsedRequiresNotice;
+
+    private bool IsDv => string.Equals(lang, "dv", StringComparison.OrdinalIgnoreCase);
+    private bool IsAdminRoute => new Uri(Navigation.Uri).AbsolutePath.StartsWith("/admin/", StringComparison.OrdinalIgnoreCase);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!string.IsNullOrWhiteSpace(LangQuery))
+            lang = LangQuery.Trim().Equals("en", StringComparison.OrdinalIgnoreCase) ? "en" : "dv";
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        loading = true;
+        error = null;
+        try
+        {
+            detail = await Api.GetOfferLetterDetailAsync(OfferId);
+            if (detail is null)
+            {
+                error = "Job Offer Letter not found or access denied.";
+                return;
+            }
+            ParseTerms(detail.TermsSnapshotJson);
+        }
+        catch (HttpRequestException)
+        {
+            error = "Could not load Job Offer Letter.";
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private void ParseTerms(string? json)
+    {
+        parsedPosition = parsedSalary = parsedPositionAllowance = parsedAttendanceAllowance = parsedJoiningDate = parsedCurrentEmployer = parsedNoticePeriod = parsedNotes = null;
+        parsedEmployed = parsedRequiresNotice = null;
+        if (string.IsNullOrWhiteSpace(json)) return;
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+            if (root.ValueKind != JsonValueKind.Object) return;
+            if (root.TryGetProperty("Position", out var pos)) parsedPosition = pos.GetString();
+            if (root.TryGetProperty("BasicSalary", out var sal) && sal.TryGetDecimal(out var salVal)) parsedSalary = $"MVR {salVal:N2}";
+            if (root.TryGetProperty("PositionAllowance", out var pa)) parsedPositionAllowance = pa.GetString();
+            if (root.TryGetProperty("AttendanceAllowance", out var aa)) parsedAttendanceAllowance = aa.GetString();
+            if (root.TryGetProperty("AcceptanceForm", out var af) && af.ValueKind == JsonValueKind.Object)
+            {
+                if (af.TryGetProperty("ConfirmedJoiningDate", out var cj)) parsedJoiningDate = cj.GetString();
+                if (af.TryGetProperty("IsCurrentlyEmployed", out var ce) && ce.ValueKind is JsonValueKind.True or JsonValueKind.False) parsedEmployed = ce.GetBoolean();
+                if (af.TryGetProperty("CurrentEmployer", out var emp)) parsedCurrentEmployer = emp.GetString();
+                if (af.TryGetProperty("RequiresWrittenNotice", out var rn) && rn.ValueKind is JsonValueKind.True or JsonValueKind.False) parsedRequiresNotice = rn.GetBoolean();
+                if (af.TryGetProperty("NoticePeriod", out var np)) parsedNoticePeriod = np.GetString();
+                if (af.TryGetProperty("AppointeeNotes", out var an)) parsedNotes = an.GetString();
+            }
+        }
+        catch { }
+    }
+
+    private async Task SignAgencyIssuerAsync(string verifiedPin)
+    {
+        showAgencyPinModal = false;
+        if (signBusy || detail is null) return;
+        signBusy = true;
+        signMessage = null;
+        try
+        {
+            var canonical = JsonSerializer.Serialize(new { detail.OfferId, detail.AnnouncementNumber, detail.ApplicantName, detail.PositionTitle, detail.TermsSnapshotJson });
+            var res = await SignatureApi.SignDocumentAsync(new SignDocumentInput(
+                "RecruitmentOffer",
+                detail.OfferId.ToString(),
+                "AgencyIssuer",
+                "Agency Issuer",
+                canonical,
+                Pin: verifiedPin));
+            signMessage = res.Message;
+            if (res.Success) await LoadAsync();
+        }
+        catch
+        {
+            signMessage = "Could not apply agency signature.";
+        }
+        finally
+        {
+            signBusy = false;
+        }
+    }
+
+    private async Task HandleAppointeeSubmittedAsync()
+    {
+        showAcceptanceModal = false;
+        signMessage = "Job Offer Acceptance Form signed and submitted successfully.";
+        await LoadAsync();
+    }
+
+    private async Task PrintAsync() => await JS.InvokeVoidAsync("window.print");
+}

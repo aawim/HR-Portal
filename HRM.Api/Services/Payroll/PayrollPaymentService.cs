@@ -25,6 +25,8 @@ public sealed class PayrollPaymentService : IPayrollPaymentService
 
     public async Task<PaymentBatchDto> PreparePaymentBatchAsync(int organisationId, int payrollRunId, string bankCode, string formatCode, int userId)
     {
+        if (formatCode is not ("BML_BULK" or "GENERIC_CSV"))
+            throw new InvalidOperationException("This bank upload format has not been verified. Use the payment review CSV and the bank's current approved template.");
         await using var db = await _factory.CreateDbContextAsync();
         var run = await db.PayrollRuns
             .Include(r => r.Employees)
@@ -58,13 +60,15 @@ public sealed class PayrollPaymentService : IPayrollPaymentService
         var employees = run.Employees.Where(e => e.NetSalary > 0).ToList();
         var individualIds = employees.Select(e => e.IndividualId).ToList();
 
-        var compensations = await db.EmployeeCompensations
-            .Where(c => c.OrganisationId == organisationId && individualIds.Contains(c.IndividualId) && c.IsActive)
-            .ToDictionaryAsync(c => c.IndividualId);
+        var frozenInputs = await db.PayrollInputSnapshots.AsNoTracking()
+            .Where(s => s.PayrollRunId == payrollRunId).ToListAsync();
+        var compensations = frozenInputs.Select(s => JsonSerializer.Deserialize<EmployeePayrollInputItem>(s.SnapshotJson))
+            .Where(s => s != null).ToDictionary(s => s!.IndividualId, s => s!);
 
         var statutoryPolicy = await PayrollStatutoryPolicyLoader.LoadAsync(db, organisationId);
 
-        if (statutoryPolicy.RequireBankAccountForPayment)
+        // Payment routing must agree with the approved snapshot, even if the live staff record changes.
+        if (employees.Count > 0)
         {
             var missingBank = employees
                 .Where(emp => string.IsNullOrWhiteSpace(compensations.GetValueOrDefault(emp.IndividualId)?.BankAccountNumber))
@@ -97,14 +101,17 @@ public sealed class PayrollPaymentService : IPayrollPaymentService
         {
             var comp = compensations.GetValueOrDefault(emp.IndividualId);
             string accNum = comp?.BankAccountNumber?.Trim() ?? string.Empty;
-            string bankName = string.IsNullOrWhiteSpace(comp?.BankName) ? "Bank of Maldives" : comp!.BankName.Trim();
-            string branch = string.IsNullOrWhiteSpace(comp?.BankBranch) ? "Male" : comp!.BankBranch.Trim();
+            string bankName = comp?.BankName.Trim() ?? "";
+            string branch = comp?.BankBranch.Trim() ?? "";
+            if (string.IsNullOrWhiteSpace(bankName) || string.IsNullOrWhiteSpace(comp?.AccountHolderName))
+                throw new InvalidOperationException($"Verified bank name and account holder are required for {emp.EmployeeName}.");
+            if (formatCode == "BML_BULK") ValidateBmlBeneficiary(comp!);
 
             batch.Transactions.Add(new PaymentTransaction
             {
                 PayrollEmployeeId = emp.PayrollEmployeeId,
                 IndividualId = emp.IndividualId,
-                EmployeeName = emp.EmployeeName,
+                EmployeeName = comp!.AccountHolderName,
                 BankAccountNumber = accNum,
                 BankName = bankName,
                 BankBranch = branch,
@@ -157,59 +164,34 @@ public sealed class PayrollPaymentService : IPayrollPaymentService
 
         if (batch == null) throw new InvalidOperationException("Payment batch not found.");
 
-        var statutoryPolicy = await PayrollStatutoryPolicyLoader.LoadAsync(db, organisationId);
-        string currency = statutoryPolicy.DefaultCurrencyCode;
+        if (batch.FormatCode is not ("BML_BULK" or "GENERIC_CSV"))
+            throw new InvalidOperationException("Unverified bank format. Use a payment review CSV and the bank's approved template.");
+        if (batch.Status is PaymentBatchStatus.Reconciled or PaymentBatchStatus.Submitted or PaymentBatchStatus.PartiallyPaid)
+            throw new InvalidOperationException("Submitted or reconciled payment batches cannot be exported again.");
+        if (batch.Status == PaymentBatchStatus.Exported && batch.ExportedContent != null) return batch.ExportedContent;
+        var frozen = await db.PayrollInputSnapshots.AsNoTracking().Where(s => s.PayrollRunId == batch.PayrollRunId).ToListAsync();
+        var inputs = frozen.Select(s => JsonSerializer.Deserialize<EmployeePayrollInputItem>(s.SnapshotJson))
+            .Where(s => s != null).ToDictionary(s => s!.IndividualId, s => s!);
         var sb = new StringBuilder();
-        if (string.Equals(batch.FormatCode, "MMA_FAVARA_XML", StringComparison.OrdinalIgnoreCase))
+        // Public BML Internet Banking Bulk Transfers template, checked 2026-11-26.
+        sb.AppendLine(batch.FormatCode == "BML_BULK"
+            ? "id_card,full_name,credit_account,credit_amount,bank"
+            : "PaymentReference,AccountHolderName,BankAccountNumber,BankName,BankBranch,Amount,Currency,Status");
+        foreach (var tx in batch.Transactions.OrderBy(t => t.IndividualId))
         {
-            sb.AppendLine("<?xml version=\"1.0\" encoding=\"UTF-8\"?>");
-            sb.AppendLine("<Document xmlns=\"urn:iso:std:iso:20022:tech:xsd:pain.001.001.03\">");
-            sb.AppendLine("  <CstmrCdtTrfInitn>");
-            sb.AppendLine("    <GrpHdr>");
-            sb.AppendLine($"      <MsgId>{System.Security.SecurityElement.Escape(batch.BatchReference)}</MsgId>");
-            sb.AppendLine($"      <CreDtTm>{DateTime.UtcNow:yyyy-MM-ddTHH:mm:ssZ}</CreDtTm>");
-            sb.AppendLine($"      <NbOfTxs>{batch.Transactions.Count}</NbOfTxs>");
-            sb.AppendLine($"      <CtrlSum>{batch.TotalAmount:F2}</CtrlSum>");
-            sb.AppendLine("    </GrpHdr>");
-            sb.AppendLine("    <PmtInf>");
-            sb.AppendLine($"      <PmtInfId>{System.Security.SecurityElement.Escape(batch.BatchReference)}</PmtInfId>");
-            sb.AppendLine("      <PmtMtd>TRF</PmtMtd>");
-            foreach (var tx in batch.Transactions)
+            if (!inputs.TryGetValue(tx.IndividualId, out var input))
+                throw new InvalidOperationException("Approved payroll bank details are missing.");
+            if (input.FrozenPolicy?.DefaultCurrencyCode is not (null or "MVR"))
+                throw new InvalidOperationException("Foreign-currency bank exports require an approved currency mapping.");
+            if (batch.FormatCode == "BML_BULK")
             {
-                sb.AppendLine("      <CdtTrfTxInf>");
-                sb.AppendLine($"        <PmtId><EndToEndId>{System.Security.SecurityElement.Escape(tx.PaymentReference)}</EndToEndId></PmtId>");
-                sb.AppendLine($"        <Amt><InstdAmt Ccy=\"{System.Security.SecurityElement.Escape(currency)}\">{tx.Amount:F2}</InstdAmt></Amt>");
-                sb.AppendLine($"        <Cdtr><Nm>{System.Security.SecurityElement.Escape(tx.EmployeeName)}</Nm></Cdtr>");
-                sb.AppendLine($"        <CdtrAcct><Id><Othr><Id>{System.Security.SecurityElement.Escape(tx.BankAccountNumber)}</Id></Othr></Id></CdtrAcct>");
-                sb.AppendLine("      </CdtTrfTxInf>");
+                ValidateBmlBeneficiary(input);
+                if (tx.BankAccountNumber != input.BankAccountNumber.Trim())
+                    throw new InvalidOperationException("Payment account differs from the approved payroll snapshot.");
+                sb.AppendLine(PayrollReportValues.Csv(input.BankIdentityNumber, tx.EmployeeName, tx.BankAccountNumber, tx.Amount, "BML"));
             }
-            sb.AppendLine("    </PmtInf>");
-            sb.AppendLine("  </CstmrCdtTrfInitn>");
-            sb.AppendLine("</Document>");
-        }
-        else if (string.Equals(batch.FormatCode, "BML_BULK", StringComparison.OrdinalIgnoreCase))
-        {
-            sb.AppendLine("BeneficiaryAccount,BeneficiaryName,Amount,Currency,Reference,BankBranch");
-            foreach (var tx in batch.Transactions)
-            {
-                sb.AppendLine($"\"{tx.BankAccountNumber}\",\"{tx.EmployeeName}\",{tx.Amount:F2},{currency},\"{tx.PaymentReference}\",\"{tx.BankBranch}\"");
-            }
-        }
-        else if (string.Equals(batch.FormatCode, "MIB_BULK", StringComparison.OrdinalIgnoreCase))
-        {
-            sb.AppendLine("AccountNumber,AccountTitle,TransferAmount,CurrencyCode,Narration");
-            foreach (var tx in batch.Transactions)
-            {
-                sb.AppendLine($"\"{tx.BankAccountNumber}\",\"{tx.EmployeeName}\",{tx.Amount:F2},{currency},\"{tx.PaymentReference}\"");
-            }
-        }
-        else
-        {
-            sb.AppendLine("PaymentReference,EmployeeName,BankAccountNumber,BankName,BankBranch,Amount,Currency,Status");
-            foreach (var tx in batch.Transactions)
-            {
-                sb.AppendLine($"\"{tx.PaymentReference}\",\"{tx.EmployeeName}\",\"{tx.BankAccountNumber}\",\"{tx.BankName}\",\"{tx.BankBranch}\",{tx.Amount:F2},{currency},\"{tx.Status}\"");
-            }
+            else sb.AppendLine(PayrollReportValues.Csv(tx.PaymentReference, tx.EmployeeName, tx.BankAccountNumber,
+                tx.BankName, tx.BankBranch, tx.Amount, "MVR", tx.Status));
         }
 
         string content = sb.ToString();
@@ -228,6 +210,17 @@ public sealed class PayrollPaymentService : IPayrollPaymentService
 
         await db.SaveChangesAsync();
         return content;
+    }
+
+    public static void ValidateBmlBeneficiary(EmployeePayrollInputItem input)
+    {
+        if (!(string.Equals(input.BankName.Trim(), "BML", StringComparison.OrdinalIgnoreCase) ||
+              string.Equals(input.BankName.Trim(), "Bank of Maldives", StringComparison.OrdinalIgnoreCase)))
+            throw new InvalidOperationException("This BML template supports BML credit accounts. Other banks require their verified bank code/template.");
+        if (input.BankAccountNumber.Trim().Length != 13 || !input.BankAccountNumber.Trim().All(char.IsAsciiDigit))
+            throw new InvalidOperationException("BML account numbers must contain exactly 13 digits.");
+        if (string.IsNullOrWhiteSpace(input.BankIdentityNumber) || !input.BankIdentityNumber.All(char.IsAsciiLetterOrDigit))
+            throw new InvalidOperationException("BML requires the beneficiary's alphanumeric national ID or passport number.");
     }
 
     public async Task<bool> ReconcilePaymentBatchAsync(int paymentBatchId, int organisationId, int userId, string reference)

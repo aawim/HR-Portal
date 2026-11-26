@@ -51,7 +51,40 @@ public sealed class RecruitmentApplicantWorkspaceController(IDbContextFactory<Hr
             }
             return new MyRecruitmentApplicationRow(a.Reference,a.VacancyReference,a.Status,a.SubmittedAtUtc,a.RecruitmentVacancyId,comment,deadline,screenedVacancies.Contains(a.RecruitmentVacancyId));
         }).ToList();
-        var mine=await(from o in db.RecruitmentOffers join m in db.RecruitmentMeritResults on o.RecruitmentMeritResultId equals m.Id join a in db.RecruitmentApplications on m.RecruitmentApplicationId equals a.Id join person in db.RecruitmentApplicants on a.RecruitmentApplicantId equals person.Id join v in db.RecruitmentVacancies on a.RecruitmentVacancyId equals v.Id where person.EfaasIdNumber==identity select new MyRecruitmentOfferRow(o.Id,v.Reference,o.Status,o.TermsSnapshotJson)).ToListAsync(ct);
+        var rawOffers=await(from o in db.RecruitmentOffers.AsNoTracking()
+            join m in db.RecruitmentMeritResults.AsNoTracking() on o.RecruitmentMeritResultId equals m.Id
+            join a in db.RecruitmentApplications.AsNoTracking() on m.RecruitmentApplicationId equals a.Id
+            join person in db.RecruitmentApplicants.AsNoTracking() on a.RecruitmentApplicantId equals person.Id
+            join v in db.RecruitmentVacancies.AsNoTracking() on a.RecruitmentVacancyId equals v.Id
+            join org in db.Organisations.AsNoTracking() on v.OrganisationId equals org.BusinessEntityID into orgs
+            from org in orgs.DefaultIfEmpty()
+            join pm in db.PositionMatrices.AsNoTracking() on v.PositionMatrixId equals pm.PositionMatrixId into pms
+            from pm in pms.DefaultIfEmpty()
+            join jt in db.FrameworkJobTitles.AsNoTracking() on pm.JobTitleId equals jt.JobTitleId into jts
+            from jt in jts.DefaultIfEmpty()
+            join jm in db.FrameworkJobMatrices.AsNoTracking() on pm.JobMatrixId equals jm.JobMatrixId into jms
+            from jm in jms.DefaultIfEmpty()
+            where person.EfaasIdNumber==identity
+            orderby o.OfferedAtUtc descending
+            select new { o.Id, VacancyReference=v.Reference, o.Status, o.TermsSnapshotJson, PositionName=jt!=null?jt.Name:(jm!=null?jm.Name:null), OrganisationName=org!=null?org.OrganisationName:null, o.OfferedAtUtc, o.AcceptedAtUtc }).ToListAsync(ct);
+
+        var offerIds=rawOffers.Select(x=>x.Id.ToString()).ToList();
+        var offerSigs=new Dictionary<string,(string Img,string Code)>();
+        if(offerIds.Count>0)
+        {
+            await DocumentSignaturesController.EnsureTablesPublicAsync(db,ct);
+            var sigs=await db.DocumentSignatures.AsNoTracking()
+                .Where(s=>s.DocumentType=="RecruitmentOffer"&&s.SlotKey=="AppointeeAcceptance"&&s.Status=="Signed"&&offerIds.Contains(s.DocumentId))
+                .Select(s=>new{s.DocumentId,s.SignatureImageDataUrl,s.VerificationCode})
+                .ToListAsync(ct);
+            foreach(var s in sigs) offerSigs[s.DocumentId]=(s.SignatureImageDataUrl,s.VerificationCode);
+        }
+
+        var mine=rawOffers.Select(o=>
+        {
+            offerSigs.TryGetValue(o.Id.ToString(),out var sig);
+            return new MyRecruitmentOfferRow(o.Id,o.VacancyReference,o.Status,o.TermsSnapshotJson,o.PositionName,o.OrganisationName,o.OfferedAtUtc,o.AcceptedAtUtc,sig.Img,sig.Code);
+        }).ToList();
         var rawResults=await(from a in db.RecruitmentApplications.AsNoTracking()
             join person in db.RecruitmentApplicants.AsNoTracking() on a.RecruitmentApplicantId equals person.Id
             join p in db.RecruitmentResultPublications.AsNoTracking() on a.RecruitmentVacancyId equals p.RecruitmentVacancyId
@@ -162,7 +195,7 @@ public sealed class RecruitmentApplicantWorkspaceController(IDbContextFactory<Hr
     [HttpPost("objections")]
     public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> SubmitObjection([FromBody]SubmitRecruitmentObjectionInput input,CancellationToken ct)=>Ok(await resultsService.SubmitObjectionAsync(input,ct));
     [HttpPost("offers/{id:int}/accept")]
-    public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> Accept(int id,CancellationToken ct)=>Ok(await offers.AcceptMyOfferAsync(id,ct));
+    public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> Accept(int id,[FromBody]AcceptRecruitmentOfferInput? input,CancellationToken ct)=>Ok(await offers.AcceptMyOfferAsync(id,input,ct));
     [HttpPost("offers/{id:int}/decline")]
     public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> Decline(int id,[FromBody]DeclineRecruitmentOfferInput? input,CancellationToken ct)=>Ok(await offers.DeclineMyOfferAsync(id,input?.Reason,ct));
     [HttpPost("apply")]

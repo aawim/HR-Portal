@@ -91,6 +91,14 @@
                             Probation Period
                             <input class="@InputClass" maxlength="100" @bind="probationPeriod" @bind:event="oninput" placeholder="e.g. 3 months" />
                         </label>
+                        <label class="block text-xs font-medium text-slate-700">
+                            Position Allowance
+                            <input class="@InputClass" maxlength="100" @bind="positionAllowance" @bind:event="oninput" placeholder="e.g. MVR 12,825/-" />
+                        </label>
+                        <label class="block text-xs font-medium text-slate-700">
+                            Attendance Allowance
+                            <input class="@InputClass" maxlength="100" @bind="attendanceAllowance" @bind:event="oninput" placeholder="e.g. MVR 345/- per day" />
+                        </label>
                     </div>
 
                     <label class="block text-xs font-medium text-slate-700">
@@ -150,11 +158,37 @@
                                         </div>
                                     </div>
                                     <div class="flex flex-wrap items-center gap-1.5">
-                                        <button type="button"
-                                                class="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50"
-                                                @onclick="() => expandedOfferId = isExpanded ? null : o.Id">
-                                            @(isExpanded ? "Hide Terms" : "View Terms")
-                                        </button>
+                                        <a href="@($"/admin/hr/recruitment/offer-letter/{o.Id}?lang=dv")"
+                                           target="_blank"
+                                           rel="noopener"
+                                           class="inline-flex items-center gap-1 rounded-lg border border-teal-200 bg-white px-2 py-1 text-[11px] font-semibold text-teal-700 hover:bg-teal-50">
+                                            <i class="bi bi-printer" aria-hidden="true"></i>
+                                            <span>ފޯމު (DV)</span>
+                                        </a>
+                                        <a href="@($"/admin/hr/recruitment/offer-letter/{o.Id}?lang=en")"
+                                           target="_blank"
+                                           rel="noopener"
+                                           class="inline-flex items-center gap-1 rounded-lg border border-blue-200 bg-white px-2 py-1 text-[11px] font-semibold text-blue-700 hover:bg-blue-50">
+                                            <i class="bi bi-printer" aria-hidden="true"></i>
+                                            <span>Form (EN)</span>
+                                        </a>
+                                        @if (o.Status is "Accepted" or "OnboardingSubmitted")
+                                        {
+                                            <button type="button"
+                                                    class="inline-flex items-center gap-1 rounded-lg border border-teal-200 bg-teal-50 px-2.5 py-1 text-[11px] font-semibold text-teal-800 hover:bg-teal-100"
+                                                    @onclick="() => viewingSignedOffer = o">
+                                                <i class="bi bi-file-earmark-check" aria-hidden="true"></i>
+                                                <span>@(o.Status == "Accepted" && !o.OnboardingRequestId.HasValue ? "Review Agreement & Decide" : "Signed Offer Form")</span>
+                                            </button>
+                                        }
+                                        else
+                                        {
+                                            <button type="button"
+                                                    class="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50"
+                                                    @onclick="() => expandedOfferId = isExpanded ? null : o.Id">
+                                                @(isExpanded ? "Hide Terms" : "View Terms")
+                                            </button>
+                                        }
                                         @if (o.OnboardingRequestId.HasValue)
                                         {
                                             <a class="inline-flex items-center gap-1 rounded-lg border border-blue-300 bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-800 hover:bg-blue-100"
@@ -219,9 +253,9 @@
 
                         <div class="grid gap-3 sm:grid-cols-2">
                             <label class="block text-xs font-medium text-slate-700">
-                                Department / Unit <span class="text-rose-600">*</span>
+                                Department <span class="text-rose-600">*</span>
                                 <select class="@InputClass" @bind="structureId">
-                                    <option value="0">-- Select approved unit --</option>
+                                    <option value="0">-- Select department --</option>
                                     @foreach (var s in workspace.Context.Structures)
                                     {
                                         <option value="@s.Id">@s.Name</option>
@@ -231,6 +265,10 @@
 
                             <label class="block text-xs font-medium text-slate-700">
                                 Job Type <span class="text-rose-600">*</span>
+                                @if (!string.IsNullOrWhiteSpace(workspace.Context.EmploymentType))
+                                {
+                                    <span class="ml-1 rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-semibold text-blue-800">Requisition: @workspace.Context.EmploymentType</span>
+                                }
                                 <select class="@InputClass" @bind="jobTypeId">
                                     <option value="0">-- Select job type --</option>
                                     @foreach (var jt in workspace.Context.JobTypes)
@@ -241,7 +279,11 @@
                             </label>
 
                             <label class="block text-xs font-medium text-slate-700">
-                                Vacant Position
+                                Position
+                                @if (!string.IsNullOrWhiteSpace(workspace.Context.PositionName))
+                                {
+                                    <span class="ml-1 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-700">@workspace.Context.PositionName</span>
+                                }
                                 <select class="@InputClass" @bind="positionId" @bind:after="OnPositionChanged">
                                     <option value="0">-- Assign later / None --</option>
                                     @foreach (var p in workspace.Context.VacantPositions)
@@ -298,16 +340,36 @@
             <button type="button" class="font-bold text-slate-500 hover:text-slate-800" @onclick="() => message = null">✕</button>
         </div>
     }
+    @if (viewingSignedOffer is not null)
+    {
+        <OfferLetterAcceptanceModal IsOpen="true"
+                                    OfferId="@viewingSignedOffer.Id"
+                                    VacancyReference="@(SelectedVacancy?.Reference ?? "")"
+                                    Status="@viewingSignedOffer.Status"
+                                    TermsSnapshotJson="@(viewingSignedOffer.TermsSnapshotJson ?? "{}")"
+                                    PositionName="@(workspace?.Context?.PositionName ?? SelectedVacancy?.PositionName)"
+                                    ApplicantName="@viewingSignedOffer.ApplicantName"
+                                    OfferedAtUtc="@viewingSignedOffer.OfferedAtUtc"
+                                    AcceptedAtUtc="@viewingSignedOffer.AcceptedAtUtc"
+                                    AppointeeSignatureDataUrl="@viewingSignedOffer.AppointeeSignatureDataUrl"
+                                    SignatureVerificationCode="@viewingSignedOffer.SignatureVerificationCode"
+                                    ReadOnly="true"
+                                    ShowHrDecisionActions="@(viewingSignedOffer.Status == "Accepted" && !viewingSignedOffer.OnboardingRequestId.HasValue)"
+                                    OnApproveForOnboarding="ApproveViewedOfferForOnboarding"
+                                    OnHrDecisionSubmitted="HandleHrDecisionSubmittedAsync"
+                                    OnClosed="() => viewingSignedOffer = null" />
+    }
 </section>
 
 @code {
     private IReadOnlyList<RecruitmentVacancyRow> vacancies = [];
     private RecruitmentOfferWorkspace? workspace;
     private RecruitmentOfferRow? selectedOffer;
+    private RecruitmentOfferRow? viewingSignedOffer;
     private int? expandedOfferId;
     private int vacancy, candidate, structureId, jobTypeId, positionId, jobMatrixStepId;
     private RecruitmentVacancyRow? SelectedVacancy => vacancies.FirstOrDefault(x => x.Id == vacancy);
-    private string terms = "", probationPeriod = "3 months", onboardingRemarks = "Recruitment offer onboarding";
+    private string terms = "", probationPeriod = "3 months", positionAllowance = "", attendanceAllowance = "", onboardingRemarks = "Recruitment offer onboarding";
     private DateTime proposedStartDate = DateTime.UtcNow.AddHours(5).Date.AddDays(14);
     private DateTime joinedDate = DateTime.UtcNow.AddHours(5).Date;
     private bool busy;
@@ -346,15 +408,45 @@
         }
     }
 
+    private void ApproveViewedOfferForOnboarding()
+    {
+        if (viewingSignedOffer is null) return;
+        var target = viewingSignedOffer;
+        viewingSignedOffer = null;
+        OpenOnboardingForm(target);
+    }
+
+    private async Task HandleHrDecisionSubmittedAsync(string msg)
+    {
+        viewingSignedOffer = null;
+        message = msg;
+        await Load();
+    }
+
     private void OpenOnboardingForm(RecruitmentOfferRow offerRow)
     {
         selectedOffer = offerRow;
         structureId = workspace?.Context?.DefaultOrganisationStructureId ?? 0;
         positionId = workspace?.Context?.DefaultPositionId ?? 0;
-        jobTypeId = workspace?.Context?.JobTypes.FirstOrDefault()?.Id ?? 0;
-        joinedDate = proposedStartDate;
+        jobTypeId = workspace?.Context?.DefaultJobTypeId ?? workspace?.Context?.JobTypes.FirstOrDefault()?.Id ?? 0;
+        joinedDate = ExtractConfirmedJoiningDate(offerRow.TermsSnapshotJson) ?? proposedStartDate;
         onboardingRemarks = $"Recruitment offer #{offerRow.Id} ({offerRow.ApplicationReference})";
         OnPositionChanged();
+    }
+
+    private static DateTime? ExtractConfirmedJoiningDate(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return null;
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            if (doc.RootElement.TryGetProperty("AcceptanceForm", out var af)
+                && af.TryGetProperty("ConfirmedJoiningDate", out var cj)
+                && DateTime.TryParse(cj.GetString(), out var dt))
+                return dt.Date;
+        }
+        catch { }
+        return null;
     }
 
     private void OnPositionChanged()
@@ -371,6 +463,8 @@
         {
             Position = workspace?.Context?.PositionName ?? SelectedVacancy?.PositionName ?? "",
             BasicSalary = workspace?.Context?.BasicSalary,
+            PositionAllowance = string.IsNullOrWhiteSpace(positionAllowance) ? null : positionAllowance.Trim(),
+            AttendanceAllowance = string.IsNullOrWhiteSpace(attendanceAllowance) ? null : attendanceAllowance.Trim(),
             EmploymentType = workspace?.Context?.EmploymentType,
             ProbationPeriod = probationPeriod.Trim(),
             ProposedStartDate = proposedStartDate.ToString("yyyy-MM-dd"),

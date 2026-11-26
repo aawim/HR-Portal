@@ -90,17 +90,15 @@ internal static class PayrollStatutoryPolicyLoader
                 UnpaidLeaveDivisorMode: string.Equals(stored.UnpaidLeaveDivisorMode, "Fixed30", StringComparison.OrdinalIgnoreCase) ? "Fixed30" : "CalendarDays",
                 RequireBankAccountForPayment: stored.RequireBankAccountForPayment,
                 DefaultCurrencyCode: string.IsNullOrWhiteSpace(stored.DefaultCurrencyCode) ? "MVR" : stored.DefaultCurrencyCode.Trim().ToUpperInvariant(),
-                TaxBrackets: brackets
+                TaxBrackets: brackets,
+                EmploymentSector: stored.EmploymentSector,
+                MinimumWageMaldiviansOnly: stored.MinimumWageMaldiviansOnly,
+                EmployeeTaxProfiles: stored.EmployeeTaxProfiles
             );
         }
-        catch
+        catch (JsonException ex)
         {
-            return defaults with
-            {
-                EmployeePensionRate = eeRate,
-                EmployerPensionRate = erRate,
-                NormalOvertimeMultiplier = normalOt
-            };
+            throw new InvalidOperationException("Payroll statutory configuration is invalid. Correct it before calculating payroll.", ex);
         }
     }
 
@@ -119,5 +117,8 @@ internal static class PayrollStatutoryPolicyLoader
         public bool RequireBankAccountForPayment { get; set; } = true;
         public string DefaultCurrencyCode { get; set; } = "MVR";
         public List<PayrollTaxBracketDto>? TaxBrackets { get; set; }
+        public string EmploymentSector { get; set; } = "CivilService";
+        public bool MinimumWageMaldiviansOnly { get; set; } = true;
+        public List<PayrollEmployeeTaxProfile>? EmployeeTaxProfiles { get; set; }
     }
 }

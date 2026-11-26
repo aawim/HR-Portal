@@ -191,7 +191,10 @@ public sealed record PayrollConfigurationDto(
     string UnpaidLeaveDivisorMode = "CalendarDays",
     bool RequireBankAccountForPayment = true,
     string DefaultCurrencyCode = "MVR",
-    List<PayrollTaxBracketDto>? TaxBrackets = null
+    List<PayrollTaxBracketDto>? TaxBrackets = null,
+    string EmploymentSector = "CivilService",
+    bool MinimumWageMaldiviansOnly = true,
+    List<PayrollEmployeeTaxProfile>? EmployeeTaxProfiles = null
 );
 
 public sealed record UpdatePayrollConfigurationInput(
@@ -213,7 +216,29 @@ public sealed record UpdatePayrollConfigurationInput(
     string UnpaidLeaveDivisorMode = "CalendarDays",
     bool RequireBankAccountForPayment = true,
     string DefaultCurrencyCode = "MVR",
-    List<PayrollTaxBracketDto>? TaxBrackets = null
+    List<PayrollTaxBracketDto>? TaxBrackets = null,
+    string EmploymentSector = "CivilService",
+    bool MinimumWageMaldiviansOnly = true,
+    List<PayrollEmployeeTaxProfile>? EmployeeTaxProfiles = null
+);
+
+// Effective-dated employee declarations/directions, stored in the existing statutory policy JSON.
+public sealed record PayrollEmployeeTaxProfile(
+    int IndividualId,
+    DateOnly EffectiveFrom,
+    DateOnly? EffectiveTo = null,
+    string TaxTreatment = "Primary",
+    string AuthorityReference = "",
+    decimal? RegularMonthlyTaxableRemuneration = null,
+    decimal? EstimatedAnnualTaxableRemuneration = null,
+    int AccountingPeriodDays = 365,
+    decimal OpeningTaxableRemuneration = 0,
+    decimal OpeningTaxWithheld = 0,
+    DateOnly? OpeningBalanceThrough = null,
+    bool ExemptionCeased = false,
+    bool VoluntaryExpatriatePension = false,
+    decimal MonthlyTaxableNonCashBenefits = 0,
+    List<PayrollTaxBracketDto>? DirectedTaxBrackets = null
 );
 
 public sealed record UpdatePayrollPeriodInput(

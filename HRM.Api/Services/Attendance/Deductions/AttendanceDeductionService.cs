@@ -71,6 +71,11 @@ public sealed class AttendanceDeductionService : IAttendanceDeductionService
             .OrderByDescending(p => p.EffectiveFrom)
             .FirstOrDefaultAsync(ct);
 
+        var payrollPolicy = await HRM.Services.Payroll.PayrollStatutoryPolicyLoader.LoadAsync(db, organisationId, workDate, ct);
+        if (payrollPolicy.EmploymentSector == "PrivateSector" &&
+            (policy == null || !policy.IsVerified || policy.PolicyCode.StartsWith("MCS", StringComparison.OrdinalIgnoreCase) ||
+             string.IsNullOrWhiteSpace(policy.LegalReference)))
+            throw new InvalidOperationException("Private-sector attendance deductions require a verified organisation policy with a contractual/legal basis. Civil-service defaults cannot be applied.");
         if (policy != null) return policy;
 
         // Default Maldives Civil Service Policy Baseline (Civil Service Reg Art 149 & 160)
@@ -79,10 +84,10 @@ public sealed class AttendanceDeductionService : IAttendanceDeductionService
             OrganisationId = organisationId,
             PolicyCode = "MCS-STD-2026",
             PolicyName = "Maldives Civil Service Standard Attendance Policy",
-            LegalReference = "Civil Service Regulation Art 149 & 160; July 2026 Amendment",
+            LegalReference = "Civil Service Regulation Art 149 & 160; confirm current circular and buffer terms before verification",
             EffectiveFrom = new DateOnly(2026, 1, 1),
             IsActive = true,
-            IsVerified = true,
+            IsVerified = false,
             SalaryDivisor = 30,
             OfficialMinutesSource = "ScheduledWorkPlan",
             DefaultDailyWorkingMinutes = 360,
@@ -157,6 +162,8 @@ public sealed class AttendanceDeductionService : IAttendanceDeductionService
         }
 
         int officialWorkingMinutes = (int)(officialFact.ScheduledEnd - officialFact.ScheduledStart).TotalMinutes;
+        if (policy.OfficialMinutesSource == "Fixed360") officialWorkingMinutes = 360;
+        if (policy.OfficialMinutesSource == "Fixed420") officialWorkingMinutes = 420;
         if (officialWorkingMinutes <= 0) officialWorkingMinutes = policy.DefaultDailyWorkingMinutes;
 
         // 3. Validation: Check Approved Leaves
@@ -233,6 +240,7 @@ public sealed class AttendanceDeductionService : IAttendanceDeductionService
             if (clockIn > scheduledStart)
             {
                 int rawLateMinutes = (int)Math.Ceiling((clockIn - scheduledStart).TotalMinutes);
+                bool bufferEligible = policy.BufferEligibilityCategory == "All" || !officialFact.IsShiftOrDuty;
 
                 // Check approved time-change explanation
                 if (approvedTimeChange != null && approvedTimeChange.Kind == "LateCheckIn")
@@ -242,7 +250,7 @@ public sealed class AttendanceDeductionService : IAttendanceDeductionService
                 }
                 // July 2026 Arrival Buffer Rule (e.g. <= 30 minutes late)
                 else if (rawLateMinutes <= policy.ArrivalBufferMinutes &&
-                         (!policy.BufferEligibilityCategory.Equals("AllNonShift", StringComparison.OrdinalIgnoreCase) || !officialFact.IsShiftOrDuty))
+                         bufferEligible)
                 {
                     // Check if make-up time is required and whether it was satisfied
                     if (!policy.BufferMakeUpRequired)
@@ -258,6 +266,12 @@ public sealed class AttendanceDeductionService : IAttendanceDeductionService
                         {
                             outcome = AttendanceOutcomeClassifications.EligibleBuffer_Completed;
                             deductibleMinutes = 0;
+                        }
+                        else if (policy.BufferMakeUpWindow == "SameDay")
+                        {
+                            outcome = AttendanceOutcomeClassifications.EligibleBuffer_MakeUpIncomplete;
+                            deductibleMinutes = rawLateMinutes;
+                            isAssumptionVerified = false;
                         }
                         else
                         {
@@ -298,7 +312,7 @@ public sealed class AttendanceDeductionService : IAttendanceDeductionService
                     }
                     else if (policy.BufferExceededRule == BufferExceededRules.DeductExcessOnly)
                     {
-                        deductibleMinutes = rawLateMinutes - policy.ArrivalBufferMinutes;
+                        deductibleMinutes = bufferEligible ? Math.Max(0, rawLateMinutes - policy.ArrivalBufferMinutes) : rawLateMinutes;
                     }
                     else
                     {
@@ -761,6 +775,15 @@ public sealed class AttendanceDeductionService : IAttendanceDeductionService
         var currentOrgId = await _access.GetCurrentOrganisationIdAsync();
         var targetOrgId = actor.IsSuperAdministrator && policy.OrganisationId > 0 ? policy.OrganisationId : currentOrgId;
         policy.OrganisationId = targetOrgId;
+        if (policy.SalaryDivisor <= 0 || policy.DefaultDailyWorkingMinutes <= 0 || policy.ArrivalBufferMinutes < 0 ||
+            policy.ArrivalBufferMinutes > policy.DefaultDailyWorkingMinutes || policy.EffectiveTo < policy.EffectiveFrom)
+            return ServiceResult.Fail("Attendance policy has invalid dates, divisor, working minutes or arrival buffer.");
+        if (policy.RoundingMethod != "AwayFromZero" || policy.BufferMakeUpWindow is not ("SameDay" or "SameWeek") ||
+            policy.OfficialMinutesSource is not ("ScheduledWorkPlan" or "Fixed360" or "Fixed420") ||
+            policy.BufferExceededRule is not (BufferExceededRules.RequireReview or BufferExceededRules.DeductAllMinutes or BufferExceededRules.DeductExcessOnly))
+            return ServiceResult.Fail("Unsupported attendance policy mode. Use AwayFromZero rounding and SameDay or SameWeek make-up.");
+        if (string.IsNullOrWhiteSpace(policy.LegalReference) || string.IsNullOrWhiteSpace(policy.PolicyCode))
+            return ServiceResult.Fail("A policy code and legal/contractual reference are required.");
         var actorUserId = actor.UserId;
         await using var db = await _factory.CreateDbContextAsync();
 
@@ -822,11 +845,18 @@ public sealed class AttendanceDeductionService : IAttendanceDeductionService
             .OrderByDescending(c => c.EffectiveFrom)
             .FirstOrDefaultAsync();
 
-        decimal monthlyBasic = comp?.BasicSalary ?? 12000m;
-        decimal dailySalary = decimal.Round(monthlyBasic / policy.SalaryDivisor, 2, MidpointRounding.AwayFromZero);
-        decimal perMinuteSalary = policy.DefaultDailyWorkingMinutes > 0
-            ? decimal.Round(dailySalary / policy.DefaultDailyWorkingMinutes, 6, MidpointRounding.AwayFromZero)
-            : 0m;
+        var job = await db.Jobs.AsNoTracking().SingleOrDefaultAsync(j => j.JobId == jobId && j.OrganisationID == organisationId)
+            ?? throw new InvalidOperationException("Employee job not found in this organisation.");
+        decimal monthlyBasic = comp?.BasicSalary ?? job.BasicSalary ?? throw new InvalidOperationException("No salary is configured for this employee.");
+        if (lateMinutes < 0) throw new ArgumentOutOfRangeException(nameof(lateMinutes));
+        var facts = await AttendanceScheduleFacts.LoadAsync(db, job.IndividualID, workDate.ToDateTime(TimeOnly.MinValue),
+            workDate.ToDateTime(TimeOnly.MinValue), organisationId, default);
+        var official = facts.FirstOrDefault(f => f.RequiresAttendance && f.Purpose == "Official");
+        int workingMinutes = policy.OfficialMinutesSource == "Fixed360" ? 360 : policy.OfficialMinutesSource == "Fixed420" ? 420 :
+            official == null ? policy.DefaultDailyWorkingMinutes : (int)(official.ScheduledEnd - official.ScheduledStart).TotalMinutes;
+        var rates = CalculateLateness(monthlyBasic, workingMinutes, 0, policy.SalaryDivisor);
+        decimal dailySalary = rates.dailySalary;
+        decimal perMinuteSalary = rates.perMinuteSalary;
 
         int deductibleMinutes = 0;
         string bufferOutcome = "OnTime";
@@ -835,25 +865,38 @@ public sealed class AttendanceDeductionService : IAttendanceDeductionService
         {
             if (lateMinutes <= policy.ArrivalBufferMinutes)
             {
-                bufferOutcome = "Within July 2026 30-min buffer (make-up time required)";
+                bufferOutcome = $"Within configured {policy.ArrivalBufferMinutes}-minute buffer; verify make-up and eligibility";
                 deductibleMinutes = 0;
             }
             else
             {
-                bufferOutcome = $"Exceeded 30-min buffer ({lateMinutes} mins late)";
+                bufferOutcome = $"Exceeded configured {policy.ArrivalBufferMinutes}-minute buffer ({lateMinutes} mins late); {policy.BufferExceededRule}";
                 deductibleMinutes = policy.BufferExceededRule == BufferExceededRules.DeductExcessOnly
                     ? lateMinutes - policy.ArrivalBufferMinutes
                     : lateMinutes;
             }
         }
-        else
+        else if (kind == AttendanceDeductionTypes.FullDayAbsence)
         {
             bufferOutcome = "Full-day absence";
-            deductibleMinutes = policy.DefaultDailyWorkingMinutes;
+            deductibleMinutes = workingMinutes;
         }
+        else throw new ArgumentException("Select LateArrival or FullDayAbsence for this preview.", nameof(kind));
 
-        decimal lateDeduction = decimal.Round(perMinuteSalary * deductibleMinutes, 2, MidpointRounding.AwayFromZero);
+        decimal lateDeduction = kind == AttendanceDeductionTypes.LateArrival
+            ? CalculateLateness(monthlyBasic, workingMinutes, deductibleMinutes, policy.SalaryDivisor).deductionAmount : 0;
         decimal absenceDeduction = kind == AttendanceDeductionTypes.FullDayAbsence ? dailySalary : 0m;
+        if (kind == AttendanceDeductionTypes.FullDayAbsence && policy.DeductServiceAllowanceOnAbsence)
+        {
+            var date = workDate.ToDateTime(TimeOnly.MinValue);
+            var serviceAllowance = await (from a in db.StaffAllowances.AsNoTracking()
+                join t in db.AllowanceTypes.AsNoTracking() on a.AllowanceTypeId equals t.Id
+                where a.JobId == jobId && a.OrganisationId == organisationId &&
+                    (EF.Functions.Like(t.Name, "%Service%") || EF.Functions.Like(t.Name, $"%{policy.ServiceAllowanceComponentCode}%")) &&
+                    a.FromDate <= date && (!a.ToDate.HasValue || a.ToDate >= date)
+                select a.Amount).SumAsync();
+            absenceDeduction = CalculateFullDayAbsence(monthlyBasic, serviceAllowance, policy.SalaryDivisor).totalDeduction;
+        }
 
         return new AttendanceDeductionCalculationPreviewDto(
             DeductibleMinutes: deductibleMinutes,
@@ -872,17 +915,19 @@ public sealed class AttendanceDeductionService : IAttendanceDeductionService
     public static (decimal dailySalary, decimal perMinuteSalary, decimal deductionAmount) CalculateLateness(
         decimal monthlyBasicSalary, int officialDailyWorkingMinutes, int deductibleMinutes, int salaryDivisor = 30)
     {
-        decimal dailySalary = decimal.Round(monthlyBasicSalary / salaryDivisor, 2, MidpointRounding.AwayFromZero);
-        decimal perMinuteSalary = officialDailyWorkingMinutes > 0
-            ? decimal.Round(dailySalary / officialDailyWorkingMinutes, 6, MidpointRounding.AwayFromZero)
-            : 0m;
+        if (salaryDivisor <= 0 || officialDailyWorkingMinutes <= 0 || monthlyBasicSalary < 0 || deductibleMinutes < 0)
+            throw new ArgumentOutOfRangeException(nameof(salaryDivisor), "Salary and minutes must be non-negative; divisors must be positive.");
+        decimal dailySalary = monthlyBasicSalary / salaryDivisor;
+        decimal perMinuteSalary = dailySalary / officialDailyWorkingMinutes;
         decimal deduction = decimal.Round(perMinuteSalary * deductibleMinutes, 2, MidpointRounding.AwayFromZero);
-        return (dailySalary, perMinuteSalary, deduction);
+        return (decimal.Round(dailySalary, 2, MidpointRounding.AwayFromZero), decimal.Round(perMinuteSalary, 6, MidpointRounding.AwayFromZero), deduction);
     }
 
     public static (decimal dailyBasic, decimal dailyService, decimal totalDeduction) CalculateFullDayAbsence(
         decimal monthlyBasicSalary, decimal monthlyServiceAllowance, int salaryDivisor = 30)
     {
+        if (salaryDivisor <= 0 || monthlyBasicSalary < 0 || monthlyServiceAllowance < 0)
+            throw new ArgumentOutOfRangeException(nameof(salaryDivisor));
         decimal dailyBasic = decimal.Round(monthlyBasicSalary / salaryDivisor, 2, MidpointRounding.AwayFromZero);
         decimal dailyService = decimal.Round(monthlyServiceAllowance / salaryDivisor, 2, MidpointRounding.AwayFromZero);
         return (dailyBasic, dailyService, dailyBasic + dailyService);

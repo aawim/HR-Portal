@@ -48,9 +48,13 @@ public sealed class EnterprisePayrollService : IEnterprisePayroll
         _activityLogs = activityLogs;
     }
 
-    private async Task<(int orgId, int userId, int individualId, bool isSuper)> RequireOrgScopeAsync()
+    private async Task<(int orgId, int userId, int individualId, bool isSuper)> RequireOrgScopeAsync(string? permission = "Payroll.View")
     {
         var actor = await _access.RequireContextAsync();
+        if (permission != null && !actor.IsSuperAdministrator &&
+            !await _access.HasPermissionAsync("Admin") && !await _access.HasPermissionAsync("Payroll.Manage") &&
+            !await _access.HasPermissionAsync(permission))
+            throw new UnauthorizedAccessException($"Payroll permission required: {permission}.");
         int org = 0;
         try
         {
@@ -127,13 +131,16 @@ public sealed class EnterprisePayrollService : IEnterprisePayroll
             UnpaidLeaveDivisorMode: policy.UnpaidLeaveDivisorMode,
             RequireBankAccountForPayment: policy.RequireBankAccountForPayment,
             DefaultCurrencyCode: policy.DefaultCurrencyCode,
-            TaxBrackets: (policy.TaxBrackets ?? PayrollStatutoryPolicy.MaldivesDefaultTaxBrackets).ToList()
+            TaxBrackets: (policy.TaxBrackets ?? PayrollStatutoryPolicy.MaldivesDefaultTaxBrackets).ToList(),
+            EmploymentSector: policy.EmploymentSector,
+            MinimumWageMaldiviansOnly: policy.MinimumWageMaldiviansOnly,
+            EmployeeTaxProfiles: policy.EmployeeTaxProfiles?.ToList()
         );
     }
 
     public async Task<ServiceResult> SaveConfigurationAsync(UpdatePayrollConfigurationInput input)
     {
-        var (orgId, userId, _, _) = await RequireOrgScopeAsync();
+        var (orgId, userId, _, _) = await RequireOrgScopeAsync("Payroll.Configure");
         await using var db = await _factory.CreateDbContextAsync();
 
         if (input.EmployeePensionPercentage < 0 || input.EmployeePensionPercentage > 50)
@@ -160,6 +167,40 @@ public sealed class EnterprisePayrollService : IEnterprisePayroll
         var normalizedBrackets = (input.TaxBrackets is { Count: > 0 } ? input.TaxBrackets : PayrollStatutoryPolicy.MaldivesDefaultTaxBrackets.ToList())
             .OrderBy(b => b.MinAmount)
             .ToList();
+        var validationPolicy = new PayrollStatutoryPolicy(
+            EmployeePensionRate: input.EmployeePensionPercentage / 100m,
+            EmployerPensionRate: input.EmployerPensionPercentage / 100m,
+            PensionMinAge: input.PensionMinAge, PensionMaxAge: input.PensionMaxAge,
+            NormalOvertimeMultiplier: input.OvertimeMultiplier, HolidayOvertimeMultiplier: input.HolidayOvertimeMultiplier,
+            UnpaidLeaveDivisorMode: input.UnpaidLeaveDivisorMode,
+            DefaultCurrencyCode: input.DefaultCurrencyCode.Trim().ToUpperInvariant(),
+            TaxBrackets: normalizedBrackets, EmploymentSector: input.EmploymentSector);
+        var policyError = MaldivesPayrollRules.ValidatePolicy(validationPolicy);
+        if (policyError != null) return ServiceResult.Fail(policyError);
+        var profiles = input.EmployeeTaxProfiles ?? [];
+        var staffIds = profiles.Select(p => p.IndividualId).Distinct().ToList();
+        var orgStaffIds = await db.Jobs.Where(j => j.OrganisationID == orgId && staffIds.Contains(j.IndividualID))
+            .Select(j => j.IndividualID).Distinct().ToListAsync();
+        foreach (var profile in profiles)
+        {
+            if (!orgStaffIds.Contains(profile.IndividualId) || profile.EffectiveTo < profile.EffectiveFrom ||
+                profile.TaxTreatment is not ("Primary" or "Secondary" or "MiraDirection") ||
+                profile.AccountingPeriodDays is < 1 or > 365 || profile.OpeningTaxableRemuneration < 0 ||
+                profile.OpeningTaxWithheld < 0 || profile.MonthlyTaxableNonCashBenefits < 0 ||
+                profile.RegularMonthlyTaxableRemuneration < 0 || profile.EstimatedAnnualTaxableRemuneration < 0)
+                return ServiceResult.Fail("Employee tax declaration contains an invalid employee, date, treatment or amount.");
+            if (string.IsNullOrWhiteSpace(profile.AuthorityReference))
+                return ServiceResult.Fail("Employee tax declarations require an evidence / MIRA direction reference.");
+            if ((profile.OpeningTaxableRemuneration > 0 || profile.OpeningTaxWithheld > 0) && !profile.OpeningBalanceThrough.HasValue)
+                return ServiceResult.Fail("Opening tax balances require a balance-through date.");
+            if (profile.OpeningBalanceThrough is DateOnly through && through.Day != DateTime.DaysInMonth(through.Year, through.Month))
+                return ServiceResult.Fail("Opening tax balances must end on the last day of a calendar month.");
+            if (profile.TaxTreatment == "MiraDirection" && (profile.DirectedTaxBrackets == null || MaldivesPayrollRules.ValidateBrackets(profile.DirectedTaxBrackets) != null))
+                return ServiceResult.Fail("A MIRA direction requires complete, valid tax brackets.");
+        }
+        if (profiles.GroupBy(p => p.IndividualId).Any(g => g.OrderBy(p => p.EffectiveFrom)
+            .Zip(g.OrderBy(p => p.EffectiveFrom).Skip(1), (a, b) => !a.EffectiveTo.HasValue || a.EffectiveTo >= b.EffectiveFrom).Any(overlap => overlap)))
+            return ServiceResult.Fail("Tax declarations for the same employee must not overlap.");
         if (normalizedBrackets.Any(b => b.MinAmount < 0 || (b.MaxAmount.HasValue && b.MaxAmount.Value <= b.MinAmount) || b.RatePercentage < 0 || b.RatePercentage > 100))
             return ServiceResult.Fail("One or more income tax brackets have invalid thresholds or rates.");
 
@@ -278,7 +319,10 @@ public sealed class EnterprisePayrollService : IEnterprisePayroll
             UnpaidLeaveDivisorMode = string.Equals(input.UnpaidLeaveDivisorMode, "Fixed30", StringComparison.OrdinalIgnoreCase) ? "Fixed30" : "CalendarDays",
             RequireBankAccountForPayment = input.RequireBankAccountForPayment,
             DefaultCurrencyCode = string.IsNullOrWhiteSpace(input.DefaultCurrencyCode) ? "MVR" : input.DefaultCurrencyCode.Trim().ToUpperInvariant(),
-            TaxBrackets = normalizedBrackets
+            TaxBrackets = normalizedBrackets,
+            EmploymentSector = input.EmploymentSector,
+            MinimumWageMaldiviansOnly = input.MinimumWageMaldiviansOnly,
+            EmployeeTaxProfiles = profiles
         });
         statutoryRule.IsActive = true;
 
@@ -559,13 +603,14 @@ public sealed class EnterprisePayrollService : IEnterprisePayroll
 
     public async Task<ServiceResult> QueueCalculationAsync(int runId)
     {
-        var (orgId, userId, _, _) = await RequireOrgScopeAsync();
+        var (orgId, userId, _, _) = await RequireOrgScopeAsync("Payroll.Calculate");
         await using var db = await _factory.CreateDbContextAsync();
 
         var run = await db.PayrollRuns.SingleOrDefaultAsync(r => r.PayrollRunId == runId && r.OrganisationId == orgId);
         if (run == null) return ServiceResult.Fail("Payroll run not found.");
 
-        if (run.Status == PayrollRunStatus.Finalised || run.Status == PayrollRunStatus.Paid || run.Status == PayrollRunStatus.Closed)
+        if (run.Status is not (PayrollRunStatus.Draft or PayrollRunStatus.Preparing or PayrollRunStatus.ReadyForCalculation or
+            PayrollRunStatus.Calculated or PayrollRunStatus.ValidationFailed or PayrollRunStatus.Failed))
         {
             return ServiceResult.Fail($"Cannot recalculate finalised payroll run in state '{run.Status}'.");
         }
@@ -630,7 +675,7 @@ public sealed class EnterprisePayrollService : IEnterprisePayroll
 
     public async Task<ServiceResult> SubmitReviewAsync(int runId, string? comment = null)
     {
-        var (orgId, userId, _, _) = await RequireOrgScopeAsync();
+        var (orgId, userId, _, _) = await RequireOrgScopeAsync("Payroll.Review");
         try
         {
             await _approvalService.SubmitForReviewAsync(orgId, runId, userId, comment);
@@ -644,7 +689,7 @@ public sealed class EnterprisePayrollService : IEnterprisePayroll
 
     public async Task<ServiceResult> ApprovePayrollAsync(int runId, string? comment = null)
     {
-        var (orgId, userId, _, _) = await RequireOrgScopeAsync();
+        var (orgId, userId, _, _) = await RequireOrgScopeAsync("Payroll.Approve");
         try
         {
             await _approvalService.ApprovePayrollAsync(orgId, runId, userId, comment);
@@ -658,7 +703,7 @@ public sealed class EnterprisePayrollService : IEnterprisePayroll
 
     public async Task<ServiceResult> FinalisePayrollAsync(int runId, string? comment = null)
     {
-        var (orgId, userId, _, _) = await RequireOrgScopeAsync();
+        var (orgId, userId, _, _) = await RequireOrgScopeAsync("Payroll.Approve");
         try
         {
             await _approvalService.FinalisePayrollAsync(orgId, runId, userId, comment);
@@ -672,7 +717,7 @@ public sealed class EnterprisePayrollService : IEnterprisePayroll
 
     public async Task<ServiceResult> RejectPayrollAsync(int runId, string reason)
     {
-        var (orgId, userId, _, _) = await RequireOrgScopeAsync();
+        var (orgId, userId, _, _) = await RequireOrgScopeAsync("Payroll.Approve");
         try
         {
             await _approvalService.RejectPayrollAsync(orgId, runId, userId, reason);
@@ -850,7 +895,7 @@ public sealed class EnterprisePayrollService : IEnterprisePayroll
 
     public async Task<List<PayslipRow>> GetMyPayslipsAsync()
     {
-        var (orgId, _, individualId, _) = await RequireOrgScopeAsync();
+        var (orgId, _, individualId, _) = await RequireOrgScopeAsync(null);
         var payslips = await _payslipService.GetEmployeePayslipsAsync(individualId, orgId);
 
         return payslips.Select(p => new PayslipRow(
@@ -886,7 +931,7 @@ public sealed class EnterprisePayrollService : IEnterprisePayroll
 
     public async Task<PayslipRow> GetPayslipDetailAsync(int payrollEmployeeId)
     {
-        var (orgId, _, individualId, isSuper) = await RequireOrgScopeAsync();
+        var (orgId, _, individualId, isSuper) = await RequireOrgScopeAsync(null);
         var p = await _payslipService.GetPayslipDetailAsync(payrollEmployeeId, orgId, individualId, isSuper);
         if (p == null) throw new InvalidOperationException("Payslip not found.");
 
@@ -948,7 +993,7 @@ public sealed class EnterprisePayrollService : IEnterprisePayroll
         var type = (reportType ?? "").Trim().ToUpperInvariant();
         if (type == "MPAO_KOSHAARU")
         {
-            sb.AppendLine("NationalId,EmployeeNumber,EmployeeName,Period,PensionableBasicWage,EmployeePension7Pct,EmployerPension7Pct,TotalMRPSContribution");
+            sb.AppendLine("NationalId,EmployeeNumber,EmployeeName,Period,PensionableWage,EmployeeContribution,EmployerContribution,TotalMRPSContribution,RunStatus,Currency,ReportPurpose");
             foreach (var emp in run.Employees.OrderBy(e => e.EmployeeNumber))
             {
                 decimal eePen = emp.Lines.Where(l => l.ComponentCode == "PEN_EMP").Sum(l => l.CalculatedAmount);
@@ -956,19 +1001,21 @@ public sealed class EnterprisePayrollService : IEnterprisePayroll
                 if (eePen <= 0 && erPen <= 0) continue;
                 string nid = idCards.GetValueOrDefault(emp.IndividualId, "");
                 string period = run.PayrollPeriod != null ? $"{run.PayrollPeriod.PeriodYear:D4}-{run.PayrollPeriod.PeriodMonth:D2}" : "";
-                sb.AppendLine($"\"{nid}\",\"{emp.EmployeeNumber}\",\"{emp.EmployeeName}\",\"{period}\",{emp.BaseSalary:F2},{eePen:F2},{erPen:F2},{(eePen + erPen):F2}");
+                sb.AppendLine(PayrollReportValues.Csv(nid, emp.EmployeeNumber, emp.EmployeeName, period,
+                    PayrollReportValues.PensionableWage(emp), eePen, erPen, eePen + erPen, run.Status, "MVR", "Review worksheet; not a Koshaaru upload template"));
             }
         }
         else if (type == "MIRA_601_EWT")
         {
-            sb.AppendLine("NationalId,EmployeeNumber,EmployeeName,Period,GrossEarnings,EmployeePension,EWTWithheld");
+            sb.AppendLine("NationalId,EmployeeNumber,EmployeeName,Period,GrossCashEarnings,EmployeePension,TaxableRemuneration,EWTWithheld,RunStatus,Currency,ReportPurpose");
             foreach (var emp in run.Employees.OrderBy(e => e.EmployeeNumber))
             {
                 decimal eePen = emp.Lines.Where(l => l.ComponentCode == "PEN_EMP").Sum(l => l.CalculatedAmount);
                 decimal tax = emp.Lines.Where(l => l.ComponentCode == "TAX_WHT").Sum(l => l.CalculatedAmount);
                 string nid = idCards.GetValueOrDefault(emp.IndividualId, "");
                 string period = run.PayrollPeriod != null ? $"{run.PayrollPeriod.PeriodYear:D4}-{run.PayrollPeriod.PeriodMonth:D2}" : "";
-                sb.AppendLine($"\"{nid}\",\"{emp.EmployeeNumber}\",\"{emp.EmployeeName}\",\"{period}\",{emp.GrossEarnings:F2},{eePen:F2},{tax:F2}");
+                sb.AppendLine(PayrollReportValues.Csv(nid, emp.EmployeeNumber, emp.EmployeeName, period,
+                    emp.GrossEarnings, eePen, PayrollReportValues.TaxableBase(emp), tax, run.Status, "MVR", "Review worksheet; file using current MIRA 601 information sheet"));
             }
         }
         else
@@ -977,7 +1024,8 @@ public sealed class EnterprisePayrollService : IEnterprisePayroll
             foreach (var emp in run.Employees.OrderBy(e => e.EmployeeNumber))
             {
                 string nid = idCards.GetValueOrDefault(emp.IndividualId, "");
-                sb.AppendLine($"\"{emp.EmployeeNumber}\",\"{nid}\",\"{emp.EmployeeName}\",\"{emp.DepartmentName}\",\"{emp.PositionTitle}\",{emp.BaseSalary:F2},{emp.GrossEarnings:F2},{emp.TotalDeductions:F2},{emp.EmployerContributions:F2},{emp.NetSalary:F2}");
+                sb.AppendLine(PayrollReportValues.Csv(emp.EmployeeNumber, nid, emp.EmployeeName, emp.DepartmentName, emp.PositionTitle,
+                    emp.BaseSalary, emp.GrossEarnings, emp.TotalDeductions, emp.EmployerContributions, emp.NetSalary));
             }
         }
 
@@ -996,7 +1044,7 @@ public sealed class EnterprisePayrollService : IEnterprisePayroll
 
     public async Task<ServiceResult> GenerateRamadanAllowanceAsync(int runId)
     {
-        var (orgId, userId, _, _) = await RequireOrgScopeAsync();
+        var (orgId, userId, _, _) = await RequireOrgScopeAsync("Payroll.Calculate");
         await using var db = await _factory.CreateDbContextAsync();
 
         var run = await db.PayrollRuns
@@ -1066,7 +1114,7 @@ public sealed class EnterprisePayrollService : IEnterprisePayroll
                 PayrollRunId = runId,
                 UserId = userId,
                 ActionType = "GENERATE_RAMADAN_ALLOWANCE",
-                Description = $"Generated tax-exempt Ramadan Allowance ({policy.RamadanAllowanceAmount:F2} {policy.DefaultCurrencyCode}) for {added} eligible staff.",
+                Description = $"Generated taxable Ramadan Allowance ({policy.RamadanAllowanceAmount:F2} {policy.DefaultCurrencyCode}) for {added} eligible staff.",
                 TimestampUtc = DateTime.UtcNow
             });
             await db.SaveChangesAsync();
@@ -1079,7 +1127,7 @@ public sealed class EnterprisePayrollService : IEnterprisePayroll
 
     public async Task<ServiceResult> AddAdjustmentAsync(PayrollAdjustmentInput input)
     {
-        var (orgId, userId, _, _) = await RequireOrgScopeAsync();
+        var (orgId, userId, _, _) = await RequireOrgScopeAsync("Payroll.Calculate");
         if (input.JobId <= 0 || input.Amount <= 0 || string.IsNullOrWhiteSpace(input.ComponentCode) || string.IsNullOrWhiteSpace(input.Description))
             return ServiceResult.Fail("Valid Job ID, component code, description, and positive amount are required.");
 

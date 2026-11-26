@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using HRM.Api.Infrastructure;
 using HRM.Application.Contracts.Recruitment;
 using HRM.Models;
@@ -84,17 +85,35 @@ public sealed class RecruitmentOfferQueriesController(
                 .GroupBy(c => c.IdcardNumber, StringComparer.OrdinalIgnoreCase)
                 .ToDictionary(g => g.Key, g => g.First().BusinessEntityId, StringComparer.OrdinalIgnoreCase);
 
-        var offers = rawOffers.Select(o => new RecruitmentOfferRow(
-            o.Id,
-            o.Reference,
-            o.FullName,
-            o.Status,
-            o.OnboardingRequestId,
-            o.EfaasIdNumber,
-            !string.IsNullOrWhiteSpace(o.EfaasIdNumber) && individualByIdCard.TryGetValue(o.EfaasIdNumber, out var indId) ? indId : null,
-            o.OfferedAtUtc,
-            o.AcceptedAtUtc,
-            o.TermsSnapshotJson)).ToList();
+        var offerIdStrings = rawOffers.Select(x => x.Id.ToString()).ToList();
+        var offerSigs = new Dictionary<string, (string Img, string Code)>();
+        if (offerIdStrings.Count > 0)
+        {
+            await DocumentSignaturesController.EnsureTablesPublicAsync(db, ct);
+            var sigs = await db.DocumentSignatures.AsNoTracking()
+                .Where(s => s.OrganisationId == org && s.DocumentType == "RecruitmentOffer" && s.SlotKey == "AppointeeAcceptance" && s.Status == "Signed" && offerIdStrings.Contains(s.DocumentId))
+                .Select(s => new { s.DocumentId, s.SignatureImageDataUrl, s.VerificationCode })
+                .ToListAsync(ct);
+            foreach (var s in sigs) offerSigs[s.DocumentId] = (s.SignatureImageDataUrl, s.VerificationCode);
+        }
+
+        var offers = rawOffers.Select(o =>
+        {
+            offerSigs.TryGetValue(o.Id.ToString(), out var sig);
+            return new RecruitmentOfferRow(
+                o.Id,
+                o.Reference,
+                o.FullName,
+                o.Status,
+                o.OnboardingRequestId,
+                o.EfaasIdNumber,
+                !string.IsNullOrWhiteSpace(o.EfaasIdNumber) && individualByIdCard.TryGetValue(o.EfaasIdNumber, out var indId) ? indId : null,
+                o.OfferedAtUtc,
+                o.AcceptedAtUtc,
+                o.TermsSnapshotJson,
+                sig.Img,
+                sig.Code);
+        }).ToList();
 
         var activeOffersCount = offers.Count(x => x.Status != "Declined");
         var candidates = activeOffersCount >= v.VacancySlots
@@ -150,6 +169,15 @@ public sealed class RecruitmentOfferQueriesController(
 
         var defaultPosId = vacantPositions.FirstOrDefault(p => p.PositionMatrixId == v.PositionMatrixId)?.Id;
 
+        int? defaultJobTypeId = null;
+        if (!string.IsNullOrWhiteSpace(v.EmploymentType))
+        {
+            var targetType = v.EmploymentType.Trim();
+            defaultJobTypeId = jobTypes.FirstOrDefault(jt => string.Equals(jt.Name.Trim(), targetType, StringComparison.OrdinalIgnoreCase))?.Id
+                ?? jobTypes.FirstOrDefault(jt => jt.Name.Contains(targetType, StringComparison.OrdinalIgnoreCase) || targetType.Contains(jt.Name, StringComparison.OrdinalIgnoreCase))?.Id;
+        }
+        defaultJobTypeId ??= jobTypes.FirstOrDefault()?.Id;
+
         var context = new RecruitmentOfferContext(
             v.PositionName,
             v.BasicSalary,
@@ -158,8 +186,95 @@ public sealed class RecruitmentOfferQueriesController(
             defaultPosId,
             structures,
             jobTypes,
-            vacantPositions);
+            vacantPositions,
+            defaultJobTypeId);
 
         return Ok(new RecruitmentOfferWorkspace(candidates, offers, context, v.VacancySlots, isFinal));
+    }
+
+    [HttpGet("offer/{offerId:int}")]
+    [AllowMissingEmployee]
+    public async Task<ActionResult<JobOfferLetterDetailDto>> OfferDetail(int offerId, CancellationToken ct)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+
+        var row = await (from o in db.RecruitmentOffers.AsNoTracking()
+                         join m in db.RecruitmentMeritResults.AsNoTracking() on o.RecruitmentMeritResultId equals m.Id
+                         join app in db.RecruitmentApplications.AsNoTracking() on m.RecruitmentApplicationId equals app.Id
+                         join person in db.RecruitmentApplicants.AsNoTracking() on app.RecruitmentApplicantId equals person.Id
+                         join v in db.RecruitmentVacancies.AsNoTracking() on app.RecruitmentVacancyId equals v.Id
+                         join org in db.Organisations.AsNoTracking() on o.OrganisationId equals org.BusinessEntityID into orgs
+                         from org in orgs.DefaultIfEmpty()
+                         join pm in db.PositionMatrices.AsNoTracking() on v.PositionMatrixId equals pm.PositionMatrixId into pms
+                         from pm in pms.DefaultIfEmpty()
+                         join jt in db.FrameworkJobTitles.AsNoTracking() on pm.JobTitleId equals jt.JobTitleId into jts
+                         from jt in jts.DefaultIfEmpty()
+                         join jm in db.FrameworkJobMatrices.AsNoTracking() on pm.JobMatrixId equals jm.JobMatrixId into jms
+                         from jm in jms.DefaultIfEmpty()
+                         join issuer in db.Users.AsNoTracking() on o.AppointmentAuthorityUserId equals issuer.UserId into issuers
+                         from issuer in issuers.DefaultIfEmpty()
+                         where o.Id == offerId
+                         select new
+                         {
+                             o.Id,
+                             o.OrganisationId,
+                             o.Status,
+                             person.FullName,
+                             person.EfaasIdNumber,
+                             ApplicationCode = app.Reference,
+                             PositionTitle = jt != null ? jt.Name : (jm != null ? jm.Name : v.Reference),
+                             BasicSalary = jm != null ? (decimal?)jm.BasicSalary : null,
+                             AnnouncementNumber = v.Reference,
+                             AgencyName = org != null ? org.OrganisationName : "",
+                             AgencyNameDhivehi = org != null ? org.OrganisationNameDhivehi : null,
+                             o.OfferedAtUtc,
+                             o.AcceptedAtUtc,
+                             o.TermsSnapshotJson,
+                             IssuedByName = issuer != null ? (!string.IsNullOrWhiteSpace(issuer.FullName) ? issuer.FullName : issuer.Username) : null
+                         }).SingleOrDefaultAsync(ct);
+
+        if (row is null) return NotFound();
+
+        // Authorize either the eFaas-bound appointee OR HR with organisation access
+        var idNumber = User.FindFirstValue("idnumber")?.Trim();
+        var isAppointee = !string.IsNullOrWhiteSpace(idNumber) && string.Equals(idNumber, row.EfaasIdNumber, StringComparison.OrdinalIgnoreCase);
+        if (!isAppointee)
+        {
+            var canManage = await access.HasOrganisationAccessAsync(row.OrganisationId)
+                && (await access.HasUserGroupAsync("SuperAdministrator")
+                    || await access.HasUserGroupAsync("Admin")
+                    || await access.HasPermissionAsync("Recruitment.Manage")
+                    || await access.HasPermissionAsync("Recruitment.View"));
+            if (!canManage) return Forbid();
+        }
+
+        await DocumentSignaturesController.EnsureTablesPublicAsync(db, ct);
+        var sigs = await db.DocumentSignatures.AsNoTracking()
+            .Where(s => s.DocumentType == "RecruitmentOffer" && s.DocumentId == row.Id.ToString() && s.Status == "Signed")
+            .ToListAsync(ct);
+
+        var appointeeSig = sigs.FirstOrDefault(s => s.SlotKey == "AppointeeAcceptance");
+        var agencySig = sigs.FirstOrDefault(s => s.SlotKey == "AgencyIssuer");
+
+        return Ok(new JobOfferLetterDetailDto(
+            row.Id,
+            row.Status,
+            row.FullName,
+            row.EfaasIdNumber,
+            row.ApplicationCode,
+            row.PositionTitle,
+            row.BasicSalary,
+            row.AnnouncementNumber,
+            row.AgencyName,
+            row.AgencyNameDhivehi,
+            row.OfferedAtUtc,
+            row.AcceptedAtUtc,
+            row.TermsSnapshotJson,
+            agencySig?.SignerName ?? row.IssuedByName,
+            appointeeSig?.SignatureImageDataUrl,
+            appointeeSig?.VerificationCode,
+            agencySig?.SignatureImageDataUrl,
+            agencySig?.VerificationCode,
+            agencySig?.SignedAtUtc));
     }
 }

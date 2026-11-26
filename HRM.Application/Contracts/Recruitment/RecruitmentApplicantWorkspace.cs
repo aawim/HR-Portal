@@ -1,6 +1,6 @@
 namespace HRM.Application.Contracts.Recruitment;
 public sealed record MyRecruitmentApplicationRow(string Reference,string VacancyReference,string Status,DateTime? SubmittedAtUtc,int VacancyId=0,string? ReturnComment=null,DateTime? CorrectionDeadlineUtc=null,bool HasScreeningResults=false);
-public sealed record MyRecruitmentOfferRow(int Id,string VacancyReference,string Status,string TermsSnapshotJson);
+public sealed record MyRecruitmentOfferRow(int Id,string VacancyReference,string Status,string TermsSnapshotJson,string? PositionName=null,string? OrganisationName=null,DateTime? OfferedAtUtc=null,DateTime? AcceptedAtUtc=null,string? AppointeeSignatureDataUrl=null,string? SignatureVerificationCode=null);
 public sealed record MyRecruitmentResultRow(int PublicationId,int ApplicationId,string ApplicationReference,string VacancyReference,string? PositionName,string ApplicationStatus,int? Rank,decimal? Score,bool IsFinal,DateTime PublishedAtUtc,DateTime ObjectionClosesAtUtc,int? ObjectionId,string? ObjectionStatus,string? ObjectionGrounds,string? ObjectionResolution);
 public sealed record PublishedMeritSheetEntry(int Rank,string ApplicationReference,decimal Score,bool IsMine);
 public sealed record MyScorecardBreakdownRow(string AssessmentKind,decimal TotalScore,string CriterionScoresJson,DateTime SubmittedAtUtc);
