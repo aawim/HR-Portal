@@ -76,8 +76,8 @@ public sealed class RecruitmentResultService(
         var publication = await db.RecruitmentResultPublications.SingleOrDefaultAsync(x => x.Id == publicationId && x.OrganisationId == organisationId, ct) ?? throw new UnauthorizedAccessException();
         if (publication.IsFinal) return ServiceResult.Fail("Results are already final.");
         if (await db.RecruitmentObjections.AnyAsync(x => x.RecruitmentResultPublicationId == publication.Id && x.Status == "Upheld", ct)) return ServiceResult.Fail("An upheld objection requires corrected results and republication before finalisation.");
-        if (publication.ObjectionClosesAtUtc > DateTime.UtcNow) return ServiceResult.Fail("The objection period is still open.");
         if (await db.RecruitmentObjections.AnyAsync(x => x.RecruitmentResultPublicationId == publication.Id && x.Status == "Submitted", ct)) return ServiceResult.Fail("Resolve all submitted objections before finalising results.");
+        if (publication.ObjectionClosesAtUtc > DateTime.UtcNow) publication.ObjectionClosesAtUtc = DateTime.UtcNow;
         var log = await logs.CreateAsync(db, SharedConfig.OperationLogActionTypes.REQUESTS_UPDATE, $"Recruitment results publication {publication.Id} finalised.");
         publication.IsFinal = true; publication.OperationLogId = log.OperationLogId;
         await db.SaveChangesAsync(ct); return ServiceResult.Ok("Results finalised; offers may now be issued.");
