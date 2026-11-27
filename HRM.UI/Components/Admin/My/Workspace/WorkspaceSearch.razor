@@ -210,6 +210,15 @@
         StaffResults=foundStaff;OrganisationResults=foundOrganisations;
     }
     catch(OperationCanceledException) { }
+    catch (UnauthorizedAccessException ex)
+    {
+        if(version!=searchVersion)return;
+        StaffResults = new List<WorkspaceSearchResult>();
+        OrganisationResults = new List<WorkspaceSearchResult>();
+        ToastService.Error(string.IsNullOrWhiteSpace(ex.Message)
+            ? "You do not have permission to search this workspace."
+            : ex.Message);
+    }
     catch (Exception ex)
     {
         if(version!=searchVersion)return;
@@ -217,11 +226,11 @@
         StaffResults = new List<WorkspaceSearchResult>();
         OrganisationResults = new List<WorkspaceSearchResult>();
 
-        ToastService.Error(
-            "Unable to search the workspace.");
-
-        // Add your logger here
-        // Logger.LogError(ex, "Workspace search failed.");
+        var msg = ex.Message?.Contains("permission", StringComparison.OrdinalIgnoreCase) == true
+            || ex.Message?.Contains("403", StringComparison.OrdinalIgnoreCase) == true
+            ? "You do not have permission to search this workspace."
+            : "Unable to search the workspace.";
+        ToastService.Error(msg);
     }
     finally
     {

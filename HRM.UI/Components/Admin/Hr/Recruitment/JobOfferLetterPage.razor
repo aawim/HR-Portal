@@ -193,6 +193,27 @@
         margin-inline: 4px;
     }
 
+    .jol-inline-input {
+        width: 100%;
+        border: 1px solid #94a3b8;
+        border-radius: 4px;
+        padding: 3px 6px;
+        font-size: 9.5pt;
+        background: #f8fafc;
+        color: #0f172a;
+        box-sizing: border-box;
+    }
+
+    .jol-inline-input:focus {
+        outline: none;
+        border-color: #075985;
+        background: #ffffff;
+    }
+
+    .jol-print-only {
+        display: none;
+    }
+
     .jol-page-break {
         page-break-before: always;
         break-before: page;
@@ -212,6 +233,10 @@
 
         .no-print {
             display: none !important;
+        }
+
+        .jol-print-only {
+            display: inline !important;
         }
 
         .jol-screen-bg {
@@ -267,6 +292,16 @@
             <div class="flex flex-wrap items-center gap-2">
                 @if (IsAdminRoute && detail is not null)
                 {
+                    @if (detail.Status == "Draft")
+                    {
+                        <button type="button"
+                                class="inline-flex items-center gap-1 rounded-lg border border-blue-300 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-800 hover:bg-blue-100 disabled:opacity-50"
+                                disabled="@signBusy"
+                                @onclick="SaveDraftTermsAsync">
+                            <i class="bi bi-save" aria-hidden="true"></i>
+                            <span>Save Offer Details</span>
+                        </button>
+                    }
                     @if (detail.Status == "Draft" && string.IsNullOrWhiteSpace(detail.AgencySignatureDataUrl))
                     {
                         <span class="rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-semibold text-amber-800">Unsigned Draft</span>
@@ -376,6 +411,10 @@
             </table>
 
             <!-- 1B. Offered Position Details -->
+            @{
+                var canEditDraft = IsAdminRoute && detail.Status == "Draft";
+                var canFillApplicant = !IsAdminRoute && detail.Status == "Offered";
+            }
             <table class="jol-table">
                 <thead>
                     <tr><th colspan="4" class="jol-subhdr">@(IsDv ? "ހުށަހަޅާ މަޤާމުގެ ތަފްޞީލު:" : "Offered Position Details:")</th></tr>
@@ -383,22 +422,79 @@
                 <tbody>
                     <tr>
                         <td class="jol-lbl">@(IsDv ? "މަޤާމުގެ ނަން:" : "Position Title:")</td>
-                        <td colspan="3" style="font-weight:700;">@(parsedPosition ?? detail.PositionTitle)</td>
+                        <td colspan="3" style="font-weight:700;">
+                            @(parsedPosition ?? detail.PositionTitle)
+                            @if (!string.IsNullOrWhiteSpace(editGradeCode))
+                            {
+                                <span style="font-weight:400; color:#475569; margin-inline-start:6px;">(@editGradeCode)</span>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(editEmploymentType))
+                            {
+                                <span style="font-weight:400; color:#475569; margin-inline-start:6px;">· @editEmploymentType</span>
+                            }
+                        </td>
                     </tr>
                     <tr>
                         <td class="jol-lbl">@(IsDv ? "އަސާސީ މުސާރަ:" : "Basic Salary:")</td>
-                        <td>@(parsedSalary ?? (detail.BasicSalary.HasValue ? $"MVR {detail.BasicSalary.Value:N2}" : "—"))</td>
+                        <td>
+                            @if (canEditDraft)
+                            {
+                                <input class="jol-inline-input no-print" @bind="editSalary" @bind:event="oninput" placeholder="e.g. MVR 15,000.00" />
+                                <span class="jol-print-only">@(string.IsNullOrWhiteSpace(editSalary) ? "—" : editSalary)</span>
+                            }
+                            else
+                            {
+                                @(string.IsNullOrWhiteSpace(editSalary) ? "—" : editSalary)
+                            }
+                        </td>
                         <td class="jol-lbl">@(IsDv ? "އިޢުލާނު ނަންބަރު:" : "Announcement Number:")</td>
-                        <td style="font-family:monospace;">@detail.AnnouncementNumber</td>
+                        <td style="font-family:monospace;" dir="ltr">@detail.AnnouncementNumber</td>
                     </tr>
                     <tr>
                         <td class="jol-lbl">@(IsDv ? "މަޤާމުގެ އެލަވަންސް:" : "Position Allowance:")</td>
-                        <td colspan="3">@(parsedPositionAllowance ?? "—")</td>
+                        <td colspan="3">
+                            @if (canEditDraft)
+                            {
+                                <input class="jol-inline-input no-print" @bind="editPositionAllowance" @bind:event="oninput" placeholder="e.g. MVR 12,825.00" />
+                                <span class="jol-print-only">@(string.IsNullOrWhiteSpace(editPositionAllowance) ? "—" : editPositionAllowance)</span>
+                            }
+                            else
+                            {
+                                @(string.IsNullOrWhiteSpace(editPositionAllowance) ? "—" : editPositionAllowance)
+                            }
+                        </td>
                     </tr>
                     <tr>
                         <td class="jol-lbl">@(IsDv ? "ޙާޟިރީ އެލަވަންސް:" : "Attendance Allowance:")</td>
-                        <td colspan="3">@(parsedAttendanceAllowance ?? "—")</td>
+                        <td colspan="3">
+                            @if (canEditDraft)
+                            {
+                                <input class="jol-inline-input no-print" @bind="editAttendanceAllowance" @bind:event="oninput" placeholder="e.g. MVR 345.00 per day" />
+                                <span class="jol-print-only">@(string.IsNullOrWhiteSpace(editAttendanceAllowance) ? "—" : editAttendanceAllowance)</span>
+                            }
+                            else
+                            {
+                                @(string.IsNullOrWhiteSpace(editAttendanceAllowance) ? "—" : editAttendanceAllowance)
+                            }
+                        </td>
                     </tr>
+                    @if (canEditDraft || !string.IsNullOrWhiteSpace(editOtherAllowances))
+                    {
+                        <tr>
+                            <td class="jol-lbl">@(IsDv ? "އެހެނިހެން އެލަވަންސްތައް:" : "Other Allowances:")</td>
+                            <td colspan="3">
+                                @if (canEditDraft)
+                                {
+                                    <input class="jol-inline-input no-print" @bind="editOtherAllowances" @bind:event="oninput" placeholder="Other position allowances / benefits..." />
+                                    <span class="jol-print-only">@(string.IsNullOrWhiteSpace(editOtherAllowances) ? "—" : editOtherAllowances)</span>
+                                }
+                                else
+                                {
+                                    @editOtherAllowances
+                                }
+                            </td>
+                        </tr>
+                    }
                 </tbody>
             </table>
 
@@ -498,15 +594,43 @@
                 </thead>
                 <tbody>
                     <tr>
-                        <td style="width:6%; text-align:center; font-weight:700; font-size:12pt;">@(accepted ? "✓" : "")</td>
+                        <td style="width:6%; text-align:center; font-weight:700; font-size:12pt;">
+                            @if (canFillApplicant)
+                            {
+                                <input type="radio" name="jolDecision" class="no-print" checked="@(appDecision == "Accept")" @onchange='() => appDecision = "Accept"' />
+                                <span class="jol-print-only">@(appDecision == "Accept" ? "✓" : "")</span>
+                            }
+                            else
+                            {
+                                @(accepted ? "✓" : "")
+                            }
+                        </td>
                         <td style="width:44%;">@(IsDv ? "ހުށަހެޅިފައިވާ ވަޒީފާ ޤަބޫލުކުރަމެވެ." : "I accept the offered position.")</td>
-                        <td style="width:6%; text-align:center; font-weight:700; font-size:12pt;">@(declined ? "✓" : "")</td>
+                        <td style="width:6%; text-align:center; font-weight:700; font-size:12pt;">
+                            @if (canFillApplicant)
+                            {
+                                <input type="radio" name="jolDecision" class="no-print" checked="@(appDecision == "Decline")" @onchange='() => appDecision = "Decline"' />
+                                <span class="jol-print-only">@(appDecision == "Decline" ? "✓" : "")</span>
+                            }
+                            else
+                            {
+                                @(declined ? "✓" : "")
+                            }
+                        </td>
                         <td style="width:44%;">@(IsDv ? "ހުށަހެޅިފައިވާ ވަޒީފާ ޤަބޫލެއްނުކުރަމެވެ." : "I decline the offered position.")</td>
                     </tr>
                     <tr>
                         <td colspan="4" style="height:54px; vertical-align:top;">
                             <strong>@(IsDv ? "ވަޒީފާ ޤަބޫލުނުކުރާނަމަ، ސަބަބު:" : "If declining, state reason:")</strong>
-                            <div>@(declined ? (parsedNotes ?? "") : "")</div>
+                            @if (canFillApplicant && appDecision == "Decline")
+                            {
+                                <textarea rows="2" class="jol-inline-input no-print" style="margin-top:4px;" @bind="appDeclineReason" @bind:event="oninput" placeholder="@(IsDv ? "ޤަބޫލުނުކުރާ ސަބަބު ލިޔުއްވާ..." : "State reason for declining...")"></textarea>
+                                <div class="jol-print-only">@appDeclineReason</div>
+                            }
+                            else
+                            {
+                                <div>@(declined ? (parsedNotes ?? "") : "")</div>
+                            }
                         </td>
                     </tr>
                 </tbody>
@@ -521,14 +645,39 @@
                     <tr>
                         <td class="jol-lbl" style="width:48%;">@(IsDv ? "މިހާރު އެއްވެސް ވަޒީފާއެއް އަދާކުރައްވަންތޯ؟" : "Are you currently employed?")</td>
                         <td>
-                            @(IsDv ? "އާން" : "Yes") <span class="jol-check">@(accepted && parsedEmployed == true ? "✓" : "")</span>
-                            &nbsp;&nbsp;
-                            @(IsDv ? "ނޫން" : "No") <span class="jol-check">@(accepted && parsedEmployed == false ? "✓" : "")</span>
+                            @if (canFillApplicant && appDecision == "Accept")
+                            {
+                                <span class="no-print" style="display:inline-flex; gap:14px; align-items:center;">
+                                    <label style="cursor:pointer;"><input type="radio" name="jolEmp" checked="@appEmployed" @onchange="() => appEmployed = true" /> @(IsDv ? "އާން" : "Yes")</label>
+                                    <label style="cursor:pointer;"><input type="radio" name="jolEmp" checked="@(!appEmployed)" @onchange="() => { appEmployed = false; appCurrentEmployer = string.Empty; appRequiresNotice = false; appNoticePeriod = string.Empty; }" /> @(IsDv ? "ނޫން" : "No")</label>
+                                </span>
+                                <span class="jol-print-only">
+                                    @(IsDv ? "އާން" : "Yes") <span class="jol-check">@(appEmployed ? "✓" : "")</span>
+                                    &nbsp;&nbsp;
+                                    @(IsDv ? "ނޫން" : "No") <span class="jol-check">@(!appEmployed ? "✓" : "")</span>
+                                </span>
+                            }
+                            else
+                            {
+                                @(IsDv ? "އާން" : "Yes") <span class="jol-check">@(accepted && parsedEmployed == true ? "✓" : "")</span>
+                                @:&nbsp;&nbsp;
+                                @(IsDv ? "ނޫން" : "No") <span class="jol-check">@(accepted && parsedEmployed == false ? "✓" : "")</span>
+                            }
                         </td>
                     </tr>
                     <tr>
                         <td class="jol-lbl">@(IsDv ? "ވަޒީފާއަށް ޚިދުމަތަށް ނުކުމެވޭނެ ތާރީޚު:" : "Confirmed Joining / Reporting Date:")</td>
-                        <td style="font-weight:700;">@(parsedJoiningDate ?? "")</td>
+                        <td style="font-weight:700;">
+                            @if (canFillApplicant && appDecision == "Accept")
+                            {
+                                <input type="date" class="jol-inline-input no-print" style="max-width:200px;" @bind="appJoiningDate" />
+                                <span class="jol-print-only">@appJoiningDate.ToString("yyyy-MM-dd")</span>
+                            }
+                            else
+                            {
+                                @(parsedJoiningDate ?? "")
+                            }
+                        </td>
                     </tr>
                 </tbody>
             </table>
@@ -541,19 +690,54 @@
                 <tbody>
                     <tr>
                         <td class="jol-lbl" style="width:48%;">@(IsDv ? "ވަޒީފާ އަދާކުރާތަން:" : "Current Workplace / Employer:")</td>
-                        <td>@(parsedCurrentEmployer ?? "")</td>
+                        <td>
+                            @if (canFillApplicant && appDecision == "Accept" && appEmployed)
+                            {
+                                <input class="jol-inline-input no-print" @bind="appCurrentEmployer" @bind:event="oninput" placeholder="@(IsDv ? "މިހާރު ވަޒީފާ އަދާކުރާ އިދާރާ / ކުންފުނި..." : "Current workplace / employer...")" />
+                                <span class="jol-print-only">@appCurrentEmployer</span>
+                            }
+                            else
+                            {
+                                @(parsedCurrentEmployer ?? "")
+                            }
+                        </td>
                     </tr>
                     <tr>
                         <td class="jol-lbl">@(IsDv ? "ވަޒީފާދޭތަނަށް ލިޔުމުން ނޯޓިސްދޭންޖެހޭތޯ؟" : "Are you required to give written notice?")</td>
                         <td>
-                            @(IsDv ? "އާން" : "Yes") <span class="jol-check">@(accepted && parsedEmployed == true && parsedRequiresNotice == true ? "✓" : "")</span>
-                            &nbsp;&nbsp;
-                            @(IsDv ? "ނޫން" : "No") <span class="jol-check">@(accepted && parsedEmployed == true && parsedRequiresNotice == false ? "✓" : "")</span>
+                            @if (canFillApplicant && appDecision == "Accept" && appEmployed)
+                            {
+                                <span class="no-print" style="display:inline-flex; gap:14px; align-items:center;">
+                                    <label style="cursor:pointer;"><input type="radio" name="jolNotice" checked="@appRequiresNotice" @onchange="() => appRequiresNotice = true" /> @(IsDv ? "އާން" : "Yes")</label>
+                                    <label style="cursor:pointer;"><input type="radio" name="jolNotice" checked="@(!appRequiresNotice)" @onchange="() => { appRequiresNotice = false; appNoticePeriod = string.Empty; }" /> @(IsDv ? "ނޫން" : "No")</label>
+                                </span>
+                                <span class="jol-print-only">
+                                    @(IsDv ? "އާން" : "Yes") <span class="jol-check">@(appRequiresNotice ? "✓" : "")</span>
+                                    &nbsp;&nbsp;
+                                    @(IsDv ? "ނޫން" : "No") <span class="jol-check">@(!appRequiresNotice ? "✓" : "")</span>
+                                </span>
+                            }
+                            else
+                            {
+                                @(IsDv ? "އާން" : "Yes") <span class="jol-check">@(accepted && parsedEmployed == true && parsedRequiresNotice == true ? "✓" : "")</span>
+                                @:&nbsp;&nbsp;
+                                @(IsDv ? "ނޫން" : "No") <span class="jol-check">@(accepted && parsedEmployed == true && parsedRequiresNotice == false ? "✓" : "")</span>
+                            }
                         </td>
                     </tr>
                     <tr>
                         <td class="jol-lbl">@(IsDv ? "ދޭންޖެހޭ ނޯޓިސްގެ މުއްދަތު:" : "Required Notice Period:")</td>
-                        <td>@(parsedNoticePeriod ?? "")</td>
+                        <td>
+                            @if (canFillApplicant && appDecision == "Accept" && appEmployed && appRequiresNotice)
+                            {
+                                <input class="jol-inline-input no-print" @bind="appNoticePeriod" @bind:event="oninput" placeholder="@(IsDv ? "މިސާލު: 30 ދުވަސް" : "e.g. 30 days")" />
+                                <span class="jol-print-only">@appNoticePeriod</span>
+                            }
+                            else
+                            {
+                                @(parsedNoticePeriod ?? "")
+                            }
+                        </td>
                     </tr>
                 </tbody>
             </table>
@@ -569,6 +753,40 @@
                             @(IsDv
                                 ? "މަތީގައިވާ މަޢުލޫމާތުތަކަކީ ތެދު މަޢުލޫމާތުކަމަށާއި، މި ވަޒީފާ އަދާކުރުމަށް ހަމަޖެހިފައިވާ ތާރީޚަށް ޚިދުމަތަށް ނުކުތުމަށް އިޤްރާރުވަމެވެ. އަދި ވަޒީފާ ހަމަޖައްސައިދިނުމަށްފަހު، ވަޒީފާއަށް ނުނިކުމެފިނަމަ ނުވަތަ މި ވަޒީފާ ޤަބޫލުނުކުރާކަމަށް ނިންމައިފިނަމަ، ދިވެހި ސިވިލް ސަރވިސްގެ ޤަވާޢިދުގައިވާ ގޮތުގެމަތިން ޢަމަލުކުރުމަށް އިޢުތިރާޟް ނުކުރާނެކަމަށް އިޤްރާރުވަމެވެ."
                                 : "I declare that the information provided above is true and accurate, and I undertake to report for duty on the confirmed joining date. I acknowledge that failure to report for duty or withdrawal after acceptance will be handled in accordance with Civil Service Regulations.")
+                            @if (canFillApplicant)
+                            {
+                                <div class="no-print" style="margin-top:8px; padding-top:8px; border-top:1px dashed #cbd5e1; display:flex; flex-direction:column; gap:6px;">
+                                    @if (appDecision == "Accept")
+                                    {
+                                        <label style="display:flex; align-items:flex-start; gap:6px; cursor:pointer;">
+                                            <input type="checkbox" style="margin-top:3px;" @bind="appAgreedAll" />
+                                            <span>@(IsDv ? "މަތީގައިވާ ވަޒީފާގެ ޝަރުޠުތަކާއި، ސުލޫކީ މިންގަނޑާއި، އިޤްރާރު ކިޔައި ޤަބޫލުކުރަމެވެ." : "I accept the offer terms, code of conduct, and confirm all information is accurate.")</span>
+                                        </label>
+                                    }
+                                    <div style="display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px; margin-top:4px;">
+                                        @if (appDecision == "Accept")
+                                        {
+                                            <button type="button"
+                                                    style="background-color:#075985; color:#ffffff; padding:6px 14px; border-radius:8px; font-weight:600; font-size:12px; border:none; cursor:pointer;"
+                                                    disabled="@(signBusy || !appAgreedAll)"
+                                                    @onclick="SubmitInlineAcceptAsync">
+                                                <i class="bi bi-pen" aria-hidden="true"></i>
+                                                <span>@(IsDv ? "ސޮއިކޮށް ފޯމު ހުށަހަޅާ" : "Sign & Submit Acceptance Form")</span>
+                                            </button>
+                                        }
+                                        else
+                                        {
+                                            <button type="button"
+                                                    style="background-color:#e11d48; color:#ffffff; padding:6px 14px; border-radius:8px; font-weight:600; font-size:12px; border:none; cursor:pointer;"
+                                                    disabled="@signBusy"
+                                                    @onclick="SubmitInlineDeclineAsync">
+                                                <i class="bi bi-x-circle" aria-hidden="true"></i>
+                                                <span>@(IsDv ? "ވަޒީފާ ޤަބޫލުނުކުރާކަން ހުށަހަޅާ" : "Submit Offer Decline")</span>
+                                            </button>
+                                        }
+                                    </div>
+                                </div>
+                            }
                         </td>
                     </tr>
                     <tr>
@@ -661,8 +879,18 @@
     private bool loading = true, signBusy, showAgencyPinModal, showAcceptanceModal;
     private string? error, signMessage;
 
-    private string? parsedPosition, parsedSalary, parsedPositionAllowance, parsedAttendanceAllowance, parsedJoiningDate, parsedCurrentEmployer, parsedNoticePeriod, parsedNotes;
+    private string? parsedPosition, parsedSalary, parsedPositionAllowance, parsedAttendanceAllowance, parsedOtherAllowances, parsedJoiningDate, parsedCurrentEmployer, parsedNoticePeriod, parsedNotes;
     private bool? parsedEmployed, parsedRequiresNotice;
+
+    // HR inline draft fields (auto-filled from Position Matrix & TermsSnapshotJson)
+    private string editSalary = "", editPositionAllowance = "", editAttendanceAllowance = "", editOtherAllowances = "";
+    private string? editGradeCode, editEmploymentType;
+
+    // Applicant inline Section 2 fields
+    private string appDecision = "Accept";
+    private string appDeclineReason = "", appCurrentEmployer = "", appNoticePeriod = "";
+    private DateTime appJoiningDate = DateTime.UtcNow.AddHours(5).Date.AddDays(14);
+    private bool appEmployed, appRequiresNotice, appAgreedAll;
 
     private bool IsDv => string.Equals(lang, "dv", StringComparison.OrdinalIgnoreCase);
     private bool IsAdminRoute => new Uri(Navigation.Uri).AbsolutePath.StartsWith("/admin/", StringComparison.OrdinalIgnoreCase);
@@ -701,29 +929,165 @@
 
     private void ParseTerms(string? json)
     {
-        parsedPosition = parsedSalary = parsedPositionAllowance = parsedAttendanceAllowance = parsedJoiningDate = parsedCurrentEmployer = parsedNoticePeriod = parsedNotes = null;
+        parsedPosition = parsedSalary = parsedPositionAllowance = parsedAttendanceAllowance = parsedOtherAllowances = parsedJoiningDate = parsedCurrentEmployer = parsedNoticePeriod = parsedNotes = null;
         parsedEmployed = parsedRequiresNotice = null;
-        if (string.IsNullOrWhiteSpace(json)) return;
+        string? jsonGrade = null, jsonEmpType = null;
+        if (!string.IsNullOrWhiteSpace(json))
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(json);
+                var root = doc.RootElement;
+                if (root.ValueKind == JsonValueKind.Object)
+                {
+                    if (root.TryGetProperty("Position", out var pos)) parsedPosition = pos.GetString();
+                    if (root.TryGetProperty("BasicSalaryText", out var salTxt) && !string.IsNullOrWhiteSpace(salTxt.GetString())) parsedSalary = salTxt.GetString();
+                    else if (root.TryGetProperty("BasicSalary", out var sal) && sal.TryGetDecimal(out var salVal)) parsedSalary = $"MVR {salVal:N2}";
+                    if (root.TryGetProperty("PositionAllowance", out var pa)) parsedPositionAllowance = pa.GetString();
+                    if (root.TryGetProperty("AttendanceAllowance", out var aa)) parsedAttendanceAllowance = aa.GetString();
+                    if (root.TryGetProperty("OtherAllowances", out var oa)) parsedOtherAllowances = oa.GetString();
+                    if (root.TryGetProperty("GradeCode", out var gc)) jsonGrade = gc.GetString();
+                    if (root.TryGetProperty("EmploymentType", out var et)) jsonEmpType = et.GetString();
+                    if (root.TryGetProperty("ProposedStartDate", out var ps) && DateTime.TryParse(ps.GetString(), out var psDt)) appJoiningDate = psDt.Date;
+                    if (root.TryGetProperty("AcceptanceForm", out var af) && af.ValueKind == JsonValueKind.Object)
+                    {
+                        if (af.TryGetProperty("ConfirmedJoiningDate", out var cj)) parsedJoiningDate = cj.GetString();
+                        if (af.TryGetProperty("IsCurrentlyEmployed", out var ce) && ce.ValueKind is JsonValueKind.True or JsonValueKind.False) parsedEmployed = ce.GetBoolean();
+                        if (af.TryGetProperty("CurrentEmployer", out var emp)) parsedCurrentEmployer = emp.GetString();
+                        if (af.TryGetProperty("RequiresWrittenNotice", out var rn) && rn.ValueKind is JsonValueKind.True or JsonValueKind.False) parsedRequiresNotice = rn.GetBoolean();
+                        if (af.TryGetProperty("NoticePeriod", out var np)) parsedNoticePeriod = np.GetString();
+                        if (af.TryGetProperty("AppointeeNotes", out var an)) parsedNotes = an.GetString();
+                    }
+                }
+            }
+            catch { }
+        }
+
+        // Auto-populate editable HR fields from TermsSnapshotJson OR Position Matrix defaults
+        editSalary = !string.IsNullOrWhiteSpace(parsedSalary)
+            ? parsedSalary
+            : (detail?.BasicSalary is > 0 ? $"MVR {detail.BasicSalary.Value:N2}" : "");
+        editPositionAllowance = !string.IsNullOrWhiteSpace(parsedPositionAllowance)
+            ? parsedPositionAllowance
+            : (detail?.PositionAllowance is > 0 ? $"MVR {detail.PositionAllowance.Value:N2}" : "");
+        editAttendanceAllowance = !string.IsNullOrWhiteSpace(parsedAttendanceAllowance)
+            ? parsedAttendanceAllowance
+            : (detail?.AttendanceAllowanceDaily is > 0 ? $"MVR {detail.AttendanceAllowanceDaily.Value:N2} per day" : "");
+        editOtherAllowances = !string.IsNullOrWhiteSpace(parsedOtherAllowances)
+            ? parsedOtherAllowances
+            : (detail?.OtherAllowancesSummary ?? "");
+        editGradeCode = !string.IsNullOrWhiteSpace(jsonGrade) ? jsonGrade : detail?.GradeCode;
+        editEmploymentType = !string.IsNullOrWhiteSpace(jsonEmpType) ? jsonEmpType : detail?.EmploymentType;
+    }
+
+    private async Task SaveDraftTermsAsync()
+    {
+        if (signBusy || detail is null || detail.Status != "Draft") return;
+        signBusy = true;
+        signMessage = null;
         try
         {
-            using var doc = JsonDocument.Parse(json);
-            var root = doc.RootElement;
-            if (root.ValueKind != JsonValueKind.Object) return;
-            if (root.TryGetProperty("Position", out var pos)) parsedPosition = pos.GetString();
-            if (root.TryGetProperty("BasicSalary", out var sal) && sal.TryGetDecimal(out var salVal)) parsedSalary = $"MVR {salVal:N2}";
-            if (root.TryGetProperty("PositionAllowance", out var pa)) parsedPositionAllowance = pa.GetString();
-            if (root.TryGetProperty("AttendanceAllowance", out var aa)) parsedAttendanceAllowance = aa.GetString();
-            if (root.TryGetProperty("AcceptanceForm", out var af) && af.ValueKind == JsonValueKind.Object)
+            var merged = new Dictionary<string, object?>();
+            if (!string.IsNullOrWhiteSpace(detail.TermsSnapshotJson))
             {
-                if (af.TryGetProperty("ConfirmedJoiningDate", out var cj)) parsedJoiningDate = cj.GetString();
-                if (af.TryGetProperty("IsCurrentlyEmployed", out var ce) && ce.ValueKind is JsonValueKind.True or JsonValueKind.False) parsedEmployed = ce.GetBoolean();
-                if (af.TryGetProperty("CurrentEmployer", out var emp)) parsedCurrentEmployer = emp.GetString();
-                if (af.TryGetProperty("RequiresWrittenNotice", out var rn) && rn.ValueKind is JsonValueKind.True or JsonValueKind.False) parsedRequiresNotice = rn.GetBoolean();
-                if (af.TryGetProperty("NoticePeriod", out var np)) parsedNoticePeriod = np.GetString();
-                if (af.TryGetProperty("AppointeeNotes", out var an)) parsedNotes = an.GetString();
+                try
+                {
+                    using var doc = JsonDocument.Parse(detail.TermsSnapshotJson);
+                    if (doc.RootElement.ValueKind == JsonValueKind.Object)
+                    {
+                        foreach (var prop in doc.RootElement.EnumerateObject())
+                            merged[prop.Name] = prop.Value.Clone();
+                    }
+                }
+                catch { }
             }
+            merged["Position"] = parsedPosition ?? detail.PositionTitle;
+            merged["BasicSalaryText"] = string.IsNullOrWhiteSpace(editSalary) ? null : editSalary.Trim();
+            merged["PositionAllowance"] = string.IsNullOrWhiteSpace(editPositionAllowance) ? null : editPositionAllowance.Trim();
+            merged["AttendanceAllowance"] = string.IsNullOrWhiteSpace(editAttendanceAllowance) ? null : editAttendanceAllowance.Trim();
+            merged["OtherAllowances"] = string.IsNullOrWhiteSpace(editOtherAllowances) ? null : editOtherAllowances.Trim();
+            if (!string.IsNullOrWhiteSpace(editGradeCode)) merged["GradeCode"] = editGradeCode;
+            if (!string.IsNullOrWhiteSpace(editEmploymentType)) merged["EmploymentType"] = editEmploymentType;
+
+            var res = await Api.UpdateOfferTermsAsync(detail.OfferId, JsonSerializer.Serialize(merged));
+            signMessage = res.Message;
+            if (res.Success) await LoadAsync();
         }
-        catch { }
+        catch
+        {
+            signMessage = "Could not save offer letter details.";
+        }
+        finally
+        {
+            signBusy = false;
+        }
+    }
+
+    private async Task SubmitInlineAcceptAsync()
+    {
+        if (signBusy || detail is null || !appAgreedAll) return;
+        if (appEmployed && string.IsNullOrWhiteSpace(appCurrentEmployer))
+        {
+            signMessage = IsDv ? "މިހާރު ވަޒީފާ އަދާކުރާތަން ލިޔުއްވާ." : "Please enter your current workplace / employer.";
+            return;
+        }
+
+        signBusy = true;
+        signMessage = null;
+        try
+        {
+            var mySig = await SignatureApi.GetMySignatureAsync();
+            if (mySig is null || string.IsNullOrWhiteSpace(mySig.SignatureDataUrl))
+            {
+                // Open the signature modal so applicant can draw or upload their signature
+                signBusy = false;
+                showAcceptanceModal = true;
+                return;
+            }
+
+            var res = await Api.AcceptMyOfferAsync(detail.OfferId, new AcceptRecruitmentOfferInput(
+                AgreedToTerms: true,
+                AgreedToCodeOfConduct: true,
+                ConfirmedInformationAccuracy: true,
+                ConfirmedJoiningDate: appJoiningDate,
+                SignatureDataUrl: mySig.SignatureDataUrl,
+                IsCurrentlyEmployed: appEmployed,
+                CurrentEmployer: appEmployed ? appCurrentEmployer.Trim() : null,
+                RequiresWrittenNotice: appEmployed && appRequiresNotice,
+                NoticePeriod: appEmployed && appRequiresNotice ? appNoticePeriod.Trim() : null));
+
+            signMessage = res.Message;
+            if (res.Success) await LoadAsync();
+        }
+        catch
+        {
+            signMessage = "Could not submit your offer acceptance. Please try again.";
+        }
+        finally
+        {
+            signBusy = false;
+        }
+    }
+
+    private async Task SubmitInlineDeclineAsync()
+    {
+        if (signBusy || detail is null) return;
+        signBusy = true;
+        signMessage = null;
+        try
+        {
+            var res = await Api.DeclineMyOfferAsync(detail.OfferId, appDeclineReason);
+            signMessage = res.Message;
+            if (res.Success) await LoadAsync();
+        }
+        catch
+        {
+            signMessage = "Could not submit offer decline.";
+        }
+        finally
+        {
+            signBusy = false;
+        }
     }
 
     private async Task SignAgencyIssuerAsync(string verifiedPin)

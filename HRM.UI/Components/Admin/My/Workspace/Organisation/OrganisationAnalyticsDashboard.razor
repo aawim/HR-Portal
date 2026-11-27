@@ -1,0 +1,531 @@
+@using HRM.Application.Contracts.Organisation
+@using Microsoft.JSInterop
+@inject HRM.UI.Services.Organisation.IOrganisationAnalyticsApiClient AnalyticsApi
+@inject IJSRuntime JS
+
+<div class="w-full min-w-0 space-y-4">
+    <!-- Filter & Action Toolbar -->
+    <section class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-xs">
+        <div class="flex flex-wrap items-end justify-between gap-3">
+            <div class="flex flex-wrap items-end gap-3">
+                <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 p-1">
+                    Department
+                    <select class="mt-1 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs text-slate-900 dark:text-slate-100 focus:border-blue-500 focus:outline-none"
+                            @bind="selectedDepartmentId" @bind:after="LoadAsync">
+                        <option value="0">All Departments (@(data?.DepartmentOptions.Count ?? 0))</option>
+                        @if (data is not null)
+                        {
+                            @foreach (var d in data.DepartmentOptions)
+                            {
+                                <option value="@d.Id">@d.Name (@d.Count)</option>
+                            }
+                        }
+                    </select>
+                </label>
+
+                <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 p-1">
+                    Employment Type
+                    <select class="mt-1 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs text-slate-900 dark:text-slate-100 focus:border-blue-500 focus:outline-none"
+                            @bind="selectedJobTypeId" @bind:after="LoadAsync">
+                        <option value="0">All Types</option>
+                        @if (data is not null)
+                        {
+                            @foreach (var jt in data.JobTypeOptions)
+                            {
+                                <option value="@jt.Id">@jt.Name (@jt.Count)</option>
+                            }
+                        }
+                    </select>
+                </label>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-2">
+                <div class="flex rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-0.5 text-xs">
+                    <button type="button"
+                            class="rounded-md px-2.5 py-1 font-semibold transition @(months == 6 ? "bg-white dark:bg-slate-700 text-blue-700 dark:text-blue-300 shadow-xs" : "text-slate-600 dark:text-slate-400 hover:text-slate-900")"
+                            @onclick="() => ChangePeriodAsync(6)">
+                        6 Months
+                    </button>
+                    <button type="button"
+                            class="rounded-md px-2.5 py-1 font-semibold transition @(months == 12 ? "bg-white dark:bg-slate-700 text-blue-700 dark:text-blue-300 shadow-xs" : "text-slate-600 dark:text-slate-400 hover:text-slate-900")"
+                            @onclick="() => ChangePeriodAsync(12)">
+                        12 Months
+                    </button>
+                </div>
+
+                <button type="button" class="app-button app-button-secondary app-button-sm" disabled="@loading" @onclick="LoadAsync">
+                    <AppIcon Name="arrow-clockwise" Class="@(loading ? "animate-spin" : "")" />
+                    <span>Refresh</span>
+                </button>
+                <button type="button" class="app-button app-button-secondary app-button-sm" @onclick="PrintAsync">
+                    <i class="bi bi-printer" aria-hidden="true"></i>
+                    <span>Export Report</span>
+                </button>
+                @if (OnClose.HasDelegate)
+                {
+                    <button type="button" class="app-button app-button-neutral app-button-sm" @onclick="() => OnClose.InvokeAsync()">
+                        <i class="bi bi-grid" aria-hidden="true"></i>
+                        <span>Standard Overview</span>
+                    </button>
+                }
+            </div>
+        </div>
+    </section>
+
+    @if (loading)
+    {
+        <div class="rounded-2xl border border-slate-200 bg-white p-10 text-center text-xs text-slate-500 shadow-xs">
+            Loading live organisation analytics from database...
+        </div>
+    }
+    else if (!string.IsNullOrWhiteSpace(error) || data is null)
+    {
+        <div role="alert" class="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-xs text-rose-800">
+            @(error ?? "Unable to load organisation analytics.")
+        </div>
+    }
+    else
+    {
+        <!-- 1. Executive Summary 6 KPI Cards -->
+        <section class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+            <!-- KPI 1: Total Headcount -->
+            <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3.5 shadow-xs space-y-1.5">
+                <div class="flex items-center justify-between text-slate-500">
+                    <span class="text-[10px] font-bold uppercase tracking-wider">Total Headcount</span>
+                    <span class="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-50 text-blue-600"><i class="bi bi-people text-sm" aria-hidden="true"></i></span>
+                </div>
+                <div class="flex items-baseline gap-1.5">
+                    <span class="text-xl font-bold text-slate-900 dark:text-white">@data.TotalHeadcount.ToString("N0")</span>
+                    <span class="text-[11px] font-semibold text-emerald-600">+@data.HiresLast12Months (12M)</span>
+                </div>
+                <div class="text-[11px] text-slate-500 flex justify-between">
+                    <span>Perm: @data.PermanentCount</span>
+                    <span>Other: @data.OtherEmploymentCount</span>
+                </div>
+            </div>
+
+            <!-- KPI 2: Turnover Rate -->
+            <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3.5 shadow-xs space-y-1.5">
+                <div class="flex items-center justify-between text-slate-500">
+                    <span class="text-[10px] font-bold uppercase tracking-wider">Turnover (12M)</span>
+                    <span class="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-50 text-amber-600"><i class="bi bi-person-dash text-sm" aria-hidden="true"></i></span>
+                </div>
+                <div class="flex items-baseline gap-1.5">
+                    <span class="text-xl font-bold text-slate-900 dark:text-white">@data.TurnoverRatePercent.ToString("0.0")%</span>
+                </div>
+                <div class="text-[11px] text-slate-500">Exits (12M): <strong class="text-slate-700">@data.ExitsLast12Months</strong></div>
+            </div>
+
+            <!-- KPI 3: Retention Rate -->
+            <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3.5 shadow-xs space-y-1.5">
+                <div class="flex items-center justify-between text-slate-500">
+                    <span class="text-[10px] font-bold uppercase tracking-wider">Retention Rate</span>
+                    <span class="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600"><i class="bi bi-shield-check text-sm" aria-hidden="true"></i></span>
+                </div>
+                <div class="flex items-baseline gap-1.5">
+                    <span class="text-xl font-bold text-emerald-700">@data.RetentionRatePercent.ToString("0.0")%</span>
+                </div>
+                <div class="text-[11px] text-slate-500">Rolling 12-month</div>
+            </div>
+
+            <!-- KPI 4: Open Vacancies -->
+            <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3.5 shadow-xs space-y-1.5">
+                <div class="flex items-center justify-between text-slate-500">
+                    <span class="text-[10px] font-bold uppercase tracking-wider">Open Vacancies</span>
+                    <span class="flex h-7 w-7 items-center justify-center rounded-lg bg-teal-50 text-teal-700"><i class="bi bi-briefcase text-sm" aria-hidden="true"></i></span>
+                </div>
+                <div class="flex items-baseline gap-1.5">
+                    <span class="text-xl font-bold text-slate-900 dark:text-white">@data.OpenVacanciesCount</span>
+                    <span class="text-[11px] text-slate-500">published</span>
+                </div>
+                <div class="text-[11px] text-slate-500">Total Slots: <strong class="text-slate-700">@data.OpenVacancySlots</strong></div>
+            </div>
+
+            <!-- KPI 5: Avg Tenure -->
+            <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3.5 shadow-xs space-y-1.5">
+                <div class="flex items-center justify-between text-slate-500">
+                    <span class="text-[10px] font-bold uppercase tracking-wider">Avg Tenure</span>
+                    <span class="flex h-7 w-7 items-center justify-center rounded-lg bg-purple-50 text-purple-600"><i class="bi bi-clock-history text-sm" aria-hidden="true"></i></span>
+                </div>
+                <div class="flex items-baseline gap-1.5">
+                    <span class="text-xl font-bold text-slate-900 dark:text-white">@data.AverageTenureYears.ToString("0.0")</span>
+                    <span class="text-xs text-slate-500">yrs</span>
+                </div>
+                <div class="text-[11px] text-slate-500">Leaves YTD: <strong class="text-slate-700">@data.ApprovedLeavesYtd d</strong></div>
+            </div>
+
+            <!-- KPI 6: Monthly Basic Payroll -->
+            <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3.5 shadow-xs space-y-1.5">
+                <div class="flex items-center justify-between text-slate-500">
+                    <span class="text-[10px] font-bold uppercase tracking-wider">Monthly Basic</span>
+                    <span class="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700"><i class="bi bi-cash-stack text-sm" aria-hidden="true"></i></span>
+                </div>
+                <div class="flex items-baseline gap-1">
+                    <span class="text-base font-bold text-slate-900 dark:text-white font-mono">MVR @FormatCompactMvr(data.TotalMonthlyBasicPayroll)</span>
+                </div>
+                <div class="text-[11px] text-slate-500">Active base payroll</div>
+            </div>
+        </section>
+
+        <!-- 2. Talent Flow Chart + Department Headcount Breakdown -->
+        <section class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+            <!-- Talent Flow: New Hires vs Departures (7 Cols) -->
+            <div class="lg:col-span-7 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-xs space-y-4">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                        <h3 class="text-sm font-bold text-slate-900 dark:text-white">Talent Flow: New Hires vs Exits</h3>
+                        <p class="text-xs text-slate-500">Monthly hiring and separation trajectory (@months-month window)</p>
+                    </div>
+                    <div class="flex items-center gap-3 text-[11px] font-semibold">
+                        <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-xs bg-blue-600"></span>Hires</span>
+                        <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-xs bg-rose-400"></span>Exits</span>
+                    </div>
+                </div>
+
+                @{
+                    var maxFlow = Math.Max(1, data.TalentFlow.SelectMany(x => new[] { x.Hires, x.Exits }).DefaultIfEmpty(1).Max());
+                }
+                <div class="grid gap-2 items-end pt-2" style="@($"grid-template-columns: repeat({Math.Max(1, data.TalentFlow.Count)}, minmax(0, 1fr)); height: 13rem;")">
+                    @foreach (var pt in data.TalentFlow)
+                    {
+                        var hPct = Math.Round((double)pt.Hires * 100.0 / maxFlow, 0);
+                        var ePct = Math.Round((double)pt.Exits * 100.0 / maxFlow, 0);
+                        <div class="flex flex-col items-center justify-end h-full gap-1.5">
+                            <div class="text-[10px] font-mono font-semibold @(pt.Net >= 0 ? "text-emerald-700" : "text-rose-600")">
+                                @(pt.Net >= 0 ? $"+{pt.Net}" : pt.Net.ToString())
+                            </div>
+                            <div class="flex items-end justify-center gap-1 w-full flex-1 min-h-0">
+                                <div title="@($"{pt.MonthLabel}: {pt.Hires} hire(s)")"
+                                     class="w-3 sm:w-4 rounded-t bg-blue-600 transition-all"
+                                     style="@($"height:{Math.Max(pt.Hires > 0 ? 8 : 2, hPct)}%;")"></div>
+                                <div title="@($"{pt.MonthLabel}: {pt.Exits} exit(s)")"
+                                     class="w-3 sm:w-4 rounded-t bg-rose-400 transition-all"
+                                     style="@($"height:{Math.Max(pt.Exits > 0 ? 8 : 2, ePct)}%;")"></div>
+                            </div>
+                            <div class="text-[10px] text-slate-500 font-medium truncate max-w-full">@pt.MonthLabel</div>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- Department Headcount Distribution (5 Cols) -->
+            <div class="lg:col-span-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-xs flex flex-col justify-between space-y-3">
+                <div class="flex items-center justify-between gap-2">
+                    <div>
+                        <h3 class="text-sm font-bold text-slate-900 dark:text-white">Department Headcount</h3>
+                        <p class="text-xs text-slate-500">Top units across @data.Departments.Count department(s)</p>
+                    </div>
+                    <span class="rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-semibold text-slate-700">@data.TotalHeadcount Total</span>
+                </div>
+
+                <div class="space-y-2.5 max-h-56 overflow-y-auto pr-1">
+                    @foreach (var dept in data.Departments.Take(8))
+                    {
+                        <div>
+                            <div class="flex items-center justify-between text-xs mb-1 gap-2">
+                                <span class="font-medium text-slate-700 dark:text-slate-300 truncate">@dept.DepartmentName</span>
+                                <span class="font-semibold text-slate-900 dark:text-white shrink-0">@dept.Headcount (@dept.SharePercent.ToString("0.0")%)</span>
+                            </div>
+                            <div class="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
+                                <div class="bg-blue-600 h-2 rounded-full" style="@($"width:{Math.Min(100, dept.SharePercent)}%;")"></div>
+                            </div>
+                        </div>
+                    }
+                    @if (data.Departments.Count == 0)
+                    {
+                        <p class="text-xs text-slate-500 py-4 text-center">No active department headcount found.</p>
+                    }
+                </div>
+
+                @if (data.Departments.Count > 0)
+                {
+                    var largest = data.Departments[0];
+                    <div class="flex items-center justify-between text-[11px] text-slate-500 pt-2 border-t border-slate-100 dark:border-slate-800">
+                        <span>Largest: <strong class="text-slate-800 dark:text-slate-200">@largest.DepartmentName (@largest.SharePercent.ToString("0.0")%)</strong></span>
+                        <span>Synced @data.GeneratedAtUtc.AddHours(5).ToString("HH:mm") MVT</span>
+                    </div>
+                }
+            </div>
+        </section>
+
+        <!-- 3. Gender Representation, Employment Type Distribution & Recruitment Efficiency -->
+        <section class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <!-- Gender Representation -->
+            <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-xs space-y-3">
+                <div class="flex items-center justify-between">
+                    <h4 class="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                        <i class="bi bi-pie-chart text-blue-600" aria-hidden="true"></i>
+                        <span>Gender Representation</span>
+                    </h4>
+                </div>
+                @{
+                    var fPct = data.TotalHeadcount == 0 ? 0m : Math.Round((decimal)data.FemaleCount * 100m / data.TotalHeadcount, 1);
+                    var mPct = data.TotalHeadcount == 0 ? 0m : Math.Round((decimal)data.MaleCount * 100m / data.TotalHeadcount, 1);
+                    var uPct = data.TotalHeadcount == 0 ? 0m : Math.Round((decimal)data.UnspecifiedGenderCount * 100m / data.TotalHeadcount, 1);
+                }
+                <div class="space-y-3 text-xs">
+                    <div>
+                        <div class="flex justify-between mb-1"><span class="text-slate-600">Female</span><span class="font-bold text-slate-900">@fPct.ToString("0.0")% (@data.FemaleCount)</span></div>
+                        <div class="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden"><div class="bg-teal-600 h-2.5 rounded-full" style="@($"width:{fPct}%;")"></div></div>
+                    </div>
+                    <div>
+                        <div class="flex justify-between mb-1"><span class="text-slate-600">Male</span><span class="font-bold text-slate-900">@mPct.ToString("0.0")% (@data.MaleCount)</span></div>
+                        <div class="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden"><div class="bg-blue-600 h-2.5 rounded-full" style="@($"width:{mPct}%;")"></div></div>
+                    </div>
+                    @if (data.UnspecifiedGenderCount > 0)
+                    {
+                        <div>
+                            <div class="flex justify-between mb-1"><span class="text-slate-600">Unspecified</span><span class="font-bold text-slate-900">@uPct.ToString("0.0")% (@data.UnspecifiedGenderCount)</span></div>
+                            <div class="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden"><div class="bg-slate-400 h-2.5 rounded-full" style="@($"width:{uPct}%;")"></div></div>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- Employment Type Distribution -->
+            <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-xs space-y-3">
+                <h4 class="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                    <i class="bi bi-building text-emerald-600" aria-hidden="true"></i>
+                    <span>Employment Type Mix</span>
+                </h4>
+                <div class="space-y-3 text-xs">
+                    @foreach (var jt in data.JobTypes.Take(5))
+                    {
+                        <div>
+                            <div class="flex justify-between mb-1"><span class="text-slate-600 truncate">@jt.Name</span><span class="font-bold text-slate-900 shrink-0">@jt.SharePercent.ToString("0.0")% (@jt.Count)</span></div>
+                            <div class="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden"><div class="bg-emerald-500 h-2.5 rounded-full" style="@($"width:{jt.SharePercent}%;")"></div></div>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- Recruitment Efficiency -->
+            <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-xs space-y-3">
+                <h4 class="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                    <i class="bi bi-speedometer2 text-amber-600" aria-hidden="true"></i>
+                    <span>Recruitment Efficiency</span>
+                </h4>
+                <div class="space-y-2 text-xs">
+                    <div class="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
+                        <span class="text-slate-600">Offer Acceptance Rate</span>
+                        <span class="font-bold text-emerald-700">@data.OfferAcceptanceRatePercent.ToString("0.0")%</span>
+                    </div>
+                    <div class="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
+                        <span class="text-slate-600">Offers Issued / Accepted</span>
+                        <span class="font-bold text-slate-900">@data.OffersIssued / @data.OffersAccepted</span>
+                    </div>
+                    <div class="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
+                        <span class="text-slate-600">Total Applications</span>
+                        <span class="font-bold text-blue-700">@data.TotalApplications.ToString("N0")</span>
+                    </div>
+                    <div class="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
+                        <span class="text-slate-600">Active Open Vacancies</span>
+                        <span class="font-bold text-slate-900">@data.OpenVacanciesCount (@data.OpenVacancySlots slots)</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 4. Executive Department Ledger & Talent Momentum -->
+        <section class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+            <!-- Department Ledger (5 Cols) -->
+            <div class="lg:col-span-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-xs space-y-3">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h3 class="text-sm font-bold text-slate-900 dark:text-white">Department Ledger</h3>
+                        <p class="text-xs text-slate-500">Headcount, teams, and monthly base payroll</p>
+                    </div>
+                </div>
+                <div class="overflow-x-auto rounded-xl border border-slate-200 max-h-80 overflow-y-auto">
+                    <table class="w-full text-left text-xs">
+                        <thead class="sticky top-0 bg-slate-50 border-b border-slate-200 text-slate-700 font-semibold">
+                            <tr>
+                                <th class="p-2.5">Department</th>
+                                <th class="p-2.5 text-right">Staff</th>
+                                <th class="p-2.5 text-right">Teams</th>
+                                <th class="p-2.5 text-right">Base Payroll</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            @foreach (var dept in data.Departments)
+                            {
+                                <tr class="hover:bg-slate-50/60">
+                                    <td class="p-2.5 font-semibold text-slate-800">@dept.DepartmentName</td>
+                                    <td class="p-2.5 text-right font-mono">@dept.Headcount</td>
+                                    <td class="p-2.5 text-right font-mono text-slate-600">@dept.TeamCount</td>
+                                    <td class="p-2.5 text-right font-mono text-slate-800">@FormatCompactMvr(dept.MonthlyBasicPayroll)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Talent Momentum: Recent Hires & Work Anniversaries (7 Cols) -->
+            <div class="lg:col-span-7 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-xs space-y-3">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                        <h3 class="text-sm font-bold text-slate-900 dark:text-white">Talent Momentum: Recent Hires &amp; Milestones</h3>
+                        <p class="text-xs text-slate-500">Latest staff onboarding and upcoming 60-day work anniversaries</p>
+                    </div>
+                    <div class="flex rounded-lg border border-slate-200 bg-slate-50 p-0.5 text-xs">
+                        <button type="button"
+                                class="rounded-md px-2.5 py-1 font-semibold @(momentumTab == "hires" ? "bg-white text-blue-700 shadow-xs" : "text-slate-600")"
+                                @onclick='() => momentumTab = "hires"'>
+                            Recent Hires (@data.RecentHires.Count)
+                        </button>
+                        <button type="button"
+                                class="rounded-md px-2.5 py-1 font-semibold @(momentumTab == "anniversaries" ? "bg-white text-blue-700 shadow-xs" : "text-slate-600")"
+                                @onclick='() => momentumTab = "anniversaries"'>
+                            Anniversaries (@data.UpcomingAnniversaries.Count)
+                        </button>
+                    </div>
+                </div>
+
+                @if (momentumTab == "hires")
+                {
+                    <div class="overflow-x-auto rounded-xl border border-slate-200">
+                        <table class="w-full text-left text-xs">
+                            <thead class="bg-slate-50 border-b border-slate-200 text-slate-700 font-semibold">
+                                <tr>
+                                    <th class="p-2.5">Employee</th>
+                                    <th class="p-2.5">Position &amp; Dept</th>
+                                    <th class="p-2.5">Joined</th>
+                                    <th class="p-2.5">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100">
+                                @if (data.RecentHires.Count == 0)
+                                {
+                                    <tr><td colspan="4" class="p-6 text-center text-slate-500">No recent hires found.</td></tr>
+                                }
+                                else
+                                {
+                                    @foreach (var h in data.RecentHires)
+                                    {
+                                        <tr class="hover:bg-slate-50/60">
+                                            <td class="p-2.5 font-semibold text-slate-900">@h.FullName</td>
+                                            <td class="p-2.5">
+                                                <div class="font-medium text-slate-800">@h.PositionTitle</div>
+                                                <div class="text-[11px] text-slate-500">@h.DepartmentName</div>
+                                            </td>
+                                            <td class="p-2.5 text-slate-600">@h.JoinedDate.ToString("dd MMM yyyy")</td>
+                                            <td class="p-2.5">
+                                                <span class="rounded-full px-2.5 py-0.5 text-[10px] font-semibold @(h.InProbation ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800")">
+                                                    @(h.InProbation ? "Probation" : "Confirmed")
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    }
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                else
+                {
+                    <div class="overflow-x-auto rounded-xl border border-slate-200">
+                        <table class="w-full text-left text-xs">
+                            <thead class="bg-slate-50 border-b border-slate-200 text-slate-700 font-semibold">
+                                <tr>
+                                    <th class="p-2.5">Employee</th>
+                                    <th class="p-2.5">Department</th>
+                                    <th class="p-2.5">Milestone</th>
+                                    <th class="p-2.5">Date</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100">
+                                @if (data.UpcomingAnniversaries.Count == 0)
+                                {
+                                    <tr><td colspan="4" class="p-6 text-center text-slate-500">No work anniversaries in the next 60 days.</td></tr>
+                                }
+                                else
+                                {
+                                    @foreach (var a in data.UpcomingAnniversaries)
+                                    {
+                                        <tr class="hover:bg-slate-50/60">
+                                            <td class="p-2.5 font-semibold text-slate-900">@a.FullName</td>
+                                            <td class="p-2.5 text-slate-600">@a.DepartmentName</td>
+                                            <td class="p-2.5">
+                                                <span class="rounded-full bg-blue-50 border border-blue-200 px-2.5 py-0.5 text-[10px] font-semibold text-blue-800">
+                                                    @a.YearsCompleted yr@(a.YearsCompleted == 1 ? "" : "s")
+                                                </span>
+                                            </td>
+                                            <td class="p-2.5 text-slate-600">@a.AnniversaryDate.ToString("dd MMM yyyy")</td>
+                                        </tr>
+                                    }
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+        </section>
+    }
+</div>
+
+@code {
+    [Parameter] public int OrganisationId { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private OrganisationAnalyticsDto? data;
+    private int loadedOrgId;
+    private int selectedDepartmentId;
+    private int selectedJobTypeId;
+    private int months = 6;
+    private string momentumTab = "hires";
+    private bool loading;
+    private string? error;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (OrganisationId > 0 && OrganisationId != loadedOrgId)
+        {
+            loadedOrgId = OrganisationId;
+            selectedDepartmentId = 0;
+            selectedJobTypeId = 0;
+            await LoadAsync();
+        }
+    }
+
+    private async Task ChangePeriodAsync(int nextMonths)
+    {
+        if (months == nextMonths) return;
+        months = nextMonths;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (OrganisationId <= 0) return;
+        loading = true;
+        error = null;
+        try
+        {
+            data = await AnalyticsApi.GetAnalyticsAsync(
+                OrganisationId,
+                selectedDepartmentId > 0 ? selectedDepartmentId : null,
+                selectedJobTypeId > 0 ? selectedJobTypeId : null,
+                months);
+            if (data is null)
+                error = "You do not have access to analytics for this organisation.";
+        }
+        catch (HttpRequestException)
+        {
+            error = "Could not load organisation analytics.";
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private async Task PrintAsync() => await JS.InvokeVoidAsync("window.print");
+
+    private static string FormatCompactMvr(decimal amount) => amount switch
+    {
+        >= 1_000_000m => $"{amount / 1_000_000m:0.##}M",
+        >= 1_000m => $"{amount / 1_000m:0.#}K",
+        _ => $"{amount:N0}"
+    };
+}

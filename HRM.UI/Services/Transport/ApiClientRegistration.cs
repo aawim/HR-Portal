@@ -52,6 +52,12 @@ public static class ApiClientRegistration
             publicHttp.BaseAddress = origins.Api;
             return new HRM.UI.Services.Signatures.DocumentSignatureApiClient(new HttpClient(handler) { BaseAddress = origins.Api }, publicHttp);
         });
+        services.AddScoped<HRM.UI.Services.Organisation.IOrganisationAnalyticsApiClient>(provider =>
+        {
+            var origins = provider.GetRequiredService<BackendOrigins>();
+            var handler = new CircuitBackendHandler(provider.GetRequiredService<Microsoft.AspNetCore.Components.Authorization.AuthenticationStateProvider>(), provider.GetRequiredService<BackendSessionStore>(), provider.GetRequiredService<IHttpClientFactory>(), origins, provider.GetRequiredService<Microsoft.AspNetCore.DataProtection.IDataProtectionProvider>(), provider.GetRequiredService<ILogger<BackendSession>>());
+            return new HRM.UI.Services.Organisation.OrganisationAnalyticsApiClient(new HttpClient(handler) { BaseAddress = origins.Api });
+        });
         services.AddScoped<IUserService, UserProfileClient>();
         services.AddScoped<IGeographyService, GeographyClient>();
         services.AddScoped<HRM.Services.ToastService>();

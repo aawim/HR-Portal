@@ -76,6 +76,24 @@ public sealed class RecruitmentOfferService(
         return ServiceResult.Ok($"Job offer draft created for {r.applicant.FullName} ({r.app.Reference}). Sign the offer letter before publishing to the applicant.");
     }
 
+    public async Task<ServiceResult> UpdateTermsAsync(int offerId, string termsSnapshotJson, CancellationToken ct = default)
+    {
+        if (offerId <= 0 || string.IsNullOrWhiteSpace(termsSnapshotJson) || termsSnapshotJson.Length > 16000)
+            return ServiceResult.Fail("Provide valid offer terms.");
+
+        var (o, _) = await Auth();
+        await using var d = await factory.CreateDbContextAsync(ct);
+        var offer = await d.RecruitmentOffers.SingleOrDefaultAsync(x => x.Id == offerId && x.OrganisationId == o, ct);
+        if (offer is null) return ServiceResult.Fail("Offer not found.");
+        if (offer.Status != "Draft") return ServiceResult.Fail("Only Draft offers can be edited.");
+
+        var l = await logs.CreateAsync(d, SharedConfig.OperationLogActionTypes.REQUESTS_UPDATE, $"Updated draft offer #{offer.Id} salary, allowances, and terms.");
+        offer.TermsSnapshotJson = termsSnapshotJson;
+        offer.OperationLogId = l.OperationLogId;
+        await d.SaveChangesAsync(ct);
+        return ServiceResult.Ok("Offer letter details saved.");
+    }
+
     public async Task<ServiceResult> PublishAsync(int offerId, CancellationToken ct = default)
     {
         var (o, _) = await Auth();

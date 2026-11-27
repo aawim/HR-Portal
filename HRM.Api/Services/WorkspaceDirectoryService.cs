@@ -419,7 +419,7 @@ public sealed class WorkspaceDirectoryService(IDbContextFactory<HrmTeContext> fa
         .Take(50)
         .ToListAsync(token);
 
-        if (!isSuperAdministrator)
+        if (!isSuperAdministrator && foundStaff.Count > 0)
         {
             var visible = await HRM.Helpers.StaffAttributeAccess.FilterViewableAsync(Db, access, currentOrganisationId,
                 foundStaff.Select(x => x.IndividualId), token);

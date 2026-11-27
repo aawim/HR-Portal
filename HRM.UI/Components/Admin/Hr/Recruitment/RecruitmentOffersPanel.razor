@@ -462,9 +462,19 @@
                 workspace = await Api.GetOfferWorkspaceAsync(vacancy);
                 if (workspace?.Context is not null)
                 {
+                    positionAllowance = workspace.Context.PositionAllowance is > 0
+                        ? $"MVR {workspace.Context.PositionAllowance.Value:N2}"
+                        : "";
+                    attendanceAllowance = workspace.Context.AttendanceAllowanceDaily is > 0
+                        ? $"MVR {workspace.Context.AttendanceAllowanceDaily.Value:N2} per day"
+                        : "";
+                    var gradeLine = !string.IsNullOrWhiteSpace(workspace.Context.GradeCode) ? $"Grade / Rank: {workspace.Context.GradeCode}" : "";
                     var salaryLine = workspace.Context.BasicSalary.HasValue ? $"Basic Salary: MVR {workspace.Context.BasicSalary.Value:N2}" : "";
+                    var posAllowLine = !string.IsNullOrWhiteSpace(positionAllowance) ? $"Position Allowance: {positionAllowance}" : "";
+                    var attAllowLine = !string.IsNullOrWhiteSpace(attendanceAllowance) ? $"Attendance Allowance: {attendanceAllowance}" : "";
+                    var otherAllowLine = !string.IsNullOrWhiteSpace(workspace.Context.OtherAllowancesSummary) ? $"Other Allowances: {workspace.Context.OtherAllowancesSummary}" : "";
                     var typeLine = !string.IsNullOrWhiteSpace(workspace.Context.EmploymentType) ? $"Employment Type: {workspace.Context.EmploymentType}" : "";
-                    terms = string.Join("\n", new[] { $"Position: {workspace.Context.PositionName}", salaryLine, typeLine }.Where(s => !string.IsNullOrWhiteSpace(s)));
+                    terms = string.Join("\n", new[] { $"Position: {workspace.Context.PositionName}", gradeLine, salaryLine, posAllowLine, attAllowLine, otherAllowLine, typeLine }.Where(s => !string.IsNullOrWhiteSpace(s)));
                 }
             }
         }
@@ -531,6 +541,8 @@
             BasicSalary = workspace?.Context?.BasicSalary,
             PositionAllowance = string.IsNullOrWhiteSpace(positionAllowance) ? null : positionAllowance.Trim(),
             AttendanceAllowance = string.IsNullOrWhiteSpace(attendanceAllowance) ? null : attendanceAllowance.Trim(),
+            OtherAllowances = string.IsNullOrWhiteSpace(workspace?.Context?.OtherAllowancesSummary) ? null : workspace.Context.OtherAllowancesSummary.Trim(),
+            GradeCode = workspace?.Context?.GradeCode,
             EmploymentType = workspace?.Context?.EmploymentType,
             ProbationPeriod = probationPeriod.Trim(),
             ProposedStartDate = proposedStartDate.ToString("yyyy-MM-dd"),

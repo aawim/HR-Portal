@@ -62,9 +62,15 @@
                     <span class="inline-flex items-center gap-1.5"><span class="h-1.5 w-1.5 rounded-full bg-blue-500"></span>Departments: <strong class="text-slate-800 dark:text-slate-100">@data.Departments.Count</strong></span>
                     <span>·</span>
                     <span class="inline-flex items-center gap-1.5"><span class="h-1.5 w-1.5 rounded-full bg-teal-500"></span>Teams: <strong class="text-slate-800 dark:text-slate-100">@data.Teams.Count</strong></span>
+                    <button type="button"
+                            class="app-button @(showAnalytics ? "app-button-neutral" : "app-button-primary") app-button-sm ml-1"
+                            @onclick="() => showAnalytics = !showAnalytics">
+                        <i class="bi @(showAnalytics ? "bi-grid" : "bi-bar-chart-line")" aria-hidden="true"></i>
+                        <span>@(showAnalytics ? "Standard Overview" : "Analytics")</span>
+                    </button>
                     @if (HideHeader)
                     {
-                        <button type="button" class="app-button app-button-secondary app-button-sm ml-1" @onclick="LoadAsync">
+                        <button type="button" class="app-button app-button-secondary app-button-sm" @onclick="LoadAsync">
                             <AppIcon Name="refresh" Class="text-xs" />
                             <span>Refresh</span>
                         </button>
@@ -72,6 +78,12 @@
                 </div>
             </section>
 
+            @if (showAnalytics)
+            {
+                <OrganisationAnalyticsDashboard OrganisationId="@OrganisationId" OnClose="() => showAnalytics = false" />
+            }
+            else
+            {
             <!-- 3-Column Responsive Enterprise Cards: Departments, Teams, Roles & Permissions -->
             <div class="org-overview-grid">
                 <section class="overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
@@ -259,6 +271,7 @@
             @if (canManageLeadership)
             {
                 <HRM.Components.Admin.Settings.LeadershipAdministrationPage Embedded="true" InitialOrganisationId="OrganisationId" />
+            }
             }
         }
         else if (ActiveTab == WorkspaceTab.Staff)
@@ -496,7 +509,7 @@
     private List<OrganisationWorkspaceStaff> staff = [];
     private OrganisationWorkspaceStaff? historyPerson;
     private List<OrganisationWorkspaceDocument> documents = [];
-    private bool loading, staffRefreshing;
+    private bool loading, staffRefreshing, showAnalytics;
     private string? error;
     private string search = "", staffScope = "active";
     private int department, page, total, loadedId;
@@ -512,7 +525,7 @@
             canManageLeadership = actor.IsSuperAdministrator || await UserAccess.HasPermissionAsync("Leadership.Appointment.Manage");
         }
         catch { canManageLeadership = false; }
-        if (loadedId != OrganisationId) { data = null; search = ""; department = 0; }
+        if (loadedId != OrganisationId) { data = null; search = ""; department = 0; showAnalytics = false; }
         loadedId = OrganisationId; loadedTab = ActiveTab; page = 0; resourceSearch = ""; resourceLimit = 50;
         await LoadAsync();
     }

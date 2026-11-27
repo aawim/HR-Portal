@@ -17,10 +17,12 @@ public sealed record AcceptRecruitmentOfferInput(
     bool RequiresWrittenNotice=false,
     string? NoticePeriod=null);
 public sealed record DeclineRecruitmentOfferInput(string? Reason);
+public sealed record UpdateOfferTermsInput(string TermsSnapshotJson);
 public sealed record HrOfferDecisionInput(string Decision,string? Comment);
 public interface IRecruitmentOfferService
 {
     Task<ServiceResult> CreateAsync(CreateRecruitmentOfferInput input,CancellationToken ct=default);
+    Task<ServiceResult> UpdateTermsAsync(int offerId,string termsSnapshotJson,CancellationToken ct=default);
     Task<ServiceResult> PublishAsync(int offerId,CancellationToken ct=default);
     Task<ServiceResult> AcceptMyOfferAsync(int offerId,AcceptRecruitmentOfferInput? input=null,CancellationToken ct=default);
     Task<ServiceResult> DeclineMyOfferAsync(int offerId,string? reason=null,CancellationToken ct=default);

@@ -7,11 +7,29 @@
 
 <PageTitle>Communication Hub</PageTitle>
 <section class="w-full min-w-0 p-2 space-y-4">
-  <header class="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur-xs px-3 py-3 shadow-xs rounded-xl flex flex-wrap items-center justify-between gap-3">
-    <div><h1 class="text-lg font-bold text-slate-900">Communication Hub</h1><p class="mt-0.5 text-xs text-slate-500">Configure communication platforms and approved announcements. Connections remain inactive until explicitly enabled.</p></div>
-    <div class="flex flex-wrap items-center gap-2"><button class="app-button app-button-secondary app-button-sm" @onclick="ToggleWidth">@(full ? "Shrink View" : "Full Width")</button><button class="app-button app-button-secondary app-button-sm" @onclick="LoadAsync">Refresh</button></div>
+  <header class="flex flex-wrap items-center justify-between gap-2 px-1 py-0.5">
+    <div class="min-w-0">
+      <div class="flex items-center gap-2 flex-wrap">
+        <h1 class="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 truncate">Communication Hub</h1>
+        <span class="inline-flex items-center gap-1 rounded-full bg-teal-50 dark:bg-teal-950/60 border border-teal-200/80 dark:border-teal-800 px-2 py-0.5 text-[10px] font-semibold text-teal-700 dark:text-teal-300">
+          <span class="h-1.5 w-1.5 rounded-full bg-teal-500"></span>
+          Communications
+        </span>
+      </div>
+      <p class="text-xs text-slate-500 dark:text-slate-400">Configure communication platforms and approved announcements. Connections remain inactive until explicitly enabled.</p>
+    </div>
+    <div class="flex flex-wrap items-center gap-1.5">
+      <button type="button" class="app-button app-button-neutral app-button-sm" @onclick="ToggleWidth">
+        <AppIcon Name="@(full ? "fullscreen_exit" : "fullscreen")" />
+        <span>@(full ? "Shrink View" : "Full Width")</span>
+      </button>
+      <button type="button" class="app-button app-button-secondary app-button-sm" disabled="@loading" @onclick="LoadAsync">
+        <AppIcon Name="arrow-clockwise" Class="@(loading ? "animate-spin" : "")" />
+        <span>Refresh</span>
+      </button>
+    </div>
   </header>
-  <div class="mx-auto w-full min-w-0 space-y-4 @(full ? "max-w-none" : "max-w-7xl")">
+  <div class="mx-auto w-full min-w-0 space-y-4 transition-all duration-300 @(full ? "max-w-none" : "max-w-7xl")">
     @if (error is not null) { <div class="flex items-center justify-between rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800"><span>@error</span><button class="app-button app-button-ghost app-button-sm" @onclick="() => error=null">Dismiss</button></div> }
     @if (loading) { <div class="rounded-xl border border-slate-200 bg-white p-6 text-xs text-slate-500">Loading communication configuration…</div> }
     else {

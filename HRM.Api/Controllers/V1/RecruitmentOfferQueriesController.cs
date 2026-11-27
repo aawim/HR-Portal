@@ -40,13 +40,19 @@ public sealed class RecruitmentOfferQueriesController(
                            vac.Reference,
                            vac.VacancySlots,
                            vac.PositionMatrixId,
+                           JobMatrixId = pm != null ? (int?)pm.JobMatrixId : null,
+                           JobMatrixStepId = pm != null ? pm.JobMatrixStepId : null,
                            EmploymentType = req != null ? req.EmploymentType : null,
                            PositionName = jt != null ? jt.Name : (jm != null ? jm.Name : vac.Reference),
                            BasicSalary = jm != null ? (decimal?)jm.BasicSalary : null,
+                           AttendanceAllowanceDaily = jm != null ? jm.AttendanceBenefitDaily : null,
+                           GradeCode = jm != null ? (jm.GradeCode ?? jm.PublicServiceRank) : null,
                            DefaultStructureId = pm != null ? pm.OrganisationStructureId : null
                        }).SingleOrDefaultAsync(ct);
 
         if (v is null) return NotFound();
+
+        var (effectiveBasicSalary, positionAllowance, otherAllowancesSummary) = await LoadMatrixRemunerationAsync(db, v.JobMatrixId, v.JobMatrixStepId, v.BasicSalary, ct);
 
         var isFinal = await db.RecruitmentResultPublications.AsNoTracking()
             .AnyAsync(p => p.RecruitmentVacancyId == v.Id && p.OrganisationId == org && p.IsFinal, ct);
@@ -186,14 +192,18 @@ public sealed class RecruitmentOfferQueriesController(
 
         var context = new RecruitmentOfferContext(
             v.PositionName,
-            v.BasicSalary,
+            effectiveBasicSalary,
             v.EmploymentType,
             v.DefaultStructureId,
             defaultPosId,
             structures,
             jobTypes,
             vacantPositions,
-            defaultJobTypeId);
+            defaultJobTypeId,
+            positionAllowance,
+            v.AttendanceAllowanceDaily,
+            otherAllowancesSummary,
+            v.GradeCode);
 
         return Ok(new RecruitmentOfferWorkspace(candidates, offers, context, v.VacancySlots, isFinal));
     }
@@ -209,6 +219,8 @@ public sealed class RecruitmentOfferQueriesController(
                          join app in db.RecruitmentApplications.AsNoTracking() on m.RecruitmentApplicationId equals app.Id
                          join person in db.RecruitmentApplicants.AsNoTracking() on app.RecruitmentApplicantId equals person.Id
                          join v in db.RecruitmentVacancies.AsNoTracking() on app.RecruitmentVacancyId equals v.Id
+                         join req in db.RecruitmentRequisitions.AsNoTracking() on v.RecruitmentRequisitionId equals req.Id into reqs
+                         from req in reqs.DefaultIfEmpty()
                          join org in db.Organisations.AsNoTracking() on o.OrganisationId equals org.BusinessEntityID into orgs
                          from org in orgs.DefaultIfEmpty()
                          join pm in db.PositionMatrices.AsNoTracking() on v.PositionMatrixId equals pm.PositionMatrixId into pms
@@ -229,7 +241,12 @@ public sealed class RecruitmentOfferQueriesController(
                              person.EfaasIdNumber,
                              ApplicationCode = app.Reference,
                              PositionTitle = jt != null ? jt.Name : (jm != null ? jm.Name : v.Reference),
+                             JobMatrixId = pm != null ? (int?)pm.JobMatrixId : null,
+                             JobMatrixStepId = pm != null ? pm.JobMatrixStepId : null,
                              BasicSalary = jm != null ? (decimal?)jm.BasicSalary : null,
+                             AttendanceAllowanceDaily = jm != null ? jm.AttendanceBenefitDaily : null,
+                             GradeCode = jm != null ? (jm.GradeCode ?? jm.PublicServiceRank) : null,
+                             EmploymentType = req != null ? req.EmploymentType : null,
                              AnnouncementNumber = v.Reference,
                              AgencyName = org != null ? org.OrganisationName : "",
                              AgencyNameDhivehi = org != null ? org.OrganisationNameDhivehi : null,
@@ -262,6 +279,8 @@ public sealed class RecruitmentOfferQueriesController(
         var appointeeSig = sigs.FirstOrDefault(s => s.SlotKey == "AppointeeAcceptance");
         var agencySig = sigs.FirstOrDefault(s => s.SlotKey == "AgencyIssuer");
 
+        var (effectiveBasicSalary, positionAllowance, otherAllowancesSummary) = await LoadMatrixRemunerationAsync(db, row.JobMatrixId, row.JobMatrixStepId, row.BasicSalary, ct);
+
         return Ok(new JobOfferLetterDetailDto(
             row.Id,
             row.Status,
@@ -269,7 +288,7 @@ public sealed class RecruitmentOfferQueriesController(
             row.EfaasIdNumber,
             row.ApplicationCode,
             row.PositionTitle,
-            row.BasicSalary,
+            effectiveBasicSalary,
             row.AnnouncementNumber,
             row.AgencyName,
             row.AgencyNameDhivehi,
@@ -281,6 +300,54 @@ public sealed class RecruitmentOfferQueriesController(
             appointeeSig?.VerificationCode,
             agencySig?.SignatureImageDataUrl,
             agencySig?.VerificationCode,
-            agencySig?.SignedAtUtc));
+            agencySig?.SignedAtUtc,
+            positionAllowance,
+            row.AttendanceAllowanceDaily,
+            otherAllowancesSummary,
+            row.GradeCode,
+            row.EmploymentType));
+    }
+
+    private static async Task<(decimal? BasicSalary, decimal? PositionAllowance, string? OtherAllowancesSummary)> LoadMatrixRemunerationAsync(
+        HrmTeContext db, int? jobMatrixId, int? jobMatrixStepId, decimal? fallbackBasicSalary, CancellationToken ct)
+    {
+        decimal? basic = fallbackBasicSalary;
+        decimal? posAllowance = null;
+        string? otherSummary = null;
+
+        if (!jobMatrixId.HasValue) return (basic, posAllowance, otherSummary);
+
+        var step = jobMatrixStepId.HasValue
+            ? await db.FrameworkJobMatrixSteps.AsNoTracking()
+                .Where(s => s.JobMatrixStepId == jobMatrixStepId.Value && s.IsActive)
+                .Select(s => new { s.BasicSalaryOverride, s.JobAllowance })
+                .FirstOrDefaultAsync(ct)
+            : await db.FrameworkJobMatrixSteps.AsNoTracking()
+                .Where(s => s.JobMatrixId == jobMatrixId.Value && s.IsActive)
+                .OrderBy(s => s.StepNumber)
+                .Select(s => new { s.BasicSalaryOverride, s.JobAllowance })
+                .FirstOrDefaultAsync(ct);
+
+        if (step is not null)
+        {
+            if (step.BasicSalaryOverride is > 0) basic = step.BasicSalaryOverride;
+            if (step.JobAllowance > 0) posAllowance = step.JobAllowance;
+        }
+
+        var benefits = await db.FrameworkJobMatrixBenefits.AsNoTracking()
+            .Where(b => b.JobMatrixId == jobMatrixId.Value && !string.IsNullOrWhiteSpace(b.BenefitName))
+            .OrderBy(b => b.JobMatrixBenefitId)
+            .Select(b => new { b.BenefitName, b.Amount, b.FrequencyCode })
+            .ToListAsync(ct);
+
+        if (benefits.Count > 0)
+        {
+            otherSummary = string.Join(", ", benefits.Select(b =>
+                b.Amount is > 0
+                    ? $"{b.BenefitName}: MVR {b.Amount.Value:N2}{(string.IsNullOrWhiteSpace(b.FrequencyCode) ? "" : $" ({b.FrequencyCode})")}"
+                    : b.BenefitName));
+        }
+
+        return (basic, posAllowance, otherSummary);
     }
 }
