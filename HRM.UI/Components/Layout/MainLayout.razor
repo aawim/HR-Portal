@@ -226,8 +226,11 @@
                     _revertingCrossPortal = true;
                     var fallback = !string.IsNullOrWhiteSpace(_lastAllowedUri) ? _lastAllowedUri : DefaultPortalHref;
                     ToastService.Error("You do not have permission to access that portal.");
-                    Navigation.NavigateTo(fallback, replace: true);
-                    _revertingCrossPortal = false;
+                    _ = InvokeAsync(() =>
+                    {
+                        try { Navigation.NavigateTo(fallback, replace: true); }
+                        finally { _revertingCrossPortal = false; }
+                    });
                     return;
                 }
 

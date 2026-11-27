@@ -5,6 +5,7 @@
 @inject HRM.Services.Leave.Contracts.LeaveFlowConfigurationServiceContracts.IOperations Configuration
 @inject ILogger<LeaveFlowSettings> Logger
 @inject HRM.Services.Interfaces.IUserAccessService UserAccess
+@inject NavigationManager Navigation
 
 <PageTitle>Request Approval Flows</PageTitle>
 <div class="@(Embedded ? "w-full min-w-0 space-y-4" : "mx-auto max-w-7xl p-2 space-y-4")">
@@ -199,9 +200,6 @@
     [Parameter] public int? InitialOrganisationId { get; set; }
     [Parameter] public int? InitialJobTypeId { get; set; }
     [Parameter] public int? InitialRequestTypeId { get; set; }
-    [SupplyParameterFromQuery(Name = "issueOrganisationId")] public int? IssueOrganisationId { get; set; }
-    [SupplyParameterFromQuery(Name = "jobTypeId")] public int? RequestedJobTypeId { get; set; }
-    [SupplyParameterFromQuery(Name = "requestTypeId")] public int? RequestedRequestTypeId { get; set; }
     private string? loadedAlert;
     private LeaveFlowSettingsData? data;
     private LeaveFlowConfigurationDto? model;
@@ -214,11 +212,14 @@
         await ApplyAlertPresetAsync();
     }
     protected override Task OnParametersSetAsync() => ApplyAlertPresetAsync();
+    private static int? ParseQueryInt(Dictionary<string, Microsoft.Extensions.Primitives.StringValues> query, string key) =>
+        query.TryGetValue(key, out var raw) && int.TryParse(raw.FirstOrDefault(), out var parsed) ? parsed : null;
     private async Task ApplyAlertPresetAsync()
     {
-        var effectiveOrgId = InitialOrganisationId ?? IssueOrganisationId;
-        var effectiveJobTypeId = InitialJobTypeId ?? RequestedJobTypeId;
-        var effectiveRequestTypeId = InitialRequestTypeId ?? RequestedRequestTypeId;
+        var query = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(new Uri(Navigation.Uri).Query);
+        var effectiveOrgId = InitialOrganisationId ?? ParseQueryInt(query, "issueOrganisationId");
+        var effectiveJobTypeId = InitialJobTypeId ?? ParseQueryInt(query, "jobTypeId");
+        var effectiveRequestTypeId = InitialRequestTypeId ?? ParseQueryInt(query, "requestTypeId");
         if (data == null || (!effectiveJobTypeId.HasValue && !effectiveRequestTypeId.HasValue)) return;
         var key = $"{effectiveOrgId}:{effectiveJobTypeId}:{effectiveRequestTypeId}";
         if (loadedAlert == key) return;
