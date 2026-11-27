@@ -21,20 +21,50 @@
 </HeadContent>
 
 <style>
+    @@font-face {
+        font-family: 'DhivehiFont';
+        src: url('/fonts/Faruma.ttf') format('truetype');
+        font-weight: normal;
+        font-style: normal;
+        font-display: swap;
+    }
+
+    @@font-face {
+        font-family: 'MV_Waheed';
+        src: url('/fonts/MV_Waheed.otf') format('opentype');
+        font-weight: normal;
+        font-style: normal;
+        font-display: swap;
+    }
+
     .jol-screen-bg {
         min-height: 100vh;
         background: #e2e8f0;
         padding: 1rem;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .jol-scroll-wrap {
+        width: 100%;
+        flex: 1 1 auto;
+        overflow-y: auto;
+        overflow-x: auto;
+        max-height: calc(100vh - 6.75rem);
+        padding: 0.25rem 0 1.5rem 0;
+        -webkit-overflow-scrolling: touch;
     }
 
     .jol-toolbar {
+        width: 100%;
         max-width: 210mm;
-        margin: 0 auto 1rem auto;
+        margin: 0 auto 0.75rem auto;
         background: #ffffff;
         border: 1px solid #cbd5e1;
         border-radius: 0.75rem;
         padding: 0.75rem 1rem;
         box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+        flex-shrink: 0;
     }
 
     .jol-page {
@@ -60,9 +90,28 @@
     .jol-page.jol-rtl {
         direction: rtl;
         text-align: right;
-        font-family: "Faruma", "MV Faseyha", "Noto Sans Thaana", sans-serif;
-        font-size: 10pt;
-        line-height: 1.65;
+        font-family: 'DhivehiFont', 'Faruma', 'MV Faseyha', 'Noto Sans Thaana', sans-serif;
+        font-size: 10.5pt;
+        line-height: 1.7;
+    }
+
+    .jol-page.jol-rtl .jol-main-title {
+        font-family: 'MV_Waheed', 'DhivehiFont', 'Faruma', sans-serif;
+    }
+
+    .jol-page.jol-rtl .jol-agency-line,
+    .jol-page.jol-rtl .jol-section-title,
+    .jol-page.jol-rtl p,
+    .jol-page.jol-rtl li,
+    .jol-page.jol-rtl th,
+    .jol-page.jol-rtl td {
+        text-align: right;
+        font-family: 'DhivehiFont', 'Faruma', 'MV Faseyha', 'Noto Sans Thaana', sans-serif;
+    }
+
+    .jol-page.jol-rtl .jol-bullets {
+        padding-right: 20px;
+        padding-left: 0;
     }
 
     .jol-top-bismillah {
@@ -167,6 +216,13 @@
 
         .jol-screen-bg {
             background: #ffffff !important;
+            padding: 0 !important;
+            display: block !important;
+        }
+
+        .jol-scroll-wrap {
+            overflow: visible !important;
+            max-height: none !important;
             padding: 0 !important;
         }
 
@@ -292,6 +348,7 @@
         var primaryQrCode = detail.AppointeeVerificationCode ?? detail.AgencyVerificationCode;
 
         <!-- PAGE 1: SECTION 1 — JOB OFFER -->
+        <div class="jol-scroll-wrap">
         <article class="jol-page @(IsDv ? "jol-rtl" : "jol-ltr")" dir="@(IsDv ? "rtl" : "ltr")">
             <div class="jol-top-bismillah">بِسْمِ اللّٰهِ الرَّحْمٰنِ الرَّحِيْمِ</div>
             <div class="jol-agency-line">@agencyHeading</div>
@@ -567,6 +624,7 @@
                 <HRM.Components.Shared.DocumentQrVerificationBar VerificationCode="@primaryQrCode" IsDhivehi="IsDv" Compact="true" />
             }
         </article>
+        </div>
     }
 
     <HRM.Components.Shared.SignaturePinModal IsOpen="showAgencyPinModal"

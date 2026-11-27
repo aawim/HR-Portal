@@ -9,37 +9,77 @@
 
 @if (IsOpen)
 {
+    <style>
+        @@font-face {
+            font-family: 'DhivehiFont';
+            src: url('/fonts/Faruma.ttf') format('truetype');
+            font-weight: normal;
+            font-style: normal;
+            font-display: swap;
+        }
+        .ola-rtl,
+        .ola-rtl input,
+        .ola-rtl textarea,
+        .ola-rtl select,
+        .ola-rtl label,
+        .ola-rtl p,
+        .ola-rtl h3,
+        .ola-rtl h4,
+        .ola-rtl span {
+            font-family: 'DhivehiFont', 'Faruma', 'Noto Sans Thaana', sans-serif;
+            text-align: right;
+        }
+        .ola-scroll-body {
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+    </style>
     <div style="position:fixed; inset:0; z-index:80; background:rgba(15,23,42,0.68); display:flex; align-items:center; justify-content:center; padding:1rem;" @onclick="CloseAsync">
-        <div style="width:100%; max-width:48rem; max-height:92vh; background:#ffffff; border-radius:1rem; box-shadow:0 25px 50px -12px rgba(15,23,42,0.45); display:flex; flex-direction:column; overflow:hidden;" @onclick:stopPropagation="true">
+        <div style="width:100%; max-width:50rem; height:90vh; max-height:90vh; background:#ffffff; border-radius:1rem; box-shadow:0 25px 50px -12px rgba(15,23,42,0.45); display:flex; flex-direction:column; overflow:hidden;" @onclick:stopPropagation="true">
             <!-- Header -->
             <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-slate-50 px-5 py-3.5 shrink-0">
-                <div class="min-w-0">
+                <div class="min-w-0 @(isDv ? "ola-rtl" : "")" dir="@(isDv ? "rtl" : "ltr")">
                     <div class="flex items-center gap-2 flex-wrap">
-                        <h3 class="text-sm font-bold text-slate-900">Job Offer Letter &amp; Appointee Agreement Form</h3>
+                        <h3 class="text-sm font-bold text-slate-900">@(isDv ? "ވަޒީފާ ހުށަހަޅާ ލިޔުމާއި އެއްބަސްވުން ފޯމު" : "Job Offer Letter & Appointee Agreement Form")</h3>
                         <span class="rounded-full px-2.5 py-0.5 text-[10px] font-semibold @StatusBadge(Status)">@(Status == "OnboardingSubmitted" ? "Onboarding In Progress" : Status)</span>
                     </div>
                     <p class="text-[11px] text-slate-500 mt-0.5">
                         @(string.IsNullOrWhiteSpace(OrganisationName) ? "" : $"{OrganisationName} · ")
-                        <span class="font-mono">@VacancyReference</span>
+                        <span class="font-mono" dir="ltr">@VacancyReference</span>
                         @if (OfferedAtUtc.HasValue)
                         {
-                            <span> · Offered @OfferedAtUtc.Value.AddHours(5).ToString("dd MMM yyyy")</span>
+                            <span> · @(isDv ? "ހުށަހެޅުނު ތާރީޚު:" : "Offered") @OfferedAtUtc.Value.AddHours(5).ToString("dd MMM yyyy")</span>
                         }
                     </p>
                 </div>
-                <div class="flex items-center gap-1.5">
+                <div class="flex flex-wrap items-center gap-1.5">
+                    <div class="inline-flex rounded-lg border border-slate-300 bg-white p-0.5 text-[11px]">
+                        <button type="button"
+                                class="rounded-md px-2 py-0.5 font-semibold @(!isDv ? "bg-blue-600 text-white" : "text-slate-600 hover:text-slate-900")"
+                                @onclick="() => isDv = false">
+                            EN
+                        </button>
+                        <button type="button"
+                                style="font-family:'DhivehiFont','Faruma',sans-serif;"
+                                class="rounded-md px-2 py-0.5 font-semibold @(isDv ? "bg-teal-700 text-white" : "text-slate-600 hover:text-slate-900")"
+                                @onclick="() => isDv = true">
+                            ދިވެހި
+                        </button>
+                    </div>
                     <a href="@($"/careers/offer-letter/{OfferId}?lang=en")" target="_blank" rel="noopener" class="rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-800 hover:bg-blue-100">
                         <i class="bi bi-printer mr-1" aria-hidden="true"></i>PDF (EN)
                     </a>
-                    <a href="@($"/careers/offer-letter/{OfferId}?lang=dv")" target="_blank" rel="noopener" class="rounded-lg border border-teal-200 bg-teal-50 px-2.5 py-1 text-[11px] font-semibold text-teal-800 hover:bg-teal-100">
+                    <a href="@($"/careers/offer-letter/{OfferId}?lang=dv")" target="_blank" rel="noopener" style="font-family:'DhivehiFont','Faruma',sans-serif;" class="rounded-lg border border-teal-200 bg-teal-50 px-2.5 py-1 text-[11px] font-semibold text-teal-800 hover:bg-teal-100">
                         <i class="bi bi-printer mr-1" aria-hidden="true"></i>ފޯމު (ދިވެހި)
                     </a>
-                    <button type="button" class="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100" @onclick="CloseAsync">Close</button>
+                    <button type="button" class="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100" @onclick="CloseAsync">@(isDv ? "ބަންދުކުރޭ" : "Close")</button>
                 </div>
             </div>
 
             <!-- Scrollable Body -->
-            <div class="p-5 overflow-y-auto space-y-4 text-xs">
+            <div class="ola-scroll-body p-5 space-y-4 text-xs @(isDv ? "ola-rtl" : "")" dir="@(isDv ? "rtl" : "ltr")">
                 @if (!string.IsNullOrWhiteSpace(hrDecisionComment))
                 {
                     <div class="rounded-xl border @(hrDecisionType == "RejectOffer" ? "border-rose-300 bg-rose-50 text-rose-950" : "border-amber-300 bg-amber-50 text-amber-950") p-3.5 space-y-1">
@@ -105,19 +145,19 @@
                 {
                     <!-- Interactive Appointee Agreement & Acceptance Form -->
                     <div class="rounded-xl border border-blue-200 bg-blue-50/30 p-4 space-y-3">
-                        <h4 class="text-xs font-bold uppercase tracking-wide text-slate-900">1. Appointee Agreements (Required)</h4>
+                        <h4 class="text-xs font-bold uppercase tracking-wide text-slate-900">@(isDv ? "1. ވަޒީފާއަށް އެއްބަސްވުމުގެ އިޤްރާރު (ކޮންމެހެން ފުރިހަމަކުރަންޖެހޭ)" : "1. Appointee Agreements (Required)")</h4>
                         <div class="space-y-2">
                             <label class="flex items-start gap-2 text-slate-800 cursor-pointer">
-                                <input type="checkbox" class="mt-0.5" @bind="agreedTerms" />
-                                <span>I have read, understood, and accept the terms of appointment, remuneration, and probation conditions stated in this Job Offer Letter.</span>
+                                <input type="checkbox" class="mt-0.5 shrink-0" @bind="agreedTerms" />
+                                <span>@(isDv ? "މި ވަޒީފާ ހުށަހަޅާ ލިޔުމުގައި ބަޔާންކޮށްފައިވާ ވަޒީފާގެ ޝަރުޠުތަކާއި، މުސާރައާއި ޢިނާޔަތްތަކާއި، އަޖުމަބެލުމުގެ މުއްދަތު ކިޔައި، ދެނެގަނެ، ޤަބޫލުކުރަމެވެ." : "I have read, understood, and accept the terms of appointment, remuneration, and probation conditions stated in this Job Offer Letter.")</span>
                             </label>
                             <label class="flex items-start gap-2 text-slate-800 cursor-pointer">
-                                <input type="checkbox" class="mt-0.5" @bind="agreedConduct" />
-                                <span>I agree to abide by the Civil Service / Organisation Code of Conduct, confidentiality obligations, and workplace policies upon appointment.</span>
+                                <input type="checkbox" class="mt-0.5 shrink-0" @bind="agreedConduct" />
+                                <span>@(isDv ? "ވަޒީފާގައި ޚިދުމަތްކުރާ މުއްދަތުގައި ސިވިލް ސަރވިސް / އިދާރާގެ ސުލޫކީ މިންގަނޑާއި، ސިއްރު ހިފެހެއްޓުމުގެ އުޞޫލުތަކާއި، ޤަވާޢިދުތަކަށް ޙުރުމަތްތެރިކޮށް ހިތުމަށް އެއްބަސްވަމެވެ." : "I agree to abide by the Civil Service / Organisation Code of Conduct, confidentiality obligations, and workplace policies upon appointment.")</span>
                             </label>
                             <label class="flex items-start gap-2 text-slate-800 cursor-pointer">
-                                <input type="checkbox" class="mt-0.5" @bind="confirmedAccuracy" />
-                                <span>I confirm that all qualifications, certificates, and information submitted in my application are true and accurate, and I understand that submitting this form initiates HR's onboarding verification process.</span>
+                                <input type="checkbox" class="mt-0.5 shrink-0" @bind="confirmedAccuracy" />
+                                <span>@(isDv ? "ވަޒީފާއަށް އެދި ހުށަހެޅި ހުރިހާ މަޢުލޫމާތަކާއި ސެޓްފިކެޓްތަކަކީ ޞައްޙަ ތަކެތިކަން ކަށަވަރުކޮށްދެމެވެ. އަދި މި ފޯމު ހުށަހެޅުމުން HR ގެ އޮންބޯޑިންގ މަރުޙަލާ ފެށޭނެކަން ދެނެގަންނަމެވެ." : "I confirm that all qualifications, certificates, and information submitted in my application are true and accurate, and I understand that submitting this form initiates HR's onboarding verification process.")</span>
                             </label>
                         </div>
                     </div>
@@ -422,6 +462,7 @@
 
     private const string InputClass = "mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-800 focus:border-[#075985] focus:outline-none";
     private readonly string canvasId = $"offer-sig-{Guid.NewGuid():N}";
+    private bool isDv = true;
 
     private bool IsInteractiveForm => !ReadOnly && Status == "Offered";
     private bool wasOpen, canvasNeedsInit, busy;
