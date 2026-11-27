@@ -4,33 +4,51 @@
 @inject HRM.WorkPlanning.Services.Contracts.DutyRosterServiceContracts.IOperations Duties
 @inject HRM.Services.ToastService Toasts
 
-<PageTitle>Duty roster</PageTitle>
-<div class="space-y-4 p-4">
-    <header class="flex flex-wrap items-center justify-between gap-3">
-        <div><h1 class="text-xl font-semibold">Duty roster</h1><p class="text-sm text-slate-500">View dated duties and arrange transfers or swaps.</p></div>
-        <div class="flex flex-wrap items-center gap-2">
-            <label>Date <InputDate @bind-Value="date" class="rounded border bg-transparent p-2" /></label>
-            <button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@busy" @onclick="TodayAsync">Today</button>
-            <button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@busy" @onclick="LoadAsync">Show roster</button>
+<PageTitle>Duty Roster</PageTitle>
+<section class="w-full min-w-0 p-2 space-y-4">
+    <header class="flex flex-wrap items-center justify-between gap-2 px-1 py-0.5">
+        <div class="min-w-0">
+            <div class="flex items-center gap-2 flex-wrap">
+                <h1 class="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 truncate">Duty Roster</h1>
+                <span class="inline-flex items-center gap-1 rounded-full bg-teal-50 border border-teal-200/80 px-2 py-0.5 text-[10px] font-semibold text-teal-700">
+                    <span class="h-1.5 w-1.5 rounded-full bg-teal-500"></span>
+                    Shift Schedule
+                </span>
+            </div>
+            <p class="text-xs text-slate-500">View dated duties and arrange transfers or swaps.</p>
+        </div>
+        <div class="flex flex-wrap items-center gap-1.5">
+            <label class="inline-flex items-center gap-1.5 text-xs font-medium text-slate-700">
+                <span>Date</span>
+                <InputDate @bind-Value="date" class="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs text-slate-900 focus:border-blue-500 focus:outline-none" />
+            </label>
+            <button type="button" class="app-button app-button-secondary app-button-sm" disabled="@busy" @onclick="TodayAsync">Today</button>
+            <button type="button" class="app-button app-button-primary app-button-sm" disabled="@busy" @onclick="LoadAsync">
+                <AppIcon Name="arrow-clockwise" Class="@(busy ? "animate-spin" : "")" />
+                <span>Show Roster</span>
+            </button>
         </div>
     </header>
-    @if (message != null) { <p role="status" class="rounded border p-3">@message</p> }
-    <section class="rounded-xl border p-4">
-        <label class="block mb-3">Search staff, department or duty <input @bind="search" @bind:event="oninput" class="rounded border bg-transparent p-2" /></label>
-        <div class="overflow-x-auto"><table class="w-full text-left text-sm">
-            <thead><tr class="border-b"><th class="p-2">Staff / Department</th><th class="p-2">Duty</th><th class="p-2">Time</th><th class="p-2">Clock events</th><th class="p-2">Actions</th></tr></thead>
-            <tbody>@foreach (var row in roster.Where(x => string.IsNullOrWhiteSpace(search) || $"{x.Staff} {x.Department} {x.Duty}".Contains(search, StringComparison.OrdinalIgnoreCase)))
+    @if (message != null) { <p role="status" class="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-800">@message</p> }
+    <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs space-y-3">
+        <label class="block text-xs font-medium text-slate-700 p-1 max-w-md">
+            Search staff, department or duty
+            <input @bind="search" @bind:event="oninput" placeholder="Filter by staff, department, or duty..." class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1.5 text-xs text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+        </label>
+        <div class="overflow-x-auto rounded-xl border border-slate-200"><table class="w-full text-left text-xs">
+            <thead class="bg-slate-50 border-b border-slate-200 text-slate-700 font-semibold"><tr><th class="p-2.5">Staff / Department</th><th class="p-2.5">Duty</th><th class="p-2.5">Time</th><th class="p-2.5">Clock Events</th><th class="p-2.5 text-right">Actions</th></tr></thead>
+            <tbody class="divide-y divide-slate-100">@foreach (var row in roster.Where(x => string.IsNullOrWhiteSpace(search) || $"{x.Staff} {x.Department} {x.Duty}".Contains(search, StringComparison.OrdinalIgnoreCase)))
             {
-                <tr class="border-b"><td class="p-2">@row.Staff<div class="text-xs text-slate-500">@row.Department</div></td><td class="p-2">@row.Duty</td>
-                    <td class="p-2 whitespace-nowrap">@row.Start.ToString("dd MMM HH:mm") – @row.End.ToString("dd MMM HH:mm")</td>
-                    <td class="p-2">@(row.RequiresAttendance ? "Check in" : "No mandatory check in") @(row.RequiresCheckout ? " · Check out" : "")</td>
-                    <td class="p-2">@if(row.CanRequest) {
-                        <div class="flex flex-wrap gap-2"><button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@busy" @onclick='() => Select(row, "Transfer")'>Transfer</button>
-                            <button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@busy" @onclick="() => SelectSwapAsync(row)">Swap</button></div>
+                <tr class="hover:bg-slate-50/50"><td class="p-2.5 font-semibold text-slate-800">@row.Staff<div class="text-[11px] font-normal text-slate-500">@row.Department</div></td><td class="p-2.5 text-slate-700">@row.Duty</td>
+                    <td class="p-2.5 whitespace-nowrap font-mono text-slate-700">@row.Start.ToString("dd MMM HH:mm") – @row.End.ToString("dd MMM HH:mm")</td>
+                    <td class="p-2.5 text-slate-600">@(row.RequiresAttendance ? "Check in" : "No mandatory check in") @(row.RequiresCheckout ? " · Check out" : "")</td>
+                    <td class="p-2.5 text-right">@if(row.CanRequest) {
+                        <div class="inline-flex flex-wrap gap-1.5 justify-end"><button type="button" class="app-button app-button-secondary app-button-sm" disabled="@busy" @onclick='() => Select(row, "Transfer")'>Transfer</button>
+                            <button type="button" class="app-button app-button-secondary app-button-sm" disabled="@busy" @onclick="() => SelectSwapAsync(row)">Swap</button></div>
                     }</td></tr>
             }</tbody>
         </table></div>
-        @if (roster.Count == 0) { <p class="py-3">No duties for this date.</p> }
+        @if (roster.Count == 0) { <div class="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center text-xs text-slate-500">No duties scheduled for this date.</div> }
     </section>
     @if (selected != null)
     {
@@ -92,9 +110,9 @@
                 </div>
             </article>
         }
-        @if(requests.Count == 0) { <p>No duty requests.</p> }
+        @if(requests.Count == 0) { <p class="text-xs text-slate-500">No duty requests.</p> }
     </section>
-</div>
+</section>
 
 @code {
     DateTime date = DateTime.UtcNow.AddHours(5).Date, swapDate = DateTime.UtcNow.AddHours(5).Date;

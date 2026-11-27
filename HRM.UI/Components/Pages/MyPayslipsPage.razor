@@ -9,28 +9,32 @@
 
 <PageTitle>My Payslips</PageTitle>
 
-<section class="mypayslips-page w-full min-w-0 p-2 flex flex-col gap-3">
+<section class="mypayslips-page w-full min-w-0 p-2 space-y-4">
 
-    <!-- Header complying with HRM.UI Design Standard -->
-    <header class="sticky top-0 z-30 m-0 flex w-full min-w-0 flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-white/95 backdrop-blur-xs px-4 py-3.5 shadow-sm rounded-xl">
-        <div>
-            <div class="flex items-center gap-2">
-                <h1 class="text-lg font-bold text-slate-900">My Payslips</h1>
-                <span class="rounded-full bg-blue-50 border border-blue-200 px-2.5 py-0.5 text-xs font-semibold text-blue-800">
+    <!-- Compact, Transparent, Borderless Header (UI_DESIGN_STANDARD §3) -->
+    <header class="flex flex-wrap items-center justify-between gap-2 px-1 py-0.5">
+        <div class="min-w-0">
+            <div class="flex items-center gap-2 flex-wrap">
+                <h1 class="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 truncate">My Payslips</h1>
+                <span class="inline-flex items-center gap-1 rounded-full bg-teal-50 border border-teal-200/80 px-2 py-0.5 text-[10px] font-semibold text-teal-700">
+                    <span class="h-1.5 w-1.5 rounded-full bg-teal-500"></span>
                     Self Service
                 </span>
             </div>
-            <p class="text-xs text-slate-500 mt-0.5">
+            <p class="text-xs text-slate-500">
                 View and download itemized monthly salary breakdowns, pension statements, and payment details.
             </p>
         </div>
 
-        <button type="button"
-                class="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition-colors"
-                @onclick="LoadPayslipsAsync">
-            <AppIcon Name="refresh" Class="h-3.5 w-3.5 text-slate-600 text-sm " />
-            <span>Refresh</span>
-        </button>
+        <div class="flex flex-wrap items-center gap-1.5">
+            <button type="button"
+                    class="app-button app-button-secondary app-button-sm"
+                    disabled="@isLoading"
+                    @onclick="LoadPayslipsAsync">
+                <AppIcon Name="arrow-clockwise" Class="@(isLoading ? "animate-spin" : "")" />
+                <span>Refresh</span>
+            </button>
+        </div>
     </header>
 
     @if (isLoading)

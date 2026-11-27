@@ -24,50 +24,46 @@
 
 <div class="mx-auto min-w-7xl max-w-full p-2 flex flex-col gap-2">
     <section class="online-dms-page w-full min-w-0 p-2 space-y-4">
-        <!-- Full-Width Sticky Header -->
-        <header class="sticky top-0 z-30 m-0 border-b border-slate-200 bg-white/95 backdrop-blur-xs px-3 py-3 shadow-xs rounded-2xl flex flex-wrap items-center justify-between gap-3">
+        <!-- Compact, Transparent, Borderless Header (UI_DESIGN_STANDARD §3) -->
+        <header class="flex flex-wrap items-center justify-between gap-2 px-1 py-0.5">
             <div class="min-w-0">
-                <div class="flex items-center gap-2">
-                    <span class="rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-semibold text-blue-800">Employee Document Centre</span>
-                    <span class="text-xs text-slate-400">DHR-DMS Self-Service</span>
+                <div class="flex items-center gap-2 flex-wrap">
+                    <h1 class="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 truncate">My Documents, Official Requests &amp; Publications</h1>
+                    <span class="inline-flex items-center gap-1 rounded-full bg-teal-50 border border-teal-200/80 px-2 py-0.5 text-[10px] font-semibold text-teal-700">
+                        <span class="h-1.5 w-1.5 rounded-full bg-teal-500"></span>
+                        DHR-DMS Self-Service
+                    </span>
                 </div>
-                <h1 class="text-lg font-bold text-slate-900 truncate mt-0.5">My Documents, Official Requests &amp; Organisation Publications</h1>
-                <p class="text-xs text-slate-500 mt-0.5">Access your authorised personal dossier, submit official letter/certificate requests, sign awaiting documents, and browse organisation policies.</p>
+                <p class="text-xs text-slate-500">Access your authorised personal dossier, submit official letter/certificate requests, sign awaiting documents, and browse organisation policies.</p>
             </div>
 
-            <div class="flex flex-wrap items-center gap-2">
-                <!-- Full Width / Shrink View Toggle -->
+            <div class="flex flex-wrap items-center gap-1.5">
                 <button type="button"
-                        class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition-colors"
+                        class="app-button app-button-neutral app-button-sm"
                         @onclick="ToggleFullWidth">
-                    @if (isFullWidth)
-                    {
-                        <AppIcon Name="fullscreen" Class="w-3.5 h-3.5 text-slate-600 text-sm" />
-                        <span>Shrink View</span>
-                    }
-                    else
-                    {
-                        <svg class="w-3.5 h-3.5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-5h-4m4 0v4m0-4l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 4h-4m4 0l-5-5"/></svg>
-                        <span>Full Width</span>
-                    }
+                    <AppIcon Name="@(isFullWidth ? "fullscreen_exit" : "fullscreen")" />
+                    <span>@(isFullWidth ? "Shrink View" : "Full Width")</span>
                 </button>
 
                 <button type="button"
-                        class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition-colors"
+                        class="app-button app-button-secondary app-button-sm"
                         @onclick="LoadPortalDataAsync">
-                    <span>↻ Refresh</span>
+                    <AppIcon Name="arrow-clockwise" />
+                    <span>Refresh</span>
                 </button>
 
                 <button type="button"
-                        class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition-colors"
+                        class="app-button app-button-secondary app-button-sm"
                         @onclick="OpenUploadModal">
-                    <span>+ Upload My Credential</span>
+                    <AppIcon Name="bi-upload" />
+                    <span>Upload Credential</span>
                 </button>
 
                 <button type="button"
-                        class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 transition-colors"
+                        class="app-button app-button-primary app-button-sm"
                         @onclick="OpenRequestModal">
-                    <span>+ Request Official Document</span>
+                    <AppIcon Name="add" />
+                    <span>Request Official Document</span>
                 </button>
             </div>
         </header>

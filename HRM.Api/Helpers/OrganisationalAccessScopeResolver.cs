@@ -131,6 +131,11 @@ public static class OrganisationalAccessScopeResolver
         foreach (var checkKey in new[]
         {
             "Admin",
+            "Staff.Details",
+            "Individual.View",
+            "Organisation.View",
+            "Recruitment.View",
+            "Recruitment.Manage",
             Permissions.EmployeeView,
             Permissions.EmployeeEdit,
             Permissions.EmployeePrivateRecordView,
@@ -149,6 +154,8 @@ public static class OrganisationalAccessScopeResolver
                 heldPermissions.Add(checkKey);
         }
 
+        var isAdminGroup = await access.HasUserGroupAsync("Admin");
+
         return await ResolveCoreAsync(
             db,
             actor.UserId,
@@ -156,7 +163,7 @@ public static class OrganisationalAccessScopeResolver
             organisationId,
             actor.IsSuperAdministrator,
             hasTenantAccess,
-            actor.IsOrganisationAdmin || actor.IsHeadOfOrganisation || actor.IsHRHead || actor.IsHRManager,
+            actor.IsOrganisationAdmin || actor.IsHeadOfOrganisation || actor.IsHRHead || actor.IsHRManager || isAdminGroup,
             actor.IsHRStaff,
             actor.IsSupervisor,
             heldPermissions,
@@ -492,6 +499,11 @@ public static class OrganisationalAccessScopeResolver
         //    have organisation-wide scope (preserving backward compatibility while enforcing isolation whenever scopes are assigned).
         var hasBroadHrOrModuleRole = isCentralHrOrAdmin || isHrStaff ||
                                      heldPermissions.Contains("Admin") ||
+                                     heldPermissions.Contains("Staff.Details") ||
+                                     heldPermissions.Contains("Individual.View") ||
+                                     heldPermissions.Contains("Organisation.View") ||
+                                     heldPermissions.Contains("Recruitment.View") ||
+                                     heldPermissions.Contains("Recruitment.Manage") ||
                                      heldPermissions.Contains(Permissions.EmployeeView) ||
                                      heldPermissions.Contains(Permissions.EmployeeEdit) ||
                                      heldPermissions.Contains(Permissions.AttendanceView) ||
