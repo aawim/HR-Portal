@@ -8,6 +8,7 @@ public sealed class UserSignature
     public int UserId { get; set; }
     public int IndividualId { get; set; }
     public string SignatureDataUrl { get; set; } = string.Empty;
+    public string SignatureStyle { get; set; } = "Canvas";
     public string ContentSha256 { get; set; } = string.Empty;
     public string? PinHash { get; set; }
     public string? PinSalt { get; set; }
@@ -31,6 +32,7 @@ public sealed class DocumentSignature
     public string SignerName { get; set; } = string.Empty;
     public string? SignerPosition { get; set; }
     public string SignatureImageDataUrl { get; set; } = string.Empty;
+    public string SignatureStyle { get; set; } = "Canvas";
     public string DocumentContentHash { get; set; } = string.Empty;
     public string VerificationCode { get; set; } = string.Empty;
     public DateTime SignedAtUtc { get; set; } = DateTime.UtcNow;

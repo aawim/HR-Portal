@@ -8,7 +8,8 @@ namespace HRM.UI.Services.Signatures;
 public interface IDocumentSignatureApiClient
 {
     Task<UserSignatureDto?> GetMySignatureAsync(CancellationToken ct = default);
-    Task<ServiceResult> SaveMySignatureAsync(string signatureDataUrl, CancellationToken ct = default);
+    Task<ServiceResult> SaveMySignatureAsync(string signatureDataUrl, string signatureStyle = "Canvas", CancellationToken ct = default);
+    Task<ServiceResult> SetSignatureStyleAsync(string signatureStyle, CancellationToken ct = default);
     Task<ServiceResult> SetSignaturePinAsync(string pin, string? currentPin = null, CancellationToken ct = default);
     Task<ServiceResult> VerifySignaturePinAsync(string pin, CancellationToken ct = default);
     Task<ServiceResult> DeleteMySignatureAsync(CancellationToken ct = default);
@@ -31,9 +32,16 @@ public sealed class DocumentSignatureApiClient(HttpClient http, HttpClient? publ
         return await r.Content.ReadFromJsonAsync<UserSignatureDto>(cancellationToken: ct);
     }
 
-    public async Task<ServiceResult> SaveMySignatureAsync(string signatureDataUrl, CancellationToken ct = default)
+    public async Task<ServiceResult> SaveMySignatureAsync(string signatureDataUrl, string signatureStyle = "Canvas", CancellationToken ct = default)
     {
-        using var r = await http.PostAsJsonAsync("/api/v1/signatures/me", new SaveUserSignatureInput(signatureDataUrl), ct);
+        using var r = await http.PostAsJsonAsync("/api/v1/signatures/me", new SaveUserSignatureInput(signatureDataUrl, signatureStyle), ct);
+        r.EnsureSuccessStatusCode();
+        return await r.Content.ReadFromJsonAsync<ServiceResult>(cancellationToken: ct) ?? ServiceResult.Fail("No response returned.");
+    }
+
+    public async Task<ServiceResult> SetSignatureStyleAsync(string signatureStyle, CancellationToken ct = default)
+    {
+        using var r = await http.PostAsJsonAsync("/api/v1/signatures/me/style", new SetSignatureStyleInput(signatureStyle), ct);
         r.EnsureSuccessStatusCode();
         return await r.Content.ReadFromJsonAsync<ServiceResult>(cancellationToken: ct) ?? ServiceResult.Fail("No response returned.");
     }

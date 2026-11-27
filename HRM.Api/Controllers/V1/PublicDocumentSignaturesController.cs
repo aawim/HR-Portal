@@ -47,7 +47,8 @@ public sealed class PublicDocumentSignaturesController(IDbContextFactory<HrmTeCo
                 x.VerificationCode,
                 x.SignedAtUtc,
                 x.Status,
-                false))
+                false,
+                x.SignatureStyle))
             .ToListAsync(ct);
 
         return Ok(rows);

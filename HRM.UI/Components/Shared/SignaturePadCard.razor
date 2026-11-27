@@ -1,4 +1,5 @@
 @using HRM.Application.Contracts.Signatures
+@using HRM.UI.Services.Signatures
 @using Microsoft.AspNetCore.Components.Forms
 @using Microsoft.JSInterop
 @inject HRM.UI.Services.Signatures.IDocumentSignatureApiClient SignatureApi
@@ -11,11 +12,14 @@
                 <i class="bi bi-pen text-blue-600" aria-hidden="true"></i>
                 <span>My Digital Signature</span>
             </h3>
-            <p class="text-xs text-slate-500 mt-0.5">Save your handwritten signature once to sign official HRM documents (A2 sheets, screening sheets, leave notes, etc.) with one click.</p>
+            <p class="text-xs text-slate-500 mt-0.5">Choose your signing style (Canvas, PNG image, or QR Code seal) and manage your Signing PIN.</p>
         </div>
         @if (saved is not null)
         {
-            <div class="flex items-center gap-1.5">
+            <div class="flex flex-wrap items-center gap-1.5">
+                <span class="rounded-full bg-slate-100 border border-slate-200 px-2.5 py-0.5 text-[11px] font-semibold text-slate-700">
+                    Style: @FormatStyleLabel(saved.SignatureStyle)
+                </span>
                 <span class="rounded-full bg-emerald-100 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-800">Saved</span>
                 <span class="rounded-full px-2.5 py-0.5 text-[11px] font-semibold @(saved.HasPin ? "bg-blue-100 text-blue-800" : "bg-amber-100 text-amber-800")">
                     @(saved.HasPin ? "PIN Protected" : "PIN Required")
@@ -24,23 +28,91 @@
         }
     </div>
 
+    <!-- Signing Style Switcher (Canvas | PNG | QR Code) -->
+    <div class="space-y-2">
+        <div class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Signing Style</div>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            @{
+                var activeStyle = saved?.SignatureStyle ?? (mode == "upload" ? "Png" : mode == "qrcode" ? "QrCode" : "Canvas");
+            }
+            <button type="button"
+                    disabled="@busy"
+                    @onclick='() => SelectStyleAsync("Canvas")'
+                    class="flex items-start gap-2.5 rounded-xl border p-3 text-left transition-colors @(activeStyle == "Canvas" && !editing ? "border-blue-600 bg-blue-50/60 ring-1 ring-blue-500" : mode == "draw" && editing ? "border-blue-600 bg-blue-50/40" : "border-slate-200 bg-white hover:bg-slate-50")">
+                <div class="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg @(activeStyle == "Canvas" ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-600")">
+                    <i class="bi bi-brush text-sm" aria-hidden="true"></i>
+                </div>
+                <div class="min-w-0">
+                    <div class="text-xs font-bold text-slate-900">Canvas (Draw)</div>
+                    <div class="text-[11px] text-slate-500">Hand-drawn signature pad</div>
+                </div>
+            </button>
+
+            <button type="button"
+                    disabled="@busy"
+                    @onclick='() => SelectStyleAsync("Png")'
+                    class="flex items-start gap-2.5 rounded-xl border p-3 text-left transition-colors @(activeStyle == "Png" && !editing ? "border-blue-600 bg-blue-50/60 ring-1 ring-blue-500" : mode == "upload" && editing ? "border-blue-600 bg-blue-50/40" : "border-slate-200 bg-white hover:bg-slate-50")">
+                <div class="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg @(activeStyle == "Png" ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-600")">
+                    <i class="bi bi-image text-sm" aria-hidden="true"></i>
+                </div>
+                <div class="min-w-0">
+                    <div class="text-xs font-bold text-slate-900">PNG Image</div>
+                    <div class="text-[11px] text-slate-500">Upload transparent PNG</div>
+                </div>
+            </button>
+
+            <button type="button"
+                    disabled="@busy"
+                    @onclick='() => SelectStyleAsync("QrCode")'
+                    class="flex items-start gap-2.5 rounded-xl border p-3 text-left transition-colors @(activeStyle == "QrCode" && !editing ? "border-blue-600 bg-blue-50/60 ring-1 ring-blue-500" : mode == "qrcode" && editing ? "border-blue-600 bg-blue-50/40" : "border-slate-200 bg-white hover:bg-slate-50")">
+                <div class="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg @(activeStyle == "QrCode" ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-600")">
+                    <i class="bi bi-qr-code text-sm" aria-hidden="true"></i>
+                </div>
+                <div class="min-w-0">
+                    <div class="text-xs font-bold text-slate-900">QR Code Seal</div>
+                    <div class="text-[11px] text-slate-500">Verified QR stamp only</div>
+                </div>
+            </button>
+        </div>
+    </div>
+
     @if (saved is not null && !editing)
     {
         <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-4 flex flex-col items-center gap-3">
-            <div class="rounded-lg border border-slate-200 bg-white px-6 py-3 flex items-center justify-center min-h-[5.5rem] w-full max-w-md">
-                <img src="@saved.SignatureDataUrl" alt="My Saved Signature" class="max-h-20 max-w-full object-contain" />
-            </div>
+            @if (string.Equals(saved.SignatureStyle, "QrCode", StringComparison.OrdinalIgnoreCase) || string.IsNullOrWhiteSpace(saved.SignatureDataUrl))
+            {
+                var sampleQr = QrCodeSvgHelper.GenerateSvgDataUri("GHR-QR-SIGNATURE-SEAL-PREVIEW", pixelsPerModule: 3);
+                <div class="rounded-lg border border-blue-200 bg-white px-5 py-3 flex items-center gap-4 w-full max-w-md">
+                    <img src="@sampleQr" alt="QR Code Digital Seal Preview" class="w-16 h-16 shrink-0" />
+                    <div class="text-xs space-y-0.5">
+                        <div class="inline-flex items-center gap-1 rounded-full bg-blue-50 border border-blue-200 px-2 py-0.5 text-[10px] font-semibold text-blue-800">
+                            <i class="bi bi-qr-code" aria-hidden="true"></i>
+                            <span>QR Code Seal Active</span>
+                        </div>
+                        <p class="text-[11px] text-slate-600 mt-1">Documents you sign will display a verified cryptographic QR seal with your name, position, timestamp, and verification code.</p>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="rounded-lg border border-slate-200 bg-white px-6 py-3 flex items-center justify-center min-h-[5.5rem] w-full max-w-md">
+                    <img src="@saved.SignatureDataUrl" alt="My Saved Signature" class="max-h-20 max-w-full object-contain" />
+                </div>
+            }
             <div class="text-[11px] text-slate-500">
-                Last updated: @saved.UpdatedAtUtc.AddHours(5).ToString("dd MMM yyyy HH:mm") MVT
+                Active Style: <strong class="text-slate-700">@FormatStyleLabel(saved.SignatureStyle)</strong> · Last updated: @saved.UpdatedAtUtc.AddHours(5).ToString("dd MMM yyyy HH:mm") MVT
             </div>
             <div class="flex flex-wrap items-center gap-2">
-                <button type="button"
-                        class="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-                        disabled="@busy"
-                        @onclick="StartEdit">
-                    <i class="bi bi-pencil" aria-hidden="true"></i>
-                    <span>Update Signature</span>
-                </button>
+                @if (!string.Equals(saved.SignatureStyle, "QrCode", StringComparison.OrdinalIgnoreCase))
+                {
+                    <button type="button"
+                            class="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                            disabled="@busy"
+                            @onclick="StartEdit">
+                        <i class="bi bi-pencil" aria-hidden="true"></i>
+                        <span>@(saved.SignatureStyle == "Png" ? "Replace PNG" : "Redraw Canvas")</span>
+                    </button>
+                }
                 <button type="button"
                         class="inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-100"
                         disabled="@busy"
@@ -54,16 +126,21 @@
     else
     {
         <div class="space-y-3">
-            <div class="inline-flex rounded-lg border border-slate-200 bg-slate-100 p-0.5 text-xs">
+            <div class="inline-flex flex-wrap rounded-lg border border-slate-200 bg-slate-100 p-0.5 text-xs">
                 <button type="button"
                         class="rounded-md px-3 py-1 font-semibold transition @(mode == "draw" ? "bg-white text-blue-700 shadow-xs" : "text-slate-600 hover:text-slate-900")"
                         @onclick='() => SwitchMode("draw")'>
-                    <i class="bi bi-brush mr-1" aria-hidden="true"></i>Draw Signature
+                    <i class="bi bi-brush mr-1" aria-hidden="true"></i>Canvas
                 </button>
                 <button type="button"
                         class="rounded-md px-3 py-1 font-semibold transition @(mode == "upload" ? "bg-white text-blue-700 shadow-xs" : "text-slate-600 hover:text-slate-900")"
                         @onclick='() => SwitchMode("upload")'>
-                    <i class="bi bi-upload mr-1" aria-hidden="true"></i>Upload Image
+                    <i class="bi bi-image mr-1" aria-hidden="true"></i>PNG Image
+                </button>
+                <button type="button"
+                        class="rounded-md px-3 py-1 font-semibold transition @(mode == "qrcode" ? "bg-white text-blue-700 shadow-xs" : "text-slate-600 hover:text-slate-900")"
+                        @onclick='() => SwitchMode("qrcode")'>
+                    <i class="bi bi-qr-code mr-1" aria-hidden="true"></i>QR Code Seal
                 </button>
             </div>
 
@@ -102,7 +179,7 @@
                     </div>
                 </div>
             }
-            else
+            else if (mode == "upload")
             {
                 <div class="space-y-3">
                     <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-3 space-y-2">
@@ -130,7 +207,41 @@
                                 disabled="@(busy || string.IsNullOrWhiteSpace(uploadedDataUrl))"
                                 @onclick="SaveUploadedAsync">
                             <i class="bi bi-check2-circle" aria-hidden="true"></i>
-                            <span>Save Signature</span>
+                            <span>Save PNG Signature</span>
+                        </button>
+                    </div>
+                </div>
+            }
+            else
+            {
+                var sampleQr = QrCodeSvgHelper.GenerateSvgDataUri("GHR-QR-SIGNATURE-SEAL-PREVIEW", pixelsPerModule: 3);
+                <div class="space-y-3">
+                    <div class="rounded-xl border border-blue-200 bg-blue-50/50 p-4 flex items-center gap-4">
+                        <div class="rounded-lg border border-slate-200 bg-white p-1.5 shrink-0">
+                            <img src="@sampleQr" alt="QR Code Digital Seal Preview" class="w-16 h-16 block" />
+                        </div>
+                        <div class="text-xs space-y-1">
+                            <div class="font-bold text-slate-900">QR Code Digital Seal</div>
+                            <p class="text-[11px] text-slate-600">No handwritten image needed. Each document you sign will carry a tamper-evident QR verification seal linked to your identity, position, timestamp, and SHA-256 hash.</p>
+                        </div>
+                    </div>
+                    <div class="flex justify-end gap-2">
+                        @if (saved is not null)
+                        {
+                            <button type="button"
+                                    class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                                    disabled="@busy"
+                                    @onclick="() => editing = false">
+                                Cancel
+                            </button>
+                        }
+                        <button type="button"
+                                style="background-color:#075985; color:#ffffff;"
+                                class="inline-flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-xs font-semibold shadow-xs hover:opacity-90 disabled:opacity-50"
+                                disabled="@busy"
+                                @onclick="SaveQrCodeStyleAsync">
+                            <i class="bi bi-qr-code" aria-hidden="true"></i>
+                            <span>Use QR Code Seal</span>
                         </button>
                     </div>
                 </div>
@@ -286,9 +397,9 @@
     private void StartEdit()
     {
         editing = true;
-        mode = "draw";
+        mode = saved?.SignatureStyle == "Png" ? "upload" : saved?.SignatureStyle == "QrCode" ? "qrcode" : "draw";
         uploadedDataUrl = null;
-        canvasNeedsInit = true;
+        canvasNeedsInit = mode == "draw";
     }
 
     private void SwitchMode(string next)
@@ -296,6 +407,80 @@
         mode = next;
         if (next == "draw") canvasNeedsInit = true;
     }
+
+    private async Task SelectStyleAsync(string style)
+    {
+        if (busy) return;
+        message = null;
+
+        // If user already has a saved signature and switches to QrCode, or switches to Canvas/Png with an existing image:
+        if (style == "QrCode")
+        {
+            await SaveQrCodeStyleAsync();
+            return;
+        }
+
+        if (saved is not null && !string.IsNullOrWhiteSpace(saved.SignatureDataUrl) && !editing && !string.Equals(saved.SignatureStyle, style, StringComparison.OrdinalIgnoreCase))
+        {
+            busy = true;
+            try
+            {
+                var res = await SignatureApi.SetSignatureStyleAsync(style);
+                message = res.Message;
+                if (res.Success)
+                {
+                    saved = await SignatureApi.GetMySignatureAsync();
+                    return;
+                }
+            }
+            catch
+            {
+                message = "Could not switch signing style.";
+                return;
+            }
+            finally
+            {
+                busy = false;
+            }
+        }
+
+        editing = true;
+        mode = style == "Png" ? "upload" : "draw";
+        uploadedDataUrl = null;
+        canvasNeedsInit = mode == "draw";
+    }
+
+    private async Task SaveQrCodeStyleAsync()
+    {
+        if (busy) return;
+        busy = true;
+        message = null;
+        try
+        {
+            var res = await SignatureApi.SaveMySignatureAsync(string.Empty, "QrCode");
+            message = res.Message;
+            if (res.Success)
+            {
+                saved = await SignatureApi.GetMySignatureAsync();
+                editing = false;
+            }
+        }
+        catch
+        {
+            message = "Could not switch to QR Code signing style.";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private static string FormatStyleLabel(string? style) => (style?.Trim().ToLowerInvariant()) switch
+    {
+        "png" => "PNG Image",
+        "qrcode" => "QR Code Seal",
+        _ => "Canvas (Draw)"
+    };
 
     private async Task ClearCanvasAsync()
     {
@@ -315,7 +500,7 @@
                 message = "Please draw your signature inside the box before saving.";
                 return;
             }
-            var res = await SignatureApi.SaveMySignatureAsync(dataUrl);
+            var res = await SignatureApi.SaveMySignatureAsync(dataUrl, "Canvas");
             message = res.Message;
             if (res.Success)
             {
@@ -358,7 +543,7 @@
         message = null;
         try
         {
-            var res = await SignatureApi.SaveMySignatureAsync(uploadedDataUrl);
+            var res = await SignatureApi.SaveMySignatureAsync(uploadedDataUrl, "Png");
             message = res.Message;
             if (res.Success)
             {

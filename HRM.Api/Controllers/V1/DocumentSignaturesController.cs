@@ -39,6 +39,7 @@ BEGIN
         UserId INT NOT NULL,
         IndividualId INT NOT NULL,
         SignatureDataUrl NVARCHAR(MAX) NOT NULL,
+        SignatureStyle NVARCHAR(20) NOT NULL CONSTRAINT DF_DS_UserSignatures_SignatureStyle DEFAULT ('Canvas'),
         ContentSha256 NVARCHAR(64) NOT NULL,
         PinHash NVARCHAR(128) NULL,
         PinSalt NVARCHAR(64) NULL,
@@ -54,6 +55,10 @@ ELSE IF COL_LENGTH(N'dbo.DS_UserSignatures', N'PinHash') IS NULL
 BEGIN
     ALTER TABLE dbo.DS_UserSignatures ADD PinHash NVARCHAR(128) NULL, PinSalt NVARCHAR(64) NULL, PinFailedAttempts INT NOT NULL CONSTRAINT DF_DS_UserSignatures_PinFailedAttempts DEFAULT (0), PinLockedUntilUtc DATETIME2 NULL;
 END;
+IF COL_LENGTH(N'dbo.DS_UserSignatures', N'SignatureStyle') IS NULL
+BEGIN
+    ALTER TABLE dbo.DS_UserSignatures ADD SignatureStyle NVARCHAR(20) NOT NULL CONSTRAINT DF_DS_UserSignatures_SignatureStyle DEFAULT ('Canvas');
+END;
 IF OBJECT_ID(N'dbo.DS_DocumentSignatures', N'U') IS NULL
 BEGIN
     CREATE TABLE dbo.DS_DocumentSignatures (
@@ -68,6 +73,7 @@ BEGIN
         SignerName NVARCHAR(250) NOT NULL,
         SignerPosition NVARCHAR(250) NULL,
         SignatureImageDataUrl NVARCHAR(MAX) NOT NULL,
+        SignatureStyle NVARCHAR(20) NOT NULL CONSTRAINT DF_DS_DocumentSignatures_SignatureStyle DEFAULT ('Canvas'),
         DocumentContentHash NVARCHAR(64) NOT NULL,
         VerificationCode NVARCHAR(40) NOT NULL,
         SignedAtUtc DATETIME2 NOT NULL CONSTRAINT DF_DS_DocumentSignatures_SignedAtUtc DEFAULT SYSUTCDATETIME(),
@@ -81,6 +87,10 @@ BEGIN
     );
     CREATE UNIQUE INDEX IX_DS_DocumentSignatures_VerificationCode ON dbo.DS_DocumentSignatures (VerificationCode);
     CREATE INDEX IX_DS_DocumentSignatures_DocSlot ON dbo.DS_DocumentSignatures (OrganisationId, DocumentType, DocumentId, SlotKey);
+END;
+IF COL_LENGTH(N'dbo.DS_DocumentSignatures', N'SignatureStyle') IS NULL
+BEGIN
+    ALTER TABLE dbo.DS_DocumentSignatures ADD SignatureStyle NVARCHAR(20) NOT NULL CONSTRAINT DF_DS_DocumentSignatures_SignatureStyle DEFAULT ('Canvas');
 END;", ct);
             _tablesReady = true;
         }
@@ -89,6 +99,13 @@ END;", ct);
             _initLock.Release();
         }
     }
+
+    private static string NormalizeSignatureStyle(string? style) => (style?.Trim().ToLowerInvariant()) switch
+    {
+        "png" or "upload" or "image" => "Png",
+        "qrcode" or "qr" => "QrCode",
+        _ => "Canvas"
+    };
 
     private static bool IsValidSignatureDataUrl(string? dataUrl)
     {
@@ -164,7 +181,7 @@ END;", ct);
 
         var row = await db.UserSignatures.AsNoTracking()
             .Where(x => x.UserId == actor.UserId && x.IsActive)
-            .Select(x => new UserSignatureDto(x.Id, x.UserId, x.SignatureDataUrl, x.UpdatedAtUtc, x.PinHash != null && x.PinHash != ""))
+            .Select(x => new UserSignatureDto(x.Id, x.UserId, x.SignatureDataUrl, x.UpdatedAtUtc, x.PinHash != null && x.PinHash != "", x.SignatureStyle))
             .SingleOrDefaultAsync(ct);
 
         if (row is null) return NoContent();
@@ -227,25 +244,28 @@ END;", ct);
     [HttpPost("me")]
     public async Task<ActionResult<ServiceResult>> SaveMySignature([FromBody] SaveUserSignatureInput input, CancellationToken ct)
     {
-        if (!IsValidSignatureDataUrl(input.SignatureDataUrl))
+        var style = NormalizeSignatureStyle(input.SignatureStyle);
+        var isQrOnly = style == "QrCode";
+        if (!isQrOnly && !IsValidSignatureDataUrl(input.SignatureDataUrl))
             return Ok(ServiceResult.Fail("Provide a valid PNG, WebP, or JPEG signature image (max 300 KB)."));
 
         var actor = await access.RequireContextAsync();
         await using var db = await factory.CreateDbContextAsync(ct);
         await EnsureTablesAsync(db, ct);
 
-        var dataUrl = input.SignatureDataUrl.Trim();
-        var sha = Sha256Hex(dataUrl);
+        var dataUrl = isQrOnly ? string.Empty : input.SignatureDataUrl.Trim();
         var now = DateTime.UtcNow;
 
         var existing = await db.UserSignatures.SingleOrDefaultAsync(x => x.UserId == actor.UserId, ct);
         if (existing is null)
         {
+            var sha = Sha256Hex(string.IsNullOrEmpty(dataUrl) ? $"QR:{actor.UserId}:{now:O}" : dataUrl);
             db.UserSignatures.Add(new UserSignature
             {
                 UserId = actor.UserId,
                 IndividualId = actor.IndividualId,
                 SignatureDataUrl = dataUrl,
+                SignatureStyle = style,
                 ContentSha256 = sha,
                 CreatedAtUtc = now,
                 UpdatedAtUtc = now,
@@ -255,15 +275,63 @@ END;", ct);
         else
         {
             existing.IndividualId = actor.IndividualId;
-            existing.SignatureDataUrl = dataUrl;
-            existing.ContentSha256 = sha;
+            existing.SignatureStyle = style;
+            if (!isQrOnly)
+            {
+                existing.SignatureDataUrl = dataUrl;
+                existing.ContentSha256 = Sha256Hex(dataUrl);
+            }
             existing.UpdatedAtUtc = now;
             existing.IsActive = true;
         }
 
-        await logs.CreateAsync(db, SharedConfig.OperationLogActionTypes.REQUESTS_UPDATE, "Updated user digital signature.");
+        await logs.CreateAsync(db, SharedConfig.OperationLogActionTypes.REQUESTS_UPDATE, $"Updated user digital signature (style: {style}).");
         await db.SaveChangesAsync(ct);
-        return Ok(ServiceResult.Ok("Your digital signature has been saved to your profile."));
+        return Ok(ServiceResult.Ok(isQrOnly
+            ? "Signing style switched to QR Code Seal."
+            : $"Your digital signature ({(style == "Png" ? "PNG Upload" : "Canvas")}) has been saved."));
+    }
+
+    [HttpPost("me/style")]
+    public async Task<ActionResult<ServiceResult>> SetMyStyle([FromBody] SetSignatureStyleInput input, CancellationToken ct)
+    {
+        var style = NormalizeSignatureStyle(input.SignatureStyle);
+        var actor = await access.RequireContextAsync();
+        await using var db = await factory.CreateDbContextAsync(ct);
+        await EnsureTablesAsync(db, ct);
+
+        var now = DateTime.UtcNow;
+        var existing = await db.UserSignatures.SingleOrDefaultAsync(x => x.UserId == actor.UserId, ct);
+        if (existing is null)
+        {
+            if (style != "QrCode")
+                return Ok(ServiceResult.Fail($"Please {(style == "Png" ? "upload a PNG signature" : "draw your signature on the canvas")} first."));
+
+            db.UserSignatures.Add(new UserSignature
+            {
+                UserId = actor.UserId,
+                IndividualId = actor.IndividualId,
+                SignatureDataUrl = string.Empty,
+                SignatureStyle = "QrCode",
+                ContentSha256 = Sha256Hex($"QR:{actor.UserId}:{now:O}"),
+                CreatedAtUtc = now,
+                UpdatedAtUtc = now,
+                IsActive = true
+            });
+        }
+        else
+        {
+            if (style != "QrCode" && string.IsNullOrWhiteSpace(existing.SignatureDataUrl))
+                return Ok(ServiceResult.Fail($"Please {(style == "Png" ? "upload a PNG signature" : "draw your signature on the canvas")} first."));
+
+            existing.SignatureStyle = style;
+            existing.UpdatedAtUtc = now;
+            existing.IsActive = true;
+        }
+
+        await logs.CreateAsync(db, SharedConfig.OperationLogActionTypes.REQUESTS_UPDATE, $"Switched digital signing style to {style}.");
+        await db.SaveChangesAsync(ct);
+        return Ok(ServiceResult.Ok($"Active signing style switched to {(style == "QrCode" ? "QR Code Seal" : style == "Png" ? "PNG Image" : "Canvas")}."));
     }
 
     [HttpDelete("me")]
@@ -316,7 +384,8 @@ END;", ct);
                 x.VerificationCode,
                 x.SignedAtUtc,
                 x.Status,
-                isAdmin || x.SignerUserId == actor.UserId))
+                isAdmin || x.SignerUserId == actor.UserId,
+                x.SignatureStyle))
             .ToListAsync(ct);
 
         return Ok(rows);
@@ -361,15 +430,25 @@ END;", ct);
         }
 
         string signatureImage;
+        string effectiveStyle;
         if (!string.IsNullOrWhiteSpace(input.InlineSignatureDataUrl))
         {
             if (!IsValidSignatureDataUrl(input.InlineSignatureDataUrl))
                 return Ok(ServiceResult.Fail("Invalid signature image format."));
             signatureImage = input.InlineSignatureDataUrl.Trim();
+            effectiveStyle = "Canvas";
+        }
+        else if (string.Equals(userSig.SignatureStyle, "QrCode", StringComparison.OrdinalIgnoreCase))
+        {
+            signatureImage = string.Empty;
+            effectiveStyle = "QrCode";
         }
         else
         {
+            if (string.IsNullOrWhiteSpace(userSig.SignatureDataUrl))
+                return Ok(ServiceResult.Fail("No saved signature image found for your current signing style. Update your signature in Online Portal → My Signature."));
             signatureImage = userSig.SignatureDataUrl;
+            effectiveStyle = NormalizeSignatureStyle(userSig.SignatureStyle);
         }
 
         // Resolve Signer Name & Active Position
@@ -414,6 +493,7 @@ END;", ct);
             SignerName = signerName,
             SignerPosition = signerPosition,
             SignatureImageDataUrl = signatureImage,
+            SignatureStyle = effectiveStyle,
             DocumentContentHash = docHash,
             VerificationCode = verificationCode,
             SignedAtUtc = DateTime.UtcNow,

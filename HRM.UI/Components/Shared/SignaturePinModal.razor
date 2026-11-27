@@ -61,10 +61,23 @@
                     @if (mySig is not null)
                     {
                         <div class="rounded-xl border border-slate-200 bg-slate-50 p-3 flex flex-col items-center gap-1.5">
-                            <div class="rounded-lg border border-slate-200 bg-white px-5 py-2.5 w-full flex items-center justify-center">
-                                <img src="@mySig.SignatureDataUrl" alt="Your Signature" class="max-h-16 max-w-full object-contain" />
+                            <div class="rounded-lg border border-slate-200 bg-white px-5 py-2.5 w-full flex items-center justify-center min-h-[4.25rem]">
+                                @if (!string.Equals(mySig.SignatureStyle, "QrCode", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(mySig.SignatureDataUrl))
+                                {
+                                    <img src="@mySig.SignatureDataUrl" alt="Your Signature" class="max-h-16 max-w-full object-contain" />
+                                }
+                                else
+                                {
+                                    <div class="flex items-center gap-2 text-blue-800">
+                                        <i class="bi bi-qr-code text-2xl" aria-hidden="true"></i>
+                                        <div class="text-left">
+                                            <div class="font-bold text-xs">QR Code Digital Seal</div>
+                                            <div class="text-[10px] text-slate-500">Signs with a verified cryptographic QR seal</div>
+                                        </div>
+                                    </div>
+                                }
                             </div>
-                            <span class="text-[10px] text-slate-500">A tamper-evident SHA-256 hash &amp; QR verification code will be attached.</span>
+                            <span class="text-[10px] text-slate-500">Active Style: <strong>@(mySig.SignatureStyle == "QrCode" ? "QR Code Seal" : mySig.SignatureStyle == "Png" ? "PNG Image" : "Canvas")</strong> · SHA-256 hash &amp; verification code attached.</span>
                         </div>
                     }
 

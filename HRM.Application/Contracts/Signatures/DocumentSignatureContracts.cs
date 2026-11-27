@@ -8,9 +8,11 @@ public sealed record UserSignatureDto(
     int UserId,
     string SignatureDataUrl,
     DateTime UpdatedAtUtc,
-    bool HasPin = false);
+    bool HasPin = false,
+    string SignatureStyle = "Canvas");
 
-public sealed record SaveUserSignatureInput(string SignatureDataUrl);
+public sealed record SaveUserSignatureInput(string SignatureDataUrl, string SignatureStyle = "Canvas");
+public sealed record SetSignatureStyleInput(string SignatureStyle);
 public sealed record SetSignaturePinInput(string Pin, string? CurrentPin = null);
 public sealed record VerifySignaturePinInput(string Pin);
 
@@ -28,7 +30,8 @@ public sealed record DocumentSignatureDto(
     string VerificationCode,
     DateTime SignedAtUtc,
     string Status,
-    bool CanRevoke = false);
+    bool CanRevoke = false,
+    string SignatureStyle = "Canvas");
 
 public sealed record SignDocumentInput(
     string DocumentType,
