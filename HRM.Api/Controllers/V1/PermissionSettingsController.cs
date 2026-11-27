@@ -37,6 +37,19 @@ public sealed class PermissionSettingsController(global::HRM.Services.Contracts.
     [HttpGet("load-for-organisation")]
     public async Task<ActionResult<global::HRM.DTOs.Roles.PermissionSettingsData>> LoadForOrganisation([FromQuery] global::System.Boolean groups, [FromQuery] global::System.Int32? organisationId = null) => Ok(await service.LoadForOrganisationAsync(groups, organisationId));
 
+    [HttpPost("add-staff-to-role")]
+    public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> AddStaffToRole([FromBody] PermissionSettingsRoleStaffRequest request) => Ok(await service.AddStaffToRoleAsync(request.roleId, request.userId, request.organisationId));
+
+    [HttpPost("remove-staff-from-role")]
+    public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> RemoveStaffFromRole([FromBody] PermissionSettingsRoleStaffRequest request) => Ok(await service.RemoveStaffFromRoleAsync(request.roleId, request.userId, request.organisationId));
+
+    public sealed class PermissionSettingsRoleStaffRequest
+    {
+        public global::System.Int32 roleId { get; set; }
+        public global::System.Int32 userId { get; set; }
+        public global::System.Int32? organisationId { get; set; }
+    }
+
     [HttpGet("load-staff-access-for-organisation")]
     public async Task<ActionResult<global::HRM.DTOs.Roles.StaffAccessSettingsData>> LoadStaffAccessForOrganisation([FromQuery] global::System.Int32? organisationId = null) => Ok(await service.LoadStaffAccessForOrganisationAsync(organisationId));
 

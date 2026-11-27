@@ -18,6 +18,10 @@ Task<ServiceResult> SavePermissionAsync(PermissionDefinitionDto model)
 ;
 Task<ServiceResult> SaveRoleAsync(AccessRoleDto model)
 ;
+Task<ServiceResult> AddStaffToRoleAsync(int roleId, int userId, int? organisationId)
+;
+Task<ServiceResult> RemoveStaffFromRoleAsync(int roleId, int userId, int? organisationId)
+;
 Task<StaffAccessSettingsData> LoadStaffAccessAsync()
 ;
 Task<StaffAccessSettingsData> LoadStaffAccessForOrganisationAsync(int? organisationId)

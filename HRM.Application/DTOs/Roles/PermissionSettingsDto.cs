@@ -49,6 +49,7 @@ public class PermissionSettingsData
     public int OrganisationId { get; set; }
     public string OrganisationName { get; set; } = "";
     public List<PermissionSettingOption> Organisations { get; set; } = new();
+    public List<RoleStaffDto> OrganisationUsers { get; set; } = new();
     public List<PermissionDefinitionDto> Permissions { get; set; } = new();
     public List<AccessRoleDto> Roles { get; set; } = new();
     public List<PermissionSettingOption> Contexts { get; set; } = new();

@@ -98,9 +98,31 @@ public partial class PermissionSettingsService(IDbContextFactory<HrmTeContext> f
                     {
                         UserId = a.UserId, Username = a.User.Username, IsActive = a.User.IsActive,
                         Name = a.User.BusinessEntity != null
-                            ? a.User.BusinessEntity.FirstNameEnglish + " " + (a.User.BusinessEntity.MiddleNameEnglish ?? "") + " " + (a.User.BusinessEntity.LastNameEnglish ?? "")
+                            ? (a.User.BusinessEntity.FirstNameEnglish + " " + (a.User.BusinessEntity.MiddleNameEnglish ?? "") + " " + (a.User.BusinessEntity.LastNameEnglish ?? "")).Replace("  ", " ").Trim()
                             : a.User.FullName ?? a.User.Username
                     }).ToList() }).ToListAsync();
+
+            var todayDate = DateTime.Today;
+            var userOrgId = await db.UserOrganisations.AsNoTracking()
+                .Where(uo => uo.BusinessEntityID == org)
+                .Select(uo => (int?)uo.UserOrganisationID)
+                .FirstOrDefaultAsync();
+            result.OrganisationUsers = await db.Users.AsNoTracking()
+                .Where(u =>
+                    db.Jobs.Any(j => j.IndividualID == u.BusinessEntityID && j.OrganisationID == org && j.JobStateId == 4 && j.TerminatedDate == null && j.JoinedDate <= todayDate) ||
+                    (userOrgId.HasValue && u.UserOrganisationId == userOrgId.Value &&
+                     !db.Jobs.Any(j => j.IndividualID == u.BusinessEntityID && j.OrganisationID != org && j.JobStateId == 4 && j.TerminatedDate == null && j.JoinedDate <= todayDate)))
+                .Select(u => new RoleStaffDto
+                {
+                    UserId = u.UserId,
+                    Username = u.Username,
+                    IsActive = u.IsActive,
+                    Name = u.BusinessEntity != null
+                        ? (u.BusinessEntity.FirstNameEnglish + " " + (u.BusinessEntity.MiddleNameEnglish ?? "") + " " + (u.BusinessEntity.LastNameEnglish ?? "")).Replace("  ", " ").Trim()
+                        : u.FullName ?? u.Username
+                })
+                .OrderBy(u => u.Name)
+                .ToListAsync();
         }
         return result;
     }
@@ -166,5 +188,76 @@ public partial class PermissionSettingsService(IDbContextFactory<HrmTeContext> f
         await db.SaveChangesAsync(); await tx.CommitAsync(); model.Id = entity.UserGroupId;
         foreach (var id in memberIds) await contexts.InvalidateAsync(id);
         return ServiceResult.Ok("Role and grouped permissions saved.");
+    }
+
+    public async Task<ServiceResult> AddStaffToRoleAsync(int roleId, int userId, int? organisationId)
+    {
+        var actor = await RequireAsync("Users.Roles.Edit", true);
+        var org = await OrganisationAsync(actor, organisationId);
+        if (!actor.IsSuperAdministrator && actor.UserId == userId)
+            return ServiceResult.Fail("You cannot add roles to your own account.");
+        await using var db = await factory.CreateDbContextAsync();
+        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted);
+        var orgId = await db.UserOrganisations.Where(x => x.BusinessEntityID == org).Select(x => x.UserOrganisationID).SingleAsync();
+        var roleGroup = await db.UserGroups.Include(g => g.UserGroupRoles)
+            .SingleOrDefaultAsync(g => g.UserGroupId == roleId && g.UserOrganisationId == orgId);
+        if (roleGroup == null) return ServiceResult.Fail("Role was not found in this organisation.");
+
+        var today = DateTime.Today;
+        var target = await db.Users.SingleOrDefaultAsync(u => u.UserId == userId && (
+            db.Jobs.Any(j => j.IndividualID == u.BusinessEntityID && j.OrganisationID == org && j.JobStateId == 4 && j.TerminatedDate == null && j.JoinedDate <= today) ||
+            (u.UserOrganisationId == orgId &&
+             !db.Jobs.Any(j => j.IndividualID == u.BusinessEntityID && j.OrganisationID != org && j.JobStateId == 4 && j.TerminatedDate == null && j.JoinedDate <= today))));
+        if (target == null) return ServiceResult.Fail("Staff account was not found in this organisation.");
+
+        if (!actor.IsSuperAdministrator)
+        {
+            var groupPermIds = roleGroup.UserGroupRoles.Where(r => r.IsActive).Select(r => r.RoleId).ToList();
+            if (groupPermIds.Any(id => !actor.Permissions.Any(p => p.RoleID == id)))
+                return ServiceResult.Fail("You can only assign roles whose permissions you hold.");
+        }
+
+        if (await db.UserAssignedUserGroups.AnyAsync(a => a.UserId == userId && a.UserGroupId == roleId))
+            return ServiceResult.Ok($"{target.FullName ?? target.Username} is already assigned to {roleGroup.GroupName}.");
+
+        if (target.UserOrganisationId != orgId) target.UserOrganisationId = orgId;
+        var log = await logs.CreateAsync(db, SharedConfig.OperationLogActionTypes.USER_ROLE_UPDATE,
+            $"Added user {userId} to role {roleGroup.GroupName} (#{roleId})");
+        db.UserAssignedUserGroups.Add(new UserAssignedUserGroup
+        {
+            UserId = userId,
+            UserGroupId = roleId,
+            OperationLogId = log.OperationLogId
+        });
+        await db.SaveChangesAsync();
+        await tx.CommitAsync();
+        await contexts.InvalidateAsync(userId);
+        return ServiceResult.Ok($"Added {target.FullName ?? target.Username} to {roleGroup.GroupName}.");
+    }
+
+    public async Task<ServiceResult> RemoveStaffFromRoleAsync(int roleId, int userId, int? organisationId)
+    {
+        var actor = await RequireAsync("Users.Roles.Edit", true);
+        var org = await OrganisationAsync(actor, organisationId);
+        await using var db = await factory.CreateDbContextAsync();
+        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted);
+        var orgId = await db.UserOrganisations.Where(x => x.BusinessEntityID == org).Select(x => x.UserOrganisationID).SingleAsync();
+        var roleGroup = await db.UserGroups.AsNoTracking()
+            .SingleOrDefaultAsync(g => g.UserGroupId == roleId && g.UserOrganisationId == orgId);
+        if (roleGroup == null) return ServiceResult.Fail("Role was not found in this organisation.");
+
+        var assignment = await db.UserAssignedUserGroups
+            .SingleOrDefaultAsync(a => a.UserId == userId && a.UserGroupId == roleId);
+        if (assignment == null) return ServiceResult.Ok("Staff member is not assigned to this role.");
+
+        var targetName = await db.Users.AsNoTracking().Where(u => u.UserId == userId)
+            .Select(u => u.FullName ?? u.Username).FirstOrDefaultAsync() ?? $"User #{userId}";
+        _ = await logs.CreateAsync(db, SharedConfig.OperationLogActionTypes.USER_ROLE_UPDATE,
+            $"Removed user {userId} from role {roleGroup.GroupName} (#{roleId})");
+        db.UserAssignedUserGroups.Remove(assignment);
+        await db.SaveChangesAsync();
+        await tx.CommitAsync();
+        await contexts.InvalidateAsync(userId);
+        return ServiceResult.Ok($"Removed {targetName} from {roleGroup.GroupName}.");
     }
 }
