@@ -179,7 +179,7 @@
                             </div>
                         </div>
 
-                        <!-- 3. Departments Card (Edit / Soft Delete via Modal) -->
+                        <!-- 3. Departments Card (Staff count + View / Edit / Soft Delete) -->
                         <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs overflow-hidden">
                             <div class="flex items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 px-3 py-2">
                                 <h3 class="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
@@ -200,12 +200,17 @@
                                 {
                                     @foreach (var dept in links.Departments)
                                     {
-                                        <div class="flex items-center justify-between gap-2 px-3 py-2 text-xs hover:bg-slate-50/70 dark:hover:bg-slate-800/40">
+                                        var isViewed = viewedDepartment?.Id == dept.Id;
+                                        <div class="flex items-center justify-between gap-2 px-3 py-2 text-xs transition @(isViewed ? "bg-sky-50/70 dark:bg-slate-800/70" : "hover:bg-slate-50/70 dark:hover:bg-slate-800/40")">
                                             <div class="min-w-0">
-                                                <p class="font-semibold text-slate-800 dark:text-slate-100 truncate">@dept.Name</p>
+                                                <div class="flex items-center gap-1.5 flex-wrap">
+                                                    <p class="font-semibold text-slate-800 dark:text-slate-100 truncate">@dept.Name</p>
+                                                    <span class="rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 px-1.5 py-0.5 text-[10px] font-semibold shrink-0">@dept.StaffCount staff</span>
+                                                </div>
                                                 <p class="text-[10px] text-slate-500">@dept.TypeName</p>
                                             </div>
                                             <div class="flex items-center gap-1 shrink-0">
+                                                <button type="button" class="app-button app-button-neutral app-button-sm" @onclick="() => ViewDepartment(dept)">View</button>
                                                 <button type="button" class="app-button app-button-secondary app-button-sm" @onclick="() => OpenEditDepartmentModal(dept)">Edit</button>
                                                 <button type="button" class="app-button app-button-danger app-button-sm" @onclick="() => deletingDepartment = dept">Delete</button>
                                             </div>
@@ -215,7 +220,45 @@
                             </div>
                         </div>
 
-                        <!-- 4. Groups Card (Edit / Soft Delete via Modal) -->
+                        <!-- 4. Teams Card -->
+                        <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs overflow-hidden">
+                            <div class="flex items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 px-3 py-2">
+                                <h3 class="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+                                    <span>Teams</span>
+                                    <span class="rounded-full bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600 dark:text-slate-300">@links.Teams.Count</span>
+                                </h3>
+                            </div>
+                            <div class="divide-y divide-slate-100 dark:divide-slate-800 max-h-48 overflow-y-auto">
+                                @if (links.Teams.Count == 0)
+                                {
+                                    <p class="p-3 text-center text-xs text-slate-400">No active teams in this organisation.</p>
+                                }
+                                else
+                                {
+                                    @foreach (var tm in links.Teams)
+                                    {
+                                        var isViewed = viewedTeam?.Id == tm.Id;
+                                        <div class="flex items-center justify-between gap-2 px-3 py-2 text-xs transition @(isViewed ? "bg-sky-50/70 dark:bg-slate-800/70" : "hover:bg-slate-50/70 dark:hover:bg-slate-800/40")">
+                                            <div class="min-w-0">
+                                                <div class="flex items-center gap-1.5 flex-wrap">
+                                                    <p class="font-semibold text-slate-800 dark:text-slate-100 truncate">@tm.Name</p>
+                                                    <span class="rounded-full bg-sky-50 text-sky-700 border border-sky-200 px-1.5 py-0.5 text-[10px] font-semibold shrink-0">@tm.StaffCount staff</span>
+                                                </div>
+                                                @if (!string.IsNullOrWhiteSpace(tm.DepartmentName))
+                                                {
+                                                    <p class="text-[10px] text-slate-500 truncate">@tm.DepartmentName</p>
+                                                }
+                                            </div>
+                                            <div class="flex items-center gap-1 shrink-0">
+                                                <button type="button" class="app-button app-button-neutral app-button-sm" @onclick="() => ViewTeam(tm)">View</button>
+                                            </div>
+                                        </div>
+                                    }
+                                }
+                            </div>
+                        </div>
+
+                        <!-- 5. Groups Card (Operational Groups + HR Staff Groups) -->
                         <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs overflow-hidden">
                             <div class="flex items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 px-3 py-2">
                                 <h3 class="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
@@ -227,24 +270,29 @@
                             <div class="divide-y divide-slate-100 dark:divide-slate-800 max-h-56 overflow-y-auto">
                                 @if (links.Groups.Count == 0)
                                 {
-                                    <p class="p-3 text-center text-xs text-slate-400">No active staff groups in this organisation.</p>
+                                    <p class="p-3 text-center text-xs text-slate-400">No active groups in this organisation.</p>
                                 }
                                 else
                                 {
                                     @foreach (var grp in links.Groups)
                                     {
-                                        <div class="flex items-center justify-between gap-2 px-3 py-2 text-xs hover:bg-slate-50/70 dark:hover:bg-slate-800/40">
+                                        var isViewed = viewedGroup?.Id == grp.Id && viewedGroup?.Source == grp.Source;
+                                        <div class="flex items-center justify-between gap-2 px-3 py-2 text-xs transition @(isViewed ? "bg-sky-50/70 dark:bg-slate-800/70" : "hover:bg-slate-50/70 dark:hover:bg-slate-800/40")">
                                             <div class="min-w-0">
-                                                <p class="font-semibold text-slate-800 dark:text-slate-100 truncate">
-                                                    @grp.Name
+                                                <div class="flex items-center gap-1.5 flex-wrap">
+                                                    <p class="font-semibold text-slate-800 dark:text-slate-100 truncate">@grp.Name</p>
                                                     @if (!string.IsNullOrWhiteSpace(grp.Code))
                                                     {
-                                                        <span class="ml-1 font-mono text-[10px] text-slate-500">(@grp.Code)</span>
+                                                        <span class="rounded bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 text-[10px] font-medium text-slate-600 dark:text-slate-300">@grp.Code</span>
                                                     }
+                                                    <span class="rounded-full bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.5 text-[10px] font-semibold shrink-0">@grp.MemberCount staff</span>
+                                                </div>
+                                                <p class="text-[10px] text-slate-500 truncate">
+                                                    @(string.IsNullOrWhiteSpace(grp.DepartmentName) ? grp.Source : $"{grp.DepartmentName} · {grp.Source}")@(string.IsNullOrWhiteSpace(grp.Description) ? "" : $" · {grp.Description}")
                                                 </p>
-                                                <p class="text-[10px] text-slate-500">@grp.MemberCount active members@(string.IsNullOrWhiteSpace(grp.Description) ? "" : $" · {grp.Description}")</p>
                                             </div>
                                             <div class="flex items-center gap-1 shrink-0">
+                                                <button type="button" class="app-button app-button-neutral app-button-sm" @onclick="() => ViewGroup(grp)">View</button>
                                                 <button type="button" class="app-button app-button-secondary app-button-sm" @onclick="() => OpenEditGroupModal(grp)">Edit</button>
                                                 <button type="button" class="app-button app-button-danger app-button-sm" @onclick="() => deletingGroup = grp">Delete</button>
                                             </div>
@@ -348,9 +396,176 @@
                         <HRM.Components.Admin.Settings.Workplan.ScopeScheduleSettings OrganisationId="model.Id" OrganisationOnly="true" @key="model.Id" />
                     }
                 </section>
+                @if (HasDetailView)
+                {
+                    <!-- Selected Department / Team / Group Detail Panel on the Right (with Close button) -->
+                    <aside class="min-w-0 xl:col-span-4">
+                        <div class="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs">
+                            <div class="flex items-center justify-between gap-2 border-b border-slate-200 dark:border-slate-800 px-3 py-2.5"
+                                 style="@(IsSuperAdminContext ? "background-color: #eef8fc;" : null)">
+                                <div class="min-w-0">
+                                    <p class="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                                        @(viewedDepartment != null ? "Department View" : viewedTeam != null ? "Team View" : "Group View")
+                                    </p>
+                                    <h3 class="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">
+                                        @(viewedDepartment?.Name ?? viewedTeam?.Name ?? viewedGroup?.Name)
+                                    </h3>
+                                </div>
+                                <button type="button" class="app-button app-button-secondary app-button-sm shrink-0" @onclick="CloseDetailView">
+                                    <span>✕ Close</span>
+                                </button>
+                            </div>
+
+                            <div class="p-3 space-y-3 text-xs max-h-[640px] overflow-y-auto">
+                                @if (viewedDepartment != null)
+                                {
+                                    var deptStaff = links.DepartmentStaff.Where(s => s.DepartmentId == viewedDepartment.Id).ToList();
+                                    var deptTeams = links.Teams.Where(t => t.DepartmentId == viewedDepartment.Id).ToList();
+                                    var deptGroups = links.Groups.Where(g => g.DepartmentId == viewedDepartment.Id).ToList();
+
+                                    <div class="grid grid-cols-2 gap-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 p-2.5">
+                                        <div>
+                                            <p class="text-[10px] font-semibold uppercase text-slate-400">Department Name</p>
+                                            <p class="font-semibold text-slate-900 dark:text-slate-100">@viewedDepartment.Name</p>
+                                        </div>
+                                        <div>
+                                            <p class="text-[10px] font-semibold uppercase text-slate-400">Structure Type</p>
+                                            <p class="font-semibold text-slate-900 dark:text-slate-100">@viewedDepartment.TypeName</p>
+                                        </div>
+                                        <div>
+                                            <p class="text-[10px] font-semibold uppercase text-slate-400">Active Staff</p>
+                                            <p class="font-bold text-emerald-700">@deptStaff.Count</p>
+                                        </div>
+                                        <div>
+                                            <p class="text-[10px] font-semibold uppercase text-slate-400">Status</p>
+                                            <span class="inline-block rounded-full bg-emerald-100 text-emerald-800 px-2 py-0.5 text-[10px] font-semibold">@(viewedDepartment.IsActive ? "Active" : "Inactive")</span>
+                                        </div>
+                                    </div>
+
+                                    <!-- Department Staff -->
+                                    <div class="space-y-1.5">
+                                        <p class="text-[11px] font-bold text-slate-800 dark:text-slate-200">Staff (@deptStaff.Count)</p>
+                                        @if (deptStaff.Count == 0)
+                                        {
+                                            <p class="rounded-lg border border-dashed border-slate-200 p-2.5 text-[11px] text-slate-400">No active staff assigned to this department.</p>
+                                        }
+                                        else
+                                        {
+                                            <div class="divide-y divide-slate-100 dark:divide-slate-800 rounded-xl border border-slate-200 dark:border-slate-800 max-h-48 overflow-y-auto">
+                                                @foreach (var st in deptStaff)
+                                                {
+                                                    <div class="px-2.5 py-1.5 flex items-center justify-between gap-2">
+                                                        <div class="min-w-0">
+                                                            <p class="font-semibold text-slate-800 dark:text-slate-100 truncate">@st.Name</p>
+                                                            <p class="text-[10px] text-slate-500 truncate">@st.JobType</p>
+                                                        </div>
+                                                        @if (!string.IsNullOrWhiteSpace(st.EmployeeNumber))
+                                                        {
+                                                            <span class="font-mono text-[10px] text-slate-500 shrink-0">@st.EmployeeNumber</span>
+                                                        }
+                                                    </div>
+                                                }
+                                            </div>
+                                        }
+                                    </div>
+
+                                    <!-- Department Teams -->
+                                    <div class="space-y-1.5">
+                                        <p class="text-[11px] font-bold text-slate-800 dark:text-slate-200">Teams (@deptTeams.Count)</p>
+                                        @if (deptTeams.Count == 0)
+                                        {
+                                            <p class="rounded-lg border border-dashed border-slate-200 p-2 text-[11px] text-slate-400">No teams linked to this department.</p>
+                                        }
+                                        else
+                                        {
+                                            <div class="space-y-1">
+                                                @foreach (var tm in deptTeams)
+                                                {
+                                                    <div class="flex items-center justify-between gap-2 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/50 px-2.5 py-1.5">
+                                                        <span class="font-semibold text-slate-800 dark:text-slate-100 truncate">@tm.Name</span>
+                                                        <span class="rounded-full bg-sky-50 text-sky-700 border border-sky-200 px-1.5 py-0.5 text-[10px] font-semibold shrink-0">@tm.StaffCount staff</span>
+                                                    </div>
+                                                }
+                                            </div>
+                                        }
+                                    </div>
+
+                                    <!-- Department Groups -->
+                                    <div class="space-y-1.5">
+                                        <p class="text-[11px] font-bold text-slate-800 dark:text-slate-200">Groups (@deptGroups.Count)</p>
+                                        @if (deptGroups.Count == 0)
+                                        {
+                                            <p class="rounded-lg border border-dashed border-slate-200 p-2 text-[11px] text-slate-400">No groups linked to this department.</p>
+                                        }
+                                        else
+                                        {
+                                            <div class="space-y-1">
+                                                @foreach (var grp in deptGroups)
+                                                {
+                                                    <div class="flex items-center justify-between gap-2 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/50 px-2.5 py-1.5">
+                                                        <div class="min-w-0">
+                                                            <span class="block font-semibold text-slate-800 dark:text-slate-100 truncate">@grp.Name</span>
+                                                            @if (!string.IsNullOrWhiteSpace(grp.Code)) { <span class="text-[10px] text-slate-500">@grp.Code</span> }
+                                                        </div>
+                                                        <span class="rounded-full bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.5 text-[10px] font-semibold shrink-0">@grp.MemberCount staff</span>
+                                                    </div>
+                                                }
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                                else if (viewedTeam != null)
+                                {
+                                    <div class="space-y-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 p-3">
+                                        <div>
+                                            <p class="text-[10px] font-semibold uppercase text-slate-400">Team Name</p>
+                                            <p class="font-semibold text-slate-900 dark:text-slate-100">@viewedTeam.Name</p>
+                                        </div>
+                                        <div>
+                                            <p class="text-[10px] font-semibold uppercase text-slate-400">Department</p>
+                                            <p class="font-medium text-slate-800 dark:text-slate-200">@(viewedTeam.DepartmentName ?? "Organisation-wide")</p>
+                                        </div>
+                                        <div>
+                                            <p class="text-[10px] font-semibold uppercase text-slate-400">Active Staff</p>
+                                            <p class="font-bold text-sky-700">@viewedTeam.StaffCount</p>
+                                        </div>
+                                    </div>
+                                }
+                                else if (viewedGroup != null)
+                                {
+                                    <div class="space-y-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 p-3">
+                                        <div>
+                                            <p class="text-[10px] font-semibold uppercase text-slate-400">Group Name</p>
+                                            <p class="font-semibold text-slate-900 dark:text-slate-100">@viewedGroup.Name</p>
+                                        </div>
+                                        <div>
+                                            <p class="text-[10px] font-semibold uppercase text-slate-400">Type / Code</p>
+                                            <p class="font-medium text-slate-800 dark:text-slate-200">@(viewedGroup.Code ?? viewedGroup.Source)</p>
+                                        </div>
+                                        <div>
+                                            <p class="text-[10px] font-semibold uppercase text-slate-400">Department</p>
+                                            <p class="font-medium text-slate-800 dark:text-slate-200">@(viewedGroup.DepartmentName ?? "Organisation-wide")</p>
+                                        </div>
+                                        <div>
+                                            <p class="text-[10px] font-semibold uppercase text-slate-400">Members</p>
+                                            <p class="font-bold text-blue-700">@viewedGroup.MemberCount</p>
+                                        </div>
+                                        @if (!string.IsNullOrWhiteSpace(viewedGroup.Description))
+                                        {
+                                            <div>
+                                                <p class="text-[10px] font-semibold uppercase text-slate-400">Description</p>
+                                                <p class="text-slate-700 dark:text-slate-300">@viewedGroup.Description</p>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </aside>
+                }
                 @if (ShowRightOrganisationList)
                 {
-                <aside class="min-w-0 xl:col-span-4">
+                <aside class="min-w-0 @(HasDetailView ? "xl:col-span-2" : "xl:col-span-4")">
                     <div class="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs">
                         <div class="border-b border-slate-200 dark:border-slate-800 p-2 flex flex-col gap-2">
                             <div class="flex items-center justify-between gap-2">
@@ -403,6 +618,10 @@
                         <button type="button" class="text-slate-400 hover:text-slate-600 text-sm font-bold" @onclick="() => showEditOrgModal = false">✕</button>
                     </div>
                     <div class="grid grid-cols-1 gap-3 p-4 md:grid-cols-2">
+                        @if (!string.IsNullOrWhiteSpace(error))
+                        {
+                            <div role="alert" class="md:col-span-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">@error</div>
+                        }
                         <label class="@Label">Organisation name<input class="@Input" maxlength="250" @bind="editOrgDraft.Name" /></label>
                         <label class="@Label">Dhivehi name<input class="@Input" maxlength="250" dir="rtl" @bind="editOrgDraft.DhivehiName" /></label>
                         <label class="@Label">Organisation type<select class="@Input" @bind="editOrgDraft.TypeId"><option value="0">Select type</option>@foreach (var option in data.Types) { <option value="@option.Id">@option.Name</option> }</select></label>
@@ -543,6 +762,14 @@
     private string? groupDraftCode, groupDraftDescription;
     private OrganisationDepartmentSummaryDto? deletingDepartment;
     private OrganisationGroupSummaryDto? deletingGroup;
+    private OrganisationDepartmentSummaryDto? viewedDepartment;
+    private OrganisationTeamSummaryDto? viewedTeam;
+    private OrganisationGroupSummaryDto? viewedGroup;
+    private bool HasDetailView => activeSection == "Manage" && model.Id > 0 && (viewedDepartment != null || viewedTeam != null || viewedGroup != null);
+    private void ViewDepartment(OrganisationDepartmentSummaryDto dept) { viewedDepartment = dept; viewedTeam = null; viewedGroup = null; }
+    private void ViewTeam(OrganisationTeamSummaryDto tm) { viewedDepartment = null; viewedTeam = tm; viewedGroup = null; }
+    private void ViewGroup(OrganisationGroupSummaryDto grp) { viewedDepartment = null; viewedTeam = null; viewedGroup = grp; }
+    private void CloseDetailView() { viewedDepartment = null; viewedTeam = null; viewedGroup = null; }
     private string activeSection = "Manage";
     private static readonly (string Name, string Icon)[] OrganisationSections =
     [ ("Structure", "account_tree"), ("Manage", "edit"), ("Contact", "contact_phone"),
@@ -603,6 +830,7 @@
         showEditOrgModal = false; showDeleteOrgModal = false;
         showDeptModal = false; deletingDepartment = null;
         showGroupModal = false; deletingGroup = null;
+        CloseDetailView();
         address = new() { BaseTypeId = data?.AddressTypes.FirstOrDefault()?.Id ?? 0, CountryId = model.CountryId, UsageId = data?.AddressUsages.FirstOrDefault(x => x.Id == 3)?.Id ?? data?.AddressUsages.FirstOrDefault()?.Id ?? 0 };
         contact = new(); addressResults.Clear(); addressSearch = ""; useExisting = false; addingAddress = false; addingContact = false;
     }

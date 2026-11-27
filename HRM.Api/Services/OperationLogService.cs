@@ -46,8 +46,8 @@ namespace HRM.Services
                 var organisationId = userContext.Organisation?.OrganisationBusinessEntityId ?? userContext.ActiveJob?.OrganisationId;
                 userOrganisationId = organisationId.HasValue
                     ? await dbContext.UserOrganisations.Where(x => x.BusinessEntityID == organisationId.Value)
-                        .Select(x => (int?)x.UserOrganisationID).SingleOrDefaultAsync()
-                    : await dbContext.Users.Where(x => x.UserId == userContext.UserId).Select(x => x.UserOrganisationId).SingleOrDefaultAsync();
+                        .Select(x => (int?)x.UserOrganisationID).FirstOrDefaultAsync()
+                    : await dbContext.Users.Where(x => x.UserId == userContext.UserId).Select(x => x.UserOrganisationId).FirstOrDefaultAsync();
             }
             else
             {

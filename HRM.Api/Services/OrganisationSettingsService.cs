@@ -58,8 +58,116 @@ public partial class OrganisationSettingsService(IDbContextFactory<HrmTeContext>
     {
         await RequireAsync(id, "UserOrganisations.View", "UserOrganisations.Admin.View", "Organisation.Edit", "Organisation.Contact.View");
         await using var db = await factory.CreateDbContextAsync();
+        var today = DateTime.Today;
+        var now = DateTime.UtcNow;
+
+        var activeJobs = await db.Jobs.AsNoTracking()
+            .Where(j => j.OrganisationID == id && j.JobStateId == 4 && j.TerminatedDate == null && j.JoinedDate <= today)
+            .OrderByDescending(j => j.JoinedDate).ThenByDescending(j => j.JobId)
+            .Select(j => new
+            {
+                j.IndividualID,
+                j.OrganisationStructureId,
+                Name = (j.Individual.FirstNameEnglish + " " + (j.Individual.MiddleNameEnglish ?? "") + " " + (j.Individual.LastNameEnglish ?? "")).Trim(),
+                j.Staff.EmployeeNumber,
+                JobType = j.JobType.TypeName
+            })
+            .ToListAsync();
+        var activeStaffCount = activeJobs.Select(j => j.IndividualID).Distinct().Count();
+        var staffCountByDept = activeJobs
+            .GroupBy(j => j.OrganisationStructureId)
+            .ToDictionary(g => g.Key, g => g.Select(x => x.IndividualID).Distinct().Count());
+        var departmentStaff = activeJobs
+            .GroupBy(j => new { j.OrganisationStructureId, j.IndividualID })
+            .Select(g => g.First())
+            .Select(j => new OrganisationDepartmentStaffDto(
+                j.IndividualID,
+                j.OrganisationStructureId,
+                string.Join(" ", j.Name.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)),
+                j.EmployeeNumber,
+                j.JobType))
+            .OrderBy(s => s.Name)
+            .ToList();
+
+        var deptRows = await db.OrganisationStructures.AsNoTracking()
+            .Where(x => x.OrganisationBusinessEntityID == id && x.OrganisationStructureStateId == 3)
+            .OrderBy(x => x.Name)
+            .Select(x => new
+            {
+                x.OrganisationStructureId,
+                x.Name,
+                x.OrganisationStructureTypeId,
+                TypeName = x.OrganisationStructureType.TypeName,
+                x.OrganisationStructureStateId
+            })
+            .ToListAsync();
+        var deptNameById = deptRows.ToDictionary(d => d.OrganisationStructureId, d => d.Name);
+
+        var departments = deptRows.Select(x => new OrganisationDepartmentSummaryDto(
+            x.OrganisationStructureId,
+            x.Name,
+            x.OrganisationStructureTypeId,
+            x.TypeName,
+            x.OrganisationStructureStateId,
+            x.OrganisationStructureStateId == 3,
+            staffCountByDept.GetValueOrDefault(x.OrganisationStructureId, 0)))
+            .ToList();
+
+        var teamRows = await db.Teams.AsNoTracking()
+            .Where(t => t.OrganisationId == id && t.IsValid != false)
+            .OrderBy(t => t.Name)
+            .Select(t => new
+            {
+                t.TeamId,
+                t.Name,
+                t.OrganisationStructureId,
+                StaffCount = db.TeamStaffs.Count(ts => ts.TeamId == t.TeamId && ts.IsValid && (ts.EndDate == null || ts.EndDate >= now))
+            })
+            .ToListAsync();
+        var teams = teamRows.Select(t => new OrganisationTeamSummaryDto(
+            t.TeamId,
+            t.Name,
+            t.OrganisationStructureId,
+            t.OrganisationStructureId.HasValue ? deptNameById.GetValueOrDefault(t.OrganisationStructureId.Value) : null,
+            t.StaffCount,
+            true)).ToList();
+
+        // Load both operational Groups (dbo.Groups) and HR StaffGroups (dbo.StaffGroups)
+        var operationalGroups = await db.Groups.AsNoTracking()
+            .Where(g => g.BusinessEntityOrganisationId == id)
+            .OrderBy(g => g.Name)
+            .Select(g => new OrganisationGroupSummaryDto(
+                g.GroupId,
+                g.Name,
+                g.GroupType.Name,
+                null,
+                g.GroupStaffs.Count(),
+                false,
+                g.OrganisationStructureId,
+                g.OrganisationStructure.Name,
+                "Operational"))
+            .ToListAsync();
+
+        var staffGroups = await db.StaffGroups.AsNoTracking()
+            .Where(x => x.OrganisationId == id && !x.IsDissolved)
+            .OrderBy(x => x.Name)
+            .Select(x => new OrganisationGroupSummaryDto(
+                x.StaffGroupId,
+                x.Name,
+                x.Code,
+                x.Description,
+                x.Members.Count(m => m.IsActive),
+                x.IsDissolved,
+                null,
+                null,
+                "StaffGroup"))
+            .ToListAsync();
+
+        var allGroups = operationalGroups.Concat(staffGroups).OrderBy(g => g.Name).ToList();
+
         return new()
         {
+            ActiveStaffCount = activeStaffCount,
             Addresses = await db.BusinessEntityLocations.AsNoTracking().Where(x => x.BusinessEntityId == id && x.IsValid)
                 .Select(x => new OrganisationAddressOption(x.LocationId, x.BusinessEntityLocationType.TypeName + ": " +
                     (x.Location.Address!.AddressInstance!.AddressBase.AddressLine1 ?? "") + " " +
@@ -67,28 +175,10 @@ public partial class OrganisationSettingsService(IDbContextFactory<HrmTeContext>
                     (x.Location.Address.AddressInstance.Floor ?? "") + " · " + x.Location.Country.NameEnglish, x.BusinessEntityLocationId)).ToListAsync(),
             Contacts = await db.BussinessEntityContactInformations.AsNoTracking().Where(x => x.BussinessEntityId == id && x.IsValid)
                 .Select(x => new OrganisationContactDto { Id = x.BussinessEntityContactInformationId, TypeId = x.ContactInformationTypeId, Type = x.ContactInformationType.TypeName, Value = x.Value }).ToListAsync(),
-            Departments = await db.OrganisationStructures.AsNoTracking()
-                .Where(x => x.OrganisationBusinessEntityID == id && x.OrganisationStructureStateId == 3)
-                .OrderBy(x => x.Name)
-                .Select(x => new OrganisationDepartmentSummaryDto(
-                    x.OrganisationStructureId,
-                    x.Name,
-                    x.OrganisationStructureTypeId,
-                    x.OrganisationStructureType.TypeName,
-                    x.OrganisationStructureStateId,
-                    x.OrganisationStructureStateId == 3))
-                .ToListAsync(),
-            Groups = await db.StaffGroups.AsNoTracking()
-                .Where(x => x.OrganisationId == id && !x.IsDissolved)
-                .OrderBy(x => x.Name)
-                .Select(x => new OrganisationGroupSummaryDto(
-                    x.StaffGroupId,
-                    x.Name,
-                    x.Code,
-                    x.Description,
-                    x.Members.Count(m => m.IsActive),
-                    x.IsDissolved))
-                .ToListAsync()
+            Departments = departments,
+            DepartmentStaff = departmentStaff,
+            Teams = teams,
+            Groups = allGroups
         };
     }
     public async Task<ServiceResult> SaveDetailsAsync(OrganisationSettingsDto model)
@@ -99,35 +189,73 @@ public partial class OrganisationSettingsService(IDbContextFactory<HrmTeContext>
         if (string.IsNullOrWhiteSpace(model.Name) || model.Name.Length > 250 || model.DhivehiName?.Length > 250 ||
             string.IsNullOrWhiteSpace(model.RegistrationNumber) || model.RegistrationNumber.Length > 50)
             return ServiceResult.Fail("Enter an organisation name and registration number (up to 50 characters).");
+        if (model.RegistrationDate.HasValue && model.RegistrationDate.Value < new DateTime(1753, 1, 1))
+            return ServiceResult.Fail("Enter a valid registration date (year 1753 or later).");
         await using var db = await factory.CreateDbContextAsync();
-        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
-        if (!await db.OrganisationTypes.AnyAsync(x => x.OrganisationTypeId == model.TypeId) || !await db.Countries.AnyAsync(x => x.CountryId == model.CountryId))
-            return ServiceResult.Fail("Select an organisation type and country.");
-        if (await db.Organisations.AnyAsync(x => x.BusinessEntityID != model.Id && x.RegistrationNumber == model.RegistrationNumber.Trim()))
-            return ServiceResult.Fail("An organisation with this registration number already exists. Select it from the list.");
-        var parentId = model.ParentId; var visited = new HashSet<int>();
-        while (parentId.HasValue)
+        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted);
+        try
         {
-            if (parentId == model.Id || !visited.Add(parentId.Value)) return ServiceResult.Fail("The parent organisation would create a hierarchy cycle.");
-            var parent = await db.Organisations.AsNoTracking().Where(x => x.BusinessEntityID == parentId).Select(x => new { x.ParentOrganisationBusinessEntityId }).SingleOrDefaultAsync();
-            if (parent == null) return ServiceResult.Fail("The parent organisation was not found.");
-            parentId = parent.ParentOrganisationBusinessEntityId;
+            if (!await db.OrganisationTypes.AnyAsync(x => x.OrganisationTypeId == model.TypeId) || !await db.Countries.AnyAsync(x => x.CountryId == model.CountryId))
+                return ServiceResult.Fail("Select an organisation type and country.");
+            Organisation? existingEntity = model.Id > 0
+                ? await db.Organisations.FirstOrDefaultAsync(x => x.BusinessEntityID == model.Id)
+                : null;
+            if (model.Id > 0 && existingEntity == null)
+                return ServiceResult.Fail("Organisation was not found.");
+
+            var trimmedReg = model.RegistrationNumber.Trim();
+            var regChanged = existingEntity == null || !string.Equals(existingEntity.RegistrationNumber?.Trim(), trimmedReg, StringComparison.OrdinalIgnoreCase);
+            if (regChanged)
+            {
+                var inactiveStateIds = await db.BusinessEntityStates.AsNoTracking()
+                    .Where(s => s.StateName.Contains("Deleted") || s.StateName.Contains("Inactive") || s.StateName.Contains("Closed") || s.StateName.Contains("Disabled"))
+                    .Select(s => s.BusinessEntityStateId)
+                    .ToListAsync();
+                var duplicateReg = await db.Organisations.AnyAsync(x =>
+                    x.BusinessEntityID != model.Id &&
+                    x.RegistrationNumber == trimmedReg &&
+                    !db.BusinessEntities.Any(b => b.BusinessEntityID == x.BusinessEntityID && b.BusinessEntityStateId.HasValue && inactiveStateIds.Contains(b.BusinessEntityStateId.Value)));
+                if (duplicateReg)
+                    return ServiceResult.Fail("An active organisation with this registration number already exists.");
+            }
+            var parentId = model.ParentId; var visited = new HashSet<int>();
+            while (parentId.HasValue)
+            {
+                if (parentId == model.Id || !visited.Add(parentId.Value)) return ServiceResult.Fail("The parent organisation would create a hierarchy cycle.");
+                var parent = await db.Organisations.AsNoTracking().Where(x => x.BusinessEntityID == parentId).Select(x => new { x.ParentOrganisationBusinessEntityId }).FirstOrDefaultAsync();
+                if (parent == null) return ServiceResult.Fail("The parent organisation was not found.");
+                parentId = parent.ParentOrganisationBusinessEntityId;
+            }
+            Organisation entity;
+            if (model.Id == 0)
+            {
+                var log = await logs.CreateAsync(db, SharedConfig.OperationLogActionTypes.BUSINESS_ENTITY_CREATE, $"Created organisation {model.Name.Trim()}");
+                var type = await db.BusinessEntityTypes.Where(x => x.TypeName == "Organisation").Select(x => x.BusinessEntityTypeId).FirstAsync();
+                var business = new BusinessEntity { BusinessEntityTypeId = type, BusinessEntityStateId = 2, OperationLogId = log.OperationLogId, LastStateChangeDate = DateTime.Now };
+                db.BusinessEntities.Add(business); await db.SaveChangesAsync();
+                entity = new Organisation { BusinessEntityID = business.BusinessEntityID }; db.Organisations.Add(entity);
+            }
+            else
+            {
+                entity = existingEntity!;
+            }
+            entity.OrganisationName = model.Name.Trim();
+            entity.OrganisationNameDhivehi = string.IsNullOrWhiteSpace(model.DhivehiName) ? null : model.DhivehiName.Trim();
+            entity.RegistrationNumber = trimmedReg;
+            entity.RegistrationDate = model.RegistrationDate;
+            entity.OrganisationTypeId = model.TypeId;
+            entity.CountryId = model.CountryId;
+            entity.ParentOrganisationBusinessEntityId = model.ParentId;
+            await db.SaveChangesAsync();
+            await tx.CommitAsync();
+            model.Id = entity.BusinessEntityID;
+            return ServiceResult.Ok("Organisation details saved.");
         }
-        var log = await logs.CreateAsync(db, SharedConfig.OperationLogActionTypes.BUSINESS_ENTITY_CREATE, $"Saved organisation {model.Name}");
-        Organisation? entity;
-        if (model.Id == 0)
+        catch (DbUpdateException ex)
         {
-            var type = await db.BusinessEntityTypes.Where(x => x.TypeName == "Organisation").Select(x => x.BusinessEntityTypeId).SingleAsync();
-            var business = new BusinessEntity { BusinessEntityTypeId = type, BusinessEntityStateId = 2, OperationLogId = log.OperationLogId, LastStateChangeDate = DateTime.Now };
-            db.BusinessEntities.Add(business); await db.SaveChangesAsync();
-            entity = new Organisation { BusinessEntityID = business.BusinessEntityID }; db.Organisations.Add(entity);
+            await tx.RollbackAsync();
+            return ServiceResult.Fail($"Could not save organisation details: {ex.InnerException?.Message ?? ex.Message}");
         }
-        else entity = await db.Organisations.SingleOrDefaultAsync(x => x.BusinessEntityID == model.Id);
-        if (entity == null) return ServiceResult.Fail("Organisation was not found.");
-        entity.OrganisationName = model.Name.Trim(); entity.OrganisationNameDhivehi = model.DhivehiName?.Trim(); entity.RegistrationNumber = model.RegistrationNumber.Trim();
-        entity.RegistrationDate = model.RegistrationDate; entity.OrganisationTypeId = model.TypeId; entity.CountryId = model.CountryId; entity.ParentOrganisationBusinessEntityId = model.ParentId;
-        await db.SaveChangesAsync(); await tx.CommitAsync(); model.Id = entity.BusinessEntityID;
-        return ServiceResult.Ok("Organisation details saved. You can now add addresses and contacts.");
     }
     public async Task<List<OrganisationSettingsOption>> SearchAddressesAsync(int organisationId, string query)
     {
@@ -376,13 +504,21 @@ public partial class OrganisationSettingsService(IDbContextFactory<HrmTeContext>
         if (string.IsNullOrWhiteSpace(name) || name.Trim().Length > 200)
             return ServiceResult.Fail("Enter a group name (up to 200 characters).");
         await using var db = await factory.CreateDbContextAsync();
-        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
-        var group = await db.StaffGroups.SingleOrDefaultAsync(x => x.StaffGroupId == groupId && x.OrganisationId == organisationId && !x.IsDissolved);
-        if (group == null) return ServiceResult.Fail("Group was not found in this organisation.");
-        group.Name = name.Trim();
-        group.Code = string.IsNullOrWhiteSpace(code) ? null : code.Trim();
-        group.Description = string.IsNullOrWhiteSpace(description) ? null : description.Trim();
-        group.UpdatedAtUtc = DateTime.UtcNow;
+        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted);
+        var staffGroup = await db.StaffGroups.FirstOrDefaultAsync(x => x.StaffGroupId == groupId && x.OrganisationId == organisationId && !x.IsDissolved);
+        if (staffGroup != null)
+        {
+            staffGroup.Name = name.Trim();
+            staffGroup.Code = string.IsNullOrWhiteSpace(code) ? null : code.Trim();
+            staffGroup.Description = string.IsNullOrWhiteSpace(description) ? null : description.Trim();
+            staffGroup.UpdatedAtUtc = DateTime.UtcNow;
+            await db.SaveChangesAsync();
+            await tx.CommitAsync();
+            return ServiceResult.Ok("Group saved.");
+        }
+        var opGroup = await db.Groups.FirstOrDefaultAsync(x => x.GroupId == groupId && x.BusinessEntityOrganisationId == organisationId);
+        if (opGroup == null) return ServiceResult.Fail("Group was not found in this organisation.");
+        opGroup.Name = name.Trim();
         await db.SaveChangesAsync();
         await tx.CommitAsync();
         return ServiceResult.Ok("Group saved.");
@@ -392,14 +528,24 @@ public partial class OrganisationSettingsService(IDbContextFactory<HrmTeContext>
     {
         await RequireAsync(organisationId, "Organisation.Edit", "UserOrganisations.Edit");
         await using var db = await factory.CreateDbContextAsync();
-        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
-        var group = await db.StaffGroups.SingleOrDefaultAsync(x => x.StaffGroupId == groupId && x.OrganisationId == organisationId && !x.IsDissolved);
-        if (group == null) return ServiceResult.Fail("Group was not found in this organisation.");
-        group.IsDissolved = true;
-        group.DissolvedAtUtc = DateTime.UtcNow;
-        group.UpdatedAtUtc = DateTime.UtcNow;
+        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted);
+        var staffGroup = await db.StaffGroups.FirstOrDefaultAsync(x => x.StaffGroupId == groupId && x.OrganisationId == organisationId && !x.IsDissolved);
+        if (staffGroup != null)
+        {
+            staffGroup.IsDissolved = true;
+            staffGroup.DissolvedAtUtc = DateTime.UtcNow;
+            staffGroup.UpdatedAtUtc = DateTime.UtcNow;
+            await db.SaveChangesAsync();
+            await tx.CommitAsync();
+            return ServiceResult.Ok("Group soft-deleted.");
+        }
+        var opGroup = await db.Groups.Include(g => g.GroupStaffs).FirstOrDefaultAsync(x => x.GroupId == groupId && x.BusinessEntityOrganisationId == organisationId);
+        if (opGroup == null) return ServiceResult.Fail("Group was not found in this organisation.");
+        if (opGroup.GroupStaffs.Any())
+            return ServiceResult.Fail("Cannot delete an operational group while staff members are assigned to it.");
+        db.Groups.Remove(opGroup);
         await db.SaveChangesAsync();
         await tx.CommitAsync();
-        return ServiceResult.Ok("Group soft-deleted.");
+        return ServiceResult.Ok("Operational group removed.");
     }
 }

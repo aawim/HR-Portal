@@ -49,14 +49,19 @@ public class OrganisationSettingsData
 }
 public class OrganisationLinksDto
 {
+    public int ActiveStaffCount { get; set; }
     public List<OrganisationAddressOption> Addresses { get; set; } = new();
     public List<OrganisationContactDto> Contacts { get; set; } = new();
     public List<OrganisationDepartmentSummaryDto> Departments { get; set; } = new();
+    public List<OrganisationDepartmentStaffDto> DepartmentStaff { get; set; } = new();
+    public List<OrganisationTeamSummaryDto> Teams { get; set; } = new();
     public List<OrganisationGroupSummaryDto> Groups { get; set; } = new();
 }
 public record OrganisationAddressOption(int Id, string Name, int LinkId);
-public record OrganisationDepartmentSummaryDto(int Id, string Name, int TypeId, string TypeName, int StateId, bool IsActive);
-public record OrganisationGroupSummaryDto(int Id, string Name, string? Code, string? Description, int MemberCount, bool IsDissolved);
+public record OrganisationDepartmentSummaryDto(int Id, string Name, int TypeId, string TypeName, int StateId, bool IsActive, int StaffCount = 0);
+public record OrganisationDepartmentStaffDto(int IndividualId, int DepartmentId, string Name, string? EmployeeNumber, string JobType);
+public record OrganisationTeamSummaryDto(int Id, string Name, int? DepartmentId, string? DepartmentName, int StaffCount, bool IsActive);
+public record OrganisationGroupSummaryDto(int Id, string Name, string? Code, string? Description, int MemberCount, bool IsDissolved, int? DepartmentId = null, string? DepartmentName = null, string Source = "StaffGroup");
 public record OrganisationStaffRow(int JobId, string Name, string? EmployeeNumber, string Department, string JobType, string Status)
 {
     public int IndividualId { get; init; }
