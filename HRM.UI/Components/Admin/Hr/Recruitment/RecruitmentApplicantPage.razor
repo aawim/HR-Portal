@@ -1560,6 +1560,7 @@
 @code {
     [Parameter] public string? OfficeName { get; set; }
     [Parameter] public string? VacancyRef { get; set; }
+    [SupplyParameterFromQuery(Name = "tab")] public string? TabQuery { get; set; }
 
     private MyRecruitmentWorkspace? workspace;
     private MyPublishedResultDetail? viewingResult;
@@ -1575,7 +1576,7 @@
     private string sortOrder = "closing";
     private string? message;
     private string? loadedOfficeName;
-    private int confirmation;
+    private string? appliedTabQuery;
     private int objectingPublicationId;
     private int objectingApplicationId;
     private string objectionGrounds = "";
@@ -1675,6 +1676,13 @@
     {
         var auth = await AuthStateProvider.GetAuthenticationStateAsync();
         isAuthenticated = auth.User.Identity?.IsAuthenticated == true;
+        if (!string.IsNullOrWhiteSpace(TabQuery) && isAuthenticated && !string.Equals(appliedTabQuery, TabQuery, StringComparison.OrdinalIgnoreCase))
+        {
+            appliedTabQuery = TabQuery;
+            var normalizedTab = TabQuery.Trim().ToLowerInvariant();
+            if (normalizedTab is "vacancies" or "applications" or "results" or "offers" or "profile")
+                activeTab = normalizedTab;
+        }
         if (!string.IsNullOrWhiteSpace(VacancyRef) && isAuthenticated && string.IsNullOrWhiteSpace(applyingVacancyRef))
         {
             applyingVacancyRef = VacancyRef;
@@ -1880,7 +1888,6 @@
             message = result.Message;
             if (result.Success)
             {
-                confirmation = 0;
                 await Load();
             }
         }

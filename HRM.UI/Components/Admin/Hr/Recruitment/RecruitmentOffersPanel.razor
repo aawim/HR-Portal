@@ -243,6 +243,32 @@
                                     </div>
                                 </div>
 
+                                @if (o.Status == "Draft")
+                                {
+                                    <div class="rounded-lg border @(o.IsAgencySigned ? "border-emerald-200 bg-emerald-50/60 text-emerald-900" : "border-amber-200 bg-amber-50/60 text-amber-900") px-2.5 py-1.5 text-[11px]">
+                                        @if (!o.IsAgencySigned)
+                                        {
+                                            <span><strong>Step 1 of 4:</strong> Draft created. Click <strong>Sign Offer Letter</strong> to digitally sign before publishing to the applicant.</span>
+                                        }
+                                        else
+                                        {
+                                            <span><strong>Step 2 of 4:</strong> Offer letter signed by Agency. Click <strong>Publish Offer</strong> to send the Offer Letter &amp; Agreement Form to the applicant.</span>
+                                        }
+                                    </div>
+                                }
+                                else if (o.Status == "Offered")
+                                {
+                                    <div class="rounded-lg border border-blue-200 bg-blue-50/60 px-2.5 py-1.5 text-[11px] text-blue-900">
+                                        <span><strong>Step 3 of 4:</strong> Published to applicant. Waiting for the applicant to fill, sign, and submit the Job Offer Acceptance Form from their Profile or Careers portal.</span>
+                                    </div>
+                                }
+                                else if (o.Status == "Accepted" && !o.OnboardingRequestId.HasValue)
+                                {
+                                    <div class="rounded-lg border border-emerald-200 bg-emerald-50/60 px-2.5 py-1.5 text-[11px] text-emerald-900">
+                                        <span><strong>Step 4 of 4:</strong> Applicant submitted signed agreement. Click <strong>Review Agreement &amp; Decide</strong> or <strong>Prepare Onboarding</strong> to start staff onboarding.</span>
+                                    </div>
+                                }
+
                                 @if (isExpanded && !string.IsNullOrWhiteSpace(o.TermsSnapshotJson))
                                 {
                                     <div class="rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-[11px] text-slate-700 whitespace-pre-wrap">

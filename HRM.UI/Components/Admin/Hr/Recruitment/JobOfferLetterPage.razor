@@ -209,15 +209,35 @@
             </div>
 
             <div class="flex flex-wrap items-center gap-2">
-                @if (IsAdminRoute && detail is not null && string.IsNullOrWhiteSpace(detail.AgencySignatureDataUrl))
+                @if (IsAdminRoute && detail is not null)
                 {
-                    <button type="button"
-                            class="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
-                            disabled="@signBusy"
-                            @onclick="() => showAgencyPinModal = true">
-                        <i class="bi bi-shield-lock" aria-hidden="true"></i>
-                        <span>Sign as Agency Issuer</span>
-                    </button>
+                    @if (detail.Status == "Draft" && string.IsNullOrWhiteSpace(detail.AgencySignatureDataUrl))
+                    {
+                        <span class="rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-semibold text-amber-800">Unsigned Draft</span>
+                        <button type="button"
+                                class="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+                                disabled="@signBusy"
+                                @onclick="() => showAgencyPinModal = true">
+                            <i class="bi bi-shield-lock" aria-hidden="true"></i>
+                            <span>Sign as Agency Issuer</span>
+                        </button>
+                    }
+                    else if (detail.Status == "Draft" && !string.IsNullOrWhiteSpace(detail.AgencySignatureDataUrl))
+                    {
+                        <span class="rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-semibold text-emerald-800">Signed Draft</span>
+                        <button type="button"
+                                style="background-color:#075985; color:#ffffff;"
+                                class="inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-semibold shadow-xs hover:opacity-90 disabled:opacity-50"
+                                disabled="@signBusy"
+                                @onclick="PublishOfferAsync">
+                            <i class="bi bi-send-check" aria-hidden="true"></i>
+                            <span>Publish Offer to Applicant</span>
+                        </button>
+                    }
+                    else
+                    {
+                        <span class="rounded-full bg-blue-100 px-2.5 py-1 text-[11px] font-semibold text-blue-800">@detail.Status</span>
+                    }
                 }
                 @if (!IsAdminRoute && detail is not null && detail.Status == "Offered")
                 {
@@ -670,6 +690,27 @@
         catch
         {
             signMessage = "Could not apply agency signature.";
+        }
+        finally
+        {
+            signBusy = false;
+        }
+    }
+
+    private async Task PublishOfferAsync()
+    {
+        if (signBusy || detail is null) return;
+        signBusy = true;
+        signMessage = null;
+        try
+        {
+            var res = await Api.PublishOfferAsync(detail.OfferId);
+            signMessage = res.Message;
+            if (res.Success) await LoadAsync();
+        }
+        catch
+        {
+            signMessage = "Could not publish the offer letter.";
         }
         finally
         {

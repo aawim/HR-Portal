@@ -125,7 +125,7 @@ public sealed class RecruitmentOfferService(
                     OrganisationId = o,
                     Kind = "RecruitmentOffer",
                     Message = $"You have received a signed Job Offer Letter for vacancy {info.VacancyRef}. View, sign, and submit your decision from your Profile or Careers portal.",
-                    Url = "/online/recruitment",
+                    Url = "/online/recruitment?tab=offers",
                     CreatedAtUtc = now
                 });
             }

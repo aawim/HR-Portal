@@ -241,20 +241,18 @@ public sealed class RecruitmentOfferQueriesController(
 
         if (row is null) return NotFound();
 
-        // Authorize either the eFaas-bound appointee OR HR with organisation access
+        // Authorize either HR with organisation access OR the eFaas-bound appointee (published offers only)
+        var canManage = await access.HasOrganisationAccessAsync(row.OrganisationId)
+            && (await access.HasUserGroupAsync("SuperAdministrator")
+                || await access.HasUserGroupAsync("Admin")
+                || await access.HasPermissionAsync("Recruitment.Manage")
+                || await access.HasPermissionAsync("Recruitment.View"));
+
         var idNumber = User.FindFirstValue("idnumber")?.Trim();
         var isAppointee = !string.IsNullOrWhiteSpace(idNumber) && string.Equals(idNumber, row.EfaasIdNumber, StringComparison.OrdinalIgnoreCase);
-        if (isAppointee && row.Status == "Draft")
+
+        if (!canManage && (!isAppointee || row.Status == "Draft"))
             return Forbid();
-        if (!isAppointee)
-        {
-            var canManage = await access.HasOrganisationAccessAsync(row.OrganisationId)
-                && (await access.HasUserGroupAsync("SuperAdministrator")
-                    || await access.HasUserGroupAsync("Admin")
-                    || await access.HasPermissionAsync("Recruitment.Manage")
-                    || await access.HasPermissionAsync("Recruitment.View"));
-            if (!canManage) return Forbid();
-        }
 
         await DocumentSignaturesController.EnsureTablesPublicAsync(db, ct);
         var sigs = await db.DocumentSignatures.AsNoTracking()
