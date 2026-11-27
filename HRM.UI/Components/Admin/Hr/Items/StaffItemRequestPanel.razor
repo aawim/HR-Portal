@@ -2,6 +2,7 @@
 @inject HRM.Services.Contracts.ItemCatalogueServiceContracts.IOperations Items
 @inject HRM.Services.ToastService Toasts
 @inject IJSRuntime JS
+@inject NavigationManager Navigation
 
 <section class="staff-items-page w-full min-w-0 flex flex-col gap-3 text-slate-900 dark:text-slate-100">
 
@@ -819,8 +820,8 @@
     [Parameter] public bool PersonalItemsOnly { get; set; }
 
     [Parameter]
-    [SupplyParameterFromQuery(Name = "requestId")]
     public int? RequestId { get; set; }
+    private int? EffectiveRequestId => RequestId ?? HRM.Helpers.QueryStringReader.GetInt(Navigation.Uri, "requestId");
 
     private List<string> previousNames = [];
     private List<ItemStaffRequestDto> rows = [];
@@ -948,9 +949,9 @@
 
     protected override async Task OnParametersSetAsync()
     {
-        if (RequestId.HasValue && RequestId.Value > 0)
+        if (EffectiveRequestId.HasValue && EffectiveRequestId.Value > 0)
         {
-            selectedRequestId = RequestId.Value;
+            selectedRequestId = EffectiveRequestId.Value;
         }
 
         if (loadedIndividualId == IndividualId && loadedJobRelatedOnly == JobRelatedOnly && loadedPersonalItemsOnly == PersonalItemsOnly)

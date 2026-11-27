@@ -32,8 +32,9 @@ public sealed class GroupsManagementService(IDbContextFactory<HrmTeContext> fact
         await using var db = await factory.CreateDbContextAsync();
         var name = await db.Organisations.AsNoTracking().Where(o=>o.BusinessEntityID==scope.Org).Select(o=>o.OrganisationName).SingleOrDefaultAsync()
             ?? throw new InvalidOperationException("Organisation not found.");
+        var inactiveStateIds = await HRM.Helpers.ActiveOrganisationFilter.InactiveEntityStateIdsAsync(db);
         return new(scope.Org,name,scope.Super,scope.Manage,
-            await db.Organisations.AsNoTracking().Where(o=>scope.Super || o.BusinessEntityID==scope.Org).OrderBy(o=>o.OrganisationName).Select(o=>new OperationalGroupOption(o.BusinessEntityID,o.OrganisationName)).ToListAsync(),
+            await HRM.Helpers.ActiveOrganisationFilter.ActiveOrganisations(db, inactiveStateIds).Where(o=>scope.Super || o.BusinessEntityID==scope.Org).OrderBy(o=>o.OrganisationName).Select(o=>new OperationalGroupOption(o.BusinessEntityID,o.OrganisationName)).ToListAsync(),
             await db.GroupTypes.AsNoTracking().Where(t=>t.OrganisationBusinessEntityId==scope.Org).OrderBy(t=>t.Name).Select(t=>new OperationalGroupOption(t.GroupTypeId,t.Name)).ToListAsync(),
             await db.OrganisationStructures.AsNoTracking().Where(s=>s.OrganisationBusinessEntityID==scope.Org && s.OrganisationStructureStateId==3).OrderBy(s=>s.Name).Select(s=>new OperationalGroupOption(s.OrganisationStructureId,s.OrganisationStructureType.TypeName+" · "+s.Name)).ToListAsync(),
             await db.Groups.AsNoTracking().Where(g=>g.BusinessEntityOrganisationId==scope.Org).OrderBy(g=>g.Name).Select(g=>new OperationalGroupRow(g.GroupId,g.Name,g.GroupTypeId,g.GroupType.Name,g.OrganisationStructureId,g.OrganisationStructure.Name,g.OperationLogId)).ToListAsync());

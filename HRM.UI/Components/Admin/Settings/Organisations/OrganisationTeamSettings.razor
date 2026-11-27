@@ -482,7 +482,7 @@
     [Parameter] public bool ShowOrganisationSelector { get; set; } = true;
     [Parameter] public bool ShowHeading { get; set; } = true;
     [Parameter] public string? InitialKind { get; set; }
-    [SupplyParameterFromQuery(Name = "teamView")] public string? QueryKind { get; set; }
+    private string? QueryKind => HRM.Helpers.QueryStringReader.GetString(Navigation.Uri, "teamView");
     private static string GetInitials(string? name)
     {
         if (string.IsNullOrWhiteSpace(name)) return "OR";

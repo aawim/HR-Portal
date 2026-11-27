@@ -69,7 +69,9 @@ public sealed class AdminAccessGrantService(IDbContextFactory<HrmTeContext> fact
         await using var db = await factory.CreateDbContextAsync();
         var manage = await Manager(actor);
         var data = new AdminAccessGrantData { IsSuperAdmin = actor.IsSuperAdministrator, CanManage = manage, OrganisationId = org };
-        data.Organisations = await db.Organisations.Where(o => actor.IsSuperAdministrator || o.BusinessEntityID == org)
+        var inactiveStateIds = await HRM.Helpers.ActiveOrganisationFilter.InactiveEntityStateIdsAsync(db);
+        data.Organisations = await HRM.Helpers.ActiveOrganisationFilter.ActiveOrganisations(db, inactiveStateIds)
+            .Where(o => actor.IsSuperAdministrator || o.BusinessEntityID == org)
             .OrderBy(o => o.OrganisationName).Select(o => new AdminAccessOption(o.BusinessEntityID, o.OrganisationName)).ToListAsync();
         if (!data.Organisations.Any(o => o.Id == org)) throw new UnauthorizedAccessException("Organisation not found.");
         var userOrg = await db.UserOrganisations.Where(o => o.BusinessEntityID == org).Select(o => o.UserOrganisationID).SingleOrDefaultAsync();

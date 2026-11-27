@@ -224,7 +224,7 @@
 
 @code {
     [Parameter] public bool RequestTypesMode { get; set; }
-    [SupplyParameterFromQuery(Name="tab")] public string? Tab {get;set;}
+    private string? Tab => HRM.Helpers.QueryStringReader.GetString(Navigation.Uri, "tab");
     private static readonly (string Id,string Name)[] ConfigTabs=[("ot","OT Config"),("leave","Leave Config"),("leave-sets","Leave Set Config")];
     private string activeTab="ot";
     private string CurrentPath => new Uri(Navigation.Uri).AbsolutePath;

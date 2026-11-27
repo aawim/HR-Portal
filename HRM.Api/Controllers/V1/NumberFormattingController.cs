@@ -75,7 +75,8 @@ public sealed class NumberFormattingController(
         await using var db = await factory.CreateDbContextAsync(ct);
         await EnsureTableAsync(db, ct);
 
-        var orgs = await db.Organisations.AsNoTracking()
+        var inactiveStateIds = await HRM.Helpers.ActiveOrganisationFilter.InactiveEntityStateIdsAsync(db, ct);
+        var orgs = await HRM.Helpers.ActiveOrganisationFilter.ActiveOrganisations(db, inactiveStateIds)
             .OrderBy(o => o.OrganisationName)
             .Select(o => new NumberFormatOptionDto(o.BusinessEntityID, o.OrganisationName, o.RegistrationNumber))
             .ToListAsync(ct);

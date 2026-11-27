@@ -432,8 +432,9 @@
 </div>
 
 @code {
-    [SupplyParameterFromQuery(Name="organisationId")] public int? OrganisationId {get;set;}
-    [Parameter, SupplyParameterFromQuery(Name="tab")] public string? RequestedTab {get;set;}
+    private int? OrganisationId => HRM.Helpers.QueryStringReader.GetInt(Navigation.Uri, "organisationId");
+    [Parameter] public string? RequestedTab { get; set; }
+    private string? EffectiveRequestedTab => !string.IsNullOrWhiteSpace(RequestedTab) ? RequestedTab : HRM.Helpers.QueryStringReader.GetString(Navigation.Uri, "tab");
     private OperationalGroupsData? data;
     private string? error,originalName,loaded;
     private string name="",search="",tab="groups",deletingName="";
@@ -446,7 +447,7 @@
 
     private IEnumerable<OperationalGroupRow> FilteredGroups => data?.Groups.Where(g => (groupTypeFilter == 0 || g.TypeId == groupTypeFilter) && (g.Name.Contains(search, StringComparison.OrdinalIgnoreCase) || g.Type.Contains(search, StringComparison.OrdinalIgnoreCase) || g.Structure.Contains(search, StringComparison.OrdinalIgnoreCase))) ?? Enumerable.Empty<OperationalGroupRow>();
 
-    protected override async Task OnParametersSetAsync(){var key=$"{OrganisationId}:{RequestedTab}";if(loaded==key)return;loaded=key;tab=RequestedTab=="types"?"types":"groups";await LoadAsync();}
+    protected override async Task OnParametersSetAsync(){var key=$"{OrganisationId}:{EffectiveRequestedTab}";if(loaded==key)return;loaded=key;tab=EffectiveRequestedTab=="types"?"types":"groups";await LoadAsync();}
     private async Task LoadAsync(){busy=true;error=null;editing=false;editId=0;name="";originalName=null;deletingId=null;detailOpen=false;selected=null;selectedDetails=null;try{data=await Groups.LoadAsync(OrganisationId);}catch(Exception ex){data=null;Fail(ex);}finally{busy=false;}}
     private void SelectTab(string value){if(busy)return;var route=value=="types"?"/admin/hr/groups/group-type":"/admin/hr/groups/management";Navigation.NavigateTo($"{route}?organisationId={data!.OrganisationId}");}
     private void ChangeOrganisation(ChangeEventArgs e){if(!busy && int.TryParse(e.Value?.ToString(),out var id)){var route=tab=="types"?"/admin/hr/groups/group-type":"/admin/hr/groups/management";Navigation.NavigateTo($"{route}?organisationId={id}");}}

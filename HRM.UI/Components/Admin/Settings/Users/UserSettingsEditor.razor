@@ -312,7 +312,7 @@
 
 @code {
     [Parameter] public UserSettingsTab Tab { get; set; }
-    [SupplyParameterFromQuery(Name = "userId")] public int? RequestedUserId { get; set; }
+    private int? RequestedUserId => HRM.Helpers.QueryStringReader.GetInt(Navigation.Uri, "userId");
     private UserSettingsData? data;
     private ManagedUserDto? user;
     private ManagedStaffDto staff = new();

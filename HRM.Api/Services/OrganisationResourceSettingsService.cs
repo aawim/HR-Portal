@@ -39,9 +39,10 @@ public sealed partial class OrganisationResourceSettingsService(IDbContextFactor
     {
         var (org, super, edit) = await Scope(organisationId);
         await using var db = await factory.CreateDbContextAsync();
+        var inactiveStateIds = await HRM.Helpers.ActiveOrganisationFilter.InactiveEntityStateIdsAsync(db);
         var result = new OrganisationResourceData { OrganisationId = org, IsSuperAdmin = super, CanEdit = IsCatalogue(kind) ? super : edit,
             OrganisationName = await db.Organisations.Where(o => o.BusinessEntityID == org).Select(o => o.OrganisationName).SingleAsync(),
-            Organisations = await db.Organisations.Where(o => super || o.BusinessEntityID == org).OrderBy(o => o.OrganisationName)
+            Organisations = await HRM.Helpers.ActiveOrganisationFilter.ActiveOrganisations(db, inactiveStateIds).Where(o => super || o.BusinessEntityID == org).OrderBy(o => o.OrganisationName)
                 .Select(o => new OrganisationSettingsOption(o.BusinessEntityID, o.OrganisationName)).ToListAsync() };
         if (IsCatalogue(kind)) result.Rows = await Catalogue(db, kind);
         else if (kind == OrganisationResourceKind.Calendar)
