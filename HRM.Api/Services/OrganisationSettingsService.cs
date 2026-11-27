@@ -31,7 +31,14 @@ public partial class OrganisationSettingsService(IDbContextFactory<HrmTeContext>
         var user = await access.RequireContextAsync();
         await using var db = await factory.CreateDbContextAsync();
         var currentOrganisation = user.IsSuperAdministrator ? 0 : await access.GetCurrentOrganisationIdAsync();
-        var organisations = await db.Organisations.AsNoTracking().Where(o => user.IsSuperAdministrator || o.BusinessEntityID == currentOrganisation).OrderBy(x => x.OrganisationName).Select(x => new OrganisationSettingsDto
+        var inactiveEntityStateIds = await db.BusinessEntityStates.AsNoTracking()
+            .Where(s => s.StateName.Contains("Deleted") || s.StateName.Contains("Inactive") || s.StateName.Contains("Closed") || s.StateName.Contains("Disabled"))
+            .Select(s => s.BusinessEntityStateId)
+            .ToListAsync();
+        var organisations = await db.Organisations.AsNoTracking()
+            .Where(o => (user.IsSuperAdministrator || o.BusinessEntityID == currentOrganisation) &&
+                        !db.BusinessEntities.Any(b => b.BusinessEntityID == o.BusinessEntityID && b.BusinessEntityStateId.HasValue && inactiveEntityStateIds.Contains(b.BusinessEntityStateId.Value)))
+            .OrderBy(x => x.OrganisationName).Select(x => new OrganisationSettingsDto
         { Id = x.BusinessEntityID, Name = x.OrganisationName, DhivehiName = x.OrganisationNameDhivehi, RegistrationNumber = x.RegistrationNumber ?? "",
             RegistrationDate = x.RegistrationDate, TypeId = x.OrganisationTypeId, CountryId = x.CountryId, ParentId = x.ParentOrganisationBusinessEntityId }).ToListAsync();
         return new()
@@ -43,7 +50,8 @@ public partial class OrganisationSettingsService(IDbContextFactory<HrmTeContext>
             AddressUsages = await db.BusinessEntityLocationTypes.AsNoTracking().Select(x => new OrganisationSettingsOption(x.BusinessEntityLocationTypeId, x.TypeName ?? "Address")).ToListAsync(),
             ContactTypes = await db.ContactInformationTypes.AsNoTracking().Select(x => new OrganisationSettingsOption(x.ContactInformationTypeId, x.TypeName)).ToListAsync(),
             Islands = await db.Islands.AsNoTracking().OrderBy(x => x.NameEnglish).Select(x => new OrganisationAreaOption(x.IslandId, x.AtollId, x.NameEnglish)).ToListAsync(),
-            Wards = await db.Wards.AsNoTracking().OrderBy(x => x.NameEnglish).Select(x => new OrganisationAreaOption(x.WardId, x.IslandId, x.NameEnglish)).ToListAsync()
+            Wards = await db.Wards.AsNoTracking().OrderBy(x => x.NameEnglish).Select(x => new OrganisationAreaOption(x.WardId, x.IslandId, x.NameEnglish)).ToListAsync(),
+            DepartmentTypes = await db.OrganisationStructureTypes.AsNoTracking().OrderBy(x => x.TypeName).Select(x => new OrganisationSettingsOption(x.OrganisationStructureTypeId, x.TypeName)).ToListAsync()
         };
     }
     public async Task<OrganisationLinksDto> GetLinksAsync(int id)
@@ -58,7 +66,29 @@ public partial class OrganisationSettingsService(IDbContextFactory<HrmTeContext>
                     (x.Location.Address.AddressInstance.AddressBase.StreetNameEnglish ?? "") + " " +
                     (x.Location.Address.AddressInstance.Floor ?? "") + " · " + x.Location.Country.NameEnglish, x.BusinessEntityLocationId)).ToListAsync(),
             Contacts = await db.BussinessEntityContactInformations.AsNoTracking().Where(x => x.BussinessEntityId == id && x.IsValid)
-                .Select(x => new OrganisationContactDto { Id = x.BussinessEntityContactInformationId, TypeId = x.ContactInformationTypeId, Type = x.ContactInformationType.TypeName, Value = x.Value }).ToListAsync()
+                .Select(x => new OrganisationContactDto { Id = x.BussinessEntityContactInformationId, TypeId = x.ContactInformationTypeId, Type = x.ContactInformationType.TypeName, Value = x.Value }).ToListAsync(),
+            Departments = await db.OrganisationStructures.AsNoTracking()
+                .Where(x => x.OrganisationBusinessEntityID == id && x.OrganisationStructureStateId == 3)
+                .OrderBy(x => x.Name)
+                .Select(x => new OrganisationDepartmentSummaryDto(
+                    x.OrganisationStructureId,
+                    x.Name,
+                    x.OrganisationStructureTypeId,
+                    x.OrganisationStructureType.TypeName,
+                    x.OrganisationStructureStateId,
+                    x.OrganisationStructureStateId == 3))
+                .ToListAsync(),
+            Groups = await db.StaffGroups.AsNoTracking()
+                .Where(x => x.OrganisationId == id && !x.IsDissolved)
+                .OrderBy(x => x.Name)
+                .Select(x => new OrganisationGroupSummaryDto(
+                    x.StaffGroupId,
+                    x.Name,
+                    x.Code,
+                    x.Description,
+                    x.Members.Count(m => m.IsActive),
+                    x.IsDissolved))
+                .ToListAsync()
         };
     }
     public async Task<ServiceResult> SaveDetailsAsync(OrganisationSettingsDto model)
@@ -263,22 +293,113 @@ public partial class OrganisationSettingsService(IDbContextFactory<HrmTeContext>
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
         var organisation = await db.Organisations.SingleOrDefaultAsync(x => x.BusinessEntityID == id);
         if (organisation == null) return ServiceResult.Fail("Organisation was not found.");
-        if (await db.Jobs.AnyAsync(x => x.OrganisationID == id))
-            return ServiceResult.Fail("Cannot delete this organisation because employees are attached, including employment history.");
-        if (await db.OrganisationStructures.AnyAsync(x => x.OrganisationBusinessEntityID == id))
-            return ServiceResult.Fail("Cannot delete this organisation because departments are attached.");
-        if (await db.Organisations.AnyAsync(x => x.ParentOrganisationBusinessEntityId == id))
-            return ServiceResult.Fail("Cannot delete this organisation because child organisations are attached.");
-        // Prevent cascading removal of linked operational and configuration records.
-        foreach (var collection in db.Entry(organisation).Collections)
-            if (await collection.Query().Cast<object>().AnyAsync())
-                return ServiceResult.Fail("Cannot delete this organisation because other records are attached. Remove those links first.");
-        if (await db.Entry(organisation).Reference(x => x.OnlineSignInOrganisation).Query().AnyAsync())
-            return ServiceResult.Fail("Cannot delete this organisation because sign-in configuration is attached.");
-        db.Organisations.Remove(organisation);
-        try { await db.SaveChangesAsync(); await tx.CommitAsync(); }
-        catch (DbUpdateException ex) when (ex.InnerException is Microsoft.Data.SqlClient.SqlException { Number: 547 })
-        { return ServiceResult.Fail("Cannot delete this organisation because other records are attached."); }
-        return ServiceResult.Ok("Organisation deleted.");
+        var entity = await db.BusinessEntities.SingleOrDefaultAsync(x => x.BusinessEntityID == id);
+        if (entity == null) return ServiceResult.Fail("Organisation entity was not found.");
+        var states = await db.BusinessEntityStates.AsNoTracking().ToListAsync();
+        var inactiveState = states.FirstOrDefault(s =>
+            s.StateName.Contains("Deleted", StringComparison.OrdinalIgnoreCase) ||
+            s.StateName.Contains("Inactive", StringComparison.OrdinalIgnoreCase) ||
+            s.StateName.Contains("Closed", StringComparison.OrdinalIgnoreCase) ||
+            s.StateName.Contains("Disabled", StringComparison.OrdinalIgnoreCase))
+            ?? states.FirstOrDefault(s => s.BusinessEntityStateId != 2);
+        if (inactiveState == null) return ServiceResult.Fail("No inactive organisation state is configured.");
+        var log = await logs.CreateAsync(db, SharedConfig.OperationLogActionTypes.BUSINESS_ENTITY_CREATE, $"Soft-deleted organisation {organisation.OrganisationName} (#{id})");
+        entity.BusinessEntityStateId = inactiveState.BusinessEntityStateId;
+        entity.LastStateChangeDate = DateTime.Now;
+        entity.OperationLogId = log.OperationLogId;
+        await db.SaveChangesAsync();
+        await tx.CommitAsync();
+        return ServiceResult.Ok("Organisation soft-deleted.");
+    }
+
+    public async Task<ServiceResult> SaveDepartmentAsync(int organisationId, int departmentId, string name, int typeId)
+    {
+        await RequireAsync(organisationId, "Organisation.Edit", "UserOrganisations.Edit");
+        if (string.IsNullOrWhiteSpace(name) || name.Trim().Length > 250)
+            return ServiceResult.Fail("Enter a department name (up to 250 characters).");
+        await using var db = await factory.CreateDbContextAsync();
+        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+        if (!await db.OrganisationStructureTypes.AnyAsync(x => x.OrganisationStructureTypeId == typeId))
+            return ServiceResult.Fail("Select a valid department type.");
+        var log = await logs.CreateAsync(db, SharedConfig.OperationLogActionTypes.BUSINESS_ENTITY_CREATE, $"Saved department '{name.Trim()}' for organisation #{organisationId}");
+        if (departmentId == 0)
+        {
+            db.OrganisationStructures.Add(new OrganisationStructure
+            {
+                OrganisationBusinessEntityID = organisationId,
+                Name = name.Trim(),
+                OrganisationStructureTypeId = typeId,
+                OrganisationStructureStateId = 3,
+                OperationLogId = log.OperationLogId
+            });
+        }
+        else
+        {
+            var dept = await db.OrganisationStructures.SingleOrDefaultAsync(x => x.OrganisationStructureId == departmentId && x.OrganisationBusinessEntityID == organisationId);
+            if (dept == null) return ServiceResult.Fail("Department was not found in this organisation.");
+            dept.Name = name.Trim();
+            dept.OrganisationStructureTypeId = typeId;
+            dept.OperationLogId = log.OperationLogId;
+        }
+        await db.SaveChangesAsync();
+        await tx.CommitAsync();
+        return ServiceResult.Ok("Department saved.");
+    }
+
+    public async Task<ServiceResult> SoftDeleteDepartmentAsync(int organisationId, int departmentId)
+    {
+        await RequireAsync(organisationId, "Organisation.Edit", "UserOrganisations.Edit");
+        await using var db = await factory.CreateDbContextAsync();
+        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+        var dept = await db.OrganisationStructures.SingleOrDefaultAsync(x => x.OrganisationStructureId == departmentId && x.OrganisationBusinessEntityID == organisationId);
+        if (dept == null) return ServiceResult.Fail("Department was not found in this organisation.");
+        var states = await db.OrganisationStructureStates.AsNoTracking().ToListAsync();
+        var inactiveState = states.FirstOrDefault(s =>
+            s.StateName.Contains("Deleted", StringComparison.OrdinalIgnoreCase) ||
+            s.StateName.Contains("Inactive", StringComparison.OrdinalIgnoreCase) ||
+            s.StateName.Contains("Closed", StringComparison.OrdinalIgnoreCase) ||
+            s.StateName.Contains("Archived", StringComparison.OrdinalIgnoreCase) ||
+            s.StateName.Contains("Terminated", StringComparison.OrdinalIgnoreCase))
+            ?? states.FirstOrDefault(s => s.OrganisationStructureStateId != 3);
+        if (inactiveState == null) return ServiceResult.Fail("No inactive department state is configured.");
+        var log = await logs.CreateAsync(db, SharedConfig.OperationLogActionTypes.BUSINESS_ENTITY_CREATE, $"Soft-deleted department '{dept.Name}' (#{departmentId})");
+        dept.OrganisationStructureStateId = inactiveState.OrganisationStructureStateId;
+        dept.OperationLogId = log.OperationLogId;
+        await db.SaveChangesAsync();
+        await tx.CommitAsync();
+        return ServiceResult.Ok("Department soft-deleted.");
+    }
+
+    public async Task<ServiceResult> SaveGroupSummaryAsync(int organisationId, int groupId, string name, string? code, string? description)
+    {
+        await RequireAsync(organisationId, "Organisation.Edit", "UserOrganisations.Edit");
+        if (string.IsNullOrWhiteSpace(name) || name.Trim().Length > 200)
+            return ServiceResult.Fail("Enter a group name (up to 200 characters).");
+        await using var db = await factory.CreateDbContextAsync();
+        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+        var group = await db.StaffGroups.SingleOrDefaultAsync(x => x.StaffGroupId == groupId && x.OrganisationId == organisationId && !x.IsDissolved);
+        if (group == null) return ServiceResult.Fail("Group was not found in this organisation.");
+        group.Name = name.Trim();
+        group.Code = string.IsNullOrWhiteSpace(code) ? null : code.Trim();
+        group.Description = string.IsNullOrWhiteSpace(description) ? null : description.Trim();
+        group.UpdatedAtUtc = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+        await tx.CommitAsync();
+        return ServiceResult.Ok("Group saved.");
+    }
+
+    public async Task<ServiceResult> SoftDeleteGroupAsync(int organisationId, int groupId)
+    {
+        await RequireAsync(organisationId, "Organisation.Edit", "UserOrganisations.Edit");
+        await using var db = await factory.CreateDbContextAsync();
+        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+        var group = await db.StaffGroups.SingleOrDefaultAsync(x => x.StaffGroupId == groupId && x.OrganisationId == organisationId && !x.IsDissolved);
+        if (group == null) return ServiceResult.Fail("Group was not found in this organisation.");
+        group.IsDissolved = true;
+        group.DissolvedAtUtc = DateTime.UtcNow;
+        group.UpdatedAtUtc = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+        await tx.CommitAsync();
+        return ServiceResult.Ok("Group soft-deleted.");
     }
 }

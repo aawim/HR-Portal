@@ -81,15 +81,19 @@ public sealed class AdminAccessGrantService(IDbContextFactory<HrmTeContext> fact
             }).ToListAsync();
         data.Permissions = await db.Roles.OrderBy(r => r.RoleKey).Select(r => new AdminAccessOption(r.RoleID, r.RoleKey + " · " + r.Name)).ToListAsync();
         if (manage)
-            data.Accounts = await db.Users.Where(u => u.UserOrganisationId == userOrg).OrderBy(u => u.FullName)
+        {
+            var today = DateTime.Today;
+            data.Accounts = await db.Users.Where(u => u.UserOrganisationId == userOrg && u.IsActive && u.LocalUserStateId == 1 &&
+                    db.Jobs.Any(j => j.IndividualID == u.BusinessEntityID && j.OrganisationID == org && j.JobStateId == 4 && j.TerminatedDate == null && j.JoinedDate <= today))
+                .OrderBy(u => u.FullName)
                 .Select(u => new AdminAccessAccount { Id = u.UserId, IndividualId = u.BusinessEntityID, Name = u.FullName ?? u.Username,
                     Enabled = u.AdminPortalAccessEnabled && u.AdminPortalAccessOrganisationId == u.UserOrganisationId,
-                    HasDeveloperAccess = u.UserAssignedUserGroups.Any(g => (g.UserGroup.IsGlobal || g.UserGroup.UserOrganisationId == userOrg) && g.UserGroup.GroupName.ToUpper() == "DEVELOPER")
-                        || u.UserRoles.Any(r => r.IsActive && r.Role.RoleKey.ToUpper() == "DEVELOPER"),
+                    HasDeveloperAccess = u.UserRoles.Any(r => r.IsActive && r.Role.RoleKey.ToUpper() == "DEVELOPER"),
                     HasSuperAdminAccess = u.AdminPortalAccessEnabled && u.AdminPortalAccessOrganisationId == u.UserOrganisationId
                         && u.UserRoles.Any(r => r.IsActive && r.UserOrganisationId == u.UserOrganisationId && r.Role.RoleKey == "Super.Admin.Manage"),
                     GroupIds = u.UserAssignedUserGroups.Where(g => g.UserGroup.UserOrganisationId == userOrg).Select(g => g.UserGroupId).ToList(),
                     PermissionIds = u.UserRoles.Where(r => r.IsActive && r.UserOrganisationId == userOrg).Select(r => r.RoleId).ToList() }).ToListAsync();
+        }
         var requests = await db.AdminAccessGrantRequests.Include(r => r.Request).ThenInclude(r => r.RequestState)
             .Where(r => r.OrganisationId == org && (manage || r.UserId == actor.UserId || r.CreatedByUserId == actor.UserId ||
                 db.WfRequestApprovals.Any(a => a.ApproverUserId == actor.UserId && a.RequestStageInstance.WorkflowRequestInstance.RequestId == r.RequestId)))
@@ -353,100 +357,55 @@ public sealed class AdminAccessGrantService(IDbContextFactory<HrmTeContext> fact
         await using var db = await factory.CreateDbContextAsync();
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
         var target = await Target(db, userId, org);
-        if (grant && (!target.IsActive || target.LocalUserStateId != 1))
-            return ServiceResult.Fail("The target account must be active.");
+        if (grant)
+        {
+            if (!target.IsActive || target.LocalUserStateId != 1)
+                return ServiceResult.Fail("The target account must be active.");
+            var today = DateTime.Today;
+            var hasActiveJob = await db.Jobs.AnyAsync(j => j.IndividualID == target.BusinessEntityID && j.OrganisationID == org &&
+                j.JobStateId == 4 && j.TerminatedDate == null && j.JoinedDate <= today);
+            if (!hasActiveJob)
+                return ServiceResult.Fail("Portal access can only be granted to an individual staff member with an active job.");
+        }
 
+        // Portal access is always granted directly to the individual staff member's UserRoles (never via a group).
         var roleKey = isSuperPortal ? "Super.Admin.Manage" : "Developer";
         var role = await db.Roles.FirstOrDefaultAsync(r => r.RoleKey.ToUpper() == roleKey.ToUpper());
-        var devGroup = !isSuperPortal
-            ? await db.UserGroups.FirstOrDefaultAsync(g => (g.IsGlobal || g.UserOrganisationId == target.UserOrganisationId) && g.GroupName.ToUpper() == "DEVELOPER")
-            : null;
-
-        if (isSuperPortal && role == null)
-            return ServiceResult.Fail("Super.Admin.Manage role is not configured in the database.");
-        if (!isSuperPortal && role == null && devGroup == null)
-            return ServiceResult.Fail("Developer role or user group is not configured in the database.");
+        if (role == null)
+            return ServiceResult.Fail($"{roleKey} role is not configured in the database.");
 
         var audit = await logs.CreateAsync(db, SharedConfig.OperationLogActionTypes.USER_ROLE_UPDATE,
             $"{(grant ? "Granted" : "Revoked")} {normalizedPortal} portal access for User {userId}: {reason.Trim()}");
 
-        if (isSuperPortal && role != null)
+        var existingRole = target.UserRoles.FirstOrDefault(r => r.RoleId == role.RoleID && r.UserOrganisationId == target.UserOrganisationId);
+        if (grant)
         {
-            var existingRole = target.UserRoles.FirstOrDefault(r => r.RoleId == role.RoleID && r.UserOrganisationId == target.UserOrganisationId);
-            if (grant)
+            if (existingRole == null)
             {
-                if (existingRole == null)
+                target.UserRoles.Add(new()
                 {
-                    target.UserRoles.Add(new()
-                    {
-                        UserId = target.UserId,
-                        RoleId = role.RoleID,
-                        UserOrganisationId = target.UserOrganisationId!.Value,
-                        IsActive = true,
-                        OperationLogId = audit.OperationLogId
-                    });
-                }
-                else
-                {
-                    existingRole.IsActive = true;
-                    existingRole.OperationLogId = audit.OperationLogId;
-                }
+                    UserId = target.UserId,
+                    RoleId = role.RoleID,
+                    UserOrganisationId = target.UserOrganisationId!.Value,
+                    IsActive = true,
+                    OperationLogId = audit.OperationLogId
+                });
+            }
+            else
+            {
+                existingRole.IsActive = true;
+                existingRole.OperationLogId = audit.OperationLogId;
+            }
+            if (isSuperPortal)
+            {
                 target.AdminPortalAccessEnabled = true;
                 target.AdminPortalAccessOrganisationId = target.UserOrganisationId;
             }
-            else if (existingRole != null)
-            {
-                existingRole.IsActive = false;
-                existingRole.OperationLogId = audit.OperationLogId;
-            }
         }
-        else
+        else if (existingRole != null)
         {
-            if (devGroup != null)
-            {
-                var assigned = target.UserAssignedUserGroups.FirstOrDefault(g => g.UserGroupId == devGroup.UserGroupId);
-                if (grant && assigned == null)
-                {
-                    db.UserAssignedUserGroups.Add(new UserAssignedUserGroup
-                    {
-                        UserId = target.UserId,
-                        UserGroupId = devGroup.UserGroupId,
-                        OperationLogId = audit.OperationLogId
-                    });
-                }
-                else if (!grant && assigned != null)
-                {
-                    db.UserAssignedUserGroups.Remove(assigned);
-                }
-            }
-            if (role != null)
-            {
-                var existingRole = target.UserRoles.FirstOrDefault(r => r.RoleId == role.RoleID && r.UserOrganisationId == target.UserOrganisationId);
-                if (grant)
-                {
-                    if (existingRole == null)
-                    {
-                        target.UserRoles.Add(new()
-                        {
-                            UserId = target.UserId,
-                            RoleId = role.RoleID,
-                            UserOrganisationId = target.UserOrganisationId!.Value,
-                            IsActive = true,
-                            OperationLogId = audit.OperationLogId
-                        });
-                    }
-                    else
-                    {
-                        existingRole.IsActive = true;
-                        existingRole.OperationLogId = audit.OperationLogId;
-                    }
-                }
-                else if (existingRole != null)
-                {
-                    existingRole.IsActive = false;
-                    existingRole.OperationLogId = audit.OperationLogId;
-                }
-            }
+            existingRole.IsActive = false;
+            existingRole.OperationLogId = audit.OperationLogId;
         }
 
         target.OperationLogId = audit.OperationLogId;

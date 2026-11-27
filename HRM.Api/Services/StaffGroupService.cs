@@ -330,7 +330,9 @@ public sealed class StaffGroupService(
         entity.MaximumWeeklyOvertimeHours = request.MaximumWeeklyOvertimeHours;
         entity.OvertimeRateMultiplier = request.OvertimeRateMultiplier;
         entity.LeaveSetId = request.LeaveSetId;
-        entity.AdminPortalAccessEnabled = request.AdminPortalAccessEnabled;
+        if (request.AdminPortalAccessEnabled)
+            throw new InvalidOperationException("Portal access can only be granted to an individual staff member with an active job, not to a group.");
+        entity.AdminPortalAccessEnabled = false;
         entity.EffectiveFrom = effectiveFrom;
         entity.EffectiveTo = effectiveTo;
         entity.OperationLogId = logId;
@@ -474,6 +476,8 @@ public sealed class StaffGroupService(
 
     public async Task SetAdminPortalAccessAsync(int staffGroupId, bool enabled)
     {
+        if (enabled)
+            throw new InvalidOperationException("Portal access can only be granted to an individual staff member with an active job, not to a group.");
         var (orgId, userId) = await RequireHrWriteAsync();
         await using var db = await factory.CreateDbContextAsync();
         await using var tx = await db.Database.BeginTransactionAsync();

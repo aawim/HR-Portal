@@ -24,15 +24,12 @@ public class UserContext(AuthenticationStateProvider auth, IDbContextFactory<Hrm
    .Select(x => new { Id = x.BusinessEntityID, Name = x.Organisation.OrganisationName }).SingleOrDefaultAsync();
   var jobId = organisation == null ? 0 : await db.Jobs.AsNoTracking().Where(j => j.IndividualID == user.BusinessEntityID && j.OrganisationID == organisation.Id && j.JobStateId == 4 && j.TerminatedDate == null && j.JoinedDate <= DateTime.Today)
    .OrderByDescending(j => j.JoinedDate).ThenByDescending(j => j.JobId).Select(j => j.JobId).FirstOrDefaultAsync();
-  // Portal admission and individual resource permissions are separate grants.
-  var canAdmin = user.AdminPortalAccessEnabled && user.AdminPortalAccessOrganisationId == user.UserOrganisationId;
-  var canDeveloper = await db.UserAssignedUserGroups.AsNoTracking().AnyAsync(x => x.UserId == user.UserId &&
-   x.User.IsActive && x.User.LocalUserStateId == 1 &&
-   (x.UserGroup.IsGlobal || x.UserGroup.UserOrganisationId == user.UserOrganisationId) &&
-   x.UserGroup.GroupName.ToUpper() == "DEVELOPER")
-   || await db.UserRoles.AsNoTracking().AnyAsync(x => x.UserId == user.UserId &&
+  var hasActiveJob = jobId > 0;
+  // Portal admission is strictly per-individual staff with an active job (never via group).
+  var canAdmin = hasActiveJob && user.AdminPortalAccessEnabled && user.AdminPortalAccessOrganisationId == user.UserOrganisationId;
+  var canDeveloper = hasActiveJob && await db.UserRoles.AsNoTracking().AnyAsync(x => x.UserId == user.UserId &&
    x.Role.RoleKey.ToUpper() == "DEVELOPER" && x.IsActive);
-  var canSuperAdmin = await HRM.Helpers.PlatformAdministratorAccess.HasAsync(db, user.UserId);
-  return new UserSessionDto { UserId = user.UserId, IndividualId = user.BusinessEntityID, JobId = jobId, OrganisationId = organisation?.Id, OrganisationName = organisation?.Name ?? "", CanAccessSystem = true, CanAccessAdminPortal = organisation != null && canAdmin, CanAccessDeveloperPortal = canDeveloper, CanAccessSuperAdminPortal = canSuperAdmin };
+  var canSuperAdmin = hasActiveJob && await HRM.Helpers.PlatformAdministratorAccess.HasAsync(db, user.UserId);
+  return new UserSessionDto { UserId = user.UserId, IndividualId = user.BusinessEntityID, JobId = jobId, OrganisationId = organisation?.Id, OrganisationName = organisation?.Name ?? "", CanAccessSystem = hasActiveJob, CanAccessAdminPortal = organisation != null && canAdmin, CanAccessDeveloperPortal = canDeveloper, CanAccessSuperAdminPortal = canSuperAdmin };
  }
 }

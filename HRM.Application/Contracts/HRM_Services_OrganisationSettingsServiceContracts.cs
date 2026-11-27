@@ -39,5 +39,13 @@ Task<OrganisationTeamSettingsData> GetTeamSettingsAsync(int organisationId)
 ;
 Task<ServiceResult> SetTeamSupervisorAsync(int organisationId, string kind, int teamId, int staffId, bool assign)
 ;
+Task<ServiceResult> SaveDepartmentAsync(int organisationId, int departmentId, string name, int typeId)
+;
+Task<ServiceResult> SoftDeleteDepartmentAsync(int organisationId, int departmentId)
+;
+Task<ServiceResult> SaveGroupSummaryAsync(int organisationId, int groupId, string name, string? code, string? description)
+;
+Task<ServiceResult> SoftDeleteGroupAsync(int organisationId, int groupId)
+;
 }
 }

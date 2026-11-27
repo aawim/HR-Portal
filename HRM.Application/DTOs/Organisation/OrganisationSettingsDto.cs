@@ -45,13 +45,18 @@ public class OrganisationSettingsData
     public List<OrganisationSettingsOption> ContactTypes { get; set; } = new();
     public List<OrganisationAreaOption> Islands { get; set; } = new();
     public List<OrganisationAreaOption> Wards { get; set; } = new();
+    public List<OrganisationSettingsOption> DepartmentTypes { get; set; } = new();
 }
 public class OrganisationLinksDto
 {
     public List<OrganisationAddressOption> Addresses { get; set; } = new();
     public List<OrganisationContactDto> Contacts { get; set; } = new();
+    public List<OrganisationDepartmentSummaryDto> Departments { get; set; } = new();
+    public List<OrganisationGroupSummaryDto> Groups { get; set; } = new();
 }
 public record OrganisationAddressOption(int Id, string Name, int LinkId);
+public record OrganisationDepartmentSummaryDto(int Id, string Name, int TypeId, string TypeName, int StateId, bool IsActive);
+public record OrganisationGroupSummaryDto(int Id, string Name, string? Code, string? Description, int MemberCount, bool IsDissolved);
 public record OrganisationStaffRow(int JobId, string Name, string? EmployeeNumber, string Department, string JobType, string Status)
 {
     public int IndividualId { get; init; }
