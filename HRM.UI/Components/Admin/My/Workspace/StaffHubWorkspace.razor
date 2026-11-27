@@ -2186,6 +2186,55 @@
                 </button>
             </nav>
 
+            <!-- Request Filters Bar (Search, Status, Date Range) -->
+            @if (activeReqSubTab is "leave" or "attendance" or "uneven-log" or "job-items" or "personal-items" or "certificates")
+            {
+                <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-2 shadow-2xs flex flex-wrap items-end gap-2">
+                    <label class="flex-1 min-w-[180px] block text-[11px] font-semibold text-slate-600 dark:text-slate-400">
+                        Search
+                        <input type="search"
+                               class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs text-slate-800 dark:text-slate-100 placeholder:text-slate-400 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                               placeholder="Applicant, reference, or type…"
+                               @bind="requestSearch"
+                               @bind:event="oninput" />
+                    </label>
+                    <label class="w-44 block text-[11px] font-semibold text-slate-600 dark:text-slate-400">
+                        Status
+                        <select class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs text-slate-800 dark:text-slate-100 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                @bind="requestStatusFilter">
+                            <option value="all">All statuses</option>
+                            <option value="pending">Pending / Processing</option>
+                            @foreach (var st in AvailableRequestStatuses)
+                            {
+                                <option value="@st">@st</option>
+                            }
+                        </select>
+                    </label>
+                    <label class="w-36 block text-[11px] font-semibold text-slate-600 dark:text-slate-400">
+                        From date
+                        <input type="date"
+                               class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs text-slate-800 dark:text-slate-100 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                               @bind="requestFromDate"
+                               @bind:after="OnRequestDateRangeChangedAsync" />
+                    </label>
+                    <label class="w-36 block text-[11px] font-semibold text-slate-600 dark:text-slate-400">
+                        To date
+                        <input type="date"
+                               class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs text-slate-800 dark:text-slate-100 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                               @bind="requestToDate"
+                               @bind:after="OnRequestDateRangeChangedAsync" />
+                    </label>
+                    @if (HasActiveRequestFilters)
+                    {
+                        <button type="button"
+                                class="rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer transition"
+                                @onclick="ResetRequestFiltersAsync">
+                            Reset
+                        </button>
+                    }
+                </div>
+            }
+
             <!-- Two-Column Workspace Layout (Left: Form to approve & details, Right: All requests) -->
             @if (activeReqSubTab is "leave" or "attendance" or "uneven-log" or "duty" or "job-items" or "personal-items" or "certificates")
             {
@@ -2733,12 +2782,13 @@
                     <main class="col-span-12 xl:col-span-7 flex flex-col gap-2 min-w-0">
                         @if (activeReqSubTab == "leave")
                         {
+                            var visibleLeaves = FilteredPendingLeaves;
                             <div class="rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-2 shadow-xs flex flex-col gap-2">
                                 <div class="flex items-center justify-between flex-wrap gap-2 pb-2 border-b border-slate-200 dark:border-slate-800">
                                     <div class="flex items-center gap-2">
                                         <h3 class="text-sm font-bold text-slate-800 dark:text-slate-200">Pending Leave Requests</h3>
                                         <span class="rounded-full bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300 px-2 py-0.5 text-xs font-bold">
-                                            @pendingLeaves.Count
+                                            @(HasActiveRequestFilters ? $"{visibleLeaves.Count} / {pendingLeaves.Count}" : pendingLeaves.Count.ToString())
                                         </span>
                                     </div>
                                     <button type="button" class="text-xs font-semibold text-teal-700 dark:text-teal-400 hover:underline cursor-pointer" @onclick="RefreshRequestsAsync">
@@ -2750,16 +2800,16 @@
                                 {
                                     <div class="py-8 text-center text-xs text-slate-400 animate-pulse">Loading leave requests...</div>
                                 }
-                                else if (pendingLeaves.Count == 0)
+                                else if (visibleLeaves.Count == 0)
                                 {
                                     <div class="py-8 text-center text-xs text-slate-500 dark:text-slate-400">
-                                        All caught up! No pending leave requests awaiting approval.
+                                        @(HasActiveRequestFilters ? "No leave requests match the selected filters." : "All caught up! No pending leave requests awaiting approval.")
                                     </div>
                                 }
                                 else
                                 {
                                     <div class="flex flex-col gap-2">
-                                        @foreach (var item in pendingLeaves)
+                                        @foreach (var item in visibleLeaves)
                                         {
                                             var isSelected = selectedLeave?.RequestId == item.RequestId;
                                             <button type="button"
@@ -2795,7 +2845,7 @@
                         }
                         else if (activeReqSubTab is "attendance" or "uneven-log")
                         {
-                            var reqs = attendanceRequestsList.Where(r => activeReqSubTab == "uneven-log" ? r.Kind == "Uneven-log correction" : r.Kind == "Attendance").ToList();
+                            var reqs = FilteredAttendanceRequests(activeReqSubTab == "uneven-log");
                             <div class="rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-2 shadow-xs flex flex-col gap-2">
                                 <div class="flex items-center justify-between flex-wrap gap-2 pb-2 border-b border-slate-200 dark:border-slate-800">
                                     <div class="flex items-center gap-2">
@@ -2869,11 +2919,7 @@
                         else if (activeReqSubTab is "job-items" or "personal-items")
                         {
                             var isJob = activeReqSubTab == "job-items";
-                            var filtered = itemRequestsList.Where(r => isJob ? r.Purpose == "Job related" : r.Purpose != "Job related").ToList();
-                            if (!showAllItemHistory)
-                            {
-                                filtered = filtered.Where(r => r.Status is "Submitted" or "ReturnRequested").ToList();
-                            }
+                            var filtered = FilteredItemRequests(isJob);
 
                             <div class="rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-2 shadow-xs flex flex-col gap-2">
                                 <div class="flex items-center justify-between flex-wrap gap-2 pb-2 border-b border-slate-200 dark:border-slate-800">
@@ -2956,9 +3002,7 @@
                         }
                         else if (activeReqSubTab == "certificates")
                         {
-                            var filteredCerts = showAllCertHistory
-                                ? certificateRequestsList
-                                : certificateRequestsList.Where(r => r.Status is "Submitted" or "UnderReview").ToList();
+                            var filteredCerts = FilteredCertificates;
 
                             <div class="rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-2 shadow-xs flex flex-col gap-2">
                                 <div class="flex items-center justify-between flex-wrap gap-2 pb-2 border-b border-slate-200 dark:border-slate-800">
@@ -3641,6 +3685,156 @@
     private bool certIncludeSalary = false;
     private string certActionComment = "";
 
+    // Request Command Center Filters (Search, Status, Date Range)
+    private string requestSearch = "";
+    private string requestStatusFilter = "all";
+    private DateOnly? requestFromDate;
+    private DateOnly? requestToDate;
+
+    private bool HasActiveRequestFilters =>
+        !string.IsNullOrWhiteSpace(requestSearch) ||
+        requestStatusFilter != "all" ||
+        requestFromDate.HasValue ||
+        requestToDate.HasValue;
+
+    private IReadOnlyList<string> AvailableRequestStatuses => activeReqSubTab switch
+    {
+        "leave" => pendingLeaves.Select(x => x.Status).Where(s => !string.IsNullOrWhiteSpace(s)).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(s => s).ToList(),
+        "attendance" => attendanceRequestsList.Where(r => r.Kind == "Attendance").Select(x => x.Status).Where(s => !string.IsNullOrWhiteSpace(s)).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(s => s).ToList(),
+        "uneven-log" => attendanceRequestsList.Where(r => r.Kind == "Uneven-log correction").Select(x => x.Status).Where(s => !string.IsNullOrWhiteSpace(s)).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(s => s).ToList(),
+        "job-items" => itemRequestsList.Where(r => r.Purpose == "Job related").Select(x => x.Status).Where(s => !string.IsNullOrWhiteSpace(s)).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(s => s).ToList(),
+        "personal-items" => itemRequestsList.Where(r => r.Purpose != "Job related").Select(x => x.Status).Where(s => !string.IsNullOrWhiteSpace(s)).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(s => s).ToList(),
+        "certificates" => certificateRequestsList.Select(x => x.Status).Where(s => !string.IsNullOrWhiteSpace(s)).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(s => s).ToList(),
+        _ => []
+    };
+
+    private static bool IsPendingStatusText(string? status) =>
+        !string.IsNullOrWhiteSpace(status) && (
+            status.Contains("Pending", StringComparison.OrdinalIgnoreCase) ||
+            status.Contains("Submitted", StringComparison.OrdinalIgnoreCase) ||
+            status.Contains("Verification", StringComparison.OrdinalIgnoreCase) ||
+            status.Contains("Approval", StringComparison.OrdinalIgnoreCase) ||
+            status.Contains("UnderReview", StringComparison.OrdinalIgnoreCase) ||
+            status.Contains("ReturnRequested", StringComparison.OrdinalIgnoreCase) ||
+            status.Contains("Processing", StringComparison.OrdinalIgnoreCase));
+
+    private bool MatchesStatusFilter(string? status, bool isPendingFlag) => requestStatusFilter switch
+    {
+        "all" => true,
+        "pending" => isPendingFlag || IsPendingStatusText(status),
+        _ => string.Equals(status?.Trim(), requestStatusFilter, StringComparison.OrdinalIgnoreCase)
+    };
+
+    private bool MatchesDateRange(DateTime start, DateTime end)
+    {
+        if (requestFromDate.HasValue && end.Date < requestFromDate.Value.ToDateTime(TimeOnly.MinValue)) return false;
+        if (requestToDate.HasValue && start.Date > requestToDate.Value.ToDateTime(TimeOnly.MinValue)) return false;
+        return true;
+    }
+
+    private bool MatchesDate(DateTime date) => MatchesDateRange(date, date);
+
+    private bool MatchesSearch(params string?[] fields) =>
+        string.IsNullOrWhiteSpace(requestSearch) ||
+        fields.Any(f => !string.IsNullOrWhiteSpace(f) && f.Contains(requestSearch.Trim(), StringComparison.OrdinalIgnoreCase));
+
+    private List<PendingLeaveRequestDto> FilteredPendingLeaves => pendingLeaves
+        .Where(x =>
+            MatchesStatusFilter(x.Status, x.IsProcessing) &&
+            MatchesDateRange(x.FromDate, x.ToDate) &&
+            MatchesSearch(x.Applicant, x.Reference, x.LeaveType, x.Status))
+        .ToList();
+
+    private List<AttendanceRequestRow> FilteredAttendanceRequests(bool unevenLog) => attendanceRequestsList
+        .Where(r => (unevenLog ? r.Kind == "Uneven-log correction" : r.Kind == "Attendance") &&
+            MatchesStatusFilter(r.Status, IsPendingStatusText(r.Status)) &&
+            MatchesDate(r.ClockTime) &&
+            MatchesSearch(r.StaffName, r.Reference, r.Mode, r.Comments, r.Status))
+        .ToList();
+
+    private List<ItemStaffRequestDto> FilteredItemRequests(bool isJob)
+    {
+        var list = itemRequestsList.Where(r => isJob ? r.Purpose == "Job related" : r.Purpose != "Job related");
+        if (!showAllItemHistory && requestStatusFilter == "all" && !requestFromDate.HasValue && !requestToDate.HasValue && string.IsNullOrWhiteSpace(requestSearch))
+        {
+            list = list.Where(r => r.Status is "Submitted" or "ReturnRequested");
+        }
+        return list
+            .Where(r =>
+                MatchesStatusFilter(r.Status, r.Status is "Submitted" or "ReturnRequested") &&
+                MatchesDate(r.CreatedAtUtc.ToLocalTime()) &&
+                MatchesSearch(r.StaffName, r.Reference, r.Kind, r.Reason, r.Status))
+            .ToList();
+    }
+
+    private List<CertificateRequestSummaryDto> FilteredCertificates
+    {
+        get
+        {
+            IEnumerable<CertificateRequestSummaryDto> list = certificateRequestsList;
+            if (!showAllCertHistory && requestStatusFilter == "all" && !requestFromDate.HasValue && !requestToDate.HasValue && string.IsNullOrWhiteSpace(requestSearch))
+            {
+                list = list.Where(r => r.Status is "Submitted" or "UnderReview");
+            }
+            return list
+                .Where(r =>
+                    MatchesStatusFilter(r.Status, r.Status is "Submitted" or "UnderReview") &&
+                    MatchesDate(r.CreatedAt) &&
+                    MatchesSearch(r.EmployeeName, r.ReferenceNumber, r.CertificateType, r.Purpose, r.DepartmentName, r.Status))
+                .ToList();
+        }
+    }
+
+    private async Task OnRequestDateRangeChangedAsync()
+    {
+        if (activeReqSubTab is "attendance" or "uneven-log")
+        {
+            await RefreshAttendanceQueueAsync();
+        }
+    }
+
+    private async Task ResetRequestFiltersAsync()
+    {
+        var hadDateFilter = requestFromDate.HasValue || requestToDate.HasValue;
+        requestSearch = "";
+        requestStatusFilter = "all";
+        requestFromDate = null;
+        requestToDate = null;
+        if (hadDateFilter && activeReqSubTab is "attendance" or "uneven-log")
+        {
+            await RefreshAttendanceQueueAsync();
+        }
+    }
+
+    private async Task RefreshAttendanceQueueAsync()
+    {
+        try
+        {
+            attendanceLoading = true;
+            var from = requestFromDate ?? DateOnly.FromDateTime(DateTime.Today.AddDays(-60));
+            var to = requestToDate ?? DateOnly.FromDateTime(DateTime.Today.AddDays(30));
+            if (to < from) to = from;
+            var filter = new AttendanceRequestFilter(from, to);
+            var page = await AttendanceQueries.GetReceivedAsync(filter);
+            attendanceRequestsList = page?.Requests ?? new();
+            if (selectedAttendanceRequest != null)
+            {
+                selectedAttendanceRequest = attendanceRequestsList.FirstOrDefault(r => r.RequestId == selectedAttendanceRequest.RequestId);
+                attendanceReview = selectedAttendanceRequest != null
+                    ? await AttendanceReviewService.GetAsync(selectedAttendanceRequest.RequestId)
+                    : null;
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed loading attendance requests for workspace");
+        }
+        finally
+        {
+            attendanceLoading = false;
+        }
+    }
+
     protected override async Task OnInitializedAsync()
     {
         try
@@ -4230,33 +4424,7 @@
         }
         catch { }
 
-        try
-        {
-            attendanceLoading = true;
-            var filter = new AttendanceRequestFilter(DateOnly.FromDateTime(DateTime.Today.AddDays(-60)), DateOnly.FromDateTime(DateTime.Today.AddDays(30)));
-            var page = await AttendanceQueries.GetReceivedAsync(filter);
-            attendanceRequestsList = page?.Requests ?? new();
-            if (selectedAttendanceRequest != null)
-            {
-                selectedAttendanceRequest = attendanceRequestsList.FirstOrDefault(r => r.RequestId == selectedAttendanceRequest.RequestId);
-                if (selectedAttendanceRequest != null)
-                {
-                    attendanceReview = await AttendanceReviewService.GetAsync(selectedAttendanceRequest.RequestId);
-                }
-                else
-                {
-                    attendanceReview = null;
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            Logger.LogWarning(ex, "Failed loading attendance requests for workspace");
-        }
-        finally
-        {
-            attendanceLoading = false;
-        }
+        await RefreshAttendanceQueueAsync();
 
         try
         {
@@ -4967,6 +5135,7 @@
     private void SetReqSubTab(string subTab)
     {
         activeReqSubTab = subTab;
+        requestStatusFilter = "all";
         selectedLeave = null;
         selectedAttendanceRequest = null;
         attendanceReview = null;
