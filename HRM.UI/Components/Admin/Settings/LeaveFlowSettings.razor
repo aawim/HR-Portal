@@ -196,6 +196,9 @@
 
 @code {
     [Parameter] public bool Embedded { get; set; }
+    [Parameter] public int? InitialOrganisationId { get; set; }
+    [Parameter] public int? InitialJobTypeId { get; set; }
+    [Parameter] public int? InitialRequestTypeId { get; set; }
     [SupplyParameterFromQuery(Name = "issueOrganisationId")] public int? IssueOrganisationId { get; set; }
     [SupplyParameterFromQuery(Name = "jobTypeId")] public int? RequestedJobTypeId { get; set; }
     [SupplyParameterFromQuery(Name = "requestTypeId")] public int? RequestedRequestTypeId { get; set; }
@@ -205,27 +208,35 @@
     private int jobType, requestType, level;
     private bool loading = true, busy;
     private string? message;
-    protected override Task OnInitializedAsync() => ReloadAsync();
-    protected override async Task OnParametersSetAsync()
+    protected override async Task OnInitializedAsync()
     {
-        if (data == null || !IssueOrganisationId.HasValue) return;
-        var key = $"{IssueOrganisationId}:{RequestedJobTypeId}:{RequestedRequestTypeId}";
+        await ReloadAsync();
+        await ApplyAlertPresetAsync();
+    }
+    protected override Task OnParametersSetAsync() => ApplyAlertPresetAsync();
+    private async Task ApplyAlertPresetAsync()
+    {
+        var effectiveOrgId = InitialOrganisationId ?? IssueOrganisationId;
+        var effectiveJobTypeId = InitialJobTypeId ?? RequestedJobTypeId;
+        var effectiveRequestTypeId = InitialRequestTypeId ?? RequestedRequestTypeId;
+        if (data == null || (!effectiveJobTypeId.HasValue && !effectiveRequestTypeId.HasValue)) return;
+        var key = $"{effectiveOrgId}:{effectiveJobTypeId}:{effectiveRequestTypeId}";
         if (loadedAlert == key) return;
         loadedAlert = key;
         try
         {
-            if (await UserAccess.GetCurrentOrganisationIdAsync() != IssueOrganisationId)
+            if (effectiveOrgId.HasValue && await UserAccess.GetCurrentOrganisationIdAsync() != effectiveOrgId.Value)
             {
                 model = null;
                 message = "This alert concerns another organisation. Open that organisation's approved admin context before reviewing its approval flow.";
                 return;
             }
-            if (data.JobTypes.Any(x => x.Id == RequestedJobTypeId) && data.RequestTypes.Any(x => x.Id == RequestedRequestTypeId))
-            {
-                jobType = RequestedJobTypeId!.Value;
-                requestType = RequestedRequestTypeId!.Value;
+            if (effectiveJobTypeId.HasValue && data.JobTypes.Any(x => x.Id == effectiveJobTypeId.Value))
+                jobType = effectiveJobTypeId.Value;
+            if (effectiveRequestTypeId.HasValue && data.RequestTypes.Any(x => x.Id == effectiveRequestTypeId.Value))
+                requestType = effectiveRequestTypeId.Value;
+            if (jobType > 0 && requestType > 0)
                 await LoadFlowAsync();
-            }
         }
         catch (Exception ex) { Handle(ex); }
     }

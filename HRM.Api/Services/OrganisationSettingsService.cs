@@ -492,7 +492,40 @@ public partial class OrganisationSettingsService(IDbContextFactory<HrmTeContext>
         if (organisation == null) return ServiceResult.Fail("Organisation was not found.");
         var entity = await db.BusinessEntities.SingleOrDefaultAsync(x => x.BusinessEntityID == id);
         if (entity == null) return ServiceResult.Fail("Organisation entity was not found.");
+
+        var today = DateTime.UtcNow.AddHours(5).Date;
         var states = await db.BusinessEntityStates.AsNoTracking().ToListAsync();
+        var inactiveEntityStateIds = states
+            .Where(s => s.StateName.Contains("Deleted", StringComparison.OrdinalIgnoreCase) ||
+                        s.StateName.Contains("Inactive", StringComparison.OrdinalIgnoreCase) ||
+                        s.StateName.Contains("Closed", StringComparison.OrdinalIgnoreCase) ||
+                        s.StateName.Contains("Disabled", StringComparison.OrdinalIgnoreCase))
+            .Select(s => s.BusinessEntityStateId)
+            .ToList();
+        var inactiveDeptStateIds = await db.OrganisationStructureStates.AsNoTracking()
+            .Where(s => s.StateName.Contains("Deleted") || s.StateName.Contains("Inactive") || s.StateName.Contains("Closed") || s.StateName.Contains("Archived") || s.StateName.Contains("Terminated"))
+            .Select(s => s.OrganisationStructureStateId)
+            .ToListAsync();
+
+        var activeStaffCount = await db.Jobs.CountAsync(j => j.OrganisationID == id && j.JobStateId == 4 && (!j.TerminatedDate.HasValue || j.TerminatedDate > today));
+        var activeDeptCount = await db.OrganisationStructures.CountAsync(s => s.OrganisationBusinessEntityID == id && !inactiveDeptStateIds.Contains(s.OrganisationStructureStateId));
+        var activeTeamCount = await db.Teams.CountAsync(t => t.OrganisationId == id && t.IsValid != false);
+        var activeGroupCount = await db.StaffGroups.CountAsync(g => g.OrganisationId == id && !g.IsDissolved)
+            + await db.Groups.CountAsync(g => g.BusinessEntityOrganisationId == id);
+        var activeChildOrgCount = await db.Organisations.CountAsync(o => o.ParentOrganisationBusinessEntityId == id &&
+            !db.BusinessEntities.Any(b => b.BusinessEntityID == o.BusinessEntityID && b.BusinessEntityStateId.HasValue && inactiveEntityStateIds.Contains(b.BusinessEntityStateId.Value)));
+        var activeUserCount = await db.Users.CountAsync(u => u.IsActive && u.UserOrganisation != null && u.UserOrganisation.BusinessEntityID == id);
+
+        var blockers = new List<string>();
+        if (activeStaffCount > 0) blockers.Add($"{activeStaffCount} active staff");
+        if (activeDeptCount > 0) blockers.Add($"{activeDeptCount} department{(activeDeptCount == 1 ? "" : "s")}");
+        if (activeTeamCount > 0) blockers.Add($"{activeTeamCount} team{(activeTeamCount == 1 ? "" : "s")}");
+        if (activeGroupCount > 0) blockers.Add($"{activeGroupCount} group{(activeGroupCount == 1 ? "" : "s")}");
+        if (activeChildOrgCount > 0) blockers.Add($"{activeChildOrgCount} child organisation{(activeChildOrgCount == 1 ? "" : "s")}");
+        if (activeUserCount > 0) blockers.Add($"{activeUserCount} active user account{(activeUserCount == 1 ? "" : "s")}");
+        if (blockers.Count > 0)
+            return ServiceResult.Fail($"Cannot delete organisation while dependencies exist: {string.Join(", ", blockers)}. Clear or reassign all dependencies first.");
+
         var inactiveState = states.FirstOrDefault(s =>
             s.StateName.Contains("Deleted", StringComparison.OrdinalIgnoreCase) ||
             s.StateName.Contains("Inactive", StringComparison.OrdinalIgnoreCase) ||
@@ -625,13 +658,28 @@ public partial class OrganisationSettingsService(IDbContextFactory<HrmTeContext>
             return ServiceResult.Fail("Enter a team name (up to 200 characters).");
         await using var db = await factory.CreateDbContextAsync();
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted);
-        var team = await db.Teams.FirstOrDefaultAsync(t => t.TeamId == teamId && t.OrganisationId == organisationId && t.IsValid != false);
-        if (team == null) return ServiceResult.Fail("Team was not found in this organisation.");
         if (departmentId.HasValue && departmentId.Value > 0 &&
             !await db.OrganisationStructures.AnyAsync(s => s.OrganisationStructureId == departmentId.Value && s.OrganisationBusinessEntityID == organisationId && s.OrganisationStructureStateId == 3))
             return ServiceResult.Fail("Select a valid department in this organisation.");
-        team.Name = name.Trim();
-        team.OrganisationStructureId = departmentId is > 0 ? departmentId.Value : null;
+        if (teamId == 0)
+        {
+            var log = await logs.CreateAsync(db, SharedConfig.OperationLogActionTypes.BUSINESS_ENTITY_CREATE, $"Created team '{name.Trim()}' for organisation #{organisationId}");
+            db.Teams.Add(new Team
+            {
+                OrganisationId = organisationId,
+                Name = name.Trim(),
+                OrganisationStructureId = departmentId is > 0 ? departmentId.Value : null,
+                IsValid = true,
+                OperationLogId = log.OperationLogId
+            });
+        }
+        else
+        {
+            var team = await db.Teams.FirstOrDefaultAsync(t => t.TeamId == teamId && t.OrganisationId == organisationId && t.IsValid != false);
+            if (team == null) return ServiceResult.Fail("Team was not found in this organisation.");
+            team.Name = name.Trim();
+            team.OrganisationStructureId = departmentId is > 0 ? departmentId.Value : null;
+        }
         await db.SaveChangesAsync();
         await tx.CommitAsync();
         return ServiceResult.Ok("Team saved.");
