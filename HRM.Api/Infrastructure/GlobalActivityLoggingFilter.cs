@@ -72,7 +72,8 @@ public sealed class GlobalActivityLoggingFilter(
             return;
 
         var path = http.Request.Path.Value ?? string.Empty;
-        if (path.Contains("heartbeat", StringComparison.OrdinalIgnoreCase) ||
+        if (path.Contains("/query/", StringComparison.OrdinalIgnoreCase) ||
+            path.Contains("heartbeat", StringComparison.OrdinalIgnoreCase) ||
             path.Contains("antiforgery", StringComparison.OrdinalIgnoreCase) ||
             path.Contains("recent-search", StringComparison.OrdinalIgnoreCase) ||
             path.Contains("mark-read", StringComparison.OrdinalIgnoreCase) ||

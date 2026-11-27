@@ -26,6 +26,8 @@ namespace HRM.Services
         }
 
 
+        public const string ExplicitOperationRecordedItemKey = "HRM.OperationLogs.ExplicitRecorded";
+
         public async Task<OperationLog> CreateAsync(HrmTeContext dbContext, int actionId,string remarks)
         {
             var userContext = await _access.GetContextAsync();
@@ -92,6 +94,8 @@ namespace HRM.Services
             dbContext.OperationLogs.Add(log);
 
             await dbContext.SaveChangesAsync();
+            if (_httpContextAccessor.HttpContext is { } httpCtx)
+                httpCtx.Items[ExplicitOperationRecordedItemKey] = true;
 
             return log;
         }
@@ -100,6 +104,8 @@ namespace HRM.Services
 
         public async Task<int> CreateLogAsync(int actionTypeId, string? remarks = null)
         {
+            if (_httpContextAccessor.HttpContext is { } httpCtx)
+                httpCtx.Items[ExplicitOperationRecordedItemKey] = true;
             // 1. Get the current OIDC Authenticated User
             var authState = await _authStateProvider.GetAuthenticationStateAsync();
             var user = authState.User;

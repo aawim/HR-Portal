@@ -166,9 +166,11 @@ public static class ApiEndpointRegistration
                 };
             });
         services.AddScoped<GlobalActivityLoggingFilter>();
+        services.AddScoped<GlobalOperationLoggingFilter>();
         services.AddControllersWithViews(options =>
         {
             options.Filters.AddService<GlobalActivityLoggingFilter>();
+            options.Filters.AddService<GlobalOperationLoggingFilter>();
         }).AddApplicationPart(typeof(HrmApiController).Assembly).AddJsonOptions(options =>
         {
             options.JsonSerializerOptions.IncludeFields = true;

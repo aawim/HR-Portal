@@ -1,0 +1,455 @@
+@using HRM.Application.Contracts.SuperAdmin
+@using HRM.Services
+@inject INumberFormattingApiClient Api
+@inject ToastService Toasts
+
+<section class="w-full min-w-0 p-2 flex flex-col gap-2">
+    <!-- Compact Section Header -->
+    <div class="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-slate-200 dark:border-slate-800">
+        <div>
+            <h2 class="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                <span>Number Formatting Configuration</span>
+                @if (data != null)
+                {
+                    <span class="rounded-full border px-2 py-0.5 text-[10px] font-semibold" style="background-color: #ADD8E6; border-color: #7cc0d8; color: #0f172a;">
+                        @data.OrganisationFormats.Count org rules · @data.GlobalSequences.Count global sequences
+                    </span>
+                }
+            </h2>
+            <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                Configure per-organisation numbering patterns for Requests, Documents, Certificates, Assets, and Recruitment with automatic annual reset and zero-padding.
+            </p>
+        </div>
+        <div class="flex items-center gap-2">
+            <button type="button" class="app-button app-button-secondary app-button-sm" disabled="@(loading || busy)" @onclick="() => LoadAsync(selectedOrgId)">
+                <AppIcon Name="arrow-clockwise" />
+                <span>Refresh</span>
+            </button>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(error))
+    {
+        <div role="alert" class="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">@error</div>
+    }
+
+    <!-- Sub-Tabs: Per-Organisation Formats vs Global Sequence Defaults -->
+    <div class="superadmin-workspace-tabs w-full border-b-2 overflow-x-auto" style="border-bottom-color: #ADD8E6;">
+        <nav class="flex items-end gap-1 min-w-max pb-0" aria-label="Number Formatting Mode">
+            <button type="button"
+                    class="inline-flex items-center gap-1.5 rounded-t-xl px-3.5 py-2 font-semibold text-xs transition-all border-t border-l border-r @(mode == "org" ? "text-slate-900 shadow-xs" : "bg-white text-slate-800 hover:bg-sky-50 dark:bg-slate-800/90 dark:text-slate-300 border-slate-200 dark:border-slate-700")"
+                    style="@(mode == "org" ? "background-color: #ADD8E6; border-color: #7cc0d8; color: #0f172a;" : null)"
+                    @onclick='() => mode = "org"'>
+                <AppIcon Name="corporate_fare" Class="text-xs" />
+                <span>Per-Organisation Formats</span>
+            </button>
+            <button type="button"
+                    class="inline-flex items-center gap-1.5 rounded-t-xl px-3.5 py-2 font-semibold text-xs transition-all border-t border-l border-r @(mode == "global" ? "text-slate-900 shadow-xs" : "bg-white text-slate-800 hover:bg-sky-50 dark:bg-slate-800/90 dark:text-slate-300 border-slate-200 dark:border-slate-700")"
+                    style="@(mode == "global" ? "background-color: #ADD8E6; border-color: #7cc0d8; color: #0f172a;" : null)"
+                    @onclick='() => mode = "global"'>
+                <AppIcon Name="bi-hash" Class="text-xs" />
+                <span>Global Sequence Defaults</span>
+            </button>
+        </nav>
+    </div>
+
+    @if (loading)
+    {
+        <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-8 text-center text-xs text-slate-500">
+            Loading number formatting configuration…
+        </div>
+    }
+    else if (data != null && mode == "org")
+    {
+        <!-- Organisation & Category Filter Bar -->
+        <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-2 shadow-2xs grid grid-cols-1 sm:grid-cols-3 gap-2 items-end">
+            <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 p-1">
+                1. Organisation
+                <select class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs text-slate-900 dark:text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        value="@selectedOrgId"
+                        @onchange="ChangeOrganisationAsync"
+                        disabled="@busy">
+                    @foreach (var org in data.Organisations)
+                    {
+                        <option value="@org.Id">@org.Name @(string.IsNullOrWhiteSpace(org.Code) ? "" : $"({org.Code})")</option>
+                    }
+                </select>
+            </label>
+            <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 p-1">
+                Category
+                <select class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs text-slate-900 dark:text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        @bind="categoryFilter">
+                    <option value="">All Categories</option>
+                    @foreach (var c in Categories) { <option value="@c">@c</option> }
+                </select>
+            </label>
+            <div class="flex items-center justify-end gap-2 p-1">
+                <button type="button" class="app-button app-button-primary app-button-sm" @onclick="NewOrgFormat">
+                    <AppIcon Name="add" />
+                    <span>New Format</span>
+                </button>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-2 items-start">
+            <!-- Left: Editor Form -->
+            <section class="min-w-0 lg:col-span-7 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs overflow-hidden">
+                <div class="flex items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 px-4 py-3">
+                    <h3 class="text-xs font-bold text-slate-900 dark:text-slate-100">
+                        @(orgForm.NumberFormatId == 0 ? "Add Organisation Number Format" : $"Edit Format: {orgForm.Name}")
+                    </h3>
+                    <span class="font-mono text-xs font-semibold px-2.5 py-0.5 rounded-md border" style="background-color: #eef8fc; border-color: #ADD8E6; color: #0f172a;">
+                        Preview: @LiveOrgPreview
+                    </span>
+                </div>
+                <fieldset disabled="@busy" class="p-4 flex flex-col gap-2">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 p-1">
+                            Category
+                            <select class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs text-slate-900 dark:text-slate-100"
+                                    @bind="orgForm.Category">
+                                @foreach (var c in Categories) { <option value="@c">@c</option> }
+                            </select>
+                        </label>
+                        <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 p-1">
+                            Overrides Global Request Sequence (optional)
+                            <select class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs text-slate-900 dark:text-slate-100"
+                                    @bind="orgForm.SequenceNumberTypeId">
+                                <option value="">None (Standalone / Document / Certificate)</option>
+                                @foreach (var s in data.GlobalSequences)
+                                {
+                                    <option value="@s.Id">@s.TypeName (@s.Prefix)</option>
+                                }
+                            </select>
+                        </label>
+                        <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 p-1">
+                            Display Name
+                            <input class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs text-slate-900 dark:text-slate-100"
+                                   maxlength="150" placeholder="e.g. Official Letters / Leave Requests" @bind="orgForm.Name" />
+                        </label>
+                        <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 p-1">
+                            Format Code
+                            <input class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs font-mono text-slate-900 dark:text-slate-100"
+                                   maxlength="60" placeholder="e.g. DOC_OFFICIAL or REQ_LEAVE" @bind="orgForm.Code" />
+                        </label>
+                        <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 p-1">
+                            Prefix
+                            <input class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs font-mono text-slate-900 dark:text-slate-100"
+                                   maxlength="30" placeholder="e.g. DOC / LTR / LV" @bind="orgForm.Prefix" @bind:event="oninput" />
+                        </label>
+                        <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 p-1">
+                            Zero-Padding Digits (1–10)
+                            <input type="number" min="1" max="10"
+                                   class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs text-slate-900 dark:text-slate-100"
+                                   @bind="orgForm.PaddingLength" @bind:event="oninput" />
+                        </label>
+                        <div class="sm:col-span-2 p-1 flex flex-col gap-1.5">
+                            <label class="block text-xs font-medium text-slate-700 dark:text-slate-300">
+                                Format Template
+                                <input class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs font-mono text-slate-900 dark:text-slate-100"
+                                       maxlength="150" placeholder="{ORG}/{PREFIX}/{YEAR}/{NUMBER}" @bind="orgForm.FormatString" @bind:event="oninput" />
+                            </label>
+                            <div class="flex flex-wrap items-center gap-1">
+                                <span class="text-[10px] text-slate-500">Insert token:</span>
+                                @foreach (var tok in Tokens)
+                                {
+                                    <button type="button" class="rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-1.5 py-0.5 font-mono text-[10px] text-slate-700 dark:text-slate-200 hover:bg-sky-50"
+                                            @onclick="() => AppendToken(tok)">
+                                        @tok
+                                    </button>
+                                }
+                            </div>
+                        </div>
+                        <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 p-1">
+                            Starting Number
+                            <input type="number" min="1"
+                                   class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs text-slate-900 dark:text-slate-100"
+                                   @bind="orgForm.StartingNumber" />
+                        </label>
+                        <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 p-1">
+                            Next Number
+                            <input type="number" min="1"
+                                   class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs text-slate-900 dark:text-slate-100"
+                                   @bind="orgForm.NextNumber" @bind:event="oninput" />
+                        </label>
+                        <div class="sm:col-span-2 p-1">
+                            <label class="inline-flex items-center gap-2 text-xs font-medium text-slate-700 dark:text-slate-200 cursor-pointer">
+                                <input type="checkbox" @bind="orgForm.IsResetAnnually" />
+                                <span>Reset counter automatically every calendar year (back to Starting Number)</span>
+                            </label>
+                        </div>
+                    </div>
+                </fieldset>
+                <div class="flex items-center gap-2 border-t border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 px-4 py-2.5">
+                    <button type="button" class="app-button app-button-primary app-button-sm" disabled="@busy" @onclick="SaveOrgFormatAsync">Save Format</button>
+                    <button type="button" class="app-button app-button-secondary app-button-sm" disabled="@busy" @onclick="NewOrgFormat">Clear</button>
+                    @if (orgForm.NumberFormatId > 0)
+                    {
+                        <button type="button" class="app-button app-button-danger app-button-sm ml-auto" disabled="@busy" @onclick="DeleteOrgFormatAsync">Delete</button>
+                    }
+                </div>
+            </section>
+
+            <!-- Right: Configured Formats List -->
+            <aside class="min-w-0 lg:col-span-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs overflow-hidden">
+                <div class="border-b border-slate-100 dark:border-slate-800 p-2 flex items-center justify-between gap-2">
+                    <h3 class="text-xs font-bold text-slate-900 dark:text-slate-100">Configured Formats (@FilteredOrgFormats.Count())</h3>
+                    <span class="text-[10px] text-slate-500 truncate">@data.OrganisationName</span>
+                </div>
+                <div class="divide-y divide-slate-100 dark:divide-slate-800 max-h-[540px] overflow-y-auto">
+                    @if (!FilteredOrgFormats.Any())
+                    {
+                        <p class="p-6 text-center text-xs text-slate-400">
+                            No custom number formats configured for this organisation yet. Global sequence defaults apply until you add an organisation override.
+                        </p>
+                    }
+                    else
+                    {
+                        @foreach (var item in FilteredOrgFormats)
+                        {
+                            var selected = orgForm.NumberFormatId == item.NumberFormatId;
+                            <button type="button"
+                                    class="block w-full border-l-4 p-2.5 text-left transition @(selected ? "font-semibold" : "border-transparent hover:bg-slate-50 dark:hover:bg-slate-800/50")"
+                                    style="@(selected ? "background-color: #eef8fc; border-left-color: #0369a1;" : null)"
+                                    @onclick="() => SelectOrgFormat(item)">
+                                <div class="flex items-center justify-between gap-2">
+                                    <span class="text-xs font-semibold text-slate-900 dark:text-slate-100 truncate">@item.Name</span>
+                                    <span class="rounded-full bg-slate-100 dark:bg-slate-800 px-2 py-0.5 text-[10px] font-semibold text-slate-600 dark:text-slate-300">@item.Category</span>
+                                </div>
+                                <p class="mt-1 font-mono text-[11px] text-blue-700 dark:text-blue-400 truncate">@item.Preview</p>
+                                <p class="mt-0.5 text-[10px] text-slate-500 truncate">
+                                    Code: @item.Code · Next: #@item.NextNumber · @(item.IsResetAnnually ? "Resets annually" : "Continuous")@(string.IsNullOrWhiteSpace(item.SequenceNumberTypeName) ? "" : $" · Overrides {item.SequenceNumberTypeName}")
+                                </p>
+                            </button>
+                        }
+                    }
+                </div>
+            </aside>
+        </div>
+    }
+    else if (data != null && mode == "global")
+    {
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-2 items-start">
+            <section class="min-w-0 lg:col-span-7 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs overflow-hidden">
+                <div class="flex items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 px-4 py-3">
+                    <h3 class="text-xs font-bold text-slate-900 dark:text-slate-100">
+                        @(globalForm.Id == 0 ? "New Global Sequence Default" : $"Edit Global Sequence: {globalForm.TypeName}")
+                    </h3>
+                    <button type="button" class="app-button app-button-secondary app-button-sm" @onclick="NewGlobalSequence">New</button>
+                </div>
+                <fieldset disabled="@busy" class="p-4 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 p-1">
+                        Sequence Name
+                        <input class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs" maxlength="100" @bind="globalForm.TypeName" />
+                    </label>
+                    <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 p-1">
+                        Prefix
+                        <input class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs font-mono" maxlength="30" @bind="globalForm.Prefix" />
+                    </label>
+                    <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 p-1 sm:col-span-2">
+                        Format String
+                        <input class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs font-mono" maxlength="100" placeholder="{PREFIX}/{YEAR}/{NUMBER}" @bind="globalForm.FormatString" />
+                    </label>
+                    <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 p-1">
+                        Starting Number
+                        <input type="number" min="1" class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs" @bind="globalForm.StartingNumber" />
+                    </label>
+                    <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 p-1">
+                        Next Number
+                        <input type="number" min="1" class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs" @bind="globalForm.NextNumber" />
+                    </label>
+                    <div class="sm:col-span-2 p-1">
+                        <label class="inline-flex items-center gap-2 text-xs font-medium text-slate-700 dark:text-slate-200 cursor-pointer">
+                            <input type="checkbox" @bind="globalForm.IsResetAnnually" />
+                            <span>Reset annually</span>
+                        </label>
+                    </div>
+                </fieldset>
+                <div class="flex items-center gap-2 border-t border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 px-4 py-2.5">
+                    <button type="button" class="app-button app-button-primary app-button-sm" disabled="@busy" @onclick="SaveGlobalSequenceAsync">Save Global Sequence</button>
+                    <button type="button" class="app-button app-button-secondary app-button-sm" disabled="@busy" @onclick="NewGlobalSequence">Clear</button>
+                </div>
+            </section>
+
+            <aside class="min-w-0 lg:col-span-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs overflow-hidden">
+                <div class="border-b border-slate-100 dark:border-slate-800 p-2">
+                    <h3 class="text-xs font-bold text-slate-900 dark:text-slate-100">Global Sequences (@data.GlobalSequences.Count)</h3>
+                </div>
+                <div class="divide-y divide-slate-100 dark:divide-slate-800 max-h-[540px] overflow-y-auto">
+                    @foreach (var seq in data.GlobalSequences)
+                    {
+                        var selected = globalForm.Id == seq.Id;
+                        <button type="button"
+                                class="block w-full border-l-4 p-2.5 text-left transition @(selected ? "font-semibold" : "border-transparent hover:bg-slate-50 dark:hover:bg-slate-800/50")"
+                                style="@(selected ? "background-color: #eef8fc; border-left-color: #0369a1;" : null)"
+                                @onclick="() => SelectGlobalSequence(seq)">
+                            <div class="flex items-center justify-between gap-2">
+                                <span class="text-xs font-semibold text-slate-900 dark:text-slate-100 truncate">@seq.TypeName</span>
+                                <span class="font-mono text-[10px] text-slate-500">@seq.Prefix</span>
+                            </div>
+                            <p class="mt-0.5 font-mono text-[11px] text-blue-700 truncate">@(string.IsNullOrWhiteSpace(seq.FormatString) ? "{PREFIX}/{YEAR}/{NUMBER}" : seq.FormatString)</p>
+                            <p class="mt-0.5 text-[10px] text-slate-500 truncate">
+                                Next: #@seq.NextNumber @(seq.LinkedRequestTypes.Count > 0 ? $"· Used by: {string.Join(", ", seq.LinkedRequestTypes)}" : "")
+                            </p>
+                        </button>
+                    }
+                </div>
+            </aside>
+        </div>
+    }
+</section>
+
+@code {
+    private static readonly string[] Categories = ["Request", "Document", "Certificate", "Asset", "Recruitment", "Custom"];
+    private static readonly string[] Tokens = ["{ORG}", "{PREFIX}", "{YEAR}", "{YY}", "{MM}", "{NUMBER}"];
+
+    private NumberFormattingWorkspaceDto? data;
+    private int selectedOrgId;
+    private string mode = "org";
+    private string categoryFilter = "";
+    private string? error;
+    private bool loading = true, busy;
+
+    private OrganisationNumberFormatDto orgForm = new();
+    private GlobalSequenceNumberDto globalForm = new();
+
+    private IEnumerable<OrganisationNumberFormatDto> FilteredOrgFormats =>
+        data?.OrganisationFormats.Where(x => string.IsNullOrWhiteSpace(categoryFilter) || x.Category.Equals(categoryFilter, StringComparison.OrdinalIgnoreCase))
+        ?? Enumerable.Empty<OrganisationNumberFormatDto>();
+
+    private string LiveOrgPreview
+    {
+        get
+        {
+            var pad = Math.Clamp(orgForm.PaddingLength, 1, 10);
+            var now = DateTime.UtcNow.AddHours(5);
+            var fmt = string.IsNullOrWhiteSpace(orgForm.FormatString) ? "{PREFIX}/{YEAR}/{NUMBER}" : orgForm.FormatString;
+            return fmt
+                .Replace("{ORG}", string.IsNullOrWhiteSpace(data?.OrganisationCode) ? "ORG" : data!.OrganisationCode)
+                .Replace("{PREFIX}", orgForm.Prefix ?? "")
+                .Replace("{YEAR}", now.Year.ToString())
+                .Replace("{YY}", now.ToString("yy"))
+                .Replace("{MM}", now.ToString("MM"))
+                .Replace("{NUMBER}", Math.Max(1, orgForm.NextNumber).ToString($"D{pad}"));
+        }
+    }
+
+    protected override async Task OnInitializedAsync() => await LoadAsync(null);
+
+    private async Task LoadAsync(int? orgId)
+    {
+        loading = true; error = null;
+        try
+        {
+            data = await Api.LoadAsync(orgId);
+            selectedOrgId = data.OrganisationId;
+            NewOrgFormat();
+            NewGlobalSequence();
+        }
+        catch (Exception ex) { error = ex.Message; }
+        finally { loading = false; }
+    }
+
+    private async Task ChangeOrganisationAsync(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var orgId) && orgId > 0)
+            await LoadAsync(orgId);
+    }
+
+    private void NewOrgFormat() => orgForm = new OrganisationNumberFormatDto
+    {
+        OrganisationId = selectedOrgId,
+        Category = string.IsNullOrWhiteSpace(categoryFilter) ? "Request" : categoryFilter,
+        FormatString = "{ORG}/{PREFIX}/{YEAR}/{NUMBER}",
+        PaddingLength = 4,
+        StartingNumber = 1,
+        NextNumber = 1,
+        IsResetAnnually = true
+    };
+
+    private void SelectOrgFormat(OrganisationNumberFormatDto item) => orgForm = new OrganisationNumberFormatDto
+    {
+        NumberFormatId = item.NumberFormatId,
+        OrganisationId = item.OrganisationId,
+        Category = item.Category,
+        SequenceNumberTypeId = item.SequenceNumberTypeId,
+        Code = item.Code,
+        Name = item.Name,
+        Prefix = item.Prefix,
+        FormatString = item.FormatString,
+        PaddingLength = item.PaddingLength,
+        StartingNumber = item.StartingNumber,
+        NextNumber = item.NextNumber,
+        IsResetAnnually = item.IsResetAnnually,
+        LastResetYear = item.LastResetYear,
+        IsActive = item.IsActive
+    };
+
+    private void AppendToken(string token) => orgForm.FormatString = (orgForm.FormatString ?? "") + token;
+
+    private async Task SaveOrgFormatAsync()
+    {
+        if (busy) return;
+        busy = true; error = null;
+        try
+        {
+            orgForm.OrganisationId = selectedOrgId;
+            var res = await Api.SaveOrganisationFormatAsync(orgForm);
+            if (!res.Success) { error = res.Message; Toasts.Error(res.Message); return; }
+            Toasts.Success(res.Message);
+            await LoadAsync(selectedOrgId);
+        }
+        catch (Exception ex) { error = ex.Message; Toasts.Error("Could not save format."); }
+        finally { busy = false; }
+    }
+
+    private async Task DeleteOrgFormatAsync()
+    {
+        if (busy || orgForm.NumberFormatId <= 0) return;
+        busy = true; error = null;
+        try
+        {
+            var res = await Api.DeleteOrganisationFormatAsync(selectedOrgId, orgForm.NumberFormatId);
+            if (!res.Success) { error = res.Message; Toasts.Error(res.Message); return; }
+            Toasts.Success(res.Message);
+            await LoadAsync(selectedOrgId);
+        }
+        catch (Exception ex) { error = ex.Message; Toasts.Error("Could not delete format."); }
+        finally { busy = false; }
+    }
+
+    private void NewGlobalSequence() => globalForm = new GlobalSequenceNumberDto
+    {
+        FormatString = "{PREFIX}/{YEAR}/{NUMBER}",
+        StartingNumber = 1,
+        NextNumber = 1,
+        IsResetAnnually = true
+    };
+
+    private void SelectGlobalSequence(GlobalSequenceNumberDto seq) => globalForm = new GlobalSequenceNumberDto
+    {
+        Id = seq.Id,
+        TypeName = seq.TypeName,
+        Prefix = seq.Prefix,
+        FormatString = seq.FormatString,
+        IsResetAnnually = seq.IsResetAnnually,
+        StartingNumber = seq.StartingNumber,
+        NextNumber = seq.NextNumber
+    };
+
+    private async Task SaveGlobalSequenceAsync()
+    {
+        if (busy) return;
+        busy = true; error = null;
+        try
+        {
+            var res = await Api.SaveGlobalSequenceAsync(globalForm);
+            if (!res.Success) { error = res.Message; Toasts.Error(res.Message); return; }
+            Toasts.Success(res.Message);
+            await LoadAsync(selectedOrgId);
+            mode = "global";
+        }
+        catch (Exception ex) { error = ex.Message; Toasts.Error("Could not save global sequence."); }
+        finally { busy = false; }
+    }
+}

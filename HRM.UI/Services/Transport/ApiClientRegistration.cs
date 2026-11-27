@@ -156,6 +156,19 @@ public static class ApiClientRegistration
             return new HRM.UI.Services.GoodsLoans.GoodsLoanApiClient(client);
         });
         services.AddScoped<HRM.Application.Contracts.Pages.IGoodsLoanService>(p => p.GetRequiredService<HRM.UI.Services.GoodsLoans.GoodsLoanApiClient>());
+        services.AddScoped<HRM.Application.Contracts.SuperAdmin.INumberFormattingApiClient>(provider =>
+        {
+            var origins = provider.GetRequiredService<BackendOrigins>();
+            var handler = new CircuitBackendHandler(
+                provider.GetRequiredService<Microsoft.AspNetCore.Components.Authorization.AuthenticationStateProvider>(),
+                provider.GetRequiredService<BackendSessionStore>(),
+                provider.GetRequiredService<IHttpClientFactory>(),
+                origins,
+                provider.GetRequiredService<Microsoft.AspNetCore.DataProtection.IDataProtectionProvider>(),
+                provider.GetRequiredService<ILogger<BackendSession>>());
+            var client = new HttpClient(handler) { BaseAddress = origins.Api };
+            return new HRM.UI.Services.SuperAdmin.NumberFormattingApiClient(client);
+        });
         return services;
     }
 }

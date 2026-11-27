@@ -45,6 +45,8 @@ Entity class and DbSet names remain descriptive C# names. Physical names are set
 - `WH_OrganisationWorkingHourRequirements`: tenant and optional Job Type temporary daily working-hour increases; `FromDate`, `ToDate`, `RequiredDailyMinutes`, `Reason`, `IsActive`, `Version`, `OperationLogId`.
 - `DS_` is the Document Signatures (e-Sign) feature prefix. `DS_UserSignatures` stores each user's saved profile signature (PNG/WebP data URL + SHA-256 hash), and `DS_DocumentSignatures` stores immutable, tamper-evident document signature records with `DocumentType`, `DocumentId`, `SlotKey`, frozen signature image snapshot, `DocumentContentHash` (SHA-256), `VerificationCode`, timestamp, IP address, and revocation audit trail.
 
+- `NF_` is the Number Formatting feature prefix. `NF_OrganisationNumberFormats` stores per-organisation number formatting rules (Requests, Documents, Certificates, Assets, Recruitment, Custom) with prefix, format template tokens (`{ORG}`, `{PREFIX}`, `{YEAR}`, `{YY}`, `{MM}`, `{NUMBER}`), zero-padding length, annual reset tracking (`LastResetYear`), and optional link to `dbo.SequenceNumberTypes`.
+
 - `WP_` is the feature prefix for new shared work-planning configuration. `WP_ScopeScheduleAssignments` stores organisation, approved structure and staff-group template assignments. Existing legacy scheduling tables retain their physical names.
 
 - `OT_` is the overtime policy feature prefix. `OT_JobTypeOvertimeRules` stores tenant-specific Job Type eligibility and daily/weekly OT caps.

@@ -7,12 +7,12 @@
 @inject ILogger<OrganisationSettingsEditor> Logger
 @inject NavigationManager Navigation
 
-<div class="w-full min-w-0 p-2">
-    @if (error != null) { <p role="alert" class="mb-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">@error</p> }
+<div class="w-full min-w-0 p-2 flex flex-col gap-2">
+    @if (error != null) { <p role="alert" class="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">@error</p> }
     @if (loading) { <p class="rounded-2xl border border-slate-200 bg-white p-6 text-xs text-slate-500">Loading organisations…</p> }
     else if (data != null)
     {
-        <fieldset disabled="@busy" class="min-w-0 space-y-2">
+        <fieldset disabled="@busy" class="min-w-0 flex flex-col gap-2">
             <div class="@(IsSuperAdminContext ? "superadmin-workspace-tabs" : "workspace-tabs border-emerald-600 dark:border-emerald-500") w-full border-b-2 overflow-x-auto"
                  style="@(IsSuperAdminContext ? "border-bottom-color: #ADD8E6;" : null)">
                 <nav aria-label="Organisation sections" class="flex items-end gap-1 px-1 min-w-max pb-0">
@@ -38,7 +38,7 @@
                 <div class="mb-2 flex items-center gap-2 px-1"><span class="text-teal-600 dark:text-teal-400"><OrganisationIcon /></span><h1 class="text-lg font-bold text-slate-900 dark:text-slate-100">@(data.Organisations.FirstOrDefault(x => x.Id == model.Id)?.Name ?? model.Name)</h1></div>
             }
             <div class="grid w-full grid-cols-1 gap-2 lg:grid-cols-12 items-start">
-                <section class="min-w-0 w-full space-y-2 @(ShowRightOrganisationList ? (HasDetailView ? "lg:col-span-5" : "lg:col-span-8") : "col-span-full lg:col-span-12")">
+                <section class="min-w-0 w-full flex flex-col gap-2 @(ShowRightOrganisationList ? (HasDetailView ? "lg:col-span-5" : "lg:col-span-8") : "col-span-full lg:col-span-12")">
                     @if (model.Id == 0)
                     {
                         <!-- New Organisation Onboarding Form (generous p-4 padding) -->
@@ -55,7 +55,7 @@
                                     </div>
                                 </div>
                             </div>
-                            <div class="grid grid-cols-1 gap-3 p-4 md:grid-cols-2">
+                            <div class="grid grid-cols-1 gap-2 p-4 md:grid-cols-2">
                                 <label class="@Label">Organisation name<input class="@Input" maxlength="250" @bind="model.Name" /></label>
                                 <label class="@Label">Dhivehi name<input class="@Input" maxlength="250" dir="rtl" @bind="model.DhivehiName" /></label>
                                 <label class="@Label">Organisation type<select class="@Input" @bind="model.TypeId"><option value="0">Select type</option>@foreach (var option in data.Types) { <option value="@option.Id">@option.Name</option> }</select></label>
@@ -103,7 +103,7 @@
                                     </button>
                                 </div>
                             </div>
-                            <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 p-4 text-xs">
+                            <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 p-4 text-xs">
                                 <div>
                                     <p class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Registration No.</p>
                                     <p class="mt-0.5 font-mono font-semibold text-slate-800 dark:text-slate-100">@(string.IsNullOrWhiteSpace(model.RegistrationNumber) ? "—" : model.RegistrationNumber)</p>
@@ -137,7 +137,7 @@
                                     </h3>
                                     <button type="button" class="text-[11px] font-semibold text-blue-700 hover:underline" @onclick='() => ChangeSection("Address")'>Manage →</button>
                                 </div>
-                                <div class="p-2 space-y-1 max-h-36 overflow-y-auto">
+                                <div class="p-2 flex flex-col gap-2 max-h-36 overflow-y-auto">
                                     @if (links.Addresses.Count == 0)
                                     {
                                         <p class="p-2 text-[11px] text-slate-400">No addresses linked. Add from the Address tab.</p>
@@ -160,7 +160,7 @@
                                     </h3>
                                     <button type="button" class="text-[11px] font-semibold text-blue-700 hover:underline" @onclick='() => ChangeSection("Contact")'>Manage →</button>
                                 </div>
-                                <div class="p-2 space-y-1 max-h-36 overflow-y-auto">
+                                <div class="p-2 flex flex-col gap-2 max-h-36 overflow-y-auto">
                                     @if (links.Contacts.Count == 0)
                                     {
                                         <p class="p-2 text-[11px] text-slate-400">No contacts added. Add from the Contact tab.</p>
@@ -418,7 +418,7 @@
                                 </button>
                             </div>
 
-                            <div class="p-3 space-y-3 text-xs max-h-[640px] overflow-y-auto">
+                            <div class="p-2 flex flex-col gap-2 text-xs max-h-[640px] overflow-y-auto">
                                 @if (viewedDepartment != null)
                                 {
                                     var deptStaff = links.DepartmentStaff.Where(s => s.DepartmentId == viewedDepartment.Id).ToList();
@@ -675,7 +675,7 @@
                         <h3 class="text-sm font-bold text-slate-900 dark:text-slate-100">Edit Organisation</h3>
                         <button type="button" class="text-slate-400 hover:text-slate-600 text-sm font-bold" @onclick="() => showEditOrgModal = false">✕</button>
                     </div>
-                    <div class="grid grid-cols-1 gap-3 p-4 md:grid-cols-2">
+                    <div class="grid grid-cols-1 gap-2 p-4 md:grid-cols-2">
                         @if (!string.IsNullOrWhiteSpace(error))
                         {
                             <div role="alert" class="md:col-span-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">@error</div>
@@ -723,7 +723,7 @@
                         <h3 class="text-sm font-bold text-slate-900 dark:text-slate-100">@(deptDraftId == 0 ? "Add Department" : "Edit Department")</h3>
                         <button type="button" class="text-slate-400 hover:text-slate-600 text-sm font-bold" @onclick="() => showDeptModal = false">✕</button>
                     </div>
-                    <div class="space-y-3 p-4">
+                    <div class="flex flex-col gap-2 p-4">
                         <label class="@Label">Department name<input class="@Input" maxlength="250" @bind="deptDraftName" /></label>
                         <label class="@Label">Department type
                             <select class="@Input" @bind="deptDraftTypeId">
@@ -767,7 +767,7 @@
                         <h3 class="text-sm font-bold text-slate-900 dark:text-slate-100">Edit Group</h3>
                         <button type="button" class="text-slate-400 hover:text-slate-600 text-sm font-bold" @onclick="() => showGroupModal = false">✕</button>
                     </div>
-                    <div class="space-y-3 p-4">
+                    <div class="flex flex-col gap-2 p-4">
                         <label class="@Label">Group name<input class="@Input" maxlength="200" @bind="groupDraftName" /></label>
                         <label class="@Label">Code (optional)<input class="@Input" maxlength="50" @bind="groupDraftCode" /></label>
                         <label class="@Label">Description<textarea rows="2" class="@Input" maxlength="500" @bind="groupDraftDescription"></textarea></label>
@@ -807,7 +807,7 @@
                         <h3 class="text-sm font-bold text-slate-900 dark:text-slate-100">Edit Team</h3>
                         <button type="button" class="text-slate-400 hover:text-slate-600 text-sm font-bold" @onclick="() => showTeamModal = false">✕</button>
                     </div>
-                    <div class="space-y-3 p-4">
+                    <div class="flex flex-col gap-2 p-4">
                         <label class="@Label">Team name<input class="@Input" maxlength="200" @bind="teamDraftName" /></label>
                         <label class="@Label">Department (optional)
                             <select class="@Input" @bind="teamDraftDeptId">
