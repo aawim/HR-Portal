@@ -50,7 +50,14 @@
     @if (ProviderCode == "FACEBOOK_PAGE") { <p class="text-xs text-amber-800">Only events explicitly marked Public can be posted to Facebook. Manual approval is required.</p> }
     <label class="block p-1 text-xs font-medium text-slate-700 dark:text-slate-200">English template<textarea rows="3" class="@Input" @bind="rule.TemplateBody"></textarea></label>
     <label class="block p-1 text-xs font-medium text-slate-700 dark:text-slate-200">Dhivehi template (optional)<textarea rows="3" dir="rtl" class="@Input" @bind="rule.DhivehiTemplateBody"></textarea></label>
-    <p class="text-xs text-slate-500">Use variables such as <code>@("{{Title}}")</code>, <code>@("{{Description}}")</code> and <code>@("{{EffectiveDate}}")</code>. The selected destination determines message language.</p>
+    @if (ProviderCode == "WHATSAPP")
+    {
+      <p class="text-xs text-slate-500">Use variables such as <code>@("{{Title}}")</code>, <code>@("{{Description}}")</code>, <code>@("{{EffectiveDate}}")</code> and <code>@("{{EmployeeName}}")</code>. The selected destination determines message language.</p>
+    }
+    else
+    {
+      <p class="text-xs text-slate-500">Use variables such as <code>@("{{Title}}")</code>, <code>@("{{Description}}")</code>, <code>@("{{StartDateTime}}")</code> and <code>@("{{EndDateTime}}")</code>. The selected destination determines message language.</p>
+    }
     <label class="flex items-center gap-2 text-xs"><input type="checkbox" disabled="@(ProviderCode == "FACEBOOK_PAGE")" @bind="rule.RequiresApproval" />Require approval</label>
     <label class="flex items-center gap-2 text-xs"><input type="checkbox" @bind="rule.IsEnabled" />Enable rule</label>
     <div class="flex gap-2"><button type="submit" disabled="@busy" class="app-button app-button-primary app-button-sm">Save rule</button><button type="button" class="app-button app-button-neutral app-button-sm" @onclick="NewRule">New</button></div>

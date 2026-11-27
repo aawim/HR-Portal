@@ -187,8 +187,8 @@ public sealed partial class CommunicationHubService(IDbContextFactory<HrmTeConte
     {
         var org = await RequireAdminAsync(); if (string.IsNullOrWhiteSpace(model.Name) || string.IsNullOrWhiteSpace(model.TemplateBody) || model.EventCode is not ("organisation-event.published.v1" or "organisation-event.cancelled.v1" or "employee.schedule-changed.v1")) throw new InvalidOperationException("Enter a name, template, and supported event trigger.");
         if (model.Id < 0 || model.Name.Trim().Length > 160) throw new InvalidOperationException("Enter a rule name of up to 160 characters.");
-        HRM.Communications.CommunicationMessageRenderer.Validate(model.TemplateBody);
-        if (!string.IsNullOrWhiteSpace(model.DhivehiTemplateBody)) HRM.Communications.CommunicationMessageRenderer.Validate(model.DhivehiTemplateBody);
+        HRM.Communications.CommunicationMessageRenderer.Validate(model.TemplateBody, model.EventCode);
+        if (!string.IsNullOrWhiteSpace(model.DhivehiTemplateBody)) HRM.Communications.CommunicationMessageRenderer.Validate(model.DhivehiTemplateBody, model.EventCode);
         await using var db = await factory.CreateDbContextAsync(); await CommunicationSchemaBootstrapper.EnsureSchemaAsync(db);
         var selected = await (from d in db.CommunicationDestinations
             join c in db.CommunicationProviderConnections on d.CommunicationProviderConnectionId equals c.CommunicationProviderConnectionId

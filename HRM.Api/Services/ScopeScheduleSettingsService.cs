@@ -175,20 +175,29 @@ public sealed partial class ScopeScheduleSettingsService(IDbContextFactory<HrmTe
         var users=await db.Users.Where(u=>u.IsActive && u.LocalUserStateId==1 && db.Jobs.Any(j=>affected.Contains(j.JobId) && j.IndividualID==u.BusinessEntityID && j.OrganisationID==org && j.JobStateId==4 && !j.TerminatedDate.HasValue)).Select(u=>new{u.UserId,u.BusinessEntityID}).ToListAsync();
         foreach(var user in users)db.StaffNotifications.Add(new(){UserId=user.UserId,IndividualId=user.BusinessEntityID,OrganisationId=org,Kind="Schedule assignment",Message=message,Url="/online",CreatedAtUtc=DateTime.UtcNow});
         // This method runs inside the schedule mutation transaction. Keep private notifications employee-targeted.
-        var recipients = await db.Jobs.AsNoTracking().Where(j => affected.Contains(j.JobId) && j.OrganisationID == org && j.JobStateId == 4)
-            .Select(j => new { j.JobId, j.IndividualID }).ToListAsync();
+        var today = DateTime.UtcNow.AddHours(5).Date;
+        var recipients = await (from j in db.Jobs.AsNoTracking()
+            join ind in db.Individuals.AsNoTracking() on j.IndividualID equals ind.BusinessEntityId into indJoin
+            from ind in indJoin.DefaultIfEmpty()
+            where affected.Contains(j.JobId) && j.OrganisationID == org && j.JobStateId == 4 && (!j.TerminatedDate.HasValue || j.TerminatedDate >= today)
+            select new { j.JobId, j.IndividualID, ind.FirstNameEnglish, ind.MiddleNameEnglish, ind.LastNameEnglish }).ToListAsync();
         foreach (var recipient in recipients)
         {
             var aggregate = $"scope:{scope.Id}:job:{recipient.JobId}";
-            var pending = await db.CommunicationOutbox.SingleOrDefaultAsync(x => x.OrganisationBusinessEntityId == org && x.AggregateType == "EmployeeSchedule" && x.AggregateId == aggregate && x.Status == "Pending");
+            var pending = await db.CommunicationOutbox
+                .Where(x => x.OrganisationBusinessEntityId == org && x.AggregateType == "EmployeeSchedule" && x.AggregateId == aggregate && x.Status == "Pending")
+                .OrderByDescending(x => x.CommunicationOutboxId)
+                .FirstOrDefaultAsync();
             if (pending is null)
             {
                 pending = new CommunicationOutbox { EventId = Guid.NewGuid(), OrganisationBusinessEntityId = org, EventCode = HRM.Communications.Contracts.CommunicationEventCodes.EmployeeScheduleChanged,
                     AggregateType = "EmployeeSchedule", AggregateId = aggregate };
                 db.CommunicationOutbox.Add(pending);
             }
+            var employeeName = string.Join(" ", new[] { recipient.FirstNameEnglish, recipient.MiddleNameEnglish, recipient.LastNameEnglish }.Where(s => !string.IsNullOrWhiteSpace(s)));
+            if (string.IsNullOrWhiteSpace(employeeName)) employeeName = "Employee";
             pending.PayloadJson = System.Text.Json.JsonSerializer.Serialize(new { ScopeScheduleAssignmentId = scope.Id, ScopeVersion = scope.Version, recipient.JobId, IndividualId = recipient.IndividualID,
-                Title = "Work schedule updated", Description = message, EffectiveDate = from.ToString("yyyy-MM-dd"), EmployeeName = "Employee" });
+                Title = "Work schedule updated", Description = message, EffectiveDate = from.ToString("yyyy-MM-dd"), EmployeeName = employeeName });
             pending.OccurredAtUtc = DateTime.UtcNow; pending.AvailableAtUtc = DateTime.UtcNow.AddMinutes(2);
         }
     }

@@ -38,4 +38,17 @@ public sealed class CommunicationTemplateTests
     [Fact]
     public void EmployeeScheduleVariablesAreRendered() => Assert.Equal("Employee: 2026-11-21",
         CommunicationMessageRenderer.Render("{{EmployeeName}}: {{EffectiveDate}}", new Dictionary<string, string?> { ["EmployeeName"] = "Employee", ["EffectiveDate"] = "2026-11-21" }));
+
+    [Theory]
+    [InlineData("{{EffectiveDate}}", "organisation-event.published.v1")]
+    [InlineData("{{EmployeeName}}", "organisation-event.cancelled.v1")]
+    [InlineData("{{StartDateTime}}", "employee.schedule-changed.v1")]
+    public void EventSpecificVariablesAreValidated(string template, string eventCode) =>
+        Assert.Throws<InvalidOperationException>(() => CommunicationMessageRenderer.Validate(template, eventCode));
+
+    [Theory]
+    [InlineData("{{Title}} ({{StartDateTime}} - {{EndDateTime}})", "organisation-event.published.v1")]
+    [InlineData("{{EmployeeName}}: {{Title}} on {{EffectiveDate}}", "employee.schedule-changed.v1")]
+    public void ValidEventSpecificTemplatesPass(string template, string eventCode) =>
+        CommunicationMessageRenderer.Validate(template, eventCode);
 }

@@ -16,6 +16,7 @@ public sealed partial class CommunicationHubService
         var org = await access.GetCurrentOrganisationIdAsync();
         if (org <= 0 || !await access.HasOrganisationAccessAsync(org)) throw new UnauthorizedAccessException("An authorised organisation context is required.");
         await using var db = await factory.CreateDbContextAsync();
+        await CommunicationSchemaBootstrapper.EnsureSchemaAsync(db);
         var rows = await (from m in db.CommunicationMessages.AsNoTracking()
             join r in db.Requests.Include(x => x.RequestState) on m.ApprovalRequestId equals r.RequestId
             where (requestId <= 0 || r.RequestId == requestId) && m.OrganisationBusinessEntityId == org && r.OrganisationBusinessEntityID == org && r.RequestType.TypeName == "Communication Announcement" &&
@@ -42,6 +43,7 @@ public sealed partial class CommunicationHubService
         var org = await access.GetCurrentOrganisationIdAsync();
         if (org <= 0 || !await access.HasOrganisationAccessAsync(org)) throw new UnauthorizedAccessException("An authorised organisation context is required.");
         await using var db = await factory.CreateDbContextAsync();
+        await CommunicationSchemaBootstrapper.EnsureSchemaAsync(db);
         await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
         var message = await db.CommunicationMessages.SingleOrDefaultAsync(x => x.CommunicationMessageId == model.Id && x.OrganisationBusinessEntityId == org)
             ?? throw new InvalidOperationException("Announcement is not available.");
