@@ -191,15 +191,20 @@
                                         @if (EffectiveUserModules.Count > 0)
                                         {
                                             <div class="flex flex-wrap gap-1">
-                                                @foreach (var mod in EffectiveUserModules)
+                                                @foreach (var mod in AccessControlUiHelper.Modules.Where(m => EffectiveUserModules.Contains(m.Label)))
                                                 {
-                                                    <span class="rounded-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-2 py-0.5 text-[10px] font-medium text-slate-700 dark:text-slate-200">@mod</span>
+                                                    <button type="button"
+                                                            class="rounded-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:border-teal-500 px-2 py-0.5 text-[10px] font-medium text-slate-700 dark:text-slate-200 transition cursor-pointer"
+                                                            title="Click to inspect @mod.Label permissions"
+                                                            @onclick="() => ToggleModuleInspector(mod.Key)">
+                                                        @mod.Label
+                                                    </button>
                                                 }
                                             </div>
                                         }
                                         else
                                         {
-                                            <p class="text-[11px] text-slate-500 dark:text-slate-400">Assign one or more roles below to grant access to HR modules.</p>
+                                            <p class="text-[11px] text-slate-500 dark:text-slate-400">Assign one or more roles below, or click any HR module to manage individual permissions.</p>
                                         }
                                     </div>
 
@@ -223,13 +228,200 @@
                                         </div>
                                     </section>
 
+                                    <!-- Interactive Module Permissions Inspector -->
+                                    <section class="rounded-xl border border-slate-200 dark:border-slate-800 p-2 flex flex-col gap-2">
+                                        <div class="flex flex-wrap items-center justify-between gap-2">
+                                            <div>
+                                                <h4 class="text-xs font-bold text-slate-800 dark:text-slate-100">Module Permissions</h4>
+                                                <p class="text-[11px] text-slate-500 dark:text-slate-400">Click any HR module to view, search, and select or deselect direct permissions for this account.</p>
+                                            </div>
+                                            <span class="rounded-full bg-slate-100 dark:bg-slate-800 px-2 py-0.5 text-[10px] font-semibold text-slate-600 dark:text-slate-300">
+                                                @EffectiveUserModules.Count active modules
+                                            </span>
+                                        </div>
+
+                                        <div class="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                                            @foreach (var mod in AccessControlUiHelper.Modules)
+                                            {
+                                                var modPerms = ModulePermissions(mod.Key);
+                                                if (modPerms.Count == 0) continue;
+                                                var orgAllowed = modPerms.Where(p => data.OrganisationPermissionIds.Contains(p.Id)).ToList();
+                                                var roleCount = orgAllowed.Count(p => InheritedIds.Contains(p.Id));
+                                                var directCount = orgAllowed.Count(p => user.DirectPermissionIds.Contains(p.Id));
+                                                var effectiveCount = orgAllowed.Count(p => InheritedIds.Contains(p.Id) || user.DirectPermissionIds.Contains(p.Id));
+                                                var isExpanded = expandedModuleKey == mod.Key;
+
+                                                <button type="button"
+                                                        @key="mod.Key"
+                                                        class="text-left rounded-xl border p-2 flex flex-col justify-between gap-1.5 transition cursor-pointer @(isExpanded ? "ring-2 ring-teal-500/80 dark:ring-teal-400/80" : "") @(effectiveCount > 0 ? "border-teal-200 bg-teal-50/30 dark:border-teal-900/60 dark:bg-teal-950/20" : "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-teal-300")"
+                                                        @onclick="() => ToggleModuleInspector(mod.Key)">
+                                                    <div class="flex items-start justify-between gap-2 w-full">
+                                                        <div class="flex items-start gap-2 min-w-0">
+                                                            <span class="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border @(effectiveCount > 0 ? "bg-teal-100/80 border-teal-200 text-teal-700" : "bg-slate-100 border-slate-200 text-slate-500")">
+                                                                <i class="bi @mod.Icon text-[11px]"></i>
+                                                            </span>
+                                                            <span class="min-w-0">
+                                                                <span class="block text-xs font-bold text-slate-900 dark:text-slate-100 truncate">@mod.Label</span>
+                                                                <span class="block text-[10px] text-slate-500 dark:text-slate-400">@effectiveCount / @orgAllowed.Count enabled</span>
+                                                            </span>
+                                                        </div>
+                                                        <i class="bi @(isExpanded ? "bi-chevron-up text-teal-600" : "bi-chevron-down text-slate-400") mt-0.5 shrink-0 text-[10px]"></i>
+                                                    </div>
+                                                    <div class="flex flex-wrap items-center gap-1 pt-1 border-t border-slate-100 dark:border-slate-800 w-full">
+                                                        @if (roleCount > 0)
+                                                        {
+                                                            <span class="rounded-full bg-teal-100 dark:bg-teal-900/50 text-teal-800 dark:text-teal-200 px-1.5 py-0.5 text-[10px] font-semibold">@roleCount role</span>
+                                                        }
+                                                        @if (directCount > 0)
+                                                        {
+                                                            <span class="rounded-full bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-200 px-1.5 py-0.5 text-[10px] font-semibold">@directCount direct</span>
+                                                        }
+                                                        @if (roleCount == 0 && directCount == 0)
+                                                        {
+                                                            <span class="rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 px-1.5 py-0.5 text-[10px] font-medium">None</span>
+                                                        }
+                                                    </div>
+                                                </button>
+                                            }
+                                        </div>
+
+                                        @if (ExpandedModule is { } activeMod)
+                                        {
+                                            var activeModPerms = ModulePermissions(activeMod.Key);
+                                            var filteredModPerms = FilterModulePermissions(activeModPerms);
+                                            var selectableShownIds = filteredModPerms
+                                                .Where(p => data.OrganisationPermissionIds.Contains(p.Id) && !InheritedIds.Contains(p.Id))
+                                                .Select(p => p.Id)
+                                                .ToList();
+                                            var directShownIds = filteredModPerms
+                                                .Where(p => user.DirectPermissionIds.Contains(p.Id))
+                                                .Select(p => p.Id)
+                                                .ToList();
+
+                                            <div class="mt-1 rounded-xl border border-teal-200 dark:border-teal-800/60 bg-slate-50/70 dark:bg-slate-800/30 p-2.5 flex flex-col gap-2">
+                                                <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200/80 dark:border-slate-700/80 pb-2">
+                                                    <div class="flex items-center gap-2 min-w-0">
+                                                        <span class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-teal-50 dark:bg-teal-950/60 border border-teal-200 dark:border-teal-800 text-teal-700 dark:text-teal-300">
+                                                            <i class="bi @activeMod.Icon text-xs"></i>
+                                                        </span>
+                                                        <div class="min-w-0">
+                                                            <h5 class="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">@activeMod.Label Permissions</h5>
+                                                            <p class="text-[11px] text-slate-500 dark:text-slate-400">
+                                                                @filteredModPerms.Count of @activeModPerms.Count permissions shown
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                    <div class="flex flex-wrap items-center gap-1.5">
+                                                        @if (selectableShownIds.Count > 0)
+                                                        {
+                                                            <button type="button"
+                                                                    class="rounded-lg border border-teal-200 dark:border-teal-800 bg-teal-50 dark:bg-teal-950/50 px-2 py-1 text-[11px] font-semibold text-teal-800 dark:text-teal-200 hover:bg-teal-100 transition"
+                                                                    @onclick="() => MoveDirect(selectableShownIds, true)">
+                                                                Select shown
+                                                            </button>
+                                                        }
+                                                        @if (directShownIds.Count > 0)
+                                                        {
+                                                            <button type="button"
+                                                                    class="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-[11px] font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 transition"
+                                                                    @onclick="() => MoveDirect(directShownIds, false)">
+                                                                Deselect direct
+                                                            </button>
+                                                        }
+                                                        <button type="button"
+                                                                class="rounded-lg px-2 py-1 text-[11px] font-semibold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 transition"
+                                                                @onclick="CloseModuleInspector">
+                                                            Close
+                                                        </button>
+                                                    </div>
+                                                </div>
+
+                                                <div class="flex flex-wrap items-center gap-2">
+                                                    <input type="search"
+                                                           placeholder="Search permissions in @activeMod.Label…"
+                                                           @bind="moduleSearch"
+                                                           @bind:event="oninput"
+                                                           class="flex-1 min-w-[180px] rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500" />
+                                                    <div class="flex flex-wrap items-center gap-1">
+                                                        @foreach (var opt in ModuleActionFilterOptions)
+                                                        {
+                                                            var activeFilter = moduleActionFilter == opt.Key;
+                                                            <button type="button"
+                                                                    class="rounded-lg border px-2 py-1 text-[11px] font-semibold transition @(activeFilter ? "border-teal-600 bg-teal-600 text-white" : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:border-teal-400")"
+                                                                    @onclick="() => moduleActionFilter = opt.Key">
+                                                                @opt.Label
+                                                            </button>
+                                                        }
+                                                    </div>
+                                                </div>
+
+                                                @if (filteredModPerms.Count == 0)
+                                                {
+                                                    <p class="rounded-lg border border-dashed border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-4 text-center text-xs text-slate-500">
+                                                        No permissions in @activeMod.Label match your search or filter.
+                                                    </p>
+                                                }
+                                                else
+                                                {
+                                                    <div class="grid max-h-72 grid-cols-1 gap-1.5 overflow-y-auto pr-0.5 md:grid-cols-2">
+                                                        @foreach (var perm in filteredModPerms)
+                                                        {
+                                                            var orgEnabled = data.OrganisationPermissionIds.Contains(perm.Id);
+                                                            var inherited = InheritedIds.Contains(perm.Id);
+                                                            var direct = user.DirectPermissionIds.Contains(perm.Id);
+                                                            var isChecked = orgEnabled && (inherited || direct);
+                                                            var isDisabled = !orgEnabled || (inherited && !direct);
+                                                            var actionLabel = ActionBucketLabel(AccessControlUiHelper.ResolveAction(perm));
+
+                                                            <label class="flex items-start gap-2 rounded-lg border p-2 transition @(isDisabled ? "opacity-75 cursor-default" : "cursor-pointer") @(direct ? "border-amber-300 dark:border-amber-700 bg-amber-50/40 dark:bg-amber-950/20" : inherited && orgEnabled ? "border-teal-200 dark:border-teal-800 bg-teal-50/40 dark:bg-teal-950/25" : "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-teal-300")"
+                                                                   @key="perm.Id">
+                                                                <input type="checkbox"
+                                                                       class="mt-0.5 h-4 w-4 rounded accent-teal-700 disabled:opacity-60"
+                                                                       checked="@isChecked"
+                                                                       disabled="@isDisabled"
+                                                                       @onchange="e => ToggleDirect(perm.Id, e.Value is true)" />
+                                                                <span class="min-w-0 flex-1">
+                                                                    <span class="flex flex-wrap items-center gap-1">
+                                                                        <span class="text-xs font-semibold text-slate-900 dark:text-slate-100">@perm.Name</span>
+                                                                        <span class="rounded-full bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 text-[10px] font-medium text-slate-600 dark:text-slate-300">@actionLabel</span>
+                                                                        @if (!orgEnabled)
+                                                                        {
+                                                                            <span class="rounded-full bg-slate-200 dark:bg-slate-700 px-1.5 py-0.5 text-[10px] font-medium text-slate-600 dark:text-slate-300">Org disabled</span>
+                                                                        }
+                                                                        else if (inherited && direct)
+                                                                        {
+                                                                            <span class="rounded-full bg-teal-100 dark:bg-teal-900/60 px-1.5 py-0.5 text-[10px] font-semibold text-teal-800 dark:text-teal-200">Role + Direct</span>
+                                                                        }
+                                                                        else if (inherited)
+                                                                        {
+                                                                            <span class="rounded-full bg-teal-100 dark:bg-teal-900/60 px-1.5 py-0.5 text-[10px] font-semibold text-teal-800 dark:text-teal-200">Via Role</span>
+                                                                        }
+                                                                        else if (direct)
+                                                                        {
+                                                                            <span class="rounded-full bg-amber-100 dark:bg-amber-900/60 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800 dark:text-amber-200">Direct</span>
+                                                                        }
+                                                                    </span>
+                                                                    <span class="mt-0.5 block break-all font-mono text-[10px] text-slate-500 dark:text-slate-400">@perm.Key</span>
+                                                                    @if (!string.IsNullOrWhiteSpace(perm.Description))
+                                                                    {
+                                                                        <span class="mt-0.5 block text-[11px] leading-snug text-slate-600 dark:text-slate-300">@perm.Description</span>
+                                                                    }
+                                                                </span>
+                                                            </label>
+                                                        }
+                                                    </div>
+                                                }
+                                            </div>
+                                        }
+                                    </section>
+
                                     <div class="rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
                                         <button type="button"
                                                 class="w-full flex items-center justify-between gap-2 bg-slate-50/70 dark:bg-slate-800/40 px-3 py-2 text-left text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100/70 dark:hover:bg-slate-800/70 transition"
                                                 @onclick="() => showDirectPermissions = !showDirectPermissions">
                                             <span class="flex items-center gap-1.5">
                                                 <i class="bi @(showDirectPermissions ? "bi-chevron-down" : "bi-chevron-right") text-[11px] text-slate-500"></i>
-                                                <span>Advanced: Direct Permission Exceptions</span>
+                                                <span>Advanced: All Direct Permissions (Dual List)</span>
                                             </span>
                                             <span class="text-[10px] font-medium text-slate-500 dark:text-slate-400">@user.DirectPermissionIds.Count direct · @InheritedIds.Count via roles</span>
                                         </button>
@@ -274,11 +466,151 @@
                             else
                             {
                                 <div class="rounded-xl border border-teal-200/70 dark:border-teal-800/40 bg-teal-50/50 dark:bg-teal-950/30 p-2 text-xs text-teal-900 dark:text-teal-200">
-                                    These permissions limit which resources accounts in @data.OrganisationName can be granted. Each account still needs an assigned role or direct permission exception.
+                                    These permissions limit which resources accounts in @data.OrganisationName can be granted. Click any module to inspect, search, and toggle individual permissions.
                                 </div>
-                                <div class="grid grid-cols-1 gap-2 lg:grid-cols-2">
-                                    <PermissionAssignmentColumn Assigned="true" Permissions="data.Permissions.Where(p => organisationPermissions.Contains(p.Id)).ToList()" OnMove="id => ToggleOrganisation(id, false)" OnMoveGroup="ids => MoveOrganisation(ids, false)" />
-                                    <PermissionAssignmentColumn Permissions="data.Permissions.Where(p => !organisationPermissions.Contains(p.Id)).ToList()" OnMove="id => ToggleOrganisation(id, true)" OnMoveGroup="ids => MoveOrganisation(ids, true)" />
+
+                                <section class="rounded-xl border border-slate-200 dark:border-slate-800 p-2 flex flex-col gap-2">
+                                    <div class="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                                        @foreach (var mod in AccessControlUiHelper.Modules)
+                                        {
+                                            var modPerms = ModulePermissions(mod.Key);
+                                            if (modPerms.Count == 0) continue;
+                                            var modIds = modPerms.Select(p => p.Id).ToList();
+                                            var modEnabled = modPerms.Count(p => organisationPermissions.Contains(p.Id));
+                                            var allOn = modEnabled == modPerms.Count;
+                                            var partial = modEnabled > 0 && !allOn;
+                                            var isExpanded = expandedModuleKey == mod.Key;
+
+                                            <div @key="mod.Key"
+                                                 class="rounded-xl border p-2 flex flex-col justify-between gap-2 transition @(isExpanded ? "ring-2 ring-teal-500/80 dark:ring-teal-400/80" : "") @(allOn ? "border-emerald-200 bg-emerald-50/30 dark:border-emerald-900/60 dark:bg-emerald-950/15" : partial ? "border-sky-200 bg-sky-50/30 dark:border-sky-900/60 dark:bg-sky-950/15" : "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900")">
+                                                <button type="button"
+                                                        class="w-full text-left flex items-start justify-between gap-2 cursor-pointer group"
+                                                        @onclick="() => ToggleModuleInspector(mod.Key)">
+                                                    <span class="flex items-start gap-2 min-w-0">
+                                                        <span class="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border @(allOn ? "bg-emerald-100/80 border-emerald-200 text-emerald-700" : partial ? "bg-sky-100/80 border-sky-200 text-sky-700" : "bg-slate-100 border-slate-200 text-slate-500")">
+                                                            <i class="bi @mod.Icon text-[11px]"></i>
+                                                        </span>
+                                                        <span class="min-w-0">
+                                                            <span class="block text-xs font-bold text-slate-900 dark:text-slate-100 group-hover:text-teal-700 truncate">@mod.Label</span>
+                                                            <span class="block text-[10px] text-slate-500">@modEnabled / @modPerms.Count allowed</span>
+                                                        </span>
+                                                    </span>
+                                                    <i class="bi @(isExpanded ? "bi-chevron-up text-teal-600" : "bi-chevron-down text-slate-400") mt-0.5 shrink-0 text-[10px]"></i>
+                                                </button>
+                                                <div class="flex items-center justify-between gap-2 pt-1 border-t border-slate-100 dark:border-slate-800">
+                                                    <span class="rounded-full px-2 py-0.5 text-[10px] font-semibold @(allOn ? "bg-emerald-100 text-emerald-800" : partial ? "bg-sky-100 text-sky-800" : "bg-slate-100 text-slate-600")">
+                                                        @(allOn ? "Enabled" : partial ? "Partial" : "Disabled")
+                                                    </span>
+                                                    <button type="button"
+                                                            class="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-0.5 text-[10px] font-semibold text-slate-700 dark:text-slate-200 hover:border-teal-400 transition"
+                                                            @onclick="() => MoveOrganisation(modIds, !allOn)">
+                                                        @(allOn ? "Disable" : "Enable all")
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        }
+                                    </div>
+
+                                    @if (ExpandedModule is { } activeOrgMod)
+                                    {
+                                        var activeModPerms = ModulePermissions(activeOrgMod.Key);
+                                        var filteredModPerms = FilterModulePermissions(activeModPerms);
+                                        var filteredIds = filteredModPerms.Select(p => p.Id).ToList();
+
+                                        <div class="mt-1 rounded-xl border border-teal-200 dark:border-teal-800/60 bg-slate-50/70 dark:bg-slate-800/30 p-2.5 flex flex-col gap-2">
+                                            <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200/80 dark:border-slate-700/80 pb-2">
+                                                <div class="min-w-0">
+                                                    <h5 class="text-xs font-bold text-slate-900 dark:text-slate-100">@activeOrgMod.Label Permissions</h5>
+                                                    <p class="text-[11px] text-slate-500">@filteredModPerms.Count of @activeModPerms.Count shown</p>
+                                                </div>
+                                                <div class="flex flex-wrap items-center gap-1.5">
+                                                    @if (filteredIds.Count > 0)
+                                                    {
+                                                        <button type="button"
+                                                                class="rounded-lg border border-teal-200 dark:border-teal-800 bg-teal-50 dark:bg-teal-950/50 px-2 py-1 text-[11px] font-semibold text-teal-800 dark:text-teal-200 hover:bg-teal-100 transition"
+                                                                @onclick="() => MoveOrganisation(filteredIds, true)">
+                                                            Select shown
+                                                        </button>
+                                                        <button type="button"
+                                                                class="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-[11px] font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 transition"
+                                                                @onclick="() => MoveOrganisation(filteredIds, false)">
+                                                            Deselect shown
+                                                        </button>
+                                                    }
+                                                    <button type="button"
+                                                            class="rounded-lg px-2 py-1 text-[11px] font-semibold text-slate-500 hover:text-slate-800 transition"
+                                                            @onclick="CloseModuleInspector">
+                                                        Close
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <div class="flex flex-wrap items-center gap-2">
+                                                <input type="search"
+                                                       placeholder="Search permissions in @activeOrgMod.Label…"
+                                                       @bind="moduleSearch"
+                                                       @bind:event="oninput"
+                                                       class="flex-1 min-w-[180px] rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500" />
+                                                <div class="flex flex-wrap items-center gap-1">
+                                                    @foreach (var opt in ModuleActionFilterOptions)
+                                                    {
+                                                        var activeFilter = moduleActionFilter == opt.Key;
+                                                        <button type="button"
+                                                                class="rounded-lg border px-2 py-1 text-[11px] font-semibold transition @(activeFilter ? "border-teal-600 bg-teal-600 text-white" : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:border-teal-400")"
+                                                                @onclick="() => moduleActionFilter = opt.Key">
+                                                            @opt.Label
+                                                        </button>
+                                                    }
+                                                </div>
+                                            </div>
+                                            @if (filteredModPerms.Count == 0)
+                                            {
+                                                <p class="p-3 text-center text-xs text-slate-500">No permissions in @activeOrgMod.Label match your search or filter.</p>
+                                            }
+                                            else
+                                            {
+                                                <div class="grid max-h-72 grid-cols-1 gap-1.5 overflow-y-auto pr-0.5 md:grid-cols-2">
+                                                    @foreach (var perm in filteredModPerms)
+                                                    {
+                                                        var isChecked = organisationPermissions.Contains(perm.Id);
+                                                        var actionLabel = ActionBucketLabel(AccessControlUiHelper.ResolveAction(perm));
+                                                        <label class="flex items-start gap-2 rounded-lg border p-2 cursor-pointer transition @(isChecked ? "border-emerald-200 dark:border-emerald-800 bg-emerald-50/30 dark:bg-emerald-950/20" : "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-teal-300")"
+                                                               @key="perm.Id">
+                                                            <input type="checkbox"
+                                                                   class="mt-0.5 h-4 w-4 rounded accent-teal-700"
+                                                                   checked="@isChecked"
+                                                                   @onchange="e => ToggleOrganisation(perm.Id, e.Value is true)" />
+                                                            <span class="min-w-0 flex-1">
+                                                                <span class="flex flex-wrap items-center gap-1">
+                                                                    <span class="text-xs font-semibold text-slate-900 dark:text-slate-100">@perm.Name</span>
+                                                                    <span class="rounded-full bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 text-[10px] font-medium text-slate-600 dark:text-slate-300">@actionLabel</span>
+                                                                </span>
+                                                                <span class="mt-0.5 block break-all font-mono text-[10px] text-slate-500 dark:text-slate-400">@perm.Key</span>
+                                                            </span>
+                                                        </label>
+                                                    }
+                                                </div>
+                                            }
+                                        </div>
+                                    }
+                                </section>
+
+                                <div class="rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+                                    <button type="button"
+                                            class="w-full flex items-center justify-between gap-2 bg-slate-50/70 dark:bg-slate-800/40 px-3 py-2 text-left text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100/70 dark:hover:bg-slate-800/70 transition"
+                                            @onclick="() => showDirectPermissions = !showDirectPermissions">
+                                        <span class="flex items-center gap-1.5">
+                                            <i class="bi @(showDirectPermissions ? "bi-chevron-down" : "bi-chevron-right") text-[11px] text-slate-500"></i>
+                                            <span>Advanced: All Organisation Permissions (Dual List)</span>
+                                        </span>
+                                        <span class="text-[10px] font-medium text-slate-500 dark:text-slate-400">@organisationPermissions.Count / @data.Permissions.Count allowed</span>
+                                    </button>
+                                    @if (showDirectPermissions)
+                                    {
+                                        <div class="p-2 border-t border-slate-200 dark:border-slate-800 grid grid-cols-1 gap-2 lg:grid-cols-2">
+                                            <PermissionAssignmentColumn Assigned="true" Permissions="data.Permissions.Where(p => organisationPermissions.Contains(p.Id)).ToList()" OnMove="id => ToggleOrganisation(id, false)" OnMoveGroup="ids => MoveOrganisation(ids, false)" />
+                                            <PermissionAssignmentColumn Permissions="data.Permissions.Where(p => !organisationPermissions.Contains(p.Id)).ToList()" OnMove="id => ToggleOrganisation(id, true)" OnMoveGroup="ids => MoveOrganisation(ids, true)" />
+                                        </div>
+                                    }
                                 </div>
                             }
                         </div>
@@ -367,6 +699,64 @@
     private int? selectedTeamId;
     private string? error;
     private bool busy, loading, existingStaff, showDirectPermissions;
+    private string? expandedModuleKey;
+    private string moduleSearch = "";
+    private string moduleActionFilter = "all";
+
+    private static readonly (string Key, string Label)[] ModuleActionFilterOptions =
+    [
+        ("all", "All"),
+        ("View", "View"),
+        ("CreateEdit", "Create / Edit"),
+        ("Approve", "Approve"),
+        ("Configure", "Configure")
+    ];
+
+    private AccessModuleDefinition? ExpandedModule =>
+        string.IsNullOrWhiteSpace(expandedModuleKey)
+            ? null
+            : AccessControlUiHelper.Modules.FirstOrDefault(m => m.Key == expandedModuleKey);
+
+    private List<PermissionDefinitionDto> ModulePermissions(string moduleKey) =>
+        (data?.Permissions ?? []).Where(p => AccessControlUiHelper.ResolveModule(p).Key == moduleKey).ToList();
+
+    private void ToggleModuleInspector(string moduleKey)
+    {
+        if (expandedModuleKey == moduleKey)
+        {
+            CloseModuleInspector();
+            return;
+        }
+        expandedModuleKey = moduleKey;
+        moduleSearch = "";
+        moduleActionFilter = "all";
+    }
+
+    private void CloseModuleInspector()
+    {
+        expandedModuleKey = null;
+        moduleSearch = "";
+        moduleActionFilter = "all";
+    }
+
+    private List<PermissionDefinitionDto> FilterModulePermissions(List<PermissionDefinitionDto> perms) =>
+        perms.Where(p =>
+            (moduleActionFilter == "all" || AccessControlUiHelper.ResolveAction(p).ToString() == moduleActionFilter) &&
+            (string.IsNullOrWhiteSpace(moduleSearch) ||
+             p.Name.Contains(moduleSearch, StringComparison.OrdinalIgnoreCase) ||
+             p.Key.Contains(moduleSearch, StringComparison.OrdinalIgnoreCase) ||
+             p.Group.Contains(moduleSearch, StringComparison.OrdinalIgnoreCase) ||
+             p.Description.Contains(moduleSearch, StringComparison.OrdinalIgnoreCase)))
+        .OrderBy(p => p.Name)
+        .ToList();
+
+    private static string ActionBucketLabel(AccessActionBucket bucket) => bucket switch
+    {
+        AccessActionBucket.CreateEdit => "Create / Edit",
+        AccessActionBucket.Approve => "Approve",
+        AccessActionBucket.Configure => "Configure",
+        _ => "View"
+    };
     private bool IsSuperAdminContext => new Uri(Navigation.Uri).AbsolutePath.StartsWith("/superadmin", StringComparison.OrdinalIgnoreCase);
     private const string LabelClass = "block text-[11px] font-semibold text-slate-600 dark:text-slate-400 p-1";
     private const string InputClass = "mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs text-slate-800 dark:text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 read-only:bg-slate-50 dark:read-only:bg-slate-800/50";
