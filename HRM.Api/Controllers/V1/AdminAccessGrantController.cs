@@ -48,6 +48,21 @@ public sealed class AdminAccessGrantController(global::HRM.Services.Contracts.Ad
         return Ok(await service.RevokeAsync(request.organisationId, request.userId, request.reason));
     }
 
+    [HttpPost("set-portal-access")]
+    public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> SetPortalAccess([FromBody] AdminAccessGrantSetPortalAccessRequest request)
+    {
+        return Ok(await service.SetPortalAccessAsync(request.organisationId, request.userId, request.portal, request.grant, request.reason));
+    }
+
+    public sealed class AdminAccessGrantSetPortalAccessRequest
+    {
+        public global::System.Int32 organisationId { get; set; }
+        public global::System.Int32 userId { get; set; }
+        public global::System.String portal { get; set; } = default!;
+        public global::System.Boolean grant { get; set; }
+        public global::System.String reason { get; set; } = default!;
+    }
+
     public sealed class AdminAccessGrantRevokeRequest
     {
         public global::System.Int32 organisationId { get; set; }

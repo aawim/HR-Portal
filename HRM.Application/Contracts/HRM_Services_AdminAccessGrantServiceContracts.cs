@@ -23,5 +23,7 @@ Task<ServiceResult> ActAsync(int organisationId, int id, int expectedState, stri
 ;
 Task<ServiceResult> RevokeAsync(int organisationId, int userId, string reason)
 ;
+Task<ServiceResult> SetPortalAccessAsync(int organisationId, int userId, string portal, bool grant, string reason)
+;
 }
 }

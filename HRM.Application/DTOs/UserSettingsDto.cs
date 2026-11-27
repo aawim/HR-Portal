@@ -6,6 +6,12 @@ public enum UserSettingsTab { Accounts, Permissions, Staff, Enrollment, Organisa
 public class ManagedUserDto
 {
     public int Id { get; set; }
+    public int IndividualId { get; set; }
+    public int? OrganisationId { get; set; }
+    public int? DepartmentId { get; set; }
+    public string? DepartmentName { get; set; }
+    public int? TeamId { get; set; }
+    public string? TeamName { get; set; }
     public string Username { get; set; } = "";
     public string Name { get; set; } = "";
     public string Email { get; set; } = "";
@@ -20,6 +26,11 @@ public class ManagedUserDto
 public class ManagedStaffDto
 {
     public int IndividualId { get; set; }
+    public int? OrganisationId { get; set; }
+    public int? DepartmentId { get; set; }
+    public string? DepartmentName { get; set; }
+    public int? TeamId { get; set; }
+    public string? TeamName { get; set; }
     public string Name { get; set; } = "";
     public string? EmployeeNumber { get; set; }
 }
@@ -27,13 +38,23 @@ public class ManagedEnrollmentDto
 {
     public int Id { get; set; }
     public int IndividualId { get; set; }
+    public int? OrganisationId { get; set; }
+    public int? DepartmentId { get; set; }
+    public string? DepartmentName { get; set; }
+    public int? TeamId { get; set; }
+    public string? TeamName { get; set; }
     public string Name { get; set; } = "";
     public string Number { get; set; } = "";
 }
 public class UserSettingsData
 {
+    public bool IsSuperAdmin { get; set; }
+    public int OrganisationId { get; set; }
     public string OrganisationName { get; set; } = "";
     public int UserOrganisationId { get; set; }
+    public List<PermissionSettingOption> Organisations { get; set; } = new();
+    public List<PermissionSettingOption> Departments { get; set; } = new();
+    public List<PermissionSettingOption> Teams { get; set; } = new();
     public List<ManagedUserDto> Users { get; set; } = new();
     public List<ManagedStaffDto> Staff { get; set; } = new();
     public List<ManagedStaffDto> People { get; set; } = new();

@@ -25,8 +25,12 @@ public static class StaffDataAccess
         var orgScope = org > 0 ? await OrganisationalAccessScopeResolver.ResolveCurrentUserAsync(db, access, org) : null;
         if (org <= 0 || orgScope is null || !orgScope.HasOrganisationTenantAccess ||
             !(actor.IsSuperAdministrator || actor.IsHRStaff || actor.IsHRHead || actor.IsHRManager || actor.IsOrganisationAdmin ||
-              actor.IsSupervisor || orgScope.HasExplicitScopeGrants ||
-              await access.HasPermissionAsync("Admin") || await access.HasPermissionAsync("Employee.View")) ||
+              actor.IsSupervisor || orgScope.HasExplicitScopeGrants || orgScope.HasFullOrganisationScope ||
+              await access.HasPermissionAsync("Admin") || await access.HasPermissionAsync("Employee.View") ||
+              await access.HasPermissionAsync("Staff.Details") || await access.HasPermissionAsync("Individual.View") ||
+              await access.HasPermissionAsync("Organisation.View") || await access.HasPermissionAsync("Attendance.View") ||
+              await access.HasPermissionAsync("Leave.View") || await access.HasPermissionAsync("Payroll.View") ||
+              await access.HasPermissionAsync("Team.View")) ||
             !await db.Jobs.AnyAsync(j => j.IndividualID == individualId && j.OrganisationID == org))
             throw new UnauthorizedAccessException("Staff information is unavailable in the current organisation.");
         await StaffAttributeAccess.RequireViewAsync(db, access, individualId, org);

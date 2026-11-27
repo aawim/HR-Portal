@@ -14,23 +14,35 @@ namespace HRM.Services;
 public class UserSettingsService(IDbContextFactory<HrmTeContext> factory, IUserAccessService access,
     IOperationLogService logs, IUserContextService contexts)
 :global::HRM.Services.Contracts.UserSettingsServiceContracts,global::HRM.Services.Contracts.UserSettingsServiceContracts.IOperations{
-    private async Task<(UserContextDto User, int Org)> RequireAsync(params string[] permissions)
+    private async Task<(UserContextDto User, int Org)> RequireAsync(int? requestedOrg, params string[] permissions)
     {
         var user = await access.RequireContextAsync();
         var allowed = user.IsSuperAdministrator || await access.HasPermissionAsync("Admin");
         foreach (var key in permissions) allowed |= await access.HasPermissionAsync(key);
         if (!allowed) throw new UnauthorizedAccessException("You do not have permission to manage these user settings.");
-        var org = user.Organisation?.OrganisationBusinessEntityId ?? 0;
+        var org = user.IsSuperAdministrator && requestedOrg is > 0
+            ? requestedOrg.Value
+            : user.Organisation?.OrganisationBusinessEntityId ?? 0;
         if (org == 0 && user.ActiveJob != null)
         {
             await using var db = await factory.CreateDbContextAsync();
             org = await db.Jobs.Where(x => x.JobId == user.ActiveJob.JobId).Select(x => x.OrganisationID).SingleAsync();
         }
-        if (org <= 0 || !await access.HasOrganisationAccessAsync(org)) throw new UnauthorizedAccessException("Select an organisation you can manage.");
+        if (org == 0 && user.IsSuperAdministrator)
+        {
+            await using var db = await factory.CreateDbContextAsync();
+            org = await db.UserOrganisations.OrderBy(x => x.Organisation.OrganisationName).Select(x => x.BusinessEntityID).FirstOrDefaultAsync();
+        }
+        if (org <= 0 || (!user.IsSuperAdministrator && !await access.HasOrganisationAccessAsync(org))) throw new UnauthorizedAccessException("Select an organisation you can manage.");
         return (user, org);
     }
 
-    public async Task<UserSettingsData> LoadAsync(UserSettingsTab tab)
+    private Task<(UserContextDto User, int Org)> RequireAsync(params string[] permissions)
+        => RequireAsync((int?)null, permissions);
+
+    public Task<UserSettingsData> LoadAsync(UserSettingsTab tab) => LoadForOrganisationAsync(tab, null);
+
+    public async Task<UserSettingsData> LoadForOrganisationAsync(UserSettingsTab tab, int? organisationId)
     {
         var required = tab switch
         {
@@ -38,22 +50,77 @@ public class UserSettingsService(IDbContextFactory<HrmTeContext> factory, IUserA
             UserSettingsTab.Staff => new[] { "Staff.Search", "Staff.Search.Admin", "Staff.Admin.Edit" },
             UserSettingsTab.Enrollment => new[] { "Staff.EnrolmentNumbers.Manage" }, _ => new[] { "UserOrganisations.View", "UserOrganisations.Admin.View" }
         };
-        var (_, org) = await RequireAsync(required);
+        var (actor, org) = await RequireAsync(organisationId, required);
         await using var db = await factory.CreateDbContextAsync();
+        var organisations = await db.UserOrganisations.AsNoTracking()
+            .Where(x => actor.IsSuperAdministrator || x.BusinessEntityID == org)
+            .OrderBy(x => x.Organisation.OrganisationName)
+            .Select(x => new PermissionSettingOption(x.BusinessEntityID, x.Organisation.OrganisationName))
+            .ToListAsync();
         var organisation = await db.UserOrganisations.AsNoTracking().Where(x => x.BusinessEntityID == org)
             .Select(x => new { x.UserOrganisationID, x.Organisation.OrganisationName }).SingleOrDefaultAsync()
             ?? throw new InvalidOperationException("This organisation has no user organisation configuration.");
-        var result = new UserSettingsData { UserOrganisationId = organisation.UserOrganisationID, OrganisationName = organisation.OrganisationName };
+        var result = new UserSettingsData
+        {
+            IsSuperAdmin = actor.IsSuperAdministrator,
+            OrganisationId = org,
+            UserOrganisationId = organisation.UserOrganisationID,
+            OrganisationName = organisation.OrganisationName,
+            Organisations = organisations
+        };
+
+        // Load organisation Departments (OrganisationStructures) and Teams for filtering
+        result.Departments = await db.OrganisationStructures.AsNoTracking()
+            .Where(s => s.OrganisationBusinessEntityID == org)
+            .OrderBy(s => s.Name)
+            .Select(s => new PermissionSettingOption(s.OrganisationStructureId, s.Name ?? $"Department #{s.OrganisationStructureId}"))
+            .ToListAsync();
+        var deptNameById = result.Departments.ToDictionary(d => d.Id, d => d.Name);
+
+        var teamRows = await db.Teams.AsNoTracking()
+            .Where(t => t.IsValid != false && t.OrganisationId == org)
+            .OrderBy(t => t.Name)
+            .Select(t => new { t.TeamId, Name = t.Name ?? $"Team #{t.TeamId}" })
+            .ToListAsync();
+        result.Teams = teamRows.Select(t => new PermissionSettingOption(t.TeamId, t.Name)).ToList();
+        var teamNameById = teamRows.ToDictionary(t => t.TeamId, t => t.Name);
+
+        var activeJobsByInd = await db.Jobs.AsNoTracking()
+            .Where(j => j.OrganisationID == org && j.TerminatedDate == null && j.JobStateId == 4)
+            .OrderByDescending(j => j.JoinedDate).ThenByDescending(j => j.JobId)
+            .Select(j => new { j.IndividualID, DeptId = (int?)j.OrganisationStructureId })
+            .ToListAsync();
+        var deptByInd = new Dictionary<int, int>();
+        foreach (var j in activeJobsByInd)
+            if (j.DeptId.HasValue && j.DeptId.Value > 0 && !deptByInd.ContainsKey(j.IndividualID))
+                deptByInd[j.IndividualID] = j.DeptId.Value;
+
+        var now = DateTime.UtcNow;
+        var activeTeamsByInd = await db.TeamStaffs.AsNoTracking()
+            .Where(ts => ts.IsValid && (ts.EndDate == null || ts.EndDate >= now) && ts.Team.OrganisationId == org)
+            .Select(ts => new { ts.Staff.IndividualId, ts.TeamId })
+            .ToListAsync();
+        var teamByInd = new Dictionary<int, int>();
+        foreach (var ts in activeTeamsByInd)
+            if (!teamByInd.ContainsKey(ts.IndividualId))
+                teamByInd[ts.IndividualId] = ts.TeamId;
+
         if (tab is UserSettingsTab.Accounts or UserSettingsTab.Permissions)
         {
             result.Users = await db.Users.AsNoTracking().AsSplitQuery().Where(x => x.UserOrganisationId == organisation.UserOrganisationID)
                 .OrderBy(x => x.FullName).Select(x => new ManagedUserDto
                 {
-                    Id = x.UserId, Username = x.Username, Name = x.FullName ?? x.Username, Email = x.Email, Mobile = x.Mobile,
+                    Id = x.UserId, IndividualId = x.BusinessEntityID, OrganisationId = org,
+                    Username = x.Username, Name = x.FullName ?? x.Username, Email = x.Email, Mobile = x.Mobile,
                     Active = x.IsActive, Approved = x.IsApproved == true, StateId = x.LocalUserStateId, SsoStatus = x.SsouserState.StateName,
                     DirectPermissionIds = x.UserRoles.Where(r => r.UserOrganisationId == organisation.UserOrganisationID && r.IsActive).Select(r => r.RoleId).ToList(),
                     RoleIds = x.UserAssignedUserGroups.Where(g => g.UserGroup.UserOrganisationId == organisation.UserOrganisationID).Select(g => g.UserGroupId).ToList()
                 }).ToListAsync();
+            foreach (var u in result.Users)
+            {
+                if (deptByInd.TryGetValue(u.IndividualId, out var dId)) { u.DepartmentId = dId; u.DepartmentName = deptNameById.GetValueOrDefault(dId); }
+                if (teamByInd.TryGetValue(u.IndividualId, out var tId)) { u.TeamId = tId; u.TeamName = teamNameById.GetValueOrDefault(tId); }
+            }
             result.AccountStates = await db.LocalUserStates.AsNoTracking().Select(x => new PermissionSettingOption(x.LocalUserStateId, x.StateName)).ToListAsync();
         }
         if (tab is UserSettingsTab.Permissions or UserSettingsTab.Organisation)
@@ -71,13 +138,23 @@ public class UserSettingsService(IDbContextFactory<HrmTeContext> factory, IUserA
             result.People = await db.Individuals.AsNoTracking().Where(x => db.Jobs.Any(j => j.IndividualID == x.BusinessEntityId && j.OrganisationID == org) ||
                 db.Users.Any(u => u.BusinessEntityID == x.BusinessEntityId && u.UserOrganisationId == organisation.UserOrganisationID))
                 .OrderBy(x => x.FirstNameEnglish).Select(x => new ManagedStaffDto
-                { IndividualId = x.BusinessEntityId, Name = x.FirstNameEnglish + " " + (x.MiddleNameEnglish ?? "") + " " + (x.LastNameEnglish ?? "") }).ToListAsync();
+                { IndividualId = x.BusinessEntityId, OrganisationId = org, Name = x.FirstNameEnglish + " " + (x.MiddleNameEnglish ?? "") + " " + (x.LastNameEnglish ?? "") }).ToListAsync();
             var ids = result.People.Select(x => x.IndividualId).ToArray();
             result.Staff = await db.Staffs.AsNoTracking().Where(x => ids.Contains(x.IndividualId)).OrderBy(x => x.Individual.FirstNameEnglish)
-                .Select(x => new ManagedStaffDto { IndividualId = x.IndividualId, Name = x.Individual.FirstNameEnglish + " " + (x.Individual.LastNameEnglish ?? ""), EmployeeNumber = x.EmployeeNumber }).ToListAsync();
+                .Select(x => new ManagedStaffDto { IndividualId = x.IndividualId, OrganisationId = org, Name = x.Individual.FirstNameEnglish + " " + (x.Individual.LastNameEnglish ?? ""), EmployeeNumber = x.EmployeeNumber }).ToListAsync();
+            foreach (var s in result.Staff)
+            {
+                if (deptByInd.TryGetValue(s.IndividualId, out var dId)) { s.DepartmentId = dId; s.DepartmentName = deptNameById.GetValueOrDefault(dId); }
+                if (teamByInd.TryGetValue(s.IndividualId, out var tId)) { s.TeamId = tId; s.TeamName = teamNameById.GetValueOrDefault(tId); }
+            }
             result.Enrollments = await db.StaffEnrollmentNumbers.AsNoTracking().Where(x => x.OrganisationId == org)
                 .OrderBy(x => x.Individual.Individual.FirstNameEnglish).Select(x => new ManagedEnrollmentDto
-                { Id = x.StaffEnrollmentNumberId, IndividualId = x.IndividualId, Name = x.Individual.Individual.FirstNameEnglish + " " + (x.Individual.Individual.LastNameEnglish ?? ""), Number = x.EnrollmentNumber.Trim() }).ToListAsync();
+                { Id = x.StaffEnrollmentNumberId, IndividualId = x.IndividualId, OrganisationId = org, Name = x.Individual.Individual.FirstNameEnglish + " " + (x.Individual.Individual.LastNameEnglish ?? ""), Number = x.EnrollmentNumber.Trim() }).ToListAsync();
+            foreach (var e in result.Enrollments)
+            {
+                if (deptByInd.TryGetValue(e.IndividualId, out var dId)) { e.DepartmentId = dId; e.DepartmentName = deptNameById.GetValueOrDefault(dId); }
+                if (teamByInd.TryGetValue(e.IndividualId, out var tId)) { e.TeamId = tId; e.TeamName = teamNameById.GetValueOrDefault(tId); }
+            }
         }
         return result;
     }
@@ -89,7 +166,7 @@ public class UserSettingsService(IDbContextFactory<HrmTeContext> factory, IUserA
 
     public async Task<ServiceResult> SaveAccountAsync(ManagedUserDto model)
     {
-        var (actor, org) = await RequireAsync("Users.Edit");
+        var (actor, org) = await RequireAsync(model.OrganisationId, "Users.Edit");
         if (string.IsNullOrWhiteSpace(model.Name) || model.Name.Length > 255 || model.Email.Length > 128 ||
             !new EmailAddressAttribute().IsValid(model.Email) || model.Mobile?.Length > 20)
             return ServiceResult.Fail("Enter a name, valid email, and mobile number of up to 20 characters.");
@@ -143,7 +220,7 @@ public class UserSettingsService(IDbContextFactory<HrmTeContext> factory, IUserA
 
     public async Task<ServiceResult> SaveUserAccessAsync(ManagedUserDto model)
     {
-        var (actor, org) = await RequireAsync("Users.Roles.Edit");
+        var (actor, org) = await RequireAsync(model.OrganisationId, "Users.Roles.Edit");
         await using var db = await factory.CreateDbContextAsync();
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
         var entity = await ScopedUserAsync(db, model.Id, org); var orgId = entity.UserOrganisationId!.Value;
@@ -167,7 +244,7 @@ public class UserSettingsService(IDbContextFactory<HrmTeContext> factory, IUserA
 
     public async Task<ServiceResult> SaveStaffAsync(ManagedStaffDto model)
     {
-        var (_, org) = await RequireAsync("Staff.Admin.Edit", "Staff.Add.Admin", "Staff.Add");
+        var (_, org) = await RequireAsync(model.OrganisationId, "Staff.Admin.Edit", "Staff.Add.Admin", "Staff.Add");
         if (model.EmployeeNumber?.Length > 50) return ServiceResult.Fail("Employee number must be 50 characters or fewer.");
         await using var db = await factory.CreateDbContextAsync();
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
@@ -187,7 +264,7 @@ public class UserSettingsService(IDbContextFactory<HrmTeContext> factory, IUserA
 
     public async Task<ServiceResult> SaveEnrollmentAsync(ManagedEnrollmentDto model)
     {
-        var (_, org) = await RequireAsync("Staff.EnrolmentNumbers.Manage");
+        var (_, org) = await RequireAsync(model.OrganisationId, "Staff.EnrolmentNumbers.Manage");
         if (string.IsNullOrWhiteSpace(model.Number) || model.Number.Trim().Length > 10) return ServiceResult.Fail("Enter an enrollment number of up to 10 characters.");
         await using var db = await factory.CreateDbContextAsync();
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);

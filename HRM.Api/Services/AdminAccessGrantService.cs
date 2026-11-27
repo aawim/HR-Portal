@@ -84,6 +84,10 @@ public sealed class AdminAccessGrantService(IDbContextFactory<HrmTeContext> fact
             data.Accounts = await db.Users.Where(u => u.UserOrganisationId == userOrg).OrderBy(u => u.FullName)
                 .Select(u => new AdminAccessAccount { Id = u.UserId, IndividualId = u.BusinessEntityID, Name = u.FullName ?? u.Username,
                     Enabled = u.AdminPortalAccessEnabled && u.AdminPortalAccessOrganisationId == u.UserOrganisationId,
+                    HasDeveloperAccess = u.UserAssignedUserGroups.Any(g => (g.UserGroup.IsGlobal || g.UserGroup.UserOrganisationId == userOrg) && g.UserGroup.GroupName.ToUpper() == "DEVELOPER")
+                        || u.UserRoles.Any(r => r.IsActive && r.Role.RoleKey.ToUpper() == "DEVELOPER"),
+                    HasSuperAdminAccess = u.AdminPortalAccessEnabled && u.AdminPortalAccessOrganisationId == u.UserOrganisationId
+                        && u.UserRoles.Any(r => r.IsActive && r.UserOrganisationId == u.UserOrganisationId && r.Role.RoleKey == "Super.Admin.Manage"),
                     GroupIds = u.UserAssignedUserGroups.Where(g => g.UserGroup.UserOrganisationId == userOrg).Select(g => g.UserGroupId).ToList(),
                     PermissionIds = u.UserRoles.Where(r => r.IsActive && r.UserOrganisationId == userOrg).Select(r => r.RoleId).ToList() }).ToListAsync();
         var requests = await db.AdminAccessGrantRequests.Include(r => r.Request).ThenInclude(r => r.RequestState)
@@ -326,5 +330,131 @@ public sealed class AdminAccessGrantService(IDbContextFactory<HrmTeContext> fact
             Url = "/online/admin-access", CreatedAtUtc = DateTime.UtcNow });
         await db.SaveChangesAsync(); await tx.CommitAsync(); await contexts.InvalidateAsync(userId);
         return ServiceResult.Ok("Admin access revoked.");
+    }
+
+    public async Task<ServiceResult> SetPortalAccessAsync(int organisationId, int userId, string portal, bool grant, string reason)
+    {
+        var (actor, org) = await Scope(organisationId);
+        var normalizedPortal = (portal ?? string.Empty).Trim();
+        if (!normalizedPortal.Equals("Developer", StringComparison.OrdinalIgnoreCase) &&
+            !normalizedPortal.Equals("SuperAdmin", StringComparison.OrdinalIgnoreCase))
+            return ServiceResult.Fail("Select a single valid portal (Developer or SuperAdmin). Admin portal access uses the approval workflow.");
+
+        var isSuperPortal = normalizedPortal.Equals("SuperAdmin", StringComparison.OrdinalIgnoreCase);
+        if (isSuperPortal && !actor.IsSuperAdministrator)
+            throw new UnauthorizedAccessException("Only a Super Administrator can grant or revoke SuperAdmin portal access.");
+        if (!isSuperPortal && !await Manager(actor))
+            throw new UnauthorizedAccessException("Only an administrator can manage portal access.");
+        if (actor.UserId == userId && !grant)
+            return ServiceResult.Fail("You cannot revoke your own portal access.");
+        if (string.IsNullOrWhiteSpace(reason) || reason.Length > 1000)
+            return ServiceResult.Fail("Enter a reason of up to 1,000 characters.");
+
+        await using var db = await factory.CreateDbContextAsync();
+        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+        var target = await Target(db, userId, org);
+        if (grant && (!target.IsActive || target.LocalUserStateId != 1))
+            return ServiceResult.Fail("The target account must be active.");
+
+        var roleKey = isSuperPortal ? "Super.Admin.Manage" : "Developer";
+        var role = await db.Roles.FirstOrDefaultAsync(r => r.RoleKey.ToUpper() == roleKey.ToUpper());
+        var devGroup = !isSuperPortal
+            ? await db.UserGroups.FirstOrDefaultAsync(g => (g.IsGlobal || g.UserOrganisationId == target.UserOrganisationId) && g.GroupName.ToUpper() == "DEVELOPER")
+            : null;
+
+        if (isSuperPortal && role == null)
+            return ServiceResult.Fail("Super.Admin.Manage role is not configured in the database.");
+        if (!isSuperPortal && role == null && devGroup == null)
+            return ServiceResult.Fail("Developer role or user group is not configured in the database.");
+
+        var audit = await logs.CreateAsync(db, SharedConfig.OperationLogActionTypes.USER_ROLE_UPDATE,
+            $"{(grant ? "Granted" : "Revoked")} {normalizedPortal} portal access for User {userId}: {reason.Trim()}");
+
+        if (isSuperPortal && role != null)
+        {
+            var existingRole = target.UserRoles.FirstOrDefault(r => r.RoleId == role.RoleID && r.UserOrganisationId == target.UserOrganisationId);
+            if (grant)
+            {
+                if (existingRole == null)
+                {
+                    target.UserRoles.Add(new()
+                    {
+                        UserId = target.UserId,
+                        RoleId = role.RoleID,
+                        UserOrganisationId = target.UserOrganisationId!.Value,
+                        IsActive = true,
+                        OperationLogId = audit.OperationLogId
+                    });
+                }
+                else
+                {
+                    existingRole.IsActive = true;
+                    existingRole.OperationLogId = audit.OperationLogId;
+                }
+                target.AdminPortalAccessEnabled = true;
+                target.AdminPortalAccessOrganisationId = target.UserOrganisationId;
+            }
+            else if (existingRole != null)
+            {
+                existingRole.IsActive = false;
+                existingRole.OperationLogId = audit.OperationLogId;
+            }
+        }
+        else
+        {
+            if (devGroup != null)
+            {
+                var assigned = target.UserAssignedUserGroups.FirstOrDefault(g => g.UserGroupId == devGroup.UserGroupId);
+                if (grant && assigned == null)
+                {
+                    db.UserAssignedUserGroups.Add(new UserAssignedUserGroup
+                    {
+                        UserId = target.UserId,
+                        UserGroupId = devGroup.UserGroupId,
+                        OperationLogId = audit.OperationLogId
+                    });
+                }
+                else if (!grant && assigned != null)
+                {
+                    db.UserAssignedUserGroups.Remove(assigned);
+                }
+            }
+            if (role != null)
+            {
+                var existingRole = target.UserRoles.FirstOrDefault(r => r.RoleId == role.RoleID && r.UserOrganisationId == target.UserOrganisationId);
+                if (grant)
+                {
+                    if (existingRole == null)
+                    {
+                        target.UserRoles.Add(new()
+                        {
+                            UserId = target.UserId,
+                            RoleId = role.RoleID,
+                            UserOrganisationId = target.UserOrganisationId!.Value,
+                            IsActive = true,
+                            OperationLogId = audit.OperationLogId
+                        });
+                    }
+                    else
+                    {
+                        existingRole.IsActive = true;
+                        existingRole.OperationLogId = audit.OperationLogId;
+                    }
+                }
+                else if (existingRole != null)
+                {
+                    existingRole.IsActive = false;
+                    existingRole.OperationLogId = audit.OperationLogId;
+                }
+            }
+        }
+
+        target.OperationLogId = audit.OperationLogId;
+        target.LastUpdatedByUserId = actor.UserId;
+        target.LastUpdatedDate = DateTime.Now;
+        await db.SaveChangesAsync();
+        await tx.CommitAsync();
+        await contexts.InvalidateAsync(userId);
+        return ServiceResult.Ok($"{normalizedPortal} portal access {(grant ? "granted" : "revoked")}.");
     }
 }

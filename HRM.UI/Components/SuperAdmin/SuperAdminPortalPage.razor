@@ -79,10 +79,11 @@
                         {
                             var isActive = activeTab == tab.Key;
                             <button type="button"
-                                    class="rounded-t-xl px-3.5 py-2 font-semibold text-xs transition-all border-t border-l border-r @(isActive ? "text-slate-900 shadow-xs" : "bg-white text-slate-800 hover:bg-sky-50 dark:bg-slate-800/90 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-700 border-slate-200 dark:border-slate-700")"
+                                    class="inline-flex items-center gap-1.5 rounded-t-xl px-3.5 py-2 font-semibold text-xs transition-all border-t border-l border-r @(isActive ? "text-slate-900 shadow-xs" : "bg-white text-slate-800 hover:bg-sky-50 dark:bg-slate-800/90 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-700 border-slate-200 dark:border-slate-700")"
                                     style="@(isActive ? "background-color: #ADD8E6; border-color: #7cc0d8; color: #0f172a;" : null)"
                                     @onclick="() => SetTab(tab.Key)">
-                                @tab.Label
+                                <AppIcon Name="@tab.Icon" Class="text-xs" />
+                                <span>@tab.Label</span>
                             </button>
                         }
                     </nav>
@@ -224,27 +225,27 @@
 @code {
     [Parameter] public string? ActiveTab { get; set; }
 
-    private sealed record TabItem(string Key, string Label);
+    private sealed record TabItem(string Key, string Label, string Icon);
     private sealed record OverviewCard(string TabKey, string Icon, string Title, string Description);
 
     private static readonly TabItem[] Tabs =
     [
-        new("overview", "Overview"),
-        new("organisations", "Organisation Onboarding"),
-        new("permissions", "Organisation Permissions"),
-        new("portal-access", "Admin Portal Access"),
-        new("staff", "Cross-Org Staff & Users"),
-        new("roles", "Roles & Access Control"),
-        new("resources", "Shared Resources"),
-        new("job-types", "Job & Work Types"),
-        new("positions", "Pay Frameworks")
+        new("overview", "Overview", "home"),
+        new("organisations", "Organisation Onboarding", "corporate_fare"),
+        new("permissions", "Organisation Permissions", "bi-key"),
+        new("portal-access", "Portal Access", "bi-shield-lock"),
+        new("staff", "Cross-Org Staff & Users", "users"),
+        new("roles", "Roles & Access Control", "bi-person-lock"),
+        new("resources", "Shared Resources", "bi-collection"),
+        new("job-types", "Job & Work Types", "bi-briefcase"),
+        new("positions", "Pay Frameworks", "bi-diagram-3")
     ];
 
     private static readonly OverviewCard[] OverviewCards =
     [
         new("organisations", "corporate_fare", "Organisation Onboarding", "Create and onboard organisations, configure hierarchy, locations, contacts, teams, supervisors, and organisation staff."),
         new("permissions", "bi-key", "Organisation Permissions", "Enable or restrict module and feature permissions for each organisation across the platform."),
-        new("portal-access", "bi-shield-lock", "Admin Portal Access", "Explicitly grant or revoke Admin portal admission for users across organisations."),
+        new("portal-access", "bi-shield-lock", "Portal Access", "Grant or revoke Admin, Developer, and SuperAdmin portal access one portal at a time for each user."),
         new("staff", "users", "Cross-Org Staff & Users", "Manage user accounts, permissions, enrollment numbers, and cross-organisation staff records."),
         new("roles", "bi-person-lock", "Roles & Access Control", "Configure role groups, permission sets, and staff access scopes."),
         new("resources", "bi-collection", "Shared Resources", "Maintain platform-wide reference catalogues including structure types, organisation types, locations, and calendars."),
