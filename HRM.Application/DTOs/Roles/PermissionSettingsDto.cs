@@ -95,6 +95,7 @@ public sealed record StaffAccessOption(int Id, string Name);
 public sealed class StaffAccessPolicyDto
 {
     public int Id { get; set; }
+    public int? OrganisationId { get; set; }
     public int PositionClassificationId { get; set; }
     public string ClassificationName { get; set; } = "";
     public bool IsRestricted { get; set; }
@@ -104,6 +105,7 @@ public sealed class StaffAccessPolicyDto
 public sealed class StaffAccessScopeDto
 {
     public int Id { get; set; }
+    public int? OrganisationId { get; set; }
     public string SubjectType { get; set; } = "User";
     public int SubjectId { get; set; }
     public string SubjectName { get; set; } = "";
@@ -113,6 +115,7 @@ public sealed class StaffAccessScopeDto
 public sealed class StaffAccessGrantDto
 {
     public int Id { get; set; }
+    public int? OrganisationId { get; set; }
     public string SubjectType { get; set; } = "User";
     public int SubjectId { get; set; }
     public string SubjectName { get; set; } = "";
@@ -126,8 +129,10 @@ public sealed class StaffAccessGrantDto
 }
 public sealed class StaffAccessSettingsData
 {
+    public bool IsSuperAdmin { get; set; }
     public int OrganisationId { get; set; }
     public string OrganisationName { get; set; } = "";
+    public List<StaffAccessOption> Organisations { get; set; } = new();
     public List<StaffAccessOption> Users { get; set; } = new();
     public List<StaffAccessOption> Groups { get; set; } = new();
     public List<StaffAccessOption> Staff { get; set; } = new();
@@ -144,6 +149,7 @@ public sealed class StaffAccessSettingsData
 public sealed class OrganisationalAccessScopeDto
 {
     public int Id { get; set; }
+    public int? OrganisationId { get; set; }
     public string SubjectType { get; set; } = "User";
     public int SubjectId { get; set; }
     public string SubjectName { get; set; } = "";

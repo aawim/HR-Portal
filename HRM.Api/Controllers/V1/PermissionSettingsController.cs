@@ -34,6 +34,28 @@ public sealed class PermissionSettingsController(global::HRM.Services.Contracts.
         public global::HRM.DTOs.Roles.AccessRoleDto model { get; set; } = default!;
     }
 
+    [HttpGet("load-staff-access-for-organisation")]
+    public async Task<ActionResult<global::HRM.DTOs.Roles.StaffAccessSettingsData>> LoadStaffAccessForOrganisation([FromQuery] global::System.Int32? organisationId = null) => Ok(await service.LoadStaffAccessForOrganisationAsync(organisationId));
+
+    [HttpPost("revoke-organisational-access-scope-for-organisation")]
+    public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> RevokeOrganisationalAccessScopeForOrganisation([FromBody] PermissionSettingsRevokeOrganisationalAccessScopeForOrgRequest request) => Ok(await service.RevokeOrganisationalAccessScopeForOrganisationAsync(request.scopeId, request.reason, request.organisationId));
+
+    public sealed class PermissionSettingsRevokeOrganisationalAccessScopeForOrgRequest
+    {
+        public global::System.Int32 scopeId { get; set; }
+        public global::System.String reason { get; set; } = default!;
+        public global::System.Int32? organisationId { get; set; }
+    }
+
+    [HttpPost("simulate-effective-access-for-organisation")]
+    public async Task<ActionResult<global::HRM.DTOs.Roles.EffectiveAccessSimulationDto>> SimulateEffectiveAccessForOrganisation([FromBody] PermissionSettingsSimulateEffectiveAccessForOrgRequest request) => Ok(await service.SimulateEffectiveAccessForOrganisationAsync(request.userId, request.organisationId));
+
+    public sealed class PermissionSettingsSimulateEffectiveAccessForOrgRequest
+    {
+        public global::System.Int32 userId { get; set; }
+        public global::System.Int32? organisationId { get; set; }
+    }
+
     [HttpGet("load-staff-access")]
     public async Task<ActionResult<global::HRM.DTOs.Roles.StaffAccessSettingsData>> LoadStaffAccess()
     {

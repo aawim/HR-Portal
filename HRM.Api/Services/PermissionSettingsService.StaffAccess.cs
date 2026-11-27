@@ -10,7 +10,7 @@ namespace HRM.Services;
 
 public partial class PermissionSettingsService
 {
-    private async Task<(UserContextDto Actor, int Org, int UserOrg)> RequireStaffAccessAdminAsync(bool allowSimulate = false)
+    private async Task<(UserContextDto Actor, int Org, int UserOrg)> RequireStaffAccessAdminAsync(int? requestedOrganisationId = null, bool allowSimulate = false)
     {
         var user = await access.RequireContextAsync();
         var allowed = user.IsSuperAdministrator ||
@@ -21,22 +21,35 @@ public partial class PermissionSettingsService
         if (!allowed)
             throw new UnauthorizedAccessException("You do not have permission to manage or simulate these access settings.");
 
-        var org = await OrganisationAsync(user);
+        var org = user.IsSuperAdministrator && requestedOrganisationId is > 0
+            ? requestedOrganisationId.Value
+            : await OrganisationAsync(user);
         await using var db = await factory.CreateDbContextAsync();
         await HRM.Helpers.OrganisationalAccessScopeResolver.EnsureSchemaAsync(db);
-        var userOrg = await db.UserOrganisations.Where(x => x.BusinessEntityID == org).Select(x => x.UserOrganisationID).SingleAsync();
-        return (user, org, userOrg);
+        var userOrg = await db.UserOrganisations.Where(x => x.BusinessEntityID == org).Select(x => (int?)x.UserOrganisationID).FirstOrDefaultAsync();
+        if (!userOrg.HasValue)
+            throw new InvalidOperationException("This organisation has no user organisation configuration.");
+        return (user, org, userOrg.Value);
     }
 
-    public async Task<StaffAccessSettingsData> LoadStaffAccessAsync()
+    public Task<StaffAccessSettingsData> LoadStaffAccessAsync() => LoadStaffAccessForOrganisationAsync(null);
+
+    public async Task<StaffAccessSettingsData> LoadStaffAccessForOrganisationAsync(int? organisationId)
     {
-        var (_, org, userOrg) = await RequireStaffAccessAdminAsync(allowSimulate: true);
+        var (actor, org, userOrg) = await RequireStaffAccessAdminAsync(organisationId, allowSimulate: true);
         await using var db = await factory.CreateDbContextAsync();
+        var inactiveEntityStateIds = await HRM.Helpers.ActiveOrganisationFilter.InactiveEntityStateIdsAsync(db);
+        var organisations = await db.UserOrganisations.AsNoTracking()
+            .Where(uo => (actor.IsSuperAdministrator || uo.BusinessEntityID == org) &&
+                         !db.BusinessEntities.Any(b => b.BusinessEntityID == uo.BusinessEntityID && b.BusinessEntityStateId.HasValue && inactiveEntityStateIds.Contains(b.BusinessEntityStateId.Value)))
+            .OrderBy(uo => uo.Organisation.OrganisationName)
+            .Select(uo => new StaffAccessOption(uo.BusinessEntityID, uo.Organisation.OrganisationName))
+            .ToListAsync();
         var orgName = await db.Organisations.AsNoTracking()
             .Where(o => o.BusinessEntityID == org)
             .Select(o => o.OrganisationName)
             .FirstOrDefaultAsync() ?? "Organisation";
-        var data = new StaffAccessSettingsData { OrganisationId = org, OrganisationName = orgName };
+        var data = new StaffAccessSettingsData { IsSuperAdmin = actor.IsSuperAdministrator, OrganisationId = org, OrganisationName = orgName, Organisations = organisations };
         data.Users = await db.Users.AsNoTracking().Where(x => x.UserOrganisationId == userOrg && x.IsActive)
             .OrderBy(x => x.FullName).Select(x => new StaffAccessOption(x.UserId, x.FullName ?? x.Username)).ToListAsync();
         data.Groups = await db.UserGroups.AsNoTracking().Where(x => x.UserOrganisationId == userOrg)
@@ -161,7 +174,7 @@ public partial class PermissionSettingsService
 
     public async Task<ServiceResult> SaveStaffAccessPolicyAsync(StaffAccessPolicyDto model)
     {
-        var (actor, org, _) = await RequireStaffAccessAdminAsync();
+        var (actor, org, _) = await RequireStaffAccessAdminAsync(model.OrganisationId);
         if (model.Description.Length > 1000) return ServiceResult.Fail("Description must be 1,000 characters or fewer.");
         await using var db = await factory.CreateDbContextAsync();
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
@@ -181,7 +194,7 @@ public partial class PermissionSettingsService
 
     public async Task<ServiceResult> SaveStaffAccessScopeAsync(StaffAccessScopeDto model)
     {
-        var (_, org, userOrg) = await RequireStaffAccessAdminAsync();
+        var (_, org, userOrg) = await RequireStaffAccessAdminAsync(model.OrganisationId);
         await using var db = await factory.CreateDbContextAsync();
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
         var user = model.SubjectType == "User" ? model.SubjectId : (int?)null;
@@ -202,7 +215,7 @@ public partial class PermissionSettingsService
 
     public async Task<ServiceResult> SaveStaffAccessGrantAsync(StaffAccessGrantDto model)
     {
-        var (_, org, userOrg) = await RequireStaffAccessAdminAsync();
+        var (_, org, userOrg) = await RequireStaffAccessAdminAsync(model.OrganisationId);
         if (string.IsNullOrWhiteSpace(model.Reason) || model.Reason.Length > 1000) return ServiceResult.Fail("Enter a reason of up to 1,000 characters.");
         await using var db = await factory.CreateDbContextAsync();
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
@@ -230,7 +243,7 @@ public partial class PermissionSettingsService
 
     public async Task<ServiceResult> SaveOrganisationalAccessScopeAsync(OrganisationalAccessScopeDto model)
     {
-        var (actor, org, userOrg) = await RequireStaffAccessAdminAsync();
+        var (actor, org, userOrg) = await RequireStaffAccessAdminAsync(model.OrganisationId);
         if (!AccessScopeTypes.IsValid(model.ScopeType))
             return ServiceResult.Fail("Select a valid organisational access scope type.");
         if (string.IsNullOrWhiteSpace(model.Reason) || model.Reason.Trim().Length > 1000)
@@ -355,9 +368,12 @@ public partial class PermissionSettingsService
         return ServiceResult.Ok("Organisational access scope saved.");
     }
 
-    public async Task<ServiceResult> RevokeOrganisationalAccessScopeAsync(int scopeId, string reason)
+    public Task<ServiceResult> RevokeOrganisationalAccessScopeAsync(int scopeId, string reason)
+        => RevokeOrganisationalAccessScopeForOrganisationAsync(scopeId, reason, null);
+
+    public async Task<ServiceResult> RevokeOrganisationalAccessScopeForOrganisationAsync(int scopeId, string reason, int? organisationId)
     {
-        var (actor, org, _) = await RequireStaffAccessAdminAsync();
+        var (actor, org, _) = await RequireStaffAccessAdminAsync(organisationId);
         var cleanReason = string.IsNullOrWhiteSpace(reason) ? "Revoked by administrator." : reason.Trim();
         if (cleanReason.Length > 1000)
             return ServiceResult.Fail("Revocation reason must be 1,000 characters or fewer.");
@@ -409,9 +425,12 @@ public partial class PermissionSettingsService
         return ServiceResult.Ok("Organisational access scope revoked.");
     }
 
-    public async Task<EffectiveAccessSimulationDto> SimulateEffectiveAccessAsync(int userId)
+    public Task<EffectiveAccessSimulationDto> SimulateEffectiveAccessAsync(int userId)
+        => SimulateEffectiveAccessForOrganisationAsync(userId, null);
+
+    public async Task<EffectiveAccessSimulationDto> SimulateEffectiveAccessForOrganisationAsync(int userId, int? organisationId)
     {
-        var (_, org, userOrg) = await RequireStaffAccessAdminAsync(allowSimulate: true);
+        var (_, org, userOrg) = await RequireStaffAccessAdminAsync(organisationId, allowSimulate: true);
         await using var db = await factory.CreateDbContextAsync();
 
         var targetUser = await db.Users.AsNoTracking()

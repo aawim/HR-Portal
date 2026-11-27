@@ -18,6 +18,8 @@ Task<ServiceResult> SaveRoleAsync(AccessRoleDto model)
 ;
 Task<StaffAccessSettingsData> LoadStaffAccessAsync()
 ;
+Task<StaffAccessSettingsData> LoadStaffAccessForOrganisationAsync(int? organisationId)
+;
 Task<ServiceResult> SaveStaffAccessPolicyAsync(StaffAccessPolicyDto model)
 ;
 Task<ServiceResult> SaveStaffAccessScopeAsync(StaffAccessScopeDto model)
@@ -28,7 +30,11 @@ Task<ServiceResult> SaveOrganisationalAccessScopeAsync(OrganisationalAccessScope
 ;
 Task<ServiceResult> RevokeOrganisationalAccessScopeAsync(int scopeId, string reason)
 ;
+Task<ServiceResult> RevokeOrganisationalAccessScopeForOrganisationAsync(int scopeId, string reason, int? organisationId)
+;
 Task<EffectiveAccessSimulationDto> SimulateEffectiveAccessAsync(int userId)
+;
+Task<EffectiveAccessSimulationDto> SimulateEffectiveAccessForOrganisationAsync(int userId, int? organisationId)
 ;
 }
 }

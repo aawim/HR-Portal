@@ -469,6 +469,12 @@
         {
             return;
         }
+        catch (UnauthorizedAccessException ex)
+        {
+            if (isDisposed || refreshStop.IsCancellationRequested) return;
+            Logger.LogWarning("Leave request history unavailable: {Message}", ex.Message);
+            loadError = ex.Message;
+        }
         catch (Exception ex)
         {
             if (isDisposed || refreshStop.IsCancellationRequested) return;
