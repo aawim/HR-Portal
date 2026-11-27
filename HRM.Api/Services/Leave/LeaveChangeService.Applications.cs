@@ -11,6 +11,9 @@ public partial class LeaveChangeService
     public async Task<List<PendingLeaveRequestDto>> GetPendingLeaveRequestsAsync()
     {
         var user = await access.RequireContextAsync();
+        var currentOrg = await access.GetCurrentOrganisationIdAsync();
+        var isHrOrAdmin = user.IsSuperAdministrator || user.IsHRStaff || user.IsHRHead || user.IsHRManager || user.IsOrganisationAdmin ||
+                          await access.HasPermissionAsync("Admin") || await access.HasPermissionAsync("Leave.View");
         await using var db = await factory.CreateDbContextAsync();
         var pending = db.WfRequestApprovals.AsNoTracking()
             .Where(x => x.ApproverUserId == user.UserId && x.Decision == "Pending" &&
@@ -26,6 +29,8 @@ public partial class LeaveChangeService
             .Include(x => x.Leave).ThenInclude(x => x.LeaveReason).ThenInclude(x => x!.LeaveTypeReasonType)
             .Include(x => x.Leave).ThenInclude(x => x.LeaveSpendingLocation)
             .Where(x => (pending.Contains(x.RequestId) ||
+                (isHrOrAdmin && currentOrg > 0 && x.Request.OrganisationBusinessEntityID == currentOrg &&
+                 x.Request.RequestState.IsProcessingState && x.Request.RequestStateId != SharedConfig.RequestStates.INCOMPLETE) ||
                 (user.IndividualId > 0 && x.Leave.Job.IndividualID == user.IndividualId &&
                  x.Request.RequestState.IsProcessingState)) &&
                 !x.Request.RequestState.IsFinalState &&
@@ -33,7 +38,7 @@ public partial class LeaveChangeService
                 x.Leave.LeaveStateId != SharedConfig.LeaveStates.REJECTED &&
                 x.Leave.LeaveStateId != SharedConfig.LeaveStates.CANCELLED &&
                 x.Request.RequestStateId != SharedConfig.RequestStates.REJECTED &&
-                x.Request.RequestStateId != SharedConfig.RequestStates.CANCELLED).OrderByDescending(x => x.RequestId).ToListAsync();
+                x.Request.RequestStateId != SharedConfig.RequestStates.CANCELLED).OrderByDescending(x => x.RequestId).Take(200).ToListAsync();
         var result = new List<PendingLeaveRequestDto>();
         foreach (var link in links)
         {

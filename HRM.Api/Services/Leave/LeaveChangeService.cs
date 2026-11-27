@@ -71,6 +71,9 @@ public partial class LeaveChangeService(
     public async Task<List<LeaveChangeRequestDto>> GetAssignedRequestsAsync()
     {
         var user = await access.RequireContextAsync();
+        var currentOrg = await access.GetCurrentOrganisationIdAsync();
+        var isHrOrAdmin = user.IsSuperAdministrator || user.IsHRStaff || user.IsHRHead || user.IsHRManager || user.IsOrganisationAdmin ||
+                          await access.HasPermissionAsync("Admin") || await access.HasPermissionAsync("Leave.View");
         await using var db = await factory.CreateDbContextAsync();
         var pending = db.WfRequestApprovals.AsNoTracking()
             .Where(x => x.ApproverUserId == user.UserId && x.Decision == "Pending" &&
@@ -80,7 +83,10 @@ public partial class LeaveChangeService(
                 x.RequestStageInstance.WorkflowRequestInstance.CurrentRequestStageInstanceId == x.RequestStageInstanceId)
             .Select(x => x.RequestStageInstance.WorkflowRequestInstance.RequestId);
         var result = await Project(db.LeaveChangeRequests.AsNoTracking()
-            .Where(x => pending.Contains(x.RequestId) && x.Request.RequestState.IsProcessingState && !x.Request.RequestState.IsFinalState)).ToListAsync();
+            .Where(x => (pending.Contains(x.RequestId) ||
+                (isHrOrAdmin && currentOrg > 0 && x.Request.OrganisationBusinessEntityID == currentOrg &&
+                 x.Request.RequestStateId != SharedConfig.RequestStates.INCOMPLETE)) &&
+                x.Request.RequestState.IsProcessingState && !x.Request.RequestState.IsFinalState)).Take(200).ToListAsync();
         await PopulateActionsAsync(db, result, user);
         return result;
     }

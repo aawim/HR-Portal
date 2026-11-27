@@ -115,6 +115,7 @@ namespace HRM.Services
 
 
             await PopulateRoleGroupsAsync(db, context);
+            PopulateRoleFlags(context);
 
 
             await PopulatePermissionsAsync(db, context);
@@ -570,6 +571,36 @@ namespace HRM.Services
             UserContextDto context)
                 {
                     context.UserGroups = await LoadUserGroupsAsync(db,context.UserId);
+        }
+
+        private static void PopulateRoleFlags(UserContextDto context)
+        {
+            var names = context.UserGroups
+                .Select(g => g.GroupName?.Trim() ?? string.Empty)
+                .Where(n => n.Length > 0)
+                .ToList();
+
+            bool Matches(params string[] tokens) =>
+                names.Any(n => tokens.Any(t => n.Contains(t, StringComparison.OrdinalIgnoreCase)));
+
+            bool StartsOrEquals(params string[] tokens) =>
+                names.Any(n => tokens.Any(t =>
+                    n.Equals(t, StringComparison.OrdinalIgnoreCase) ||
+                    n.StartsWith(t + " ", StringComparison.OrdinalIgnoreCase) ||
+                    n.StartsWith(t + "_", StringComparison.OrdinalIgnoreCase) ||
+                    n.StartsWith(t + ":", StringComparison.OrdinalIgnoreCase)));
+
+            context.IsHeadOfOrganisation = Matches("Head of Organisation");
+            context.IsHRHead = Matches("Human Resource :Head", "Human Resource: Head", "Human Resource:Head", "HR Head");
+            context.IsHRManager = context.IsHRHead || Matches("HR Manager", "Human Resource Manager");
+            context.IsHRReceptionist = Matches("Human Resource: Receptionist", "HR Receptionist");
+            context.IsHRStaff = context.IsHRHead || context.IsHRManager || context.IsHRReceptionist ||
+                                Matches("Human Resource", "HR Staff", "HR Officer") ||
+                                StartsOrEquals("HR");
+            context.IsOrganisationAdmin = Matches("Organisation Admin", "System Administrator : Organisation", "System Administrator: Organisation", "System Administrator:Organisation") ||
+                                          names.Any(n => n.Equals("Admin", StringComparison.OrdinalIgnoreCase) ||
+                                                         n.EndsWith(" Admin", StringComparison.OrdinalIgnoreCase));
+            context.IsSupervisor = Matches("Supervisor", "Team Leader", "HOD");
         }
 
 

@@ -243,12 +243,13 @@ public static class OrganisationalAccessScopeResolver
             StringComparer.OrdinalIgnoreCase);
 
         bool HasGroup(params string[] names) =>
-            groupNames.Any(g => names.Any(n => g.Equals(n, StringComparison.OrdinalIgnoreCase)));
+            groupNames.Any(g => names.Any(n => g.Contains(n, StringComparison.OrdinalIgnoreCase)));
 
         var isCentralHrOrAdmin = isSuper ||
                                  heldPermissions.Contains("Admin") ||
-                                 HasGroup("Organisation Admin", "HR Head", "HR Manager", "Head of Organisation");
-        var isHrStaff = HasGroup("HR Staff", "HR Officer", "HR");
+                                 HasGroup("Organisation Admin", "System Administrator : Organisation", "System Administrator: Organisation", "HR Head", "Human Resource :Head", "Human Resource: Head", "HR Manager", "Head of Organisation");
+        var isHrStaff = isCentralHrOrAdmin || HasGroup("Human Resource", "HR Staff", "HR Officer") ||
+                        groupNames.Any(g => g.Equals("HR", StringComparison.OrdinalIgnoreCase) || g.StartsWith("HR ", StringComparison.OrdinalIgnoreCase) || g.StartsWith("HR_", StringComparison.OrdinalIgnoreCase) || g.StartsWith("HR:", StringComparison.OrdinalIgnoreCase));
         var isSupervisor = HasGroup("Supervisor") ||
                            await db.OrganisationStructureSupervisors.AsNoTracking()
                                .AnyAsync(s => s.SupervisorStaffId == user.BusinessEntityID && s.IsActive && s.IsValid, ct) ||

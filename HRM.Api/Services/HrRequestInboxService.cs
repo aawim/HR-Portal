@@ -16,7 +16,7 @@ public sealed class HrRequestInboxService(IDbContextFactory<HrmTeContext> factor
         if(org<=0||!await access.HasOrganisationAccessAsync(org))throw new UnauthorizedAccessException("Select your current organisation.");
         if(from.HasValue&&(from.Value.Year<1900||from.Value.Year>2200)||to.HasValue&&(to.Value.Year<1900||to.Value.Year>2200)||from.HasValue&&to.HasValue&&to.Value.Date<from.Value.Date)throw new InvalidOperationException("Enter a valid date range.");
         if(search?.Length>250)throw new InvalidOperationException("Search must be 250 characters or fewer.");
-        var wide=actor.IsSuperAdministrator||await access.HasPermissionAsync("Admin")||await access.HasPermissionAsync("Requests.View");
+        var wide=actor.IsSuperAdministrator||actor.IsHRStaff||actor.IsHRHead||actor.IsHRManager||actor.IsOrganisationAdmin||await access.HasPermissionAsync("Admin")||await access.HasPermissionAsync("Requests.View");
         await using var db=await factory.CreateDbContextAsync(cancellationToken);
         var statuses=await db.RequestStates.AsNoTracking().OrderBy(s=>s.StateName).Select(s=>new HrRequestStatus(s.RequestStateId,s.StateName)).ToListAsync(cancellationToken);
         int? stateId=null;

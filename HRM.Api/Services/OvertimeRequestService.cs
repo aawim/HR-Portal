@@ -18,7 +18,7 @@ public sealed partial class OvertimeRequestService(IDbContextFactory<HrmTeContex
     private async Task<(int Org,int Person,int User,bool Manage,bool Pay)> ScopeAsync()
     {
         var actor=await access.RequireContextAsync();var org=await access.GetCurrentOrganisationIdAsync();if(org<=0||!await access.HasOrganisationAccessAsync(org))throw new UnauthorizedAccessException("Select your current organisation.");
-        var admin=actor.IsSuperAdministrator||await access.HasPermissionAsync("Admin");return(org,actor.IndividualId,actor.UserId,admin||await access.HasPermissionAsync("Overtime.Review"),actor.IsSuperAdministrator||await access.HasPermissionAsync("Overtime.Pay"));
+        var admin=actor.IsSuperAdministrator||actor.IsHRStaff||actor.IsHRHead||actor.IsHRManager||actor.IsOrganisationAdmin||await access.HasPermissionAsync("Admin");return(org,actor.IndividualId,actor.UserId,admin||await access.HasPermissionAsync("Overtime.Review"),actor.IsSuperAdministrator||await access.HasPermissionAsync("Overtime.Pay"));
     }
     private static async Task<JobTypeOvertimeRule> ValidateAsync(HrmTeContext db,OvertimeRequest r)
     {

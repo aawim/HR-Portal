@@ -21,12 +21,14 @@ public sealed partial class LateCheckInRequestService(IDbContextFactory<HrmTeCon
     
     
     private static DateTime Today => DateTime.UtcNow.AddHours(5).Date;
-    private async Task<(int User, int Person, int Org, int Job)> Scope()
+    private async Task<(int User, int Person, int Org, int Job, bool IsHrOrAdmin)> Scope()
     {
         var actor = await access.RequireContextAsync();
         var org = await access.GetCurrentOrganisationIdAsync();
         if (org <= 0 || !await access.HasOrganisationAccessAsync(org)) throw new UnauthorizedAccessException("Select your current organisation.");
-        return (actor.UserId, actor.IndividualId, org, actor.ActiveJob?.JobId ?? 0);
+        var isHrOrAdmin = actor.IsSuperAdministrator || actor.IsHRStaff || actor.IsHRHead || actor.IsHRManager || actor.IsOrganisationAdmin ||
+                          await access.HasPermissionAsync("Admin") || await access.HasPermissionAsync("Attendance.View");
+        return (actor.UserId, actor.IndividualId, org, actor.ActiveJob?.JobId ?? 0, isHrOrAdmin);
     }
     
     
@@ -107,7 +109,7 @@ public sealed partial class LateCheckInRequestService(IDbContextFactory<HrmTeCon
         var rows = await db.LateCheckInRequests.Include(r => r.Request).ThenInclude(r => r.RequestState)
             .Where(r => r.OrganisationId == actor.Org && (kind == null || r.Kind == kind || kind == "LateCheckIn" && r.Kind == "Explanation") &&
                 (pendingOnly ? r.Request.RequestState.IsProcessingState && !r.Request.RequestState.IsFinalState : r.ScheduledStart >= from.Date && r.ScheduledStart < to.Date.AddDays(1)) &&
-                (r.IndividualId == actor.Person || db.WfRequestApprovals.Any(a => a.ApproverUserId == actor.User && a.RequestStageInstance.WorkflowRequestInstance.RequestId == r.RequestId)))
+                (actor.IsHrOrAdmin || r.IndividualId == actor.Person || db.WfRequestApprovals.Any(a => a.ApproverUserId == actor.User && a.RequestStageInstance.WorkflowRequestInstance.RequestId == r.RequestId)))
             .OrderByDescending(r => r.CreatedAtUtc).Take(200).ToListAsync();
         var result = new List<LateCheckInRow>();
         foreach (var r in rows)

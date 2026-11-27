@@ -13,7 +13,7 @@ public partial class OrganisationWorkspaceService
         await using var db=await factory.CreateDbContextAsync(cancellationToken);var ct=cancellationToken;var org=filter.OrganisationId;
         var yearStart=new DateTime(filter.Year,1,1);var yearEnd=yearStart.AddYears(1);
         var monthStart=new DateTime(filter.Year,filter.Month,1);var monthEnd=monthStart.AddMonths(1);var today=Today;
-        var wide=actor.IsSuperAdministrator||await access.HasPermissionAsync("Admin")||await access.HasPermissionAsync("Leave.View");
+        var wide=actor.IsSuperAdministrator||actor.IsHRStaff||actor.IsHRHead||actor.IsHRManager||actor.IsOrganisationAdmin||await access.HasPermissionAsync("Admin")||await access.HasPermissionAsync("Leave.View");
         var data=new OrganisationLeaveOverviewData{OrganisationWide=wide};
         var own=actor.IndividualId;var search=filter.Search.Trim();
         var assigned=db.WfRequestApprovals.Where(a=>a.ApproverUserId==actor.UserId&&a.Decision=="Pending"&&a.RequestStageInstance.StageStatus=="Pending"&&
