@@ -100,7 +100,6 @@
     private bool CanAccessDeveloperPortal => HasSystemAccess && _session?.CanAccessDeveloperPortal == true;
     private bool CanAccessAuditPortal => HasSystemAccess && _session?.CanAccessAuditPortal == true;
     private bool CanAccessSuperAdminPortal => HasSystemAccess && _session?.CanAccessSuperAdminPortal == true;
-    private TransactionContext? _lockedPortalContext;
     private string? _lastAllowedUri;
     private bool _revertingCrossPortal;
     [CascadingParameter]
@@ -179,22 +178,60 @@
     private void OpenMobileNav() => mobileNavOpen = true;
     private Task CloseMobileNav() { mobileNavOpen = false; return InvokeAsync(StateHasChanged); }
 
+    private bool CanNavigateToPortalContext(TransactionContext targetContext, string uri)
+    {
+        if (_session is null) return targetContext == TransactionContext.Online;
+        return targetContext switch
+        {
+            TransactionContext.SuperAdmin => CanAccessSuperAdminPortal,
+            TransactionContext.Developer => CanAccessDeveloperPortal,
+            TransactionContext.Audit => CanAccessAuditPortal,
+            TransactionContext.Admin => CanAccessAdminPortal || IsWorkspaceApproverRoute(uri),
+            TransactionContext.Online => true,
+            _ => true
+        };
+    }
+
+    private static bool IsWorkspaceApproverRoute(string uri)
+    {
+        var path = new Uri(uri).AbsolutePath;
+        return path.Equals("/admin/my/workspace", StringComparison.OrdinalIgnoreCase)
+            || path.StartsWith("/admin/my/workspace/", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private void SyncPortalContext(TransactionContext targetContext)
+    {
+        switch (targetContext)
+        {
+            case TransactionContext.SuperAdmin: PortalContext.SwitchToSuperAdmin(); break;
+            case TransactionContext.Developer: PortalContext.SwitchToDeveloper(); break;
+            case TransactionContext.Admin: PortalContext.SwitchToAdmin(); break;
+            case TransactionContext.Audit: PortalContext.SwitchToAudit(); break;
+            default: PortalContext.SwitchToEmployee(); break;
+        }
+    }
+
     protected override void OnInitialized() => Navigation.LocationChanged += OnLocationChanged;
     private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs args)
     {
         mobileNavOpen = false;
 
-        if (!_revertingCrossPortal && _isAuthenticated && _lockedPortalContext.HasValue)
+        if (!_revertingCrossPortal && _isAuthenticated && !_checkingAccess)
         {
             var targetContext = GetRoutePortalContext(args.Location);
-            if (targetContext.HasValue && targetContext.Value != _lockedPortalContext.Value)
+            if (targetContext.HasValue)
             {
-                _revertingCrossPortal = true;
-                var fallback = !string.IsNullOrWhiteSpace(_lastAllowedUri) ? _lastAllowedUri : DefaultPortalHref;
-                ToastService.Error("Cross-portal navigation is restricted. Use the Portal Switcher in the sidebar to switch portals.");
-                Navigation.NavigateTo(fallback, replace: true);
-                _revertingCrossPortal = false;
-                return;
+                if (!CanNavigateToPortalContext(targetContext.Value, args.Location))
+                {
+                    _revertingCrossPortal = true;
+                    var fallback = !string.IsNullOrWhiteSpace(_lastAllowedUri) ? _lastAllowedUri : DefaultPortalHref;
+                    ToastService.Error("You do not have permission to access that portal.");
+                    Navigation.NavigateTo(fallback, replace: true);
+                    _revertingCrossPortal = false;
+                    return;
+                }
+
+                SyncPortalContext(targetContext.Value);
             }
         }
 
@@ -230,9 +267,8 @@
         else if (IsAuditPortal) PortalContext.SwitchToAudit();
         else PortalContext.SwitchToEmployee();
 
-        if (_isAuthenticated && !_lockedPortalContext.HasValue)
+        if (_isAuthenticated && string.IsNullOrWhiteSpace(_lastAllowedUri))
         {
-            _lockedPortalContext = GetRoutePortalContext(Navigation.Uri);
             _lastAllowedUri = Navigation.Uri;
         }
 

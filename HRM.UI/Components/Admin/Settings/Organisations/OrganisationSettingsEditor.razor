@@ -7,12 +7,13 @@
 @inject ILogger<OrganisationSettingsEditor> Logger
 @inject NavigationManager Navigation
 
-<div class="w-full min-w-0 p-2 flex flex-col gap-2">
+<div class="mt-2 w-full min-w-0 p-2 flex flex-col gap-2">
     @if (error != null) { <p role="alert" class="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">@error</p> }
     @if (loading) { <p class="rounded-2xl border border-slate-200 bg-white p-6 text-xs text-slate-500">Loading organisations…</p> }
     else if (data != null)
     {
-        <fieldset disabled="@busy" class="min-w-0 flex flex-col gap-2">
+        <fieldset disabled="@busy" class="min-w-0">
+            <div class="min-w-0 flex flex-col gap-2">
             <div class="@(IsSuperAdminContext ? "superadmin-workspace-tabs" : "workspace-tabs border-emerald-600 dark:border-emerald-500") w-full border-b-2 overflow-x-auto"
                  style="@(IsSuperAdminContext ? "border-bottom-color: #ADD8E6;" : null)">
                 <nav aria-label="Organisation sections" class="flex items-end gap-1 px-1 min-w-max pb-0">
@@ -37,7 +38,7 @@
             {
                 <div class="mb-2 flex items-center gap-2 px-1"><span class="text-teal-600 dark:text-teal-400"><OrganisationIcon /></span><h1 class="text-lg font-bold text-slate-900 dark:text-slate-100">@(data.Organisations.FirstOrDefault(x => x.Id == model.Id)?.Name ?? model.Name)</h1></div>
             }
-            <div class="grid w-full grid-cols-1 gap-2 lg:grid-cols-12 items-start">
+            <div class="mt-2 grid w-full grid-cols-1 gap-2 lg:grid-cols-12 items-start">
                 <section class="min-w-0 w-full flex flex-col gap-2 @(ShowRightOrganisationList ? (HasDetailView ? "lg:col-span-5" : "lg:col-span-8") : "col-span-full lg:col-span-12")">
                     @if (model.Id == 0)
                     {
@@ -307,33 +308,33 @@
                     @if (model.Id > 0 && activeSection == "Address")
                     {
                         <section aria-label="Organisation addresses" class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-                            <div class="flex items-center justify-between gap-3 border-b border-slate-200 px-5 py-4"><div><h3 class="text-sm font-semibold text-slate-900">Addresses</h3><p class="mt-1 text-xs text-slate-500">@links.Addresses.Count linked addresses</p></div><button type="button" class="@Secondary" @onclick="() => addingAddress = !addingAddress">@(addingAddress ? "Close address form" : "Add address")</button></div>
-                            <div class="space-y-3 p-5">
+                            <div class="flex items-center justify-between gap-2 border-b border-slate-200 px-5 py-4"><div><h3 class="text-sm font-semibold text-slate-900">Addresses</h3><p class="mt-1 text-xs text-slate-500">@links.Addresses.Count linked addresses</p></div><button type="button" class="@Secondary" @onclick="() => addingAddress = !addingAddress">@(addingAddress ? "Close address form" : "Add address")</button></div>
+                            <div class="flex flex-col gap-2 p-5">
                                 @foreach (var saved in links.Addresses)
                                 {
                                     <div class="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
-                                        <div class="flex items-center justify-between gap-3"><p>@saved.Name</p><div class="flex gap-2"><button type="button" class="@Secondary" @onclick="() => EditAddressAsync(saved.LinkId)">Edit</button><button type="button" class="rounded-lg border border-red-200 px-3 py-2 text-xs font-medium text-red-600 hover:bg-red-50" @onclick="() => deletingAddress = saved.LinkId">Delete</button></div></div>
+                                        <div class="flex items-center justify-between gap-2"><p>@saved.Name</p><div class="flex gap-2"><button type="button" class="@Secondary" @onclick="() => EditAddressAsync(saved.LinkId)">Edit</button><button type="button" class="rounded-lg border border-red-200 px-3 py-2 text-xs font-medium text-red-600 hover:bg-red-50" @onclick="() => deletingAddress = saved.LinkId">Delete</button></div></div>
                                         @if (deletingAddress == saved.LinkId)
                                         {
-                                            <div class="mt-3 flex flex-wrap items-center gap-3 border-t border-slate-200 pt-3"><span>Remove this address from the organisation?</span><button type="button" class="@Secondary" @onclick="() => deletingAddress = null">Cancel</button><button type="button" class="rounded-lg bg-red-600 px-3 py-2 text-xs font-medium text-white" @onclick="() => DeleteAddressAsync(saved.LinkId)">Confirm delete</button></div>
+                                            <div class="mt-2 flex flex-wrap items-center gap-2 border-t border-slate-200 pt-2"><span>Remove this address from the organisation?</span><button type="button" class="@Secondary" @onclick="() => deletingAddress = null">Cancel</button><button type="button" class="rounded-lg bg-red-600 px-3 py-2 text-xs font-medium text-white" @onclick="() => DeleteAddressAsync(saved.LinkId)">Confirm delete</button></div>
                                         }
                                     </div>
                                 }
                                 @if (links.Addresses.Count == 0) { <p class="text-sm text-slate-500">No addresses yet. Add a new address or link an existing one.</p> }
                                 @if (addingAddress)
                                 {
-                                    <div class="space-y-4 rounded-xl border border-blue-100 p-4">
+                                    <div class="flex flex-col gap-2 rounded-xl border border-blue-100 p-4">
                                         <label class="flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" @bind="useExisting" @bind:after="AddressModeChanged" /> Link an existing address</label>
                                         <label class="@Label">Address usage<select class="@Input" @bind="address.UsageId">@foreach (var option in data.AddressUsages) { <option value="@option.Id">@option.Name</option> }</select></label>
                                         @if (useExisting)
                                         {
                                             <label class="@Label">Search addresses<input type="search" class="@Input" placeholder="Building or street name…" @bind="addressSearch" /></label>
                                             <button type="button" class="@Secondary" @onclick="SearchAddressesAsync">Search addresses</button>
-                                            <div class="max-h-56 space-y-2 overflow-y-auto">@foreach (var result in addressResults) { <button type="button" class="block w-full rounded-lg border p-3 text-left text-sm @(address.ExistingLocationId == result.Id ? "border-blue-300 bg-blue-50" : "border-slate-200")" @onclick="() => address.ExistingLocationId = result.Id">@result.Name @(address.ExistingLocationId == result.Id ? "✓" : "")</button> }</div>
+                                            <div class="max-h-56 flex flex-col gap-2 overflow-y-auto">@foreach (var result in addressResults) { <button type="button" class="block w-full rounded-lg border p-3 text-left text-sm @(address.ExistingLocationId == result.Id ? "border-blue-300 bg-blue-50" : "border-slate-200")" @onclick="() => address.ExistingLocationId = result.Id">@result.Name @(address.ExistingLocationId == result.Id ? "✓" : "")</button> }</div>
                                         }
                                         else
                                         {
-                                            <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                                            <div class="grid grid-cols-1 gap-2 md:grid-cols-2">
                                                 <label class="@Label">Address type<select class="@Input" @bind="address.BaseTypeId">@foreach (var option in data.AddressTypes) { <option value="@option.Id">@option.Name</option> }</select></label>
                                                 <label class="@Label">Country<select class="@Input" @bind="address.CountryId" @bind:after="ClearArea">@foreach (var option in data.Countries) { <option value="@option.Id">@option.Name</option> }</select></label>
                                                 <label class="@Label">Address line 1<input class="@Input" maxlength="250" @bind="address.Line1" /></label>
@@ -348,7 +349,7 @@
                                                 <label class="@Label">Postcode<input class="@Input" maxlength="20" @bind="address.PostCode" /></label>
                                             </div>
                                         }
-                                        <div class="flex gap-3"><button type="button" class="@Primary" @onclick="SaveAddressAsync">@(address.LinkId > 0 ? "Save changes" : "Save address")</button><button type="button" class="@Secondary" @onclick="ResetForms">Cancel</button></div>
+                                        <div class="flex gap-2"><button type="button" class="@Primary" @onclick="SaveAddressAsync">@(address.LinkId > 0 ? "Save changes" : "Save address")</button><button type="button" class="@Secondary" @onclick="ResetForms">Cancel</button></div>
                                     </div>
                                 }
                             </div>
@@ -357,25 +358,25 @@
                     @if (model.Id > 0 && activeSection == "Contact")
                     {
                         <section aria-label="Organisation contacts" class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-                            <div class="flex items-center justify-between gap-3 border-b border-slate-200 px-5 py-4"><div><h3 class="text-sm font-semibold text-slate-900">Contacts</h3><p class="mt-1 text-xs text-slate-500">@links.Contacts.Count contact details</p></div><button type="button" class="@Secondary" @onclick="NewContact">Add contact</button></div>
-                            <div class="space-y-4 p-5">
+                            <div class="flex items-center justify-between gap-2 border-b border-slate-200 px-5 py-4"><div><h3 class="text-sm font-semibold text-slate-900">Contacts</h3><p class="mt-1 text-xs text-slate-500">@links.Contacts.Count contact details</p></div><button type="button" class="@Secondary" @onclick="NewContact">Add contact</button></div>
+                            <div class="flex flex-col gap-2 p-5">
                                 @foreach (var saved in links.Contacts)
                                 {
                                     <div class="rounded-xl border border-slate-200 p-3">
-                                        <div class="flex items-center justify-between gap-3"><div class="min-w-0"><p class="text-xs font-semibold text-slate-500">@saved.Type</p><p class="break-all text-sm text-slate-800">@saved.Value</p></div><div class="flex gap-2"><button type="button" class="@Secondary" @onclick="() => EditContact(saved)">Edit</button><button type="button" class="@Danger" @onclick="() => deletingContact = saved.Id">Delete</button></div></div>
+                                        <div class="flex items-center justify-between gap-2"><div class="min-w-0"><p class="text-xs font-semibold text-slate-500">@saved.Type</p><p class="break-all text-sm text-slate-800">@saved.Value</p></div><div class="flex gap-2"><button type="button" class="@Secondary" @onclick="() => EditContact(saved)">Edit</button><button type="button" class="@Danger" @onclick="() => deletingContact = saved.Id">Delete</button></div></div>
                                         @if (deletingContact == saved.Id)
                                         {
-                                            <div class="mt-3 flex flex-wrap items-center gap-3 border-t border-slate-200 pt-3 text-sm"><span>Delete this contact?</span><button type="button" class="@Secondary" @onclick="() => deletingContact = null">Cancel</button><button type="button" class="@Danger" @onclick="() => ExecuteAsync(() => Settings.DeleteContactAsync(model.Id, saved.Id))">Confirm delete</button></div>
+                                            <div class="mt-2 flex flex-wrap items-center gap-2 border-t border-slate-200 pt-2 text-sm"><span>Delete this contact?</span><button type="button" class="@Secondary" @onclick="() => deletingContact = null">Cancel</button><button type="button" class="@Danger" @onclick="() => ExecuteAsync(() => Settings.DeleteContactAsync(model.Id, saved.Id))">Confirm delete</button></div>
                                         }
                                     </div>
                                 }
                                 @if (links.Contacts.Count == 0) { <p class="text-sm text-slate-500">No contacts have been added yet.</p> }
                                 @if (addingContact)
                                 {
-                                    <div class="grid grid-cols-1 gap-4 rounded-xl border border-blue-100 p-4 md:grid-cols-2">
+                                    <div class="grid grid-cols-1 gap-2 rounded-xl border border-blue-100 p-4 md:grid-cols-2">
                                         <label class="@Label">Contact type<select class="@Input" @bind="contact.TypeId"><option value="0">Select type</option>@foreach (var option in data.ContactTypes) { <option value="@option.Id">@option.Name</option> }</select></label>
                                         <label class="@Label">Contact value<input class="@Input" maxlength="250" @bind="contact.Value" /></label>
-                                        <div class="flex gap-3 md:col-span-2"><button type="button" class="@Primary" @onclick="SaveContactAsync">Save contact</button><button type="button" class="@Secondary" @onclick="() => addingContact = false">Cancel</button></div>
+                                        <div class="flex gap-2 md:col-span-2"><button type="button" class="@Primary" @onclick="SaveContactAsync">Save contact</button><button type="button" class="@Secondary" @onclick="() => addingContact = false">Cancel</button></div>
                                     </div>
                                 }
                             </div>
@@ -519,7 +520,7 @@
                                 else if (viewedTeam != null)
                                 {
                                     var tmStaff = links.TeamStaff.Where(s => s.ParentId == viewedTeam.Id).ToList();
-                                    <div class="space-y-3">
+                                    <div class="flex flex-col gap-2">
                                         <div class="grid grid-cols-2 gap-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 p-2.5">
                                             <div>
                                                 <p class="text-[10px] font-semibold uppercase text-slate-400">Team Name</p>
@@ -566,7 +567,7 @@
                                 else if (viewedGroup != null)
                                 {
                                     var grpStaff = links.GroupStaff.Where(s => s.ParentId == viewedGroup.Id && s.Source == viewedGroup.Source).ToList();
-                                    <div class="space-y-3">
+                                    <div class="flex flex-col gap-2">
                                         <div class="grid grid-cols-2 gap-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 p-2.5">
                                             <div>
                                                 <p class="text-[10px] font-semibold uppercase text-slate-400">Group Name</p>
@@ -663,6 +664,7 @@
                     </div>
                 </aside>
                 }
+            </div>
             </div>
         </fieldset>
 
