@@ -1,8 +1,10 @@
+using HRM.Hosting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Intranet.Infrastructure.Persistence;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Configuration.AddSecureExternalConnectionStrings();
 builder.Services.AddControllers();
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(o =>
@@ -21,6 +23,8 @@ builder.Services.AddScoped<Intranet.Application.Security.IOrganisationContext, I
 builder.Services.AddScoped<Intranet.Application.Services.IPostService, Intranet.Infrastructure.Services.PostService>();
 builder.Services.AddScoped<Intranet.Application.Services.INewJoinerService, Intranet.Infrastructure.Services.NewJoinerService>();
 var cs = builder.Configuration.GetConnectionString("IntranetDb");
+if (string.IsNullOrWhiteSpace(cs))
+    throw new InvalidOperationException("ConnectionStrings:IntranetDb is required. Configure it in the external secure connectionstrings.json file, user secrets, or environment variables.");
 builder.Services.AddDbContext<IntranetDbContext>(o => o.UseSqlServer(cs));
 var app = builder.Build();
 

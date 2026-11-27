@@ -66,22 +66,98 @@ public static class StaffAttributeAccess
         var distinctIds = individualIds.Distinct().ToArray();
         if (distinctIds.Length == 0) return [];
 
+        var actor = await access.RequireContextAsync();
+        if (actor.IsSuperAdministrator) return [.. distinctIds];
+        if (organisationId <= 0)
+            return distinctIds.Contains(actor.IndividualId) ? [actor.IndividualId] : [];
+
         var orgScope = await OrganisationalAccessScopeResolver.ResolveCurrentUserAsync(
             db, access, organisationId, ct: cancellationToken);
         var scopedIds = await OrganisationalAccessScopeResolver.FilterAuthorisedEmployeesAsync(
             db, orgScope, distinctIds, ct: cancellationToken);
 
+        var groupIds = await db.UserAssignedUserGroups.AsNoTracking()
+            .Where(x => x.UserId == actor.UserId &&
+                (x.UserGroup.IsGlobal || x.UserGroup.UserOrganisation!.BusinessEntityID == organisationId))
+            .Select(x => x.UserGroupId)
+            .ToArrayAsync(cancellationToken);
+
+        var now = DateTime.UtcNow;
+        var today = now.AddHours(5).Date;
+
+        var grants = await db.StaffAccessGrants.AsNoTracking()
+            .Where(x => x.OrganisationId == organisationId && x.IsActive &&
+                (!x.ExpiresAtUtc.HasValue || x.ExpiresAtUtc > now) &&
+                (x.UserId == actor.UserId || (x.UserGroupId.HasValue && groupIds.Contains(x.UserGroupId.Value))))
+            .Select(x => new { x.TargetIndividualId, x.PositionClassificationId, x.IsAllowed })
+            .ToListAsync(cancellationToken);
+
+        var restrictedClassifications = (await db.StaffAccessPolicies.AsNoTracking()
+            .Where(x => x.OrganisationId == organisationId && x.IsActive && x.IsRestricted)
+            .Select(x => x.PositionClassificationId)
+            .Distinct()
+            .ToListAsync(cancellationToken)).ToHashSet();
+
+        var explicitOnly = await db.StaffAccessScopes.AsNoTracking()
+            .AnyAsync(x => x.OrganisationId == organisationId && x.IsActive && x.RequireExplicitGrant &&
+                (x.UserId == actor.UserId || (x.UserGroupId.HasValue && groupIds.Contains(x.UserGroupId.Value))), cancellationToken);
+
+        var needClassifications = restrictedClassifications.Count > 0 || grants.Any(g => g.PositionClassificationId.HasValue);
+        var classificationsByIndividual = new Dictionary<int, HashSet<int>>();
+        if (needClassifications)
+        {
+            var jobClassifications = await db.JobPositions.AsNoTracking()
+                .Where(x => distinctIds.Contains(x.Job.IndividualID) && x.Job.OrganisationID == organisationId &&
+                    x.Job.JobStateId == 4 && x.Job.JoinedDate <= today &&
+                    (!x.Job.TerminatedDate.HasValue || x.Job.TerminatedDate > today) &&
+                    x.JobPositionStateId == 4 && x.FromDate <= today && (!x.ToDate.HasValue || x.ToDate > today) &&
+                    x.Position.PositionClassificationId.HasValue)
+                .Select(x => new { x.Job.IndividualID, ClassificationId = x.Position.PositionClassificationId!.Value })
+                .ToListAsync(cancellationToken);
+
+            foreach (var row in jobClassifications)
+            {
+                if (!classificationsByIndividual.TryGetValue(row.IndividualID, out var set))
+                {
+                    set = [];
+                    classificationsByIndividual[row.IndividualID] = set;
+                }
+                set.Add(row.ClassificationId);
+            }
+        }
+
+        var deniedIndividuals = grants.Where(g => !g.IsAllowed && g.TargetIndividualId.HasValue).Select(g => g.TargetIndividualId!.Value).ToHashSet();
+        var allowedIndividuals = grants.Where(g => g.IsAllowed && g.TargetIndividualId.HasValue).Select(g => g.TargetIndividualId!.Value).ToHashSet();
+        var deniedClassifications = grants.Where(g => !g.IsAllowed && g.PositionClassificationId.HasValue).Select(g => g.PositionClassificationId!.Value).ToHashSet();
+        var allowedClassifications = grants.Where(g => g.IsAllowed && g.PositionClassificationId.HasValue).Select(g => g.PositionClassificationId!.Value).ToHashSet();
+
         var result = new HashSet<int>();
         foreach (var id in distinctIds)
         {
-            if (!scopedIds.Contains(id))
+            if (id == actor.IndividualId)
             {
-                // Only check ABAC if not in organisational scope in case of an explicit individual grant
-                if (!orgScope.HasOrganisationTenantAccess) continue;
+                result.Add(id);
+                continue;
             }
-            if (await CanViewAsync(db, access, id, organisationId, cancellationToken))
+
+            var inOrgScope = scopedIds.Contains(id);
+            if (!inOrgScope && !orgScope.HasOrganisationTenantAccess) continue;
+
+            classificationsByIndividual.TryGetValue(id, out var empClassifications);
+
+            var explicitlyDenied = deniedIndividuals.Contains(id) ||
+                (empClassifications != null && empClassifications.Any(deniedClassifications.Contains));
+            if (explicitlyDenied) continue;
+
+            var explicitlyAllowed = allowedIndividuals.Contains(id) ||
+                (empClassifications != null && empClassifications.Any(allowedClassifications.Contains));
+            if (!inOrgScope && !explicitlyAllowed) continue;
+
+            var restricted = empClassifications != null && empClassifications.Any(restrictedClassifications.Contains);
+            if (explicitlyAllowed || (!restricted && !explicitOnly))
                 result.Add(id);
         }
+
         return result;
     }
 }

@@ -36,17 +36,11 @@ public sealed class SqlErrorLogStore : IErrorLogStore
 
             if (string.IsNullOrWhiteSpace(raw))
             {
-                var fallback = configuration.GetConnectionString("DefaultConnection") ??
-                               "Server=DESKTOP-IGBGLUQ\\SQLEXPRESS;Database=HrmErrorLogs;Trusted_Connection=True;TrustServerCertificate=True;";
-                try
-                {
-                    var csb = new SqlConnectionStringBuilder(fallback) { InitialCatalog = "HrmErrorLogs" };
-                    raw = csb.ConnectionString;
-                }
-                catch
-                {
-                    raw = "Server=DESKTOP-IGBGLUQ\\SQLEXPRESS;Database=HrmErrorLogs;Trusted_Connection=True;TrustServerCertificate=True;";
-                }
+                var fallback = configuration.GetConnectionString("DefaultConnection");
+                if (string.IsNullOrWhiteSpace(fallback))
+                    throw new InvalidOperationException("ConnectionStrings:ErrorLogsConnection (or ConnectionStrings:DefaultConnection) is not configured. Configure it in the external secure connectionstrings.json file, user secrets, or environment variables.");
+                var csb = new SqlConnectionStringBuilder(fallback) { InitialCatalog = "HrmErrorLogs" };
+                raw = csb.ConnectionString;
             }
             _connectionString = raw;
         }

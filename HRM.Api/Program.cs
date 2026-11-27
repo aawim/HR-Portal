@@ -21,6 +21,7 @@ using HRM.ActivityLogs.Persistence;
 
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Configuration.AddSecureExternalConnectionStrings();
 // Edge ingestion independently validates an enrolled client certificate.  Other HTTPS endpoints remain usable without one.
 builder.WebHost.ConfigureKestrel(options => options.ConfigureHttpsDefaults(https =>
 {

@@ -1,3 +1,4 @@
+using HRM.Hosting;
 using HRM.Models;
 using HRM.Services.Communications;
 using HRM.Communications;
@@ -7,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
 
 var builder = Host.CreateApplicationBuilder(args);
+builder.Configuration.AddSecureExternalConnectionStrings();
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
     ?? builder.Configuration.GetConnectionString("HrmTeContext")
     ?? throw new InvalidOperationException("A Communications worker connection string is required.");
