@@ -171,6 +171,32 @@ public sealed class OrganisationSettingsController(global::HRM.Services.Contract
         return Ok(await service.SoftDeleteGroupAsync(request.organisationId, request.groupId));
     }
 
+    [HttpPost("save-team-summary")]
+    public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> SaveTeamSummary([FromBody] OrganisationSettingsSaveTeamSummaryRequest request)
+    {
+        return Ok(await service.SaveTeamSummaryAsync(request.organisationId, request.teamId, request.name, request.departmentId));
+    }
+
+    public sealed class OrganisationSettingsSaveTeamSummaryRequest
+    {
+        public global::System.Int32 organisationId { get; set; }
+        public global::System.Int32 teamId { get; set; }
+        public global::System.String name { get; set; } = default!;
+        public global::System.Int32? departmentId { get; set; }
+    }
+
+    [HttpPost("soft-delete-team")]
+    public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> SoftDeleteTeam([FromBody] OrganisationSettingsSoftDeleteTeamRequest request)
+    {
+        return Ok(await service.SoftDeleteTeamAsync(request.organisationId, request.teamId));
+    }
+
+    public sealed class OrganisationSettingsSoftDeleteTeamRequest
+    {
+        public global::System.Int32 organisationId { get; set; }
+        public global::System.Int32 teamId { get; set; }
+    }
+
     public sealed class OrganisationSettingsSoftDeleteGroupRequest
     {
         public global::System.Int32 organisationId { get; set; }

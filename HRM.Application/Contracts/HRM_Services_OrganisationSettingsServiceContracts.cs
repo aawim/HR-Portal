@@ -47,5 +47,9 @@ Task<ServiceResult> SaveGroupSummaryAsync(int organisationId, int groupId, strin
 ;
 Task<ServiceResult> SoftDeleteGroupAsync(int organisationId, int groupId)
 ;
+Task<ServiceResult> SaveTeamSummaryAsync(int organisationId, int teamId, string name, int? departmentId)
+;
+Task<ServiceResult> SoftDeleteTeamAsync(int organisationId, int teamId)
+;
 }
 }

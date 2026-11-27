@@ -163,6 +163,64 @@ public partial class OrganisationSettingsService(IDbContextFactory<HrmTeContext>
                 "StaffGroup"))
             .ToListAsync();
 
+        var teamStaffRows = await db.TeamStaffs.AsNoTracking()
+            .Where(ts => ts.IsValid && (ts.EndDate == null || ts.EndDate >= now) && ts.Team.OrganisationId == id)
+            .Select(ts => new
+            {
+                ts.TeamId,
+                ts.Staff.IndividualId,
+                Name = (ts.Staff.Individual.FirstNameEnglish + " " + (ts.Staff.Individual.MiddleNameEnglish ?? "") + " " + (ts.Staff.Individual.LastNameEnglish ?? "")).Trim(),
+                ts.Staff.EmployeeNumber
+            })
+            .ToListAsync();
+        var teamStaff = teamStaffRows
+            .GroupBy(x => new { x.TeamId, x.IndividualId })
+            .Select(g => g.First())
+            .Select(x => new OrganisationMemberStaffDto(
+                x.TeamId, "Team", x.IndividualId,
+                string.Join(" ", x.Name.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)),
+                x.EmployeeNumber))
+            .OrderBy(x => x.Name)
+            .ToList();
+
+        var opGroupStaffRows = await db.GroupStaffs.AsNoTracking()
+            .Where(gs => gs.Group.BusinessEntityOrganisationId == id)
+            .Select(gs => new
+            {
+                gs.GroupId,
+                IndividualId = gs.StaffIndividualId,
+                Name = (gs.StaffIndividual.Individual.FirstNameEnglish + " " + (gs.StaffIndividual.Individual.MiddleNameEnglish ?? "") + " " + (gs.StaffIndividual.Individual.LastNameEnglish ?? "")).Trim(),
+                gs.StaffIndividual.EmployeeNumber
+            })
+            .ToListAsync();
+        var hrGroupStaffRows = await (
+            from m in db.StaffGroupMembers.AsNoTracking()
+            join s in db.Staffs.AsNoTracking() on m.IndividualId equals s.IndividualId
+            where m.IsActive && m.StaffGroup.OrganisationId == id && !m.StaffGroup.IsDissolved
+            select new
+            {
+                m.StaffGroupId,
+                m.IndividualId,
+                Name = (s.Individual.FirstNameEnglish + " " + (s.Individual.MiddleNameEnglish ?? "") + " " + (s.Individual.LastNameEnglish ?? "")).Trim(),
+                s.EmployeeNumber
+            }).ToListAsync();
+        var groupStaff = opGroupStaffRows
+            .GroupBy(x => new { x.GroupId, x.IndividualId })
+            .Select(g => g.First())
+            .Select(x => new OrganisationMemberStaffDto(
+                x.GroupId, "Operational", x.IndividualId,
+                string.Join(" ", x.Name.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)),
+                x.EmployeeNumber))
+            .Concat(hrGroupStaffRows
+                .GroupBy(x => new { x.StaffGroupId, x.IndividualId })
+                .Select(g => g.First())
+                .Select(x => new OrganisationMemberStaffDto(
+                    x.StaffGroupId, "StaffGroup", x.IndividualId,
+                    string.Join(" ", x.Name.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)),
+                    x.EmployeeNumber)))
+            .OrderBy(x => x.Name)
+            .ToList();
+
         var allGroups = operationalGroups.Concat(staffGroups).OrderBy(g => g.Name).ToList();
 
         return new()
@@ -178,7 +236,9 @@ public partial class OrganisationSettingsService(IDbContextFactory<HrmTeContext>
             Departments = departments,
             DepartmentStaff = departmentStaff,
             Teams = teams,
-            Groups = allGroups
+            TeamStaff = teamStaff,
+            Groups = allGroups,
+            GroupStaff = groupStaff
         };
     }
     public async Task<ServiceResult> SaveDetailsAsync(OrganisationSettingsDto model)
@@ -547,5 +607,38 @@ public partial class OrganisationSettingsService(IDbContextFactory<HrmTeContext>
         await db.SaveChangesAsync();
         await tx.CommitAsync();
         return ServiceResult.Ok("Operational group removed.");
+    }
+
+    public async Task<ServiceResult> SaveTeamSummaryAsync(int organisationId, int teamId, string name, int? departmentId)
+    {
+        await RequireAsync(organisationId, "Organisation.Edit", "UserOrganisations.Edit");
+        if (string.IsNullOrWhiteSpace(name) || name.Trim().Length > 200)
+            return ServiceResult.Fail("Enter a team name (up to 200 characters).");
+        await using var db = await factory.CreateDbContextAsync();
+        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted);
+        var team = await db.Teams.FirstOrDefaultAsync(t => t.TeamId == teamId && t.OrganisationId == organisationId && t.IsValid != false);
+        if (team == null) return ServiceResult.Fail("Team was not found in this organisation.");
+        if (departmentId.HasValue && departmentId.Value > 0 &&
+            !await db.OrganisationStructures.AnyAsync(s => s.OrganisationStructureId == departmentId.Value && s.OrganisationBusinessEntityID == organisationId && s.OrganisationStructureStateId == 3))
+            return ServiceResult.Fail("Select a valid department in this organisation.");
+        team.Name = name.Trim();
+        team.OrganisationStructureId = departmentId is > 0 ? departmentId.Value : null;
+        await db.SaveChangesAsync();
+        await tx.CommitAsync();
+        return ServiceResult.Ok("Team saved.");
+    }
+
+    public async Task<ServiceResult> SoftDeleteTeamAsync(int organisationId, int teamId)
+    {
+        await RequireAsync(organisationId, "Organisation.Edit", "UserOrganisations.Edit");
+        await using var db = await factory.CreateDbContextAsync();
+        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted);
+        var team = await db.Teams.FirstOrDefaultAsync(t => t.TeamId == teamId && t.OrganisationId == organisationId && t.IsValid != false);
+        if (team == null) return ServiceResult.Fail("Team was not found in this organisation.");
+        team.IsValid = false;
+        team.EndDate = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+        await tx.CommitAsync();
+        return ServiceResult.Ok("Team soft-deleted.");
     }
 }

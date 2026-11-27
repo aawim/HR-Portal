@@ -37,8 +37,8 @@
             {
                 <div class="mb-2 flex items-center gap-2 px-1"><span class="text-teal-600 dark:text-teal-400"><OrganisationIcon /></span><h1 class="text-lg font-bold text-slate-900 dark:text-slate-100">@(data.Organisations.FirstOrDefault(x => x.Id == model.Id)?.Name ?? model.Name)</h1></div>
             }
-            <div class="grid w-full grid-cols-1 gap-2 xl:grid-cols-12 items-start">
-                <section class="min-w-0 w-full space-y-2 @(ShowRightOrganisationList ? "xl:col-span-8" : "col-span-full xl:col-span-12")">
+            <div class="grid w-full grid-cols-1 gap-2 lg:grid-cols-12 items-start">
+                <section class="min-w-0 w-full space-y-2 @(ShowRightOrganisationList ? (HasDetailView ? "lg:col-span-5" : "lg:col-span-8") : "col-span-full lg:col-span-12")">
                     @if (model.Id == 0)
                     {
                         <!-- New Organisation Onboarding Form (generous p-4 padding) -->
@@ -251,6 +251,8 @@
                                             </div>
                                             <div class="flex items-center gap-1 shrink-0">
                                                 <button type="button" class="app-button app-button-neutral app-button-sm" @onclick="() => ViewTeam(tm)">View</button>
+                                                <button type="button" class="app-button app-button-secondary app-button-sm" @onclick="() => OpenEditTeamModal(tm)">Edit</button>
+                                                <button type="button" class="app-button app-button-danger app-button-sm" @onclick="() => deletingTeam = tm">Delete</button>
                                             </div>
                                         </div>
                                     }
@@ -398,8 +400,8 @@
                 </section>
                 @if (HasDetailView)
                 {
-                    <!-- Selected Department / Team / Group Detail Panel on the Right (with Close button) -->
-                    <aside class="min-w-0 xl:col-span-4">
+                    <!-- Selected Department / Team / Group Detail Panel on the Right (with Close button & p-2) -->
+                    <aside class="min-w-0 p-2 lg:col-span-5">
                         <div class="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs">
                             <div class="flex items-center justify-between gap-2 border-b border-slate-200 dark:border-slate-800 px-3 py-2.5"
                                  style="@(IsSuperAdminContext ? "background-color: #eef8fc;" : null)">
@@ -516,47 +518,103 @@
                                 }
                                 else if (viewedTeam != null)
                                 {
-                                    <div class="space-y-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 p-3">
-                                        <div>
-                                            <p class="text-[10px] font-semibold uppercase text-slate-400">Team Name</p>
-                                            <p class="font-semibold text-slate-900 dark:text-slate-100">@viewedTeam.Name</p>
+                                    var tmStaff = links.TeamStaff.Where(s => s.ParentId == viewedTeam.Id).ToList();
+                                    <div class="space-y-3">
+                                        <div class="grid grid-cols-2 gap-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 p-2.5">
+                                            <div>
+                                                <p class="text-[10px] font-semibold uppercase text-slate-400">Team Name</p>
+                                                <p class="font-semibold text-slate-900 dark:text-slate-100">@viewedTeam.Name</p>
+                                            </div>
+                                            <div>
+                                                <p class="text-[10px] font-semibold uppercase text-slate-400">Department</p>
+                                                <p class="font-medium text-slate-800 dark:text-slate-200">@(viewedTeam.DepartmentName ?? "Organisation-wide")</p>
+                                            </div>
+                                            <div>
+                                                <p class="text-[10px] font-semibold uppercase text-slate-400">Active Staff</p>
+                                                <p class="font-bold text-sky-700">@tmStaff.Count</p>
+                                            </div>
+                                            <div class="flex items-end justify-end gap-1">
+                                                <button type="button" class="app-button app-button-secondary app-button-sm" @onclick="() => OpenEditTeamModal(viewedTeam)">Edit</button>
+                                                <button type="button" class="app-button app-button-danger app-button-sm" @onclick="() => deletingTeam = viewedTeam">Delete</button>
+                                            </div>
                                         </div>
-                                        <div>
-                                            <p class="text-[10px] font-semibold uppercase text-slate-400">Department</p>
-                                            <p class="font-medium text-slate-800 dark:text-slate-200">@(viewedTeam.DepartmentName ?? "Organisation-wide")</p>
-                                        </div>
-                                        <div>
-                                            <p class="text-[10px] font-semibold uppercase text-slate-400">Active Staff</p>
-                                            <p class="font-bold text-sky-700">@viewedTeam.StaffCount</p>
+
+                                        <div class="space-y-1.5">
+                                            <p class="text-[11px] font-bold text-slate-800 dark:text-slate-200">Team Staff (@tmStaff.Count)</p>
+                                            @if (tmStaff.Count == 0)
+                                            {
+                                                <p class="rounded-lg border border-dashed border-slate-200 p-2.5 text-[11px] text-slate-400">No active staff assigned to this team.</p>
+                                            }
+                                            else
+                                            {
+                                                <div class="divide-y divide-slate-100 dark:divide-slate-800 rounded-xl border border-slate-200 dark:border-slate-800 max-h-60 overflow-y-auto">
+                                                    @foreach (var st in tmStaff)
+                                                    {
+                                                        <div class="px-2.5 py-1.5 flex items-center justify-between gap-2">
+                                                            <p class="font-semibold text-slate-800 dark:text-slate-100 truncate">@st.Name</p>
+                                                            @if (!string.IsNullOrWhiteSpace(st.EmployeeNumber))
+                                                            {
+                                                                <span class="font-mono text-[10px] text-slate-500 shrink-0">@st.EmployeeNumber</span>
+                                                            }
+                                                        </div>
+                                                    }
+                                                </div>
+                                            }
                                         </div>
                                     </div>
                                 }
                                 else if (viewedGroup != null)
                                 {
-                                    <div class="space-y-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 p-3">
-                                        <div>
-                                            <p class="text-[10px] font-semibold uppercase text-slate-400">Group Name</p>
-                                            <p class="font-semibold text-slate-900 dark:text-slate-100">@viewedGroup.Name</p>
-                                        </div>
-                                        <div>
-                                            <p class="text-[10px] font-semibold uppercase text-slate-400">Type / Code</p>
-                                            <p class="font-medium text-slate-800 dark:text-slate-200">@(viewedGroup.Code ?? viewedGroup.Source)</p>
-                                        </div>
-                                        <div>
-                                            <p class="text-[10px] font-semibold uppercase text-slate-400">Department</p>
-                                            <p class="font-medium text-slate-800 dark:text-slate-200">@(viewedGroup.DepartmentName ?? "Organisation-wide")</p>
-                                        </div>
-                                        <div>
-                                            <p class="text-[10px] font-semibold uppercase text-slate-400">Members</p>
-                                            <p class="font-bold text-blue-700">@viewedGroup.MemberCount</p>
-                                        </div>
-                                        @if (!string.IsNullOrWhiteSpace(viewedGroup.Description))
-                                        {
+                                    var grpStaff = links.GroupStaff.Where(s => s.ParentId == viewedGroup.Id && s.Source == viewedGroup.Source).ToList();
+                                    <div class="space-y-3">
+                                        <div class="grid grid-cols-2 gap-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 p-2.5">
                                             <div>
-                                                <p class="text-[10px] font-semibold uppercase text-slate-400">Description</p>
-                                                <p class="text-slate-700 dark:text-slate-300">@viewedGroup.Description</p>
+                                                <p class="text-[10px] font-semibold uppercase text-slate-400">Group Name</p>
+                                                <p class="font-semibold text-slate-900 dark:text-slate-100">@viewedGroup.Name</p>
                                             </div>
-                                        }
+                                            <div>
+                                                <p class="text-[10px] font-semibold uppercase text-slate-400">Type / Code</p>
+                                                <p class="font-medium text-slate-800 dark:text-slate-200">@(viewedGroup.Code ?? viewedGroup.Source)</p>
+                                            </div>
+                                            <div>
+                                                <p class="text-[10px] font-semibold uppercase text-slate-400">Department</p>
+                                                <p class="font-medium text-slate-800 dark:text-slate-200">@(viewedGroup.DepartmentName ?? "Organisation-wide")</p>
+                                            </div>
+                                            <div class="flex items-end justify-end gap-1">
+                                                <button type="button" class="app-button app-button-secondary app-button-sm" @onclick="() => OpenEditGroupModal(viewedGroup)">Edit</button>
+                                                <button type="button" class="app-button app-button-danger app-button-sm" @onclick="() => deletingGroup = viewedGroup">Delete</button>
+                                            </div>
+                                            @if (!string.IsNullOrWhiteSpace(viewedGroup.Description))
+                                            {
+                                                <div class="col-span-2">
+                                                    <p class="text-[10px] font-semibold uppercase text-slate-400">Description</p>
+                                                    <p class="text-slate-700 dark:text-slate-300">@viewedGroup.Description</p>
+                                                </div>
+                                            }
+                                        </div>
+
+                                        <div class="space-y-1.5">
+                                            <p class="text-[11px] font-bold text-slate-800 dark:text-slate-200">Group Staff (@grpStaff.Count)</p>
+                                            @if (grpStaff.Count == 0)
+                                            {
+                                                <p class="rounded-lg border border-dashed border-slate-200 p-2.5 text-[11px] text-slate-400">No active staff assigned to this group.</p>
+                                            }
+                                            else
+                                            {
+                                                <div class="divide-y divide-slate-100 dark:divide-slate-800 rounded-xl border border-slate-200 dark:border-slate-800 max-h-60 overflow-y-auto">
+                                                    @foreach (var st in grpStaff)
+                                                    {
+                                                        <div class="px-2.5 py-1.5 flex items-center justify-between gap-2">
+                                                            <p class="font-semibold text-slate-800 dark:text-slate-100 truncate">@st.Name</p>
+                                                            @if (!string.IsNullOrWhiteSpace(st.EmployeeNumber))
+                                                            {
+                                                                <span class="font-mono text-[10px] text-slate-500 shrink-0">@st.EmployeeNumber</span>
+                                                            }
+                                                        </div>
+                                                    }
+                                                </div>
+                                            }
+                                        </div>
                                     </div>
                                 }
                             </div>
@@ -565,7 +623,7 @@
                 }
                 @if (ShowRightOrganisationList)
                 {
-                <aside class="min-w-0 @(HasDetailView ? "xl:col-span-2" : "xl:col-span-4")">
+                <aside class="min-w-0 p-2 @(HasDetailView ? "lg:col-span-2" : "lg:col-span-4")">
                     <div class="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs">
                         <div class="border-b border-slate-200 dark:border-slate-800 p-2 flex flex-col gap-2">
                             <div class="flex items-center justify-between gap-2">
@@ -740,6 +798,50 @@
                 </div>
             </div>
         }
+
+        @if (showTeamModal)
+        {
+            <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4" role="dialog" aria-modal="true" aria-label="Edit Team">
+                <div class="w-full max-w-md rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl overflow-hidden">
+                    <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 px-4 py-3">
+                        <h3 class="text-sm font-bold text-slate-900 dark:text-slate-100">Edit Team</h3>
+                        <button type="button" class="text-slate-400 hover:text-slate-600 text-sm font-bold" @onclick="() => showTeamModal = false">✕</button>
+                    </div>
+                    <div class="space-y-3 p-4">
+                        <label class="@Label">Team name<input class="@Input" maxlength="200" @bind="teamDraftName" /></label>
+                        <label class="@Label">Department (optional)
+                            <select class="@Input" @bind="teamDraftDeptId">
+                                <option value="">Organisation-wide</option>
+                                @foreach (var d in links.Departments) { <option value="@d.Id">@d.Name</option> }
+                            </select>
+                        </label>
+                    </div>
+                    <div class="flex justify-end gap-2 border-t border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 px-4 py-3">
+                        <button type="button" class="app-button app-button-secondary app-button-sm" @onclick="() => showTeamModal = false">Cancel</button>
+                        <button type="button" class="app-button app-button-primary app-button-sm" disabled="@busy" @onclick="SaveTeamModalAsync">Save Team</button>
+                    </div>
+                </div>
+            </div>
+        }
+
+        @if (deletingTeam != null)
+        {
+            <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4" role="dialog" aria-modal="true" aria-label="Soft Delete Team">
+                <div class="w-full max-w-md rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl overflow-hidden">
+                    <div class="border-b border-slate-200 dark:border-slate-800 px-4 py-3">
+                        <h3 class="text-sm font-bold text-rose-700">Soft Delete Team</h3>
+                    </div>
+                    <div class="p-4 text-xs text-slate-700 dark:text-slate-300 space-y-2">
+                        <p>Soft-delete team <strong>@deletingTeam.Name</strong>?</p>
+                        <p class="text-[11px] text-slate-500">The team will be marked inactive and hidden from active lists while preserving history.</p>
+                    </div>
+                    <div class="flex justify-end gap-2 border-t border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 px-4 py-3">
+                        <button type="button" class="app-button app-button-secondary app-button-sm" @onclick="() => deletingTeam = null">Cancel</button>
+                        <button type="button" class="app-button app-button-danger app-button-sm" disabled="@busy" @onclick="ConfirmSoftDeleteTeamAsync">Confirm Soft Delete</button>
+                    </div>
+                </div>
+            </div>
+        }
     }
 </div>
 
@@ -755,13 +857,15 @@
     private bool busy, loading, addingAddress, addingContact, useExisting;
     private int? deletingAddress;
     private int? deletingContact;
-    private bool showEditOrgModal, showDeleteOrgModal, showDeptModal, showGroupModal;
+    private bool showEditOrgModal, showDeleteOrgModal, showDeptModal, showGroupModal, showTeamModal;
     private OrganisationSettingsDto editOrgDraft = new();
-    private int deptDraftId, deptDraftTypeId, groupDraftId;
-    private string deptDraftName = "", groupDraftName = "";
+    private int deptDraftId, deptDraftTypeId, groupDraftId, teamDraftId;
+    private int? teamDraftDeptId;
+    private string deptDraftName = "", groupDraftName = "", teamDraftName = "";
     private string? groupDraftCode, groupDraftDescription;
     private OrganisationDepartmentSummaryDto? deletingDepartment;
     private OrganisationGroupSummaryDto? deletingGroup;
+    private OrganisationTeamSummaryDto? deletingTeam;
     private OrganisationDepartmentSummaryDto? viewedDepartment;
     private OrganisationTeamSummaryDto? viewedTeam;
     private OrganisationGroupSummaryDto? viewedGroup;
@@ -830,6 +934,7 @@
         showEditOrgModal = false; showDeleteOrgModal = false;
         showDeptModal = false; deletingDepartment = null;
         showGroupModal = false; deletingGroup = null;
+        showTeamModal = false; deletingTeam = null;
         CloseDetailView();
         address = new() { BaseTypeId = data?.AddressTypes.FirstOrDefault()?.Id ?? 0, CountryId = model.CountryId, UsageId = data?.AddressUsages.FirstOrDefault(x => x.Id == 3)?.Id ?? data?.AddressUsages.FirstOrDefault()?.Id ?? 0 };
         contact = new(); addressResults.Clear(); addressSearch = ""; useExisting = false; addingAddress = false; addingContact = false;
@@ -871,6 +976,13 @@
     }
     private Task SaveGroupModalAsync() => ExecuteAsync(() => Settings.SaveGroupSummaryAsync(model.Id, groupDraftId, groupDraftName, groupDraftCode, groupDraftDescription));
     private Task ConfirmSoftDeleteGroupAsync() => deletingGroup == null ? Task.CompletedTask : ExecuteAsync(() => Settings.SoftDeleteGroupAsync(model.Id, deletingGroup.Id));
+    private void OpenEditTeamModal(OrganisationTeamSummaryDto tm)
+    {
+        teamDraftId = tm.Id; teamDraftName = tm.Name; teamDraftDeptId = tm.DepartmentId;
+        showTeamModal = true;
+    }
+    private Task SaveTeamModalAsync() => ExecuteAsync(() => Settings.SaveTeamSummaryAsync(model.Id, teamDraftId, teamDraftName, teamDraftDeptId));
+    private Task ConfirmSoftDeleteTeamAsync() => deletingTeam == null ? Task.CompletedTask : ExecuteAsync(() => Settings.SoftDeleteTeamAsync(model.Id, deletingTeam.Id));
     private async Task SelectAsync(OrganisationSettingsDto item, bool navigate = true)
     {
         busy = true; error = null;
