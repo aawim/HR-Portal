@@ -28,6 +28,11 @@ public sealed class ChannelErrorLogQueue : IErrorLogQueue
         return _channel.Writer.TryWrite(entry);
     }
 
+    public bool TryDequeue(out ErrorLogEntry? entry)
+    {
+        return _channel.Reader.TryRead(out entry);
+    }
+
     public ValueTask<ErrorLogEntry> DequeueAsync(CancellationToken cancellationToken = default)
     {
         return _channel.Reader.ReadAsync(cancellationToken);

@@ -221,25 +221,38 @@ public class UserSettingsService(IDbContextFactory<HrmTeContext> factory, IUserA
     public async Task<ServiceResult> SaveUserAccessAsync(ManagedUserDto model)
     {
         var (actor, org) = await RequireAsync(model.OrganisationId, "Users.Roles.Edit");
+        var desiredDirect = (model.DirectPermissionIds ?? []).Distinct().ToArray();
+        var desiredGroups = (model.RoleIds ?? []).Distinct().ToArray();
         await using var db = await factory.CreateDbContextAsync();
-        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
-        var entity = await ScopedUserAsync(db, model.Id, org); var orgId = entity.UserOrganisationId!.Value;
-        var allowedIds = await db.UserOrganisationRoles.Where(p => p.UserOrganisationID == orgId && p.IsActive).Select(p => p.RoleID).ToListAsync();
-        if (model.DirectPermissionIds.Except(allowedIds).Any()) return ServiceResult.Fail("Some direct permissions are not enabled for this organisation. Update Organisation Permissions first.");
-        var desiredGroups = model.RoleIds.Distinct().ToArray();
-        var groups = await db.UserGroups.Include(x => x.UserGroupRoles).Where(x => desiredGroups.Contains(x.UserGroupId) && x.UserOrganisationId == orgId).ToListAsync();
-        if (groups.Count != desiredGroups.Length) return ServiceResult.Fail("Select roles from the current organisation.");
-        var oldDirect = entity.UserRoles.Where(x => x.UserOrganisationId == orgId && x.IsActive).Select(x => x.RoleId).ToArray();
-        var oldGroups = entity.UserAssignedUserGroups.Where(x => x.UserGroup.UserOrganisationId == orgId).Select(x => x.UserGroupId).ToArray();
-        if (actor.UserId == entity.UserId &&
-            (model.DirectPermissionIds.Except(oldDirect).Any() || desiredGroups.Except(oldGroups).Any()))
-            throw new UnauthorizedAccessException("You cannot increase your own access.");
-        var addedGroupPermissions = groups.Where(x => !oldGroups.Contains(x.UserGroupId)).SelectMany(x => x.UserGroupRoles.Where(r => r.IsActive).Select(r => r.RoleId));
-        await ValidateGrantsAsync(db, actor, model.DirectPermissionIds.Concat(addedGroupPermissions), oldDirect);
-        var log = await logs.CreateAsync(db, SharedConfig.OperationLogActionTypes.USER_ROLE_UPDATE, $"Updated permissions and roles for account {entity.UserId}");
-        await UserAccessAssignmentWriter.ApplyAsync(db, entity, desiredGroups, model.DirectPermissionIds, log.OperationLogId);
-        await db.SaveChangesAsync(); await tx.CommitAsync(); await contexts.InvalidateAsync(entity.UserId);
-        return ServiceResult.Ok("Account roles and direct permissions saved.");
+        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted);
+        try
+        {
+            var entity = await ScopedUserAsync(db, model.Id, org);
+            if (entity.UserOrganisationId is not int orgId)
+                return ServiceResult.Fail("This user account is not linked to a user organisation.");
+            var allowedIds = await db.UserOrganisationRoles.Where(p => p.UserOrganisationID == orgId && p.IsActive).Select(p => p.RoleID).ToListAsync();
+            if (desiredDirect.Except(allowedIds).Any()) return ServiceResult.Fail("Some direct permissions are not enabled for this organisation. Update Organisation Permissions first.");
+            var groups = await db.UserGroups.Include(x => x.UserGroupRoles).Where(x => desiredGroups.Contains(x.UserGroupId) && x.UserOrganisationId == orgId).ToListAsync();
+            if (groups.Count != desiredGroups.Length) return ServiceResult.Fail("Select roles from the current organisation.");
+            var oldDirect = entity.UserRoles.Where(x => x.UserOrganisationId == orgId && x.IsActive).Select(x => x.RoleId).ToArray();
+            var oldGroups = entity.UserAssignedUserGroups.Where(x => x.UserGroup != null && x.UserGroup.UserOrganisationId == orgId).Select(x => x.UserGroupId).ToArray();
+            if (actor.UserId == entity.UserId &&
+                (desiredDirect.Except(oldDirect).Any() || desiredGroups.Except(oldGroups).Any()))
+                throw new UnauthorizedAccessException("You cannot increase your own access.");
+            var addedGroupPermissions = groups.Where(x => !oldGroups.Contains(x.UserGroupId)).SelectMany(x => x.UserGroupRoles.Where(r => r.IsActive).Select(r => r.RoleId));
+            await ValidateGrantsAsync(db, actor, desiredDirect.Concat(addedGroupPermissions), oldDirect);
+            var log = await logs.CreateAsync(db, SharedConfig.OperationLogActionTypes.USER_ROLE_UPDATE, $"Updated permissions and roles for account {entity.UserId}");
+            await UserAccessAssignmentWriter.ApplyAsync(db, entity, desiredGroups, desiredDirect, log.OperationLogId);
+            await db.SaveChangesAsync();
+            await tx.CommitAsync();
+            await contexts.InvalidateAsync(entity.UserId);
+            return ServiceResult.Ok("Account roles and direct permissions saved.");
+        }
+        catch (DbUpdateException ex)
+        {
+            await tx.RollbackAsync();
+            return ServiceResult.Fail($"Could not save account permissions: {ex.InnerException?.Message ?? ex.Message}");
+        }
     }
 
     public async Task<ServiceResult> SaveStaffAsync(ManagedStaffDto model)

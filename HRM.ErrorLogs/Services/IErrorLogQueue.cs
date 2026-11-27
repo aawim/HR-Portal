@@ -14,6 +14,11 @@ public interface IErrorLogQueue
     bool Enqueue(ErrorLogEntry entry);
 
     /// <summary>
+    /// Attempts to dequeue an entry immediately without waiting.
+    /// </summary>
+    bool TryDequeue(out ErrorLogEntry? entry);
+
+    /// <summary>
     /// Reads an entry asynchronously when available.
     /// </summary>
     ValueTask<ErrorLogEntry> DequeueAsync(CancellationToken cancellationToken = default);

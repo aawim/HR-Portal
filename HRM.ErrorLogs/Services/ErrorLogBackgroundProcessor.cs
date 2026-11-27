@@ -14,7 +14,6 @@ public sealed class ErrorLogBackgroundProcessor : BackgroundService
     private readonly IErrorLogStore? _store;
     private readonly ILogger<ErrorLogBackgroundProcessor>? _logger;
     private const int BatchSize = 50;
-    private static readonly TimeSpan FlushInterval = TimeSpan.FromMilliseconds(500);
 
     public ErrorLogBackgroundProcessor(
         IErrorLogQueue queue,
@@ -40,30 +39,15 @@ public sealed class ErrorLogBackgroundProcessor : BackgroundService
         {
             try
             {
-                var timeoutTask = Task.Delay(FlushInterval, stoppingToken);
-                var dequeueTask = _queue.DequeueAsync(stoppingToken).AsTask();
+                // Await a single reader cleanly (never orphan a ReadAsync task on a SingleReader channel).
+                var firstItem = await _queue.DequeueAsync(stoppingToken);
+                batch.Add(firstItem);
 
-                var completedTask = await Task.WhenAny(dequeueTask, timeoutTask);
-
-                if (completedTask == dequeueTask)
+                // Drain any additional immediately-ready entries up to BatchSize
+                while (batch.Count < BatchSize && _queue.TryDequeue(out var nextItem))
                 {
-                    var firstItem = await dequeueTask;
-                    batch.Add(firstItem);
-
-                    // Drain whatever else is currently ready in the channel up to BatchSize
-                    while (batch.Count < BatchSize)
-                    {
-                        using var drainCts = new CancellationTokenSource(10);
-                        try
-                        {
-                            var nextItem = await _queue.DequeueAsync(drainCts.Token);
-                            batch.Add(nextItem);
-                        }
-                        catch
-                        {
-                            break; // Channel is empty for now
-                        }
-                    }
+                    if (nextItem != null)
+                        batch.Add(nextItem);
                 }
 
                 if (batch.Count > 0)
@@ -79,7 +63,7 @@ public sealed class ErrorLogBackgroundProcessor : BackgroundService
             catch (Exception ex)
             {
                 _logger?.LogError(ex, "Background error log batch processor encountered an unexpected error.");
-                await Task.Delay(1000, stoppingToken);
+                try { await Task.Delay(1000, stoppingToken); } catch (OperationCanceledException) { break; }
             }
         }
 
