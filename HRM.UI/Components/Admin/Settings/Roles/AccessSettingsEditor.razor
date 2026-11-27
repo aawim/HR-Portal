@@ -143,6 +143,7 @@
 
                                 @if (activeView == "matrix")
                                 {
+                                    <p class="text-[11px] text-slate-500 dark:text-slate-400">Toggle actions by column or click any HR module to inspect, search, and select individual permissions.</p>
                                     <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
                                         <table class="w-full text-left text-xs">
                                             <thead class="border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/70 text-[11px] font-bold text-slate-700 dark:text-slate-200">
@@ -162,15 +163,22 @@
                                                     if (modPerms.Count == 0) continue;
                                                     var allModSelected = modPerms.All(p => role.PermissionIds.Contains(p.Id));
                                                     var modSelectedCount = modPerms.Count(p => role.PermissionIds.Contains(p.Id));
-                                                    <tr class="hover:bg-slate-50/60 dark:hover:bg-slate-800/40" @key="mod.Key">
+                                                    var isExpanded = expandedModuleKey == mod.Key;
+                                                    <tr class="@(isExpanded ? "bg-teal-50/50 dark:bg-teal-950/30" : "hover:bg-slate-50/60 dark:hover:bg-slate-800/40")" @key="mod.Key">
                                                         <td class="p-2">
-                                                            <div class="flex items-center gap-2">
-                                                                <i class="bi @mod.Icon text-teal-700 dark:text-teal-400"></i>
-                                                                <div>
-                                                                    <div class="font-semibold text-slate-900 dark:text-slate-100">@mod.Label</div>
-                                                                    <div class="text-[10px] text-slate-500">@modSelectedCount / @modPerms.Count permissions</div>
-                                                                </div>
-                                                            </div>
+                                                            <button type="button"
+                                                                    class="w-full text-left flex items-center justify-between gap-2 group cursor-pointer"
+                                                                    title="Click to inspect and search permissions in @mod.Label"
+                                                                    @onclick="() => ToggleModuleInspector(mod.Key)">
+                                                                <span class="flex items-center gap-2 min-w-0">
+                                                                    <i class="bi @(isExpanded ? "bi-chevron-down text-teal-700 dark:text-teal-300" : "bi-chevron-right text-slate-400 group-hover:text-teal-600") text-[11px] shrink-0"></i>
+                                                                    <i class="bi @mod.Icon text-teal-700 dark:text-teal-400 shrink-0"></i>
+                                                                    <span class="min-w-0">
+                                                                        <span class="block font-semibold text-slate-900 dark:text-slate-100 group-hover:text-teal-700 dark:group-hover:text-teal-300 truncate">@mod.Label</span>
+                                                                        <span class="block text-[10px] text-slate-500">@modSelectedCount / @modPerms.Count permissions</span>
+                                                                    </span>
+                                                                </span>
+                                                            </button>
                                                         </td>
                                                         @foreach (var bucket in new[] { HRM.Helpers.AccessActionBucket.View, HRM.Helpers.AccessActionBucket.CreateEdit, HRM.Helpers.AccessActionBucket.Approve, HRM.Helpers.AccessActionBucket.Configure })
                                                         {
@@ -202,6 +210,95 @@
                                                                    @onchange="e => MovePermissions(modPerms.Select(p => p.Id).ToList(), e.Value is true)" />
                                                         </td>
                                                     </tr>
+                                                    @if (isExpanded)
+                                                    {
+                                                        var filteredModPerms = FilterModulePermissions(modPerms);
+                                                        var filteredIds = filteredModPerms.Select(p => p.Id).ToList();
+                                                        <tr class="bg-slate-50/80 dark:bg-slate-800/30" @key='($"{mod.Key}-drawer")'>
+                                                            <td colspan="6" class="p-2.5">
+                                                                <div class="rounded-xl border border-teal-200/80 dark:border-teal-800/60 bg-white dark:bg-slate-900 p-2.5 flex flex-col gap-2">
+                                                                    <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-2">
+                                                                        <div class="min-w-0">
+                                                                            <p class="text-xs font-bold text-slate-900 dark:text-slate-100">@mod.Label Permissions</p>
+                                                                            <p class="text-[11px] text-slate-500">@modSelectedCount / @modPerms.Count selected@(string.IsNullOrWhiteSpace(moduleSearch) && moduleActionFilter == "all" ? "" : $" · {filteredModPerms.Count} shown")</p>
+                                                                        </div>
+                                                                        <div class="flex flex-wrap items-center gap-1.5">
+                                                                            @if (filteredModPerms.Count > 0)
+                                                                            {
+                                                                                <button type="button"
+                                                                                        class="rounded-lg border border-teal-200 dark:border-teal-800 bg-teal-50 dark:bg-teal-950/50 px-2 py-1 text-[11px] font-semibold text-teal-800 dark:text-teal-200 hover:bg-teal-100 transition"
+                                                                                        @onclick="() => MovePermissions(filteredIds, true)">
+                                                                                    Select shown
+                                                                                </button>
+                                                                                <button type="button"
+                                                                                        class="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-[11px] font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 transition"
+                                                                                        @onclick="() => MovePermissions(filteredIds, false)">
+                                                                                    Deselect shown
+                                                                                </button>
+                                                                            }
+                                                                            <button type="button"
+                                                                                    class="rounded-lg px-2 py-1 text-[11px] font-semibold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 transition"
+                                                                                    @onclick="CloseModuleInspector">
+                                                                                Close
+                                                                            </button>
+                                                                        </div>
+                                                                    </div>
+
+                                                                    <div class="flex flex-wrap items-center gap-2">
+                                                                        <input type="search"
+                                                                               placeholder="Search permissions in @mod.Label…"
+                                                                               @bind="moduleSearch"
+                                                                               @bind:event="oninput"
+                                                                               class="flex-1 min-w-[180px] rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500" />
+                                                                        <div class="flex flex-wrap items-center gap-1">
+                                                                            @foreach (var opt in ModuleActionFilterOptions)
+                                                                            {
+                                                                                var activeFilter = moduleActionFilter == opt.Key;
+                                                                                <button type="button"
+                                                                                        class="rounded-lg border px-2 py-1 text-[11px] font-semibold transition @(activeFilter ? "border-teal-600 bg-teal-600 text-white" : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:border-teal-400")"
+                                                                                        @onclick="() => moduleActionFilter = opt.Key">
+                                                                                    @opt.Label
+                                                                                </button>
+                                                                            }
+                                                                        </div>
+                                                                    </div>
+
+                                                                    @if (filteredModPerms.Count == 0)
+                                                                    {
+                                                                        <p class="p-3 text-center text-xs text-slate-500">No permissions in @mod.Label match your search or filter.</p>
+                                                                    }
+                                                                    else
+                                                                    {
+                                                                        <div class="grid max-h-64 grid-cols-1 gap-1.5 overflow-y-auto pr-0.5 md:grid-cols-2">
+                                                                            @foreach (var perm in filteredModPerms)
+                                                                            {
+                                                                                var isChecked = role.PermissionIds.Contains(perm.Id);
+                                                                                var actionLabel = ActionBucketLabel(HRM.Helpers.AccessControlUiHelper.ResolveAction(perm));
+                                                                                <label class="flex items-start gap-2 rounded-lg border p-2 cursor-pointer transition @(isChecked ? "border-teal-200 dark:border-teal-800 bg-teal-50/40 dark:bg-teal-950/25" : "border-slate-200 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-800/40 hover:border-teal-300")"
+                                                                                       @key="perm.Id">
+                                                                                    <input type="checkbox"
+                                                                                           class="mt-0.5 h-4 w-4 rounded accent-teal-700"
+                                                                                           checked="@isChecked"
+                                                                                           @onchange="e => TogglePermission(perm.Id, e.Value is true)" />
+                                                                                    <span class="min-w-0 flex-1">
+                                                                                        <span class="flex flex-wrap items-center gap-1.5">
+                                                                                            <span class="text-xs font-semibold text-slate-900 dark:text-slate-100">@perm.Name</span>
+                                                                                            <span class="rounded-full bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 text-[10px] font-medium text-slate-600 dark:text-slate-300">@actionLabel</span>
+                                                                                        </span>
+                                                                                        <span class="mt-0.5 block break-all font-mono text-[10px] text-slate-500 dark:text-slate-400">@perm.Key</span>
+                                                                                        @if (!string.IsNullOrWhiteSpace(perm.Description))
+                                                                                        {
+                                                                                            <span class="mt-0.5 block text-[11px] leading-snug text-slate-600 dark:text-slate-300">@perm.Description</span>
+                                                                                        }
+                                                                                    </span>
+                                                                                </label>
+                                                                            }
+                                                                        </div>
+                                                                    }
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    }
                                                 }
                                             </tbody>
                                         </table>
@@ -374,6 +471,52 @@
     private string search = "";
     private string staffSearch = "";
     private string activeView = "matrix";
+    private string? expandedModuleKey;
+    private string moduleSearch = "";
+    private string moduleActionFilter = "all";
+
+    private static readonly (string Key, string Label)[] ModuleActionFilterOptions =
+    [
+        ("all", "All"),
+        ("View", "View"),
+        ("CreateEdit", "Create / Edit"),
+        ("Approve", "Approve"),
+        ("Configure", "Configure")
+    ];
+
+    private void ToggleModuleInspector(string moduleKey)
+    {
+        if (expandedModuleKey == moduleKey)
+        {
+            CloseModuleInspector();
+            return;
+        }
+        expandedModuleKey = moduleKey;
+        moduleSearch = "";
+        moduleActionFilter = "all";
+    }
+
+    private void CloseModuleInspector()
+    {
+        expandedModuleKey = null;
+        moduleSearch = "";
+        moduleActionFilter = "all";
+    }
+
+    private List<PermissionDefinitionDto> FilterModulePermissions(List<PermissionDefinitionDto> perms) =>
+        perms.Where(p =>
+            (moduleActionFilter == "all" || HRM.Helpers.AccessControlUiHelper.ResolveAction(p).ToString() == moduleActionFilter) &&
+            (string.IsNullOrWhiteSpace(moduleSearch) || Matches(p, moduleSearch)))
+        .OrderBy(p => p.Name)
+        .ToList();
+
+    private static string ActionBucketLabel(HRM.Helpers.AccessActionBucket bucket) => bucket switch
+    {
+        HRM.Helpers.AccessActionBucket.CreateEdit => "Create / Edit",
+        HRM.Helpers.AccessActionBucket.Approve => "Approve",
+        HRM.Helpers.AccessActionBucket.Configure => "Configure",
+        _ => "View"
+    };
     private void ApplyRoleTemplate(HRM.Helpers.RoleTemplatePreset template)
     {
         if (data == null) return;
