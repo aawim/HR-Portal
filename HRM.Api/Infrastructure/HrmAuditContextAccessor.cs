@@ -101,8 +101,9 @@ public sealed class HrmAuditContextAccessor(
 
         var currentOrg = await access.GetCurrentOrganisationIdAsync();
         var isAdmin = userCtx.IsSuperAdministrator || userCtx.IsOrganisationAdmin || await access.HasPermissionAsync("Admin");
+        var isDeveloper = await access.HasUserGroupAsync("Developer") || await access.HasPermissionAsync("Developer");
         var isHrLead = userCtx.IsHRHead || userCtx.IsHRManager;
-        var canViewAudit = isAdmin || isHrLead || userCtx.IsHRStaff ||
+        var canViewAudit = isAdmin || isDeveloper || isHrLead || userCtx.IsHRStaff ||
                            await access.HasPermissionAsync("Audit.View") ||
                            await access.HasPermissionAsync("AuditLogs.View");
         var canViewConfidential = userCtx.IsSuperAdministrator || userCtx.IsOrganisationAdmin || isHrLead ||

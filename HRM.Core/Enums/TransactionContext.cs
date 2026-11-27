@@ -7,5 +7,6 @@
         Mobile = 3,
         Developer = 4,
         Audit = 5,
+        SuperAdmin = 6,
     }
 }

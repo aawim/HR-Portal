@@ -64,8 +64,9 @@ public sealed class HrmActivityContextAccessor(
         var effectiveOrg = currentOrg > 0 ? currentOrg : userCtx.ActiveJob?.OrganisationId;
 
         var isAdmin = userCtx.IsSuperAdministrator || userCtx.IsOrganisationAdmin || await access.HasPermissionAsync("Admin");
+        var isDeveloper = await access.HasUserGroupAsync("Developer") || await access.HasPermissionAsync("Developer");
         var isHrLead = userCtx.IsHRHead || userCtx.IsHRManager;
-        var canViewOrg = isAdmin || isHrLead || userCtx.IsHRStaff ||
+        var canViewOrg = isAdmin || isDeveloper || isHrLead || userCtx.IsHRStaff ||
                          await access.HasPermissionAsync("Activity.View") ||
                          await access.HasPermissionAsync("ActivityLogs.View");
         var canViewTeam = canViewOrg || userCtx.IsSupervisor ||

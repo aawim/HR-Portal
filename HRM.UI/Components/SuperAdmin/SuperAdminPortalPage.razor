@@ -1,0 +1,345 @@
+@page "/superadmin"
+@page "/superadmin/{ActiveTab}"
+@using HRM.Components.Admin.Settings
+@using HRM.Components.Admin.Settings.JobTypes
+@using HRM.Components.Admin.Settings.Organisations
+@using HRM.Components.Admin.Settings.Positions
+@using HRM.Components.Admin.Settings.Roles
+@using HRM.Components.Admin.Settings.Users
+@using HRM.DTOs
+@using HRM.DTOs.Organisation
+@using HRM.Services
+@using HRM.Services.Interfaces
+@using Microsoft.AspNetCore.Components.Authorization
+@attribute [Authorize]
+@rendermode InteractiveServer
+
+@inject IUserAccessService UserAccess
+@inject PortalContext PortalContext
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@inject HRM.Services.Contracts.OrganisationSettingsServiceContracts.IOperations OrgSettings
+
+<PageTitle>SuperAdmin Portal - GHR Platform</PageTitle>
+
+<AuthorizeView>
+    <Authorized>
+        @if (checking)
+        {
+            <div class="mx-auto max-w-7xl p-4">
+                <div class="flex flex-col items-center justify-center p-12 my-6 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs">
+                    <div class="w-12 h-12 border-4 border-t-transparent rounded-full animate-spin" style="border-color: #ADD8E6; border-top-color: transparent;"></div>
+                    <p class="mt-4 text-sm font-semibold text-slate-700 dark:text-slate-200">Loading SuperAdmin Portal...</p>
+                    <p class="text-xs text-slate-400 mt-0.5">Verifying platform administrator authority</p>
+                </div>
+            </div>
+        }
+        else if (!isSuperAdmin)
+        {
+            <div class="mx-auto max-w-7xl p-4">
+                <div class="rounded-2xl border p-6 text-sm text-slate-900 shadow-sm space-y-2" style="background-color: #eef8fc; border-color: #ADD8E6;">
+                    <h2 class="font-bold text-base">SuperAdmin Access Required</h2>
+                    <p>Your account does not currently hold Super Administrator authority (<code class="font-mono text-xs">Super.Admin.Manage</code>).</p>
+                    <a href="/online" class="inline-block font-semibold text-blue-700 underline mt-2">Return to Employee Portal</a>
+                </div>
+            </div>
+        }
+        else
+        {
+            <section class="superadmin-workspace-page w-full min-w-0 p-2 space-y-3 text-slate-900 dark:text-slate-100">
+                <!-- 1. Compact, Transparent, Borderless Header (UI_DESIGN_STANDARD_SUPERADMIN) -->
+                <header class="superadmin-workspace-header staff-overview-no-print flex flex-wrap items-center justify-between gap-2 px-1 py-0.5">
+                    <div class="min-w-0">
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <h1 class="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 truncate">SuperAdmin Portal</h1>
+                            <span class="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold text-slate-900"
+                                  style="background-color: #ADD8E6; border-color: #7cc0d8;">
+                                <span class="h-1.5 w-1.5 rounded-full" style="background-color: #0369a1;"></span>
+                                Platform Configuration
+                            </span>
+                        </div>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">
+                            Platform-wide organisation onboarding, permission entitlements, cross-organisation staff administration, and shared catalogues.
+                        </p>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-1.5">
+                        <button type="button"
+                                class="app-button app-button-neutral app-button-sm"
+                                @onclick="ToggleFullWidthAsync">
+                            <AppIcon Name="@(isFullWidth ? "fullscreen_exit" : "fullscreen")" />
+                            <span>@(isFullWidth ? "Shrink View" : "Full Width")</span>
+                        </button>
+                    </div>
+                </header>
+
+                <!-- 2. SuperAdmin Contextual Tab Strip (#ADD8E6 Portal Theme) -->
+                <div class="superadmin-workspace-tabs staff-overview-no-print w-full border-b-2 overflow-x-auto" style="border-bottom-color: #ADD8E6;">
+                    <nav class="flex items-end gap-1 min-w-max pb-0" aria-label="SuperAdmin Portal Tabs">
+                        @foreach (var tab in Tabs)
+                        {
+                            var isActive = activeTab == tab.Key;
+                            <button type="button"
+                                    class="rounded-t-xl px-3.5 py-2 font-semibold text-xs transition-all border-t border-l border-r @(isActive ? "text-slate-900 shadow-xs" : "bg-white text-slate-800 hover:bg-sky-50 dark:bg-slate-800/90 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-700 border-slate-200 dark:border-slate-700")"
+                                    style="@(isActive ? "background-color: #ADD8E6; border-color: #7cc0d8; color: #0f172a;" : null)"
+                                    @onclick="() => SetTab(tab.Key)">
+                                @tab.Label
+                            </button>
+                        }
+                    </nav>
+                </div>
+
+                <!-- 3. Portal Content Area -->
+                <div class="superadmin-workspace-content w-full min-w-0 transition-all duration-300 @(isFullWidth ? "max-w-none" : "max-w-7xl mx-auto")">
+                    @if (activeTab == "overview")
+                    {
+                        <div class="space-y-4">
+                            <!-- Platform Summary Cards -->
+                            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                                <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-xs flex items-center gap-3">
+                                    <div class="flex h-10 w-10 items-center justify-center rounded-xl border text-slate-900" style="background-color: #ADD8E6; border-color: #7cc0d8;">
+                                        <AppIcon Name="corporate_fare" Class="text-lg" />
+                                    </div>
+                                    <div>
+                                        <p class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Organisations</p>
+                                        <p class="text-xl font-bold text-slate-900 dark:text-white">@(loadingSummary ? "…" : organisationCount.ToString())</p>
+                                    </div>
+                                </div>
+                                <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-xs flex items-center gap-3">
+                                    <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-sky-50 text-sky-700 border border-sky-200">
+                                        <AppIcon Name="bi-key" Class="text-lg" />
+                                    </div>
+                                    <div>
+                                        <p class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Entitlements</p>
+                                        <p class="text-sm font-bold text-slate-900 dark:text-white">Per-Org Permissions</p>
+                                    </div>
+                                </div>
+                                <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-xs flex items-center gap-3">
+                                    <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                        <AppIcon Name="users" Class="text-lg" />
+                                    </div>
+                                    <div>
+                                        <p class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Cross-Org Staff</p>
+                                        <p class="text-sm font-bold text-slate-900 dark:text-white">Users &amp; Staff Edit</p>
+                                    </div>
+                                </div>
+                                <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-xs flex items-center gap-3">
+                                    <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-50 text-amber-700 border border-amber-200">
+                                        <AppIcon Name="bi-collection" Class="text-lg" />
+                                    </div>
+                                    <div>
+                                        <p class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Catalogues</p>
+                                        <p class="text-sm font-bold text-slate-900 dark:text-white">Shared References</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Configuration Modules Grid -->
+                            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                                @foreach (var card in OverviewCards)
+                                {
+                                    <button type="button"
+                                            class="text-left rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-xs hover:border-sky-300 hover:bg-sky-50/40 dark:hover:bg-slate-800/80 transition space-y-2"
+                                            @onclick="() => SetTab(card.TabKey)">
+                                        <div class="flex items-center justify-between gap-2">
+                                            <div class="flex items-center gap-2.5">
+                                                <span class="inline-flex h-8 w-8 items-center justify-center rounded-lg border text-slate-900" style="background-color: #ADD8E6; border-color: #7cc0d8;">
+                                                    <AppIcon Name="@card.Icon" Class="text-base" />
+                                                </span>
+                                                <h2 class="text-sm font-bold text-slate-900 dark:text-white">@card.Title</h2>
+                                            </div>
+                                            <AppIcon Name="chevron_right" Class="text-slate-400" />
+                                        </div>
+                                        <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">@card.Description</p>
+                                    </button>
+                                }
+                            </div>
+                        </div>
+                    }
+                    else if (activeTab == "organisations")
+                    {
+                        <OrganisationSettingsEditor HideHeader="true" />
+                    }
+                    else if (activeTab == "permissions")
+                    {
+                        <OrganisationPermissions HideHeader="true" />
+                    }
+                    else if (activeTab == "portal-access")
+                    {
+                        <AdminPortalAccess />
+                    }
+                    else if (activeTab == "staff")
+                    {
+                        <div class="space-y-3">
+                            <div class="flex flex-wrap items-center gap-1.5 px-1">
+                                @foreach (var sub in UserSubTabs)
+                                {
+                                    var activeSub = selectedUserTab == sub.Tab;
+                                    <button type="button"
+                                            class="rounded-lg px-3 py-1.5 text-xs font-semibold border transition @(activeSub ? "text-slate-900 shadow-xs" : "bg-white text-slate-700 border-slate-200 hover:bg-sky-50")"
+                                            style="@(activeSub ? "background-color: #ADD8E6; border-color: #7cc0d8; color: #0f172a;" : null)"
+                                            @onclick="() => selectedUserTab = sub.Tab">
+                                        @sub.Label
+                                    </button>
+                                }
+                            </div>
+                            <UserSettingsEditor @key="selectedUserTab" Tab="selectedUserTab" />
+                        </div>
+                    }
+                    else if (activeTab == "roles")
+                    {
+                        <StaffAccessControl />
+                    }
+                    else if (activeTab == "resources")
+                    {
+                        <div class="space-y-3">
+                            <div class="flex flex-wrap items-center gap-1.5 px-1">
+                                @foreach (var res in ResourceSubTabs)
+                                {
+                                    var activeRes = selectedResourceKind == res.Kind;
+                                    <button type="button"
+                                            class="rounded-lg px-3 py-1.5 text-xs font-semibold border transition @(activeRes ? "text-slate-900 shadow-xs" : "bg-white text-slate-700 border-slate-200 hover:bg-sky-50")"
+                                            style="@(activeRes ? "background-color: #ADD8E6; border-color: #7cc0d8; color: #0f172a;" : null)"
+                                            @onclick="() => selectedResourceKind = res.Kind">
+                                        @res.Label
+                                    </button>
+                                }
+                            </div>
+                            <OrganisationResources @key="selectedResourceKind" Kind="selectedResourceKind" />
+                        </div>
+                    }
+                    else if (activeTab == "job-types")
+                    {
+                        <JobTypeConfiguration />
+                    }
+                    else if (activeTab == "positions")
+                    {
+                        <PayFrameworks />
+                    }
+                </div>
+            </section>
+        }
+    </Authorized>
+</AuthorizeView>
+
+@code {
+    [Parameter] public string? ActiveTab { get; set; }
+
+    private sealed record TabItem(string Key, string Label);
+    private sealed record OverviewCard(string TabKey, string Icon, string Title, string Description);
+
+    private static readonly TabItem[] Tabs =
+    [
+        new("overview", "Overview"),
+        new("organisations", "Organisation Onboarding"),
+        new("permissions", "Organisation Permissions"),
+        new("portal-access", "Admin Portal Access"),
+        new("staff", "Cross-Org Staff & Users"),
+        new("roles", "Roles & Access Control"),
+        new("resources", "Shared Resources"),
+        new("job-types", "Job & Work Types"),
+        new("positions", "Pay Frameworks")
+    ];
+
+    private static readonly OverviewCard[] OverviewCards =
+    [
+        new("organisations", "corporate_fare", "Organisation Onboarding", "Create and onboard organisations, configure hierarchy, locations, contacts, teams, supervisors, and organisation staff."),
+        new("permissions", "bi-key", "Organisation Permissions", "Enable or restrict module and feature permissions for each organisation across the platform."),
+        new("portal-access", "bi-shield-lock", "Admin Portal Access", "Explicitly grant or revoke Admin portal admission for users across organisations."),
+        new("staff", "users", "Cross-Org Staff & Users", "Manage user accounts, permissions, enrollment numbers, and cross-organisation staff records."),
+        new("roles", "bi-person-lock", "Roles & Access Control", "Configure role groups, permission sets, and staff access scopes."),
+        new("resources", "bi-collection", "Shared Resources", "Maintain platform-wide reference catalogues including structure types, organisation types, locations, and calendars."),
+        new("job-types", "bi-briefcase", "Job & Work Types", "Manage shared job types, leave sets, and overtime configuration catalogues."),
+        new("positions", "bi-diagram-3", "Pay Frameworks", "Maintain civil service and agency pay frameworks, grades, and job matrices.")
+    ];
+
+    private static readonly (UserSettingsTab Tab, string Label)[] UserSubTabs =
+    [
+        (UserSettingsTab.Staff, "Staff"),
+        (UserSettingsTab.Accounts, "Accounts"),
+        (UserSettingsTab.Permissions, "Account Permissions"),
+        (UserSettingsTab.Enrollment, "Enrollment Numbers"),
+        (UserSettingsTab.Organisation, "Organisation Access")
+    ];
+
+    private static readonly (OrganisationResourceKind Kind, string Label)[] ResourceSubTabs =
+    [
+        (OrganisationResourceKind.OrganisationTypes, "Organisation Types"),
+        (OrganisationResourceKind.StructureTypes, "Structure Types"),
+        (OrganisationResourceKind.LocationTypes, "Location Types"),
+        (OrganisationResourceKind.Locations, "Locations"),
+        (OrganisationResourceKind.Calendar, "Calendars"),
+        (OrganisationResourceKind.Requests, "Request Catalogues"),
+        (OrganisationResourceKind.StructureRequestTypes, "Structure Request Types")
+    ];
+
+    private bool checking = true;
+    private bool isSuperAdmin;
+    private bool isFullWidth;
+    private bool loadingSummary;
+    private int organisationCount;
+    private string activeTab = "overview";
+    private UserSettingsTab selectedUserTab = UserSettingsTab.Staff;
+    private OrganisationResourceKind selectedResourceKind = OrganisationResourceKind.OrganisationTypes;
+    private const string FullWidthStorageKey = "superadmin.workspace.fullWidth";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var actor = await UserAccess.GetContextAsync();
+            isSuperAdmin = actor?.IsSuperAdministrator == true || PortalContext.CanAccessSuperAdminPortal;
+            if (isSuperAdmin)
+            {
+                loadingSummary = true;
+                try
+                {
+                    var data = await OrgSettings.LoadAsync();
+                    organisationCount = data?.Organisations?.Count ?? 0;
+                }
+                catch { }
+                finally { loadingSummary = false; }
+            }
+        }
+        finally
+        {
+            checking = false;
+        }
+    }
+
+    protected override void OnParametersSet()
+    {
+        var requested = string.IsNullOrWhiteSpace(ActiveTab) ? "overview" : ActiveTab.Trim().ToLowerInvariant();
+        activeTab = Tabs.Any(t => t.Key == requested) ? requested : "overview";
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        try
+        {
+            var saved = await JS.InvokeAsync<string?>("localStorage.getItem", FullWidthStorageKey);
+            if (bool.TryParse(saved, out var parsed) && parsed != isFullWidth)
+            {
+                isFullWidth = parsed;
+                StateHasChanged();
+            }
+        }
+        catch { }
+    }
+
+    private async Task ToggleFullWidthAsync()
+    {
+        isFullWidth = !isFullWidth;
+        try
+        {
+            await JS.InvokeVoidAsync("localStorage.setItem", FullWidthStorageKey, isFullWidth ? "true" : "false");
+        }
+        catch { }
+    }
+
+    private void SetTab(string tabKey)
+    {
+        activeTab = tabKey;
+        Navigation.NavigateTo($"/superadmin/{tabKey}", replace: false);
+    }
+}

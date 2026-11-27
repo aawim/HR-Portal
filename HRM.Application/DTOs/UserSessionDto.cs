@@ -10,6 +10,7 @@ namespace HRM.DTOs
         public bool CanAccessAdminPortal { get; set; }
         public bool CanAccessDeveloperPortal { get; set; }
         public bool CanAccessAuditPortal { get; set; }
+        public bool CanAccessSuperAdminPortal { get; set; }
 
         public bool CanAccessSystem { get; set; }
     }

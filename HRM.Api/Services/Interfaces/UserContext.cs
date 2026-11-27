@@ -32,6 +32,7 @@ public class UserContext(AuthenticationStateProvider auth, IDbContextFactory<Hrm
    x.UserGroup.GroupName.ToUpper() == "DEVELOPER")
    || await db.UserRoles.AsNoTracking().AnyAsync(x => x.UserId == user.UserId &&
    x.Role.RoleKey.ToUpper() == "DEVELOPER" && x.IsActive);
-  return new UserSessionDto { UserId = user.UserId, IndividualId = user.BusinessEntityID, JobId = jobId, OrganisationId = organisation?.Id, OrganisationName = organisation?.Name ?? "", CanAccessSystem = true, CanAccessAdminPortal = organisation != null && canAdmin, CanAccessDeveloperPortal = canDeveloper };
+  var canSuperAdmin = await HRM.Helpers.PlatformAdministratorAccess.HasAsync(db, user.UserId);
+  return new UserSessionDto { UserId = user.UserId, IndividualId = user.BusinessEntityID, JobId = jobId, OrganisationId = organisation?.Id, OrganisationName = organisation?.Name ?? "", CanAccessSystem = true, CanAccessAdminPortal = organisation != null && canAdmin, CanAccessDeveloperPortal = canDeveloper, CanAccessSuperAdminPortal = canSuperAdmin };
  }
 }

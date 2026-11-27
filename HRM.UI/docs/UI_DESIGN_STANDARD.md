@@ -267,6 +267,19 @@ Consistent badge classes based on status semantic:
 
 ---
 
-## 9. Antigravity Agent Directive
+## 9. Portal-Specific Design Standards & Color Themes
 
-For every future UI creation, redesign, or modification within `HRM.UI`, consult `HRM.UI/docs/UI_DESIGN_STANDARD.md` first. Use `/online/item-requests` as the primary visual and interaction reference alongside the Enterprise Portal & Data Table standards documented above. Maintain consistent header, buttons, forms, panels, tables, `p-2` container padding, and Full Width / Shrink View behavior. Do not introduce conflicting design styles. Work only within `HRM.UI` unless explicit permission is obtained.
+All four portals inherit the shared layout, spacing (`p-2`), header, Full Width / Shrink View, card, table, and icon standards above, and apply their dedicated portal color theme and route isolation rules:
+
+| Portal | Route Prefix | Shell Class | Signature Color Theme | Standard Document |
+| :--- | :--- | :--- | :--- | :--- |
+| **Online (Self)** | `/online/*` | `.portal-online` | Deep Sky Blue (`#075985` sidebar / `#2563eb` active tab) | [`UI_DESIGN_STANDARD_ONLINE.md`](./UI_DESIGN_STANDARD_ONLINE.md) |
+| **Admin** | `/admin/*` | `.portal-admin` | Deep Teal (`#008080` sidebar / `#0d9488` active tab) | [`UI_DESIGN_STANDARD_ADMIN.md`](./UI_DESIGN_STANDARD_ADMIN.md) |
+| **Developer** | `/developer/*` | `.portal-developer` | Warm Amber / Orange (`#92400e` sidebar / `#d97706` active tab) | [`UI_DESIGN_STANDARD_DEVELOPER.md`](./UI_DESIGN_STANDARD_DEVELOPER.md) |
+| **SuperAdmin** | `/superadmin/*` | `.portal-superadmin` | Light Blue (`#ADD8E6` sidebar & active tab, `#0f172a` contrast text) | [`UI_DESIGN_STANDARD_SUPERADMIN.md`](./UI_DESIGN_STANDARD_SUPERADMIN.md) |
+
+---
+
+## 10. Antigravity Agent Directive
+
+For every future UI creation, redesign, or modification within `HRM.UI`, consult `HRM.UI/docs/UI_DESIGN_STANDARD.md` **and the target portal's standard document** first. Use `/online/item-requests` as the primary visual and interaction reference alongside the Enterprise Portal & Data Table standards documented above. Maintain consistent header, buttons, forms, panels, tables, `p-2` container padding, portal color tokens, route isolation, and Full Width / Shrink View behavior. Do not introduce conflicting design styles. Work only within `HRM.UI` unless explicit permission is obtained.

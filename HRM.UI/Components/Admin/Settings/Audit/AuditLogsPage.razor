@@ -1,11 +1,17 @@
 @page "/admin/settings/audit-logs"
+@page "/developer/audit-logs"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
 @using HRM.AuditLogs.Models
 @using HRM.UI.Services.Audit
 @inject IAuditLogApiClient AuditApi
 @inject IJSRuntime JS
+@inject NavigationManager Navigation
 
 <PageTitle>Audit Logs</PageTitle>
+
+@{
+    var isDevContext = new Uri(Navigation.Uri).AbsolutePath.StartsWith("/developer", StringComparison.OrdinalIgnoreCase);
+}
 
 <section class="w-full min-w-0 p-2 space-y-4">
     <!-- Compact, Transparent, Borderless Header (UI_DESIGN_STANDARD §3) -->
@@ -13,8 +19,8 @@
         <div class="min-w-0">
             <div class="flex items-center gap-2 flex-wrap">
                 <h1 class="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 truncate">Audit Logs</h1>
-                <span class="inline-flex items-center gap-1 rounded-full bg-teal-50 dark:bg-teal-950/60 border border-teal-200/80 dark:border-teal-800 px-2 py-0.5 text-[10px] font-semibold text-teal-700 dark:text-teal-300">
-                    <span class="h-1.5 w-1.5 rounded-full bg-teal-500"></span>
+                <span class="inline-flex items-center gap-1 rounded-full @(isDevContext ? "bg-amber-50 dark:bg-amber-950/60 border border-amber-200/80 dark:border-amber-800 text-amber-700 dark:text-amber-300" : "bg-teal-50 dark:bg-teal-950/60 border border-teal-200/80 dark:border-teal-800 text-teal-700 dark:text-teal-300") px-2 py-0.5 text-[10px] font-semibold">
+                    <span class="h-1.5 w-1.5 rounded-full @(isDevContext ? "bg-amber-500" : "bg-teal-500")"></span>
                     Compliance Trail
                 </span>
             </div>

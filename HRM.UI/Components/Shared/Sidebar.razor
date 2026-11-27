@@ -38,14 +38,35 @@
                 <!-- Active Navigation Links -->
                 <nav class="flex-1 overflow-y-auto py-4">
                     <ul class="space-y-1 px-3">
-                        @if (IsDeveloperPortal && (CanAccessDeveloperPortal || isDeveloper))
+                        @if (IsSuperAdminPortal && CanAccessSuperAdminPortal)
+                        {
+                            <!-- SuperAdmin Menu -->
+                            @SectionGroup("super-platform", "Platform", @<text>
+                                <NavItem Compact="collapsed" Href="/superadmin/overview" Icon="home" Text="Overview" />
+                                <NavItem Compact="collapsed" Href="/superadmin/organisations" Icon="corporate_fare" Text="Organisation Onboarding" />
+                                <NavItem Compact="collapsed" Href="/superadmin/permissions" Icon="bi-key" Text="Organisation Permissions" />
+                            </text>, isFirst: true)
+
+                            @SectionGroup("super-access", "Access & Staff", @<text>
+                                <NavItem Compact="collapsed" Href="/superadmin/portal-access" Icon="bi-shield-lock" Text="Admin Portal Access" />
+                                <NavItem Compact="collapsed" Href="/superadmin/staff" Icon="users" Text="Cross-Org Staff & Users" />
+                                <NavItem Compact="collapsed" Href="/superadmin/roles" Icon="bi-person-lock" Text="Roles & Access Control" />
+                            </text>)
+
+                            @SectionGroup("super-catalogues", "Shared Catalogues", @<text>
+                                <NavItem Compact="collapsed" Href="/superadmin/resources" Icon="bi-collection" Text="Shared Resources" />
+                                <NavItem Compact="collapsed" Href="/superadmin/job-types" Icon="bi-briefcase" Text="Job & Work Types" />
+                                <NavItem Compact="collapsed" Href="/superadmin/positions" Icon="bi-diagram-3" Text="Pay Frameworks" />
+                            </text>)
+                        }
+                        else if (IsDeveloperPortal && (CanAccessDeveloperPortal || isDeveloper))
                         {
                             <!-- Developer Menu -->
                             @SectionGroup("dev-monitoring", "Monitoring", @<text>
                                 <NavItem Compact="collapsed" Href="/developer/overview" Icon="home" Text="Overview" />
                                 <NavItem Compact="collapsed" Href="/developer/error-logs" Icon="exclamation" Text="Error Logs" />
-                                <NavItem Compact="collapsed" Href="/admin/settings/audit-logs" Icon="bi-shield-check" Text="Audit Logs" />
-                                <NavItem Compact="collapsed" Href="/admin/settings/activity-logs" Icon="bi-activity" Text="Activity Logs" />
+                                <NavItem Compact="collapsed" Href="/developer/audit-logs" Icon="bi-shield-check" Text="Audit Logs" />
+                                <NavItem Compact="collapsed" Href="/developer/activity-logs" Icon="bi-activity" Text="Activity Logs" />
                                 <NavItem Compact="collapsed" Href="/developer/health" Icon="bi-heart-pulse" Text="Application Health" />
                             </text>, isFirst: true)
 
@@ -230,7 +251,10 @@
                 </nav>
 
 
-                <PortalSwitcher CanAccessAdminPortal="CanAccessAdminPortal" CanAccessDeveloperPortal="CanAccessDeveloperPortal || isDeveloper" @rendermode="RenderMode.InteractiveServer" />
+                <PortalSwitcher CanAccessAdminPortal="CanAccessAdminPortal"
+                                CanAccessDeveloperPortal="CanAccessDeveloperPortal || isDeveloper"
+                                CanAccessSuperAdminPortal="CanAccessSuperAdminPortal"
+                                @rendermode="RenderMode.InteractiveServer" />
             }
             else
             {
@@ -271,6 +295,7 @@
     [Parameter] public bool CanAccessAdminPortal { get; set; }
     [Parameter] public bool CanAccessDeveloperPortal { get; set; }
     [Parameter] public bool CanAccessAuditPortal { get; set; }
+    [Parameter] public bool CanAccessSuperAdminPortal { get; set; }
     [Parameter] public bool MobileOpen { get; set; }
     [Parameter] public EventCallback OnMobileClose { get; set; }
     private bool collapsed;
@@ -328,16 +353,16 @@
         canViewSettings = false;
     }
 
-    private (bool HasAccess, bool CanAdmin, bool CanDev, string Portal)? loadedPermissionScope;
+    private (bool HasAccess, bool CanAdmin, bool CanDev, bool CanSuper, string Portal)? loadedPermissionScope;
 
-    private string CurrentPortalKey => IsDeveloperPortal ? "dev" : IsAdminPortal ? "admin" : "emp";
+    private string CurrentPortalKey => IsSuperAdminPortal ? "super" : IsDeveloperPortal ? "dev" : IsAdminPortal ? "admin" : "emp";
 
     protected override async Task OnParametersSetAsync()
     {
         if (MobileOpen) collapsed = false;
         EnsurePortalGroupsInitialized();
 
-        var scope = (HasSystemAccess, CanAccessAdminPortal, CanAccessDeveloperPortal, CurrentPortalKey);
+        var scope = (HasSystemAccess, CanAccessAdminPortal, CanAccessDeveloperPortal, CanAccessSuperAdminPortal, CurrentPortalKey);
         if (loadedPermissionScope == scope)
             return;
 
@@ -435,6 +460,7 @@
 
     private static readonly string[] AllGroupKeys =
     [
+        "super-platform", "super-access", "super-catalogues",
         "dev-monitoring", "dev-workflows", "dev-infra",
         "admin-workspace", "admin-people", "admin-time", "admin-finance", "admin-assets", "admin-org", "admin-settings",
         "emp-overview", "emp-time", "emp-pay", "emp-services", "emp-career"
@@ -473,7 +499,7 @@
 
     private void EnsurePortalGroupsInitialized()
     {
-        var portal = IsDeveloperPortal ? "dev" : IsAdminPortal ? "admin" : "emp";
+        var portal = IsSuperAdminPortal ? "super" : IsDeveloperPortal ? "dev" : IsAdminPortal ? "admin" : "emp";
         if (string.Equals(initializedPortal, portal, StringComparison.Ordinal))
             return;
 
@@ -487,6 +513,7 @@
 
         var defaultGroup = portal switch
         {
+            "super" => "super-platform",
             "dev" => "dev-monitoring",
             "admin" => "admin-workspace",
             _ => "emp-overview"
@@ -502,6 +529,15 @@
     {
         var path = new Uri(Navigation.Uri).AbsolutePath.TrimEnd('/').ToLowerInvariant();
         if (string.IsNullOrEmpty(path)) path = "/";
+
+        if (IsSuperAdminPortal)
+        {
+            if (path.Contains("/portal-access") || path.Contains("/staff") || path.Contains("/roles"))
+                return "super-access";
+            if (path.Contains("/resources") || path.Contains("/job-types") || path.Contains("/positions"))
+                return "super-catalogues";
+            return "super-platform";
+        }
 
         if (IsDeveloperPortal)
         {
@@ -603,12 +639,16 @@
     private Task<AuthenticationState>? AuthenticationState { get; set; }
     private Task<AuthenticationState>? AuthState { get; set; }
 
+    private bool IsSuperAdminPortal =>
+        new Uri(Navigation.Uri).AbsolutePath
+            .Split('/', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.Equals("superadmin", StringComparison.OrdinalIgnoreCase) == true;
+
     private bool IsDeveloperPortal =>
         new Uri(Navigation.Uri).AbsolutePath
-            .Split('/', StringSplitOptions.RemoveEmptyEntries).Any(s => s.Equals("developer", StringComparison.OrdinalIgnoreCase));
+            .Split('/', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.Equals("developer", StringComparison.OrdinalIgnoreCase) == true;
 
     private bool IsAdminPortal =>
-        !IsDeveloperPortal && new Uri(Navigation.Uri).AbsolutePath
+        new Uri(Navigation.Uri).AbsolutePath
             .Split('/', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.Equals("admin", StringComparison.OrdinalIgnoreCase) == true;
 
     public void Dispose()
