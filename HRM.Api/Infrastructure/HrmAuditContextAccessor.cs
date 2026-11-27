@@ -77,15 +77,21 @@ public sealed class HrmAuditContextAccessor(
         return await BuildContextAsync(http, access, cancellationToken);
     }
 
+    private const string AuditContextItemKey = "HRM.Audit.ActorContext";
+
     private async Task<AuditActorContext> BuildContextAsync(
         HttpContext http,
         IUserAccessService access,
         CancellationToken cancellationToken)
     {
+        if (http.Items.TryGetValue(AuditContextItemKey, out var cached) && cached is AuditActorContext existing)
+            return existing;
+
         var correlationId = ResolveCorrelationId(http);
         var ipAddress = ResolveClientIpAddress(http);
         var url = ResolveRequestUrl(http);
-        var userCtx = await access.GetContextAsync();
+        var userCtx = http.RequestServices.GetService<IUserContextService>()?.Current
+                      ?? await access.GetContextAsync();
         if (userCtx is null || userCtx.UserId <= 0)
         {
             return new AuditActorContext
@@ -99,19 +105,20 @@ public sealed class HrmAuditContextAccessor(
             };
         }
 
-        var currentOrg = await access.GetCurrentOrganisationIdAsync();
-        var isAdmin = userCtx.IsSuperAdministrator || userCtx.IsOrganisationAdmin || await access.HasPermissionAsync("Admin");
-        var isDeveloper = await access.HasUserGroupAsync("Developer") || await access.HasPermissionAsync("Developer");
+        var currentOrg = userCtx.Organisation?.OrganisationBusinessEntityId ?? userCtx.ActiveJob?.OrganisationId ?? 0;
+        var isAdmin = userCtx.IsSuperAdministrator || userCtx.IsOrganisationAdmin || userCtx.HasPermission("Admin");
+        var isDeveloper = userCtx.UserGroups.Any(g => g.GroupName.Equals("Developer", StringComparison.OrdinalIgnoreCase))
+                          || userCtx.HasPermission("Developer");
         var isHrLead = userCtx.IsHRHead || userCtx.IsHRManager;
         var canViewAudit = isAdmin || isDeveloper || isHrLead || userCtx.IsHRStaff ||
-                           await access.HasPermissionAsync("Audit.View") ||
-                           await access.HasPermissionAsync("AuditLogs.View");
+                           userCtx.HasPermission("Audit.View") ||
+                           userCtx.HasPermission("AuditLogs.View");
         var canViewConfidential = userCtx.IsSuperAdministrator || userCtx.IsOrganisationAdmin || isHrLead ||
-                                  await access.HasPermissionAsync("Audit.ViewConfidential") ||
-                                  await access.HasPermissionAsync("Payroll.Manage");
+                                  userCtx.HasPermission("Audit.ViewConfidential") ||
+                                  userCtx.HasPermission("Payroll.Manage");
         var canExport = userCtx.IsSuperAdministrator || userCtx.IsOrganisationAdmin || isHrLead ||
-                        await access.HasPermissionAsync("Audit.Export");
-        var canCrossOrg = userCtx.IsSuperAdministrator || await access.HasPermissionAsync("Audit.CrossOrganisation");
+                        userCtx.HasPermission("Audit.Export");
+        var canCrossOrg = userCtx.IsSuperAdministrator || userCtx.HasPermission("Audit.CrossOrganisation");
 
         var authorizedOrgs = new HashSet<int>();
         if (currentOrg > 0) authorizedOrgs.Add(currentOrg);
@@ -119,13 +126,13 @@ public sealed class HrmAuditContextAccessor(
 
         var authorizedDivisions = new HashSet<int>();
         var dbFactory = http.RequestServices.GetService<IDbContextFactory<HrmTeContext>>();
-        if (dbFactory is not null && !userCtx.IsSuperAdministrator && currentOrg > 0)
+        if (HttpMethods.IsGet(http.Request.Method) && dbFactory is not null && !userCtx.IsSuperAdministrator && currentOrg > 0 && !isAdmin && !isHrLead && !userCtx.IsHRStaff)
         {
             try
             {
                 await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
                 var scope = await OrganisationalAccessScopeResolver.ResolveCurrentUserAsync(db, access, currentOrg);
-                if (scope.HasExplicitScopeGrants && !isAdmin && !isHrLead && !userCtx.IsHRStaff)
+                if (scope.HasExplicitScopeGrants)
                 {
                     foreach (var structureId in scope.AuthorisedStructureIds)
                         authorizedDivisions.Add(structureId);
@@ -139,7 +146,7 @@ public sealed class HrmAuditContextAccessor(
 
         var isDelegated = userCtx.ActiveJob != null && currentOrg > 0 && userCtx.ActiveJob.OrganisationId != currentOrg;
 
-        return new AuditActorContext
+        var result = new AuditActorContext
         {
             TenantId = currentOrg > 0 ? currentOrg : userCtx.ActiveJob?.OrganisationId,
             OrganisationId = currentOrg > 0 ? currentOrg : userCtx.ActiveJob?.OrganisationId,
@@ -160,6 +167,8 @@ public sealed class HrmAuditContextAccessor(
             AuthorizedOrganisationIds = authorizedOrgs.ToArray(),
             AuthorizedDivisionIds = authorizedDivisions.ToArray()
         };
+        http.Items[AuditContextItemKey] = result;
+        return result;
     }
 
     private static string ResolveCorrelationId(HttpContext http)

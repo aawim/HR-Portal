@@ -30,7 +30,8 @@ namespace HRM.Services
 
         public async Task<OperationLog> CreateAsync(HrmTeContext dbContext, int actionId,string remarks)
         {
-            var userContext = await _access.GetContextAsync();
+            var userContext = _httpContextAccessor.HttpContext?.RequestServices.GetService<IUserContextService>()?.Current
+                              ?? await _access.GetContextAsync();
             var ip =
                 _httpContextAccessor.HttpContext?
                 .Connection

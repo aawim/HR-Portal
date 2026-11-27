@@ -173,7 +173,7 @@ public class UserSettingsService(IDbContextFactory<HrmTeContext> factory, IUserA
         if (actor.UserId == model.Id && (!model.Active || !model.Approved || model.StateId != 1))
             return ServiceResult.Fail("You cannot suspend or disable your own account here.");
         await using var db = await factory.CreateDbContextAsync();
-        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted);
         var entity = await ScopedUserAsync(db, model.Id, org);
         if (!await db.LocalUserStates.AnyAsync(x => x.LocalUserStateId == model.StateId)) return ServiceResult.Fail("Select a valid account state.");
         var log = await logs.CreateAsync(db, SharedConfig.OperationLogActionTypes.USERS_UPDATE, $"Updated account {entity.UserId}");
@@ -260,7 +260,7 @@ public class UserSettingsService(IDbContextFactory<HrmTeContext> factory, IUserA
         var (_, org) = await RequireAsync(model.OrganisationId, "Staff.Admin.Edit", "Staff.Add.Admin", "Staff.Add");
         if (model.EmployeeNumber?.Length > 50) return ServiceResult.Fail("Employee number must be 50 characters or fewer.");
         await using var db = await factory.CreateDbContextAsync();
-        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted);
         if (!await db.Individuals.AnyAsync(x => x.BusinessEntityId == model.IndividualId &&
             (db.Jobs.Any(j => j.IndividualID == x.BusinessEntityId && j.OrganisationID == org) || db.Users.Any(u => u.BusinessEntityID == x.BusinessEntityId && u.UserOrganisation!.BusinessEntityID == org))))
             return ServiceResult.Fail("Select an individual associated with this organisation.");
@@ -280,7 +280,7 @@ public class UserSettingsService(IDbContextFactory<HrmTeContext> factory, IUserA
         var (_, org) = await RequireAsync(model.OrganisationId, "Staff.EnrolmentNumbers.Manage");
         if (string.IsNullOrWhiteSpace(model.Number) || model.Number.Trim().Length > 10) return ServiceResult.Fail("Enter an enrollment number of up to 10 characters.");
         await using var db = await factory.CreateDbContextAsync();
-        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted);
         if (!await db.Staffs.AnyAsync(x => x.IndividualId == model.IndividualId && (x.Jobs.Any(j => j.OrganisationID == org) ||
             db.Users.Any(u => u.BusinessEntityID == x.IndividualId && u.UserOrganisation!.BusinessEntityID == org)))) return ServiceResult.Fail("Select staff from this organisation.");
         if (await db.StaffEnrollmentNumbers.AnyAsync(x => x.OrganisationId == org && x.StaffEnrollmentNumberId != model.Id && x.EnrollmentNumber == model.Number.Trim()))

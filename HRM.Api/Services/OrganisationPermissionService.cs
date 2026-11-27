@@ -61,7 +61,7 @@ public sealed class OrganisationPermissionService(
         if (string.IsNullOrWhiteSpace(reason) || reason.Trim().Length > 1000) return ServiceResult.Fail("Enter a reason of up to 1,000 characters.");
         var desired = selectedIds.Distinct().ToHashSet(); var expected = expectedIds.ToHashSet();
         await using var db = await factory.CreateDbContextAsync();
-        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted);
         var entity = await db.UserOrganisations.Include(x => x.UserOrganisationRoles).SingleOrDefaultAsync(x => x.BusinessEntityID == org)
             ?? throw new InvalidOperationException("The organisation configuration no longer exists.");
         var existing = entity.UserOrganisationRoles.Where(x => x.IsActive).Select(x => x.RoleID).ToHashSet();
@@ -78,8 +78,8 @@ public sealed class OrganisationPermissionService(
         foreach (var p in entity.UserOrganisationRoles) { p.IsActive = desired.Contains(p.RoleID); p.OperationLogId = audit.OperationLogId; }
         foreach (var id in desired.Except(entity.UserOrganisationRoles.Select(p => p.RoleID))) entity.UserOrganisationRoles.Add(new() { RoleID = id, IsActive = true, OperationLogId = audit.OperationLogId });
         entity.OperationLogId = audit.OperationLogId;
-        var users = await db.Users.Where(u => u.UserOrganisationId == entity.UserOrganisationID).Select(u => u.UserId).ToListAsync();
         await db.SaveChangesAsync(); await tx.CommitAsync();
+        var users = await db.Users.AsNoTracking().Where(u => u.UserOrganisationId == entity.UserOrganisationID).Select(u => u.UserId).ToListAsync();
         foreach (var id in users) await contexts.InvalidateAsync(id);
 
         if (auditLogs is not null)
