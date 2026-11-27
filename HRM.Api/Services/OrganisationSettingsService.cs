@@ -10,7 +10,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace HRM.Services;
 
-public partial class OrganisationSettingsService(IDbContextFactory<HrmTeContext> factory, IUserAccessService access, IOperationLogService logs)
+public partial class OrganisationSettingsService(IDbContextFactory<HrmTeContext> factory, IUserAccessService access, IOperationLogService logs, IUserContextService? contexts = null)
 :global::HRM.Services.Contracts.OrganisationSettingsServiceContracts,global::HRM.Services.Contracts.OrganisationSettingsServiceContracts.IOperations{
     private async Task RequireAsync(int id, params string[] keys)
     {
@@ -309,6 +309,15 @@ public partial class OrganisationSettingsService(IDbContextFactory<HrmTeContext>
             await db.SaveChangesAsync();
             await tx.CommitAsync();
             model.Id = entity.BusinessEntityID;
+            if (contexts != null)
+            {
+                var affectedUserIds = await db.Users.AsNoTracking()
+                    .Where(u => u.UserOrganisation != null && u.UserOrganisation.BusinessEntityID == entity.BusinessEntityID)
+                    .Select(u => u.UserId)
+                    .ToListAsync();
+                foreach (var uid in affectedUserIds)
+                    await contexts.InvalidateAsync(uid);
+            }
             return ServiceResult.Ok("Organisation details saved.");
         }
         catch (DbUpdateException ex)

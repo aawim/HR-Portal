@@ -3,6 +3,7 @@
 @using HRM.Services
 @using HRM.Components.Admin.Hr.Organisation.Tabs
 @inject HRM.Services.Contracts.OrganisationSettingsServiceContracts.IOperations Settings
+@inject HRM.Services.Interfaces.IUserAccessService UserAccess
 @inject ToastService Toast
 @inject ILogger<OrganisationSettingsEditor> Logger
 @inject NavigationManager Navigation
@@ -90,18 +91,24 @@
                                     </div>
                                 </div>
                                 <div class="flex flex-wrap items-center gap-1.5">
-                                    <button type="button" class="app-button app-button-secondary app-button-sm" @onclick="() => NewOrganisation(true)">
-                                        <AppIcon Name="add" Class="text-xs" />
-                                        <span>New Organisation</span>
-                                    </button>
+                                    @if (IsSuperAdminContext)
+                                    {
+                                        <button type="button" class="app-button app-button-secondary app-button-sm" @onclick="() => NewOrganisation(true)">
+                                            <AppIcon Name="add" Class="text-xs" />
+                                            <span>New Organisation</span>
+                                        </button>
+                                    }
                                     <button type="button" class="app-button app-button-primary app-button-sm" @onclick="OpenEditOrgModal">
                                         <AppIcon Name="edit" Class="text-xs" />
                                         <span>Edit</span>
                                     </button>
-                                    <button type="button" class="app-button app-button-danger app-button-sm" @onclick="() => showDeleteOrgModal = true">
-                                        <AppIcon Name="bi-trash" Class="text-xs" />
-                                        <span>Delete</span>
-                                    </button>
+                                    @if (IsSuperAdminContext)
+                                    {
+                                        <button type="button" class="app-button app-button-danger app-button-sm" @onclick="() => showDeleteOrgModal = true">
+                                            <AppIcon Name="bi-trash" Class="text-xs" />
+                                            <span>Delete</span>
+                                        </button>
+                                    }
                                 </div>
                             </div>
                             <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 p-4 text-xs">
@@ -893,11 +900,7 @@
     private bool IsSuperAdminContext => new Uri(Navigation.Uri).AbsolutePath.StartsWith("/superadmin", StringComparison.OrdinalIgnoreCase);
     private bool ShowRightOrganisationList => IsSuperAdminContext || (activeSection != "Structure" && activeSection != "Manage" && activeSection != "Contact" && activeSection != "Groups" && activeSection != "Locations" && activeSection != "Address" && activeSection != "Schedules");
     private void ChangeSection(string name) { activeSection = name; ResetForms(); NavigateSection(); }
-    private void NavigateSection()
-    {
-        if (HideHeader) return;
-        if (model.Id > 0) Navigation.NavigateTo($"/admin/settings/org/manage/{model.Id}/{HRM.Helpers.SectionRoutes.Slug(activeSection)}");
-    }
+    private void NavigateSection() { }
     protected override async Task OnParametersSetAsync()
     {
         if (data == null || InitialOrganisationId is not > 0) return;
@@ -917,7 +920,34 @@
     protected override async Task OnInitializedAsync()
     {
         loading = true;
-        try { data = await Settings.LoadAsync(); NewOrganisation(false); }
+        try
+        {
+            data = await Settings.LoadAsync();
+            if (InitialOrganisationId is > 0)
+            {
+                var requested = data.Organisations.FirstOrDefault(o => o.Id == InitialOrganisationId.Value);
+                if (requested != null)
+                {
+                    await SelectAsync(requested, false);
+                    if (!string.IsNullOrWhiteSpace(InitialSection))
+                        activeSection = HRM.Helpers.SectionRoutes.Tab(OrganisationSections.Select(s => s.Name), InitialSection, "Manage");
+                    return;
+                }
+            }
+
+            if (!IsSuperAdminContext && data.Organisations.Count > 0)
+            {
+                var currentOrgId = await UserAccess.GetCurrentOrganisationIdAsync();
+                var currentOrg = data.Organisations.FirstOrDefault(o => o.Id == currentOrgId)
+                    ?? data.Organisations.First();
+                await SelectAsync(currentOrg, false);
+                if (!string.IsNullOrWhiteSpace(InitialSection))
+                    activeSection = HRM.Helpers.SectionRoutes.Tab(OrganisationSections.Select(s => s.Name), InitialSection, "Manage");
+                return;
+            }
+
+            NewOrganisation(false);
+        }
         catch (Exception ex) { Fail(ex); }
         finally { loading = false; }
     }
@@ -927,7 +957,6 @@
         activeSection = "Manage";
         model = new() { CountryId = data?.Countries.FirstOrDefault(x => x.Name == "Maldives")?.Id ?? 0 };
         links = new(); error = null; ResetForms();
-        if (navigate && !HideHeader) Navigation.NavigateTo("/admin/settings/org/manage");
     }
     private void ResetForms()
     {
