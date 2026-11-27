@@ -25,7 +25,7 @@
                     }
                 </div>
                 <p class="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
-                    Control which resources the organisation can access. Direct permissions and User Groups cannot exceed these limits.
+                    Control which HR modules and permissions this organisation can use. Roles and direct permissions cannot exceed these limits.
                 </p>
             </div>
             <div class="flex flex-wrap items-center gap-2">
@@ -121,7 +121,7 @@
                         <div class="flex items-start gap-2 rounded-xl border border-blue-200/70 dark:border-blue-900/50 bg-blue-50/40 dark:bg-blue-950/20 px-3 py-2 text-[11px] leading-relaxed text-slate-700 dark:text-slate-300">
                             <i class="bi bi-info-circle-fill mt-0.5 shrink-0 text-blue-600 dark:text-blue-400"></i>
                             <div class="space-y-1">
-                                <p>Removing a permission blocks it even when assigned directly or via User Groups. Admin portal access still requires an approved grant.</p>
+                                <p>Disabling a module or permission blocks it even when assigned via Roles or directly. Admin portal access still requires an approved grant.</p>
                                 @if (!data.CanEdit)
                                 {
                                     <p class="font-semibold text-amber-700 dark:text-amber-300">View-only access. Contact a Super Administrator to make changes.</p>
@@ -202,8 +202,76 @@
                     }
                 </aside>
 
-                <!-- RIGHT COLUMN: permission catalogue -->
-                <div class="min-w-0 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 shadow-xs space-y-3">
+                <!-- RIGHT COLUMN: module switches + advanced individual permissions -->
+                <div class="min-w-0 flex flex-col gap-2">
+                    <!-- 1. Quick Module Switches (Recommended) -->
+                    <section class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 shadow-xs flex flex-col gap-2">
+                        <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-2">
+                            <div>
+                                <h3 class="text-xs font-bold text-slate-900 dark:text-slate-100">Organisation Modules</h3>
+                                <p class="text-[11px] text-slate-500 dark:text-slate-400">Enable or disable complete HR modules in one click. Expand Advanced Permissions below only for fine-grained overrides.</p>
+                            </div>
+                            <span class="rounded-full bg-slate-100 dark:bg-slate-800 px-2 py-0.5 text-[10px] font-semibold text-slate-600 dark:text-slate-300">
+                                @HRM.Helpers.AccessControlUiHelper.Modules.Count(m => ModulePermissions(m.Key).Any(p => selected.Contains(p.Id))) / @HRM.Helpers.AccessControlUiHelper.Modules.Count(m => ModulePermissions(m.Key).Count > 0) active
+                            </span>
+                        </div>
+                        <div class="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                            @foreach (var mod in HRM.Helpers.AccessControlUiHelper.Modules)
+                            {
+                                var modPerms = ModulePermissions(mod.Key);
+                                if (modPerms.Count == 0) continue;
+                                var modEnabledCount = modPerms.Count(p => selected.Contains(p.Id));
+                                var allOn = modEnabledCount == modPerms.Count;
+                                var partial = modEnabledCount > 0 && !allOn;
+                                var anyChanged = modPerms.Any(p => selected.Contains(p.Id) != baseline.Contains(p.Id));
+
+                                <div class="rounded-xl border p-2.5 flex flex-col justify-between gap-2 transition @(anyChanged ? "border-amber-300 bg-amber-50/40 dark:border-amber-700 dark:bg-amber-950/20" : allOn ? "border-emerald-200 bg-emerald-50/30 dark:border-emerald-900/60 dark:bg-emerald-950/15" : partial ? "border-sky-200 bg-sky-50/30 dark:border-sky-900/60 dark:bg-sky-950/15" : "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900")"
+                                     @key="mod.Key">
+                                    <div class="flex items-start justify-between gap-2">
+                                        <div class="flex items-start gap-2 min-w-0">
+                                            <span class="mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border @(allOn ? "bg-emerald-100/80 border-emerald-200 text-emerald-700" : partial ? "bg-sky-100/80 border-sky-200 text-sky-700" : "bg-slate-100 border-slate-200 text-slate-500")">
+                                                <i class="bi @mod.Icon text-xs"></i>
+                                            </span>
+                                            <div class="min-w-0">
+                                                <p class="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">@mod.Label</p>
+                                                <p class="text-[11px] text-slate-500 dark:text-slate-400 leading-snug">@mod.Description</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center justify-between gap-2 pt-1 border-t border-slate-100 dark:border-slate-800">
+                                        <span class="rounded-full px-2 py-0.5 text-[10px] font-semibold @(allOn ? "bg-emerald-100 text-emerald-800" : partial ? "bg-sky-100 text-sky-800" : "bg-slate-100 text-slate-600")">
+                                            @(allOn ? "Enabled" : partial ? $"Partial ({modEnabledCount}/{modPerms.Count})" : "Disabled")
+                                        </span>
+                                        @if (data.CanEdit)
+                                        {
+                                            <button type="button"
+                                                    disabled="@busy"
+                                                    class="app-button @(allOn ? "app-button-neutral" : "app-button-secondary") app-button-sm"
+                                                    @onclick="() => SelectGroup(modPerms, !allOn)">
+                                                @(allOn ? "Disable" : "Enable all")
+                                            </button>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </section>
+
+                    <!-- 2. Advanced: Individual Permissions Catalogue -->
+                    <section class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs overflow-hidden">
+                        <button type="button"
+                                class="w-full flex flex-wrap items-center justify-between gap-2 p-3 text-left text-xs font-bold text-slate-800 dark:text-slate-100 hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition"
+                                @onclick="() => showAdvancedPermissions = !showAdvancedPermissions">
+                            <span class="flex items-center gap-2">
+                                <i class="bi @(showAdvancedPermissions ? "bi-chevron-down" : "bi-chevron-right") text-slate-500"></i>
+                                <i class="bi bi-sliders text-slate-500"></i>
+                                <span>Advanced: Individual Permissions (@selected.Count / @data.Permissions.Count enabled)</span>
+                            </span>
+                            <span class="text-[11px] font-normal text-slate-500">@(showAdvancedPermissions ? "Click to collapse" : "Click to expand fine-grained permission overrides")</span>
+                        </button>
+                    @if (showAdvancedPermissions)
+                    {
+                    <div class="border-t border-slate-100 dark:border-slate-800 p-3 flex flex-col gap-2">
                     <!-- Filter Controls -->
                     <div class="grid gap-3 sm:grid-cols-3">
                         <div>
@@ -359,6 +427,9 @@
                             }
                         }
                     </div>
+                    </div>
+                    }
+                    </section>
                 </div>
             </div>
         }
@@ -396,6 +467,10 @@
     private bool busy;
     private bool isFullWidth;
     private bool expandAll;
+    private bool showAdvancedPermissions;
+
+    private List<PermissionDefinitionDto> ModulePermissions(string moduleKey) =>
+        (data?.Permissions ?? []).Where(p => HRM.Helpers.AccessControlUiHelper.ResolveModule(p).Key == moduleKey).ToList();
 
     private bool Dirty => !selected.SetEquals(baseline);
     private HashSet<int> Added => selected.Except(baseline).ToHashSet();
