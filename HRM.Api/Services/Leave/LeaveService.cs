@@ -689,8 +689,13 @@ namespace HRM.Services.Leave
 
                 if (request == null)
                     return ServiceResult.Fail("Associated request not found.");
-                await RequestTransitionPolicy.RequireAllowedAsync(db, request.RequestTypeId, request.RequestStateId, SharedConfig.RequestStates.CANCELLED);
-                if (await db.WfRequestInstances.AnyAsync(x => x.RequestId == request.RequestId))
+                var hasWorkflow = await db.WfRequestInstances.AnyAsync(x => x.RequestId == request.RequestId);
+                var isUnsubmittedDraft = !hasWorkflow && request.RequestStateId == SharedConfig.RequestStates.INCOMPLETE;
+                if (!isUnsubmittedDraft)
+                {
+                    await RequestTransitionPolicy.RequireAllowedAsync(db, request.RequestTypeId, request.RequestStateId, SharedConfig.RequestStates.CANCELLED);
+                }
+                if (hasWorkflow)
                 {
                     await transaction.RollbackAsync();
                     if (_leaveChanges == null) return ServiceResult.Fail("Cancel this request through its approval workflow.");
@@ -716,27 +721,31 @@ namespace HRM.Services.Leave
                 //
                 // Update Leave
                 //
+                var wasIncompleteDraft = leave.LeaveStateId == SharedConfig.LeaveStates.INCOMPLETE;
                 leave.LeaveStateId = SharedConfig.LeaveStates.CANCELLED;
                 leave.OperationLogId = operationLog.OperationLogId;
 
                 //
-                // Restore Leave Balance
+                // Restore Leave Balance (skip for unsubmitted legacy Incomplete drafts that never reserved balance)
                 //
-                var jobLeaveType = await db.JobLeaveTypes
-                    .FirstOrDefaultAsync(j =>
-                        j.JobId == leave.JobId &&
-                        j.LeaveTypeId == leave.LeaveTypeId &&
-                        j.IsValid);
-
-                if (jobLeaveType != null)
+                if (!isUnsubmittedDraft && !wasIncompleteDraft)
                 {
-                    jobLeaveType.RemainingDays += leave.Duration;
-                    jobLeaveType.OperationLogId = operationLog.OperationLogId;
+                    var jobLeaveType = await db.JobLeaveTypes
+                        .FirstOrDefaultAsync(j =>
+                            j.JobId == leave.JobId &&
+                            j.LeaveTypeId == leave.LeaveTypeId &&
+                            j.IsValid);
 
-                    // Optional
-                    // If your business rules require recalculation,
-                    // don't simply set this to null.
-                    jobLeaveType.LastLeaveTakenDate = null;
+                    if (jobLeaveType != null)
+                    {
+                        jobLeaveType.RemainingDays += leave.Duration;
+                        jobLeaveType.OperationLogId = operationLog.OperationLogId;
+
+                        // Optional
+                        // If your business rules require recalculation,
+                        // don't simply set this to null.
+                        jobLeaveType.LastLeaveTakenDate = null;
+                    }
                 }
 
                 await db.SaveChangesAsync();

@@ -34,6 +34,9 @@ public sealed class PermissionSettingsController(global::HRM.Services.Contracts.
         public global::HRM.DTOs.Roles.AccessRoleDto model { get; set; } = default!;
     }
 
+    [HttpGet("load-for-organisation")]
+    public async Task<ActionResult<global::HRM.DTOs.Roles.PermissionSettingsData>> LoadForOrganisation([FromQuery] global::System.Boolean groups, [FromQuery] global::System.Int32? organisationId = null) => Ok(await service.LoadForOrganisationAsync(groups, organisationId));
+
     [HttpGet("load-staff-access-for-organisation")]
     public async Task<ActionResult<global::HRM.DTOs.Roles.StaffAccessSettingsData>> LoadStaffAccessForOrganisation([FromQuery] global::System.Int32? organisationId = null) => Ok(await service.LoadStaffAccessForOrganisationAsync(organisationId));
 

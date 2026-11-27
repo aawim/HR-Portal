@@ -85,14 +85,14 @@ public sealed class AdminAccessGrantService(IDbContextFactory<HrmTeContext> fact
         if (manage)
         {
             var today = DateTime.Today;
-            data.Accounts = await db.Users.Where(u => u.UserOrganisationId == userOrg && u.IsActive && u.LocalUserStateId == 1 &&
+            data.Accounts = await db.Users.Where(u => u.IsActive && u.LocalUserStateId == 1 &&
                     db.Jobs.Any(j => j.IndividualID == u.BusinessEntityID && j.OrganisationID == org && j.JobStateId == 4 && j.TerminatedDate == null && j.JoinedDate <= today))
                 .OrderBy(u => u.FullName)
                 .Select(u => new AdminAccessAccount { Id = u.UserId, IndividualId = u.BusinessEntityID, Name = u.FullName ?? u.Username,
-                    Enabled = u.AdminPortalAccessEnabled && u.AdminPortalAccessOrganisationId == u.UserOrganisationId,
+                    Enabled = u.AdminPortalAccessEnabled && u.AdminPortalAccessOrganisationId == userOrg,
                     HasDeveloperAccess = u.UserRoles.Any(r => r.IsActive && r.Role.RoleKey.ToUpper() == "DEVELOPER"),
-                    HasSuperAdminAccess = u.AdminPortalAccessEnabled && u.AdminPortalAccessOrganisationId == u.UserOrganisationId
-                        && u.UserRoles.Any(r => r.IsActive && r.UserOrganisationId == u.UserOrganisationId && r.Role.RoleKey == "Super.Admin.Manage"),
+                    HasSuperAdminAccess = u.AdminPortalAccessEnabled && u.AdminPortalAccessOrganisationId == userOrg
+                        && u.UserRoles.Any(r => r.IsActive && r.UserOrganisationId == userOrg && r.Role.RoleKey == "Super.Admin.Manage"),
                     GroupIds = u.UserAssignedUserGroups.Where(g => g.UserGroup.UserOrganisationId == userOrg).Select(g => g.UserGroupId).ToList(),
                     PermissionIds = u.UserRoles.Where(r => r.IsActive && r.UserOrganisationId == userOrg).Select(r => r.RoleId).ToList() }).ToListAsync();
         }
@@ -116,10 +116,25 @@ public sealed class AdminAccessGrantService(IDbContextFactory<HrmTeContext> fact
         }
         return data;
     }
-    private static async Task<User> Target(HrmTeContext db, int userId, int org) => await db.Users
-        .Include(u => u.UserRoles).Include(u => u.UserAssignedUserGroups).ThenInclude(g => g.UserGroup)
-        .SingleOrDefaultAsync(u => u.UserId == userId && u.UserOrganisation!.BusinessEntityID == org)
-        ?? throw new UnauthorizedAccessException("Account is not in this organisation.");
+    private static async Task<User> Target(HrmTeContext db, int userId, int org)
+    {
+        var today = DateTime.Today;
+        var target = await db.Users
+            .Include(u => u.UserRoles).Include(u => u.UserAssignedUserGroups).ThenInclude(g => g.UserGroup)
+            .SingleOrDefaultAsync(u => u.UserId == userId && (
+                db.Jobs.Any(j => j.IndividualID == u.BusinessEntityID && j.OrganisationID == org && j.JobStateId == 4 && j.TerminatedDate == null && j.JoinedDate <= today) ||
+                (u.UserOrganisation != null && u.UserOrganisation.BusinessEntityID == org)))
+            ?? throw new UnauthorizedAccessException("Account is not in this organisation.");
+        var targetUserOrgId = await db.UserOrganisations.AsNoTracking()
+            .Where(uo => uo.BusinessEntityID == org)
+            .Select(uo => (int?)uo.UserOrganisationID)
+            .FirstOrDefaultAsync();
+        if (targetUserOrgId.HasValue && target.UserOrganisationId != targetUserOrgId.Value)
+        {
+            target.UserOrganisationId = targetUserOrgId.Value;
+        }
+        return target;
+    }
     private static async Task ValidateAssignments(HrmTeContext db, User target, int[] groups, int[] permissions)
     {
         var allowed = await db.UserOrganisationRoles.Where(p => p.UserOrganisationID == target.UserOrganisationId && p.IsActive).Select(p => p.RoleID).ToListAsync();

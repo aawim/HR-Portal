@@ -203,8 +203,12 @@ public static class OrganisationalAccessScopeResolver
         }
 
         var isSuper = await PlatformAdministratorAccess.HasAsync(db, userId);
-        var hasTenantAccess = isSuper || await db.UserOrganisations.AsNoTracking()
-            .AnyAsync(o => o.UserOrganisationID == user.UserOrganisationId && o.BusinessEntityID == organisationId, ct);
+        var todayDate = DateTime.Today;
+        var hasTenantAccess = isSuper ||
+            (user.BusinessEntityID > 0 && await db.Jobs.AsNoTracking()
+                .AnyAsync(j => j.IndividualID == user.BusinessEntityID && j.OrganisationID == organisationId && j.JobStateId == 4 && j.TerminatedDate == null && j.JoinedDate <= todayDate, ct)) ||
+            await db.UserOrganisations.AsNoTracking()
+                .AnyAsync(o => o.UserOrganisationID == user.UserOrganisationId && o.BusinessEntityID == organisationId, ct);
 
         if (!hasTenantAccess && user.BusinessEntityID > 0)
         {

@@ -29,10 +29,10 @@ public partial class LeaveChangeService
             .Include(x => x.Leave).ThenInclude(x => x.LeaveReason).ThenInclude(x => x!.LeaveTypeReasonType)
             .Include(x => x.Leave).ThenInclude(x => x.LeaveSpendingLocation)
             .Where(x => (pending.Contains(x.RequestId) ||
-                (isHrOrAdmin && currentOrg > 0 && x.Request.OrganisationBusinessEntityID == currentOrg &&
-                 x.Request.RequestState.IsProcessingState && x.Request.RequestStateId != SharedConfig.RequestStates.INCOMPLETE) ||
-                (user.IndividualId > 0 && x.Leave.Job.IndividualID == user.IndividualId &&
-                 x.Request.RequestState.IsProcessingState)) &&
+                ((isHrOrAdmin || (user.IndividualId > 0 && x.Leave.Job.IndividualID == user.IndividualId)) &&
+                 currentOrg > 0 && x.Request.OrganisationBusinessEntityID == currentOrg &&
+                 x.Request.RequestState.IsProcessingState &&
+                 x.Request.RequestStateId != SharedConfig.RequestStates.INCOMPLETE)) &&
                 !x.Request.RequestState.IsFinalState &&
                 x.Leave.LeaveStateId != SharedConfig.LeaveStates.APPROVED &&
                 x.Leave.LeaveStateId != SharedConfig.LeaveStates.REJECTED &&

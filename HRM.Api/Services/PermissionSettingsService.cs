@@ -23,19 +23,24 @@ public partial class PermissionSettingsService(IDbContextFactory<HrmTeContext> f
         return user;
     }
 
-    private async Task<int> OrganisationAsync(UserContextDto user)
+    private async Task<int> OrganisationAsync(UserContextDto user, int? requestedOrgId = null)
     {
-        var org = user.Organisation?.OrganisationBusinessEntityId ?? 0;
+        var org = user.IsSuperAdministrator && requestedOrgId is > 0
+            ? requestedOrgId.Value
+            : user.Organisation?.OrganisationBusinessEntityId ?? 0;
         if (org == 0 && user.ActiveJob != null)
         {
             await using var db = await factory.CreateDbContextAsync();
             org = await db.Jobs.Where(x => x.JobId == user.ActiveJob.JobId).Select(x => x.OrganisationID).SingleAsync();
         }
-        if (org <= 0 || !await access.HasOrganisationAccessAsync(org)) throw new UnauthorizedAccessException("Select an organisation you can manage.");
+        if (org <= 0 || (!user.IsSuperAdministrator && !await access.HasOrganisationAccessAsync(org)))
+            throw new UnauthorizedAccessException("Select an organisation you can manage.");
         return org;
     }
 
-    public async Task<PermissionSettingsData> LoadAsync(bool groups)
+    public Task<PermissionSettingsData> LoadAsync(bool groups) => LoadForOrganisationAsync(groups, null);
+
+    public async Task<PermissionSettingsData> LoadForOrganisationAsync(bool groups, int? organisationId)
     {
         var user = await RequireAsync(groups ? "UserOrganisation.Groups.View" : "Roles.View", groups);
         await using var db = await factory.CreateDbContextAsync();
@@ -64,6 +69,7 @@ public partial class PermissionSettingsService(IDbContextFactory<HrmTeContext> f
 
         var result = new PermissionSettingsData
         {
+            IsSuperAdmin = user.IsSuperAdministrator,
             Permissions = rawPermissions,
             Contexts = contextsList,
             Modules = modulesList,
@@ -71,10 +77,21 @@ public partial class PermissionSettingsService(IDbContextFactory<HrmTeContext> f
         };
         if (groups)
         {
-            var org = await OrganisationAsync(user);
+            var org = await OrganisationAsync(user, organisationId);
+            var inactiveEntityStateIds = await HRM.Helpers.ActiveOrganisationFilter.InactiveEntityStateIdsAsync(db);
+            result.Organisations = await db.UserOrganisations.AsNoTracking()
+                .Where(uo => (user.IsSuperAdministrator || uo.BusinessEntityID == org) &&
+                             !db.BusinessEntities.Any(b => b.BusinessEntityID == uo.BusinessEntityID && b.BusinessEntityStateId.HasValue && inactiveEntityStateIds.Contains(b.BusinessEntityStateId.Value)))
+                .OrderBy(uo => uo.Organisation.OrganisationName)
+                .Select(uo => new PermissionSettingOption(uo.BusinessEntityID, uo.Organisation.OrganisationName))
+                .ToListAsync();
+            result.OrganisationId = org;
+            result.OrganisationName = result.Organisations.FirstOrDefault(o => o.Id == org)?.Name
+                ?? await db.Organisations.AsNoTracking().Where(o => o.BusinessEntityID == org).Select(o => o.OrganisationName).FirstOrDefaultAsync()
+                ?? "Organisation";
             result.Roles = await db.UserGroups.AsNoTracking().AsSplitQuery().Where(x => x.UserOrganisation.BusinessEntityID == org)
                 .OrderBy(x => x.GroupName).Select(x => new AccessRoleDto
-                { Id = x.UserGroupId, Name = x.GroupName,
+                { Id = x.UserGroupId, OrganisationId = org, Name = x.GroupName,
                     MemberCount = x.UserAssignedUserGroups.Count(a => db.Users.Any(u => u.UserId == a.UserId)),
                     PermissionIds = x.UserGroupRoles.Where(r => r.IsActive).Select(r => r.RoleId).ToList(),
                     Members = x.UserAssignedUserGroups.OrderBy(a => a.User.FullName).Select(a => new RoleStaffDto
@@ -118,10 +135,10 @@ public partial class PermissionSettingsService(IDbContextFactory<HrmTeContext> f
     public async Task<ServiceResult> SaveRoleAsync(AccessRoleDto model)
     {
         var user = await RequireAsync(model.Id == 0 ? "UserOrganisation.Groups.Create" : "UserOrganisation.Groups.Edit", true);
-        var org = await OrganisationAsync(user);
+        var org = await OrganisationAsync(user, model.OrganisationId);
         if (string.IsNullOrWhiteSpace(model.Name) || model.Name.Length > 250) return ServiceResult.Fail("Enter a role name of up to 250 characters.");
         await using var db = await factory.CreateDbContextAsync();
-        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted);
         var orgId = await db.UserOrganisations.Where(x => x.BusinessEntityID == org).Select(x => x.UserOrganisationID).SingleAsync();
         var entity = model.Id == 0 ? new UserGroup { UserOrganisationId = orgId } :
             await db.UserGroups.Include(x => x.UserGroupRoles).SingleOrDefaultAsync(x => x.UserGroupId == model.Id && x.UserOrganisationId == orgId);

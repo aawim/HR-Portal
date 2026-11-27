@@ -50,7 +50,12 @@ public partial class PermissionSettingsService
             .Select(o => o.OrganisationName)
             .FirstOrDefaultAsync() ?? "Organisation";
         var data = new StaffAccessSettingsData { IsSuperAdmin = actor.IsSuperAdministrator, OrganisationId = org, OrganisationName = orgName, Organisations = organisations };
-        data.Users = await db.Users.AsNoTracking().Where(x => x.UserOrganisationId == userOrg && x.IsActive)
+        var todayDate = DateTime.Today;
+        data.Users = await db.Users.AsNoTracking()
+            .Where(x => x.IsActive && (
+                db.Jobs.Any(j => j.IndividualID == x.BusinessEntityID && j.OrganisationID == org && j.JobStateId == 4 && j.TerminatedDate == null && j.JoinedDate <= todayDate) ||
+                (x.UserOrganisationId == userOrg &&
+                 !db.Jobs.Any(j => j.IndividualID == x.BusinessEntityID && j.OrganisationID != org && j.JobStateId == 4 && j.TerminatedDate == null && j.JoinedDate <= todayDate))))
             .OrderBy(x => x.FullName).Select(x => new StaffAccessOption(x.UserId, x.FullName ?? x.Username)).ToListAsync();
         data.Groups = await db.UserGroups.AsNoTracking().Where(x => x.UserOrganisationId == userOrg)
             .OrderBy(x => x.GroupName).Select(x => new StaffAccessOption(x.UserGroupId, x.GroupName)).ToListAsync();
@@ -192,6 +197,15 @@ public partial class PermissionSettingsService
         return ServiceResult.Ok("Staff classification policy saved.");
     }
 
+    private static Task<bool> UserBelongsToOrganisationAsync(HrmTeContext db, int userId, int org, int userOrg)
+    {
+        var today = DateTime.Today;
+        return db.Users.AsNoTracking().AnyAsync(x => x.UserId == userId && (
+            db.Jobs.Any(j => j.IndividualID == x.BusinessEntityID && j.OrganisationID == org && j.JobStateId == 4 && j.TerminatedDate == null && j.JoinedDate <= today) ||
+            (x.UserOrganisationId == userOrg &&
+             !db.Jobs.Any(j => j.IndividualID == x.BusinessEntityID && j.OrganisationID != org && j.JobStateId == 4 && j.TerminatedDate == null && j.JoinedDate <= today))));
+    }
+
     public async Task<ServiceResult> SaveStaffAccessScopeAsync(StaffAccessScopeDto model)
     {
         var (_, org, userOrg) = await RequireStaffAccessAdminAsync(model.OrganisationId);
@@ -199,7 +213,7 @@ public partial class PermissionSettingsService
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
         var user = model.SubjectType == "User" ? model.SubjectId : (int?)null;
         var group = model.SubjectType == "Role" ? model.SubjectId : (int?)null;
-        if (user.HasValue && !await db.Users.AnyAsync(x => x.UserId == user && x.UserOrganisationId == userOrg) ||
+        if (user.HasValue && !await UserBelongsToOrganisationAsync(db, user.Value, org, userOrg) ||
             group.HasValue && !await db.UserGroups.AnyAsync(x => x.UserGroupId == group && x.UserOrganisationId == userOrg))
             return ServiceResult.Fail("Select a user or role from this organisation.");
         var entity = model.Id == 0 ? new StaffAccessScope { OrganisationId = org } :
@@ -223,7 +237,7 @@ public partial class PermissionSettingsService
         var group = model.SubjectType == "Role" ? model.SubjectId : (int?)null;
         var staff = model.ResourceType == "Staff" ? model.ResourceId : (int?)null;
         var classification = model.ResourceType == "Classification" ? model.ResourceId : (int?)null;
-        if (user.HasValue && !await db.Users.AnyAsync(x => x.UserId == user && x.UserOrganisationId == userOrg) ||
+        if (user.HasValue && !await UserBelongsToOrganisationAsync(db, user.Value, org, userOrg) ||
             group.HasValue && !await db.UserGroups.AnyAsync(x => x.UserGroupId == group && x.UserOrganisationId == userOrg) ||
             staff.HasValue && !await db.Jobs.AnyAsync(x => x.IndividualID == staff && x.OrganisationID == org) ||
             classification.HasValue && !await db.PositionClassifications.AnyAsync(x => x.PositionClassificationId == classification &&
@@ -262,7 +276,7 @@ public partial class PermissionSettingsService
         var user = model.SubjectType == "User" ? model.SubjectId : (int?)null;
         var group = model.SubjectType == "Role" ? model.SubjectId : (int?)null;
         if ((!user.HasValue && !group.HasValue) ||
-            (user.HasValue && !await db.Users.AnyAsync(x => x.UserId == user && x.UserOrganisationId == userOrg)) ||
+            (user.HasValue && !await UserBelongsToOrganisationAsync(db, user.Value, org, userOrg)) ||
             (group.HasValue && !await db.UserGroups.AnyAsync(x => x.UserGroupId == group && x.UserOrganisationId == userOrg)))
             return ServiceResult.Fail("Select a valid user or role from this organisation.");
 
@@ -433,8 +447,12 @@ public partial class PermissionSettingsService
         var (_, org, userOrg) = await RequireStaffAccessAdminAsync(organisationId, allowSimulate: true);
         await using var db = await factory.CreateDbContextAsync();
 
+        var todayDate = DateTime.Today;
         var targetUser = await db.Users.AsNoTracking()
-            .Where(u => u.UserId == userId && u.UserOrganisationId == userOrg)
+            .Where(u => u.UserId == userId && (
+                db.Jobs.Any(j => j.IndividualID == u.BusinessEntityID && j.OrganisationID == org && j.JobStateId == 4 && j.TerminatedDate == null && j.JoinedDate <= todayDate) ||
+                (u.UserOrganisationId == userOrg &&
+                 !db.Jobs.Any(j => j.IndividualID == u.BusinessEntityID && j.OrganisationID != org && j.JobStateId == 4 && j.TerminatedDate == null && j.JoinedDate <= todayDate))))
             .Select(u => new { u.UserId, u.Username, u.FullName, u.BusinessEntityID })
             .SingleOrDefaultAsync()
             ?? throw new InvalidOperationException("Select a user account belonging to this organisation.");

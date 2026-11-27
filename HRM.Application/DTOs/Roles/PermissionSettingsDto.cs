@@ -27,6 +27,7 @@ public class PermissionDefinitionDto
 public class AccessRoleDto
 {
     public int Id { get; set; }
+    public int? OrganisationId { get; set; }
     public string Name { get; set; } = "";
     public int MemberCount { get; set; }
     public List<int> PermissionIds { get; set; } = new();
@@ -44,6 +45,10 @@ public class RoleStaffDto
 public record PermissionSettingOption(int Id, string Name);
 public class PermissionSettingsData
 {
+    public bool IsSuperAdmin { get; set; }
+    public int OrganisationId { get; set; }
+    public string OrganisationName { get; set; } = "";
+    public List<PermissionSettingOption> Organisations { get; set; } = new();
     public List<PermissionDefinitionDto> Permissions { get; set; } = new();
     public List<AccessRoleDto> Roles { get; set; } = new();
     public List<PermissionSettingOption> Contexts { get; set; } = new();

@@ -141,12 +141,16 @@ namespace HRM.Services
     HrmTeContext db,
     UserContextDto context)
         {
+            var activeOrgId = context.ActiveJob?.OrganisationId;
+            var activeUserOrgId = context.UserOrganisationId;
+
             context.OrganisationAccess =
                 await db.UserOrganisations
                     .AsNoTracking()
                     .Where(x =>
-                        x.Users.Any(u =>
-                            u.UserId == context.UserId))
+                        (activeOrgId.HasValue && activeOrgId.Value > 0 && x.BusinessEntityID == activeOrgId.Value) ||
+                        (activeUserOrgId.HasValue && activeUserOrgId.Value > 0 && x.UserOrganisationID == activeUserOrgId.Value) ||
+                        x.Users.Any(u => u.UserId == context.UserId))
                     .Select(x => new UserOrganisationAccessDto
                     {
                         UserOrganisationID =
@@ -396,9 +400,7 @@ namespace HRM.Services
                 where
                     job.IndividualID == individualId &&
                     job.JobStateId == approvedStateId &&
-                    job.TerminatedDate == null && job.JoinedDate <= today &&
-                    db.Users.Any(u => u.BusinessEntityID == individualId &&
-                        db.UserOrganisations.Any(o => o.UserOrganisationID == u.UserOrganisationId && o.BusinessEntityID == job.OrganisationID))
+                    job.TerminatedDate == null && job.JoinedDate <= today
 
                 let activePosition =
                     (
@@ -526,6 +528,35 @@ namespace HRM.Services
                 return;
             }
 
+            // Always prefer the active job's organisation as the user's organisation.
+            if (context.ActiveJob is { OrganisationId: > 0 } activeJob)
+            {
+                var fromActiveJob = await db.Organisations.AsNoTracking()
+                    .Where(o => o.BusinessEntityID == activeJob.OrganisationId)
+                    .Select(o => new UserOrganisationDto
+                    {
+                        OrganisationBusinessEntityId = o.BusinessEntityID,
+                        OrganisationName = o.OrganisationName,
+                        OrganisationNameDhivehi = o.OrganisationNameDhivehi ?? "",
+                        ParentOrganisationBusinessEntityId = o.ParentOrganisationBusinessEntityId
+                    })
+                    .FirstOrDefaultAsync();
+
+                if (fromActiveJob != null)
+                {
+                    context.Organisation = fromActiveJob;
+                    var mappedUserOrgId = await db.UserOrganisations.AsNoTracking()
+                        .Where(uo => uo.BusinessEntityID == activeJob.OrganisationId)
+                        .Select(uo => (int?)uo.UserOrganisationID)
+                        .FirstOrDefaultAsync();
+                    if (mappedUserOrgId.HasValue)
+                    {
+                        context.UserOrganisationId = mappedUserOrgId.Value;
+                    }
+                    return;
+                }
+            }
+
             context.Organisation = await (from user in db.Users.AsNoTracking()
                 join assignment in db.UserOrganisations on user.UserOrganisationId equals assignment.UserOrganisationID
                 join organisation in db.Organisations on assignment.BusinessEntityID equals organisation.BusinessEntityID
@@ -540,11 +571,15 @@ namespace HRM.Services
         }
 
 
-        private async Task<List<UserGroupDto>> LoadUserGroupsAsync(HrmTeContext db, int userId)
+        private async Task<List<UserGroupDto>> LoadUserGroupsAsync(HrmTeContext db, int userId, int? resolvedUserOrganisationId)
         {
             return await db.UserAssignedUserGroups
                 .AsNoTracking()
-                .Where(x => x.UserId == userId && (x.UserGroup.IsGlobal || x.UserGroup.UserOrganisationId == x.User.UserOrganisationId))
+                .Where(x => x.UserId == userId &&
+                            (x.UserGroup.IsGlobal ||
+                             (resolvedUserOrganisationId.HasValue
+                                 ? x.UserGroup.UserOrganisationId == resolvedUserOrganisationId.Value
+                                 : x.UserGroup.UserOrganisationId == x.User.UserOrganisationId)))
                 .Select(x => new UserGroupDto
                 {
                     UserGroupID = x.UserGroupId,
@@ -570,7 +605,7 @@ namespace HRM.Services
             HrmTeContext db,
             UserContextDto context)
                 {
-                    context.UserGroups = await LoadUserGroupsAsync(db,context.UserId);
+                    context.UserGroups = await LoadUserGroupsAsync(db, context.UserId, context.UserOrganisationId);
         }
 
         private static void PopulateRoleFlags(UserContextDto context)

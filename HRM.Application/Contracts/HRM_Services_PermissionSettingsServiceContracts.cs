@@ -12,6 +12,8 @@ public interface IOperations
 {
 Task<PermissionSettingsData> LoadAsync(bool groups)
 ;
+Task<PermissionSettingsData> LoadForOrganisationAsync(bool groups, int? organisationId)
+;
 Task<ServiceResult> SavePermissionAsync(PermissionDefinitionDto model)
 ;
 Task<ServiceResult> SaveRoleAsync(AccessRoleDto model)

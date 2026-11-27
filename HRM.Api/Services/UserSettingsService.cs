@@ -107,7 +107,12 @@ public class UserSettingsService(IDbContextFactory<HrmTeContext> factory, IUserA
 
         if (tab is UserSettingsTab.Accounts or UserSettingsTab.Permissions)
         {
-            result.Users = await db.Users.AsNoTracking().AsSplitQuery().Where(x => x.UserOrganisationId == organisation.UserOrganisationID)
+            var today = DateTime.Today;
+            result.Users = await db.Users.AsNoTracking().AsSplitQuery()
+                .Where(x =>
+                    db.Jobs.Any(j => j.IndividualID == x.BusinessEntityID && j.OrganisationID == org && j.JobStateId == 4 && j.TerminatedDate == null && j.JoinedDate <= today) ||
+                    (x.UserOrganisationId == organisation.UserOrganisationID &&
+                     !db.Jobs.Any(j => j.IndividualID == x.BusinessEntityID && j.OrganisationID != org && j.JobStateId == 4 && j.TerminatedDate == null && j.JoinedDate <= today)))
                 .OrderBy(x => x.FullName).Select(x => new ManagedUserDto
                 {
                     Id = x.UserId, IndividualId = x.BusinessEntityID, OrganisationId = org,
@@ -159,10 +164,27 @@ public class UserSettingsService(IDbContextFactory<HrmTeContext> factory, IUserA
         return result;
     }
 
-    private static async Task<User> ScopedUserAsync(HrmTeContext db, int id, int org) => await db.Users
-        .Include(x => x.UserRoles).Include(x => x.UserAssignedUserGroups).ThenInclude(x => x.UserGroup)
-        .SingleOrDefaultAsync(x => x.UserId == id && x.UserOrganisation!.BusinessEntityID == org)
-        ?? throw new InvalidOperationException("Account was not found in this organisation.");
+    private static async Task<User> ScopedUserAsync(HrmTeContext db, int id, int org)
+    {
+        var today = DateTime.Today;
+        var entity = await db.Users
+            .Include(x => x.UserRoles).Include(x => x.UserAssignedUserGroups).ThenInclude(x => x.UserGroup)
+            .SingleOrDefaultAsync(x => x.UserId == id && (
+                db.Jobs.Any(j => j.IndividualID == x.BusinessEntityID && j.OrganisationID == org && j.JobStateId == 4 && j.TerminatedDate == null && j.JoinedDate <= today) ||
+                (x.UserOrganisation != null && x.UserOrganisation.BusinessEntityID == org &&
+                 !db.Jobs.Any(j => j.IndividualID == x.BusinessEntityID && j.OrganisationID != org && j.JobStateId == 4 && j.TerminatedDate == null && j.JoinedDate <= today))))
+            ?? throw new InvalidOperationException("Account was not found in this organisation.");
+
+        var targetUserOrgId = await db.UserOrganisations.AsNoTracking()
+            .Where(uo => uo.BusinessEntityID == org)
+            .Select(uo => (int?)uo.UserOrganisationID)
+            .FirstOrDefaultAsync();
+        if (targetUserOrgId.HasValue && entity.UserOrganisationId != targetUserOrgId.Value)
+        {
+            entity.UserOrganisationId = targetUserOrgId.Value;
+        }
+        return entity;
+    }
 
     public async Task<ServiceResult> SaveAccountAsync(ManagedUserDto model)
     {

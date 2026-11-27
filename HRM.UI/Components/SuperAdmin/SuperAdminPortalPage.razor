@@ -188,7 +188,28 @@
                     }
                     else if (activeTab == "roles")
                     {
-                        <StaffAccessControl />
+                        <div class="space-y-3">
+                            <div class="flex flex-wrap items-center gap-1.5 px-1">
+                                @foreach (var sub in RoleSubTabs)
+                                {
+                                    var activeSub = selectedRoleSubTab == sub.Key;
+                                    <button type="button"
+                                            class="rounded-lg px-3 py-1.5 text-xs font-semibold border transition @(activeSub ? "text-slate-900 shadow-xs" : "bg-white text-slate-700 border-slate-200 hover:bg-sky-50")"
+                                            style="@(activeSub ? "background-color: #ADD8E6; border-color: #7cc0d8; color: #0f172a;" : null)"
+                                            @onclick="() => selectedRoleSubTab = sub.Key">
+                                        @sub.Label
+                                    </button>
+                                }
+                            </div>
+                            @if (selectedRoleSubTab == "roles")
+                            {
+                                <AccessSettingsEditor GroupsMode="true" />
+                            }
+                            else
+                            {
+                                <StaffAccessControl />
+                            }
+                        </div>
                     }
                     else if (activeTab == "resources")
                     {
@@ -264,8 +285,13 @@
         (UserSettingsTab.Staff, "Staff"),
         (UserSettingsTab.Accounts, "Accounts"),
         (UserSettingsTab.Permissions, "Account Permissions"),
-        (UserSettingsTab.Enrollment, "Enrollment Numbers"),
-        (UserSettingsTab.Organisation, "Organisation Access")
+        (UserSettingsTab.Enrollment, "Enrollment Numbers")
+    ];
+
+    private static readonly (string Key, string Label)[] RoleSubTabs =
+    [
+        ("roles", "Roles"),
+        ("access-control", "Access Control")
     ];
 
     private static readonly (OrganisationResourceKind Kind, string Label)[] ResourceSubTabs =
@@ -286,6 +312,7 @@
     private int organisationCount;
     private string activeTab = "overview";
     private UserSettingsTab selectedUserTab = UserSettingsTab.Staff;
+    private string selectedRoleSubTab = "roles";
     private OrganisationResourceKind selectedResourceKind = OrganisationResourceKind.OrganisationTypes;
     private const string FullWidthStorageKey = "superadmin.workspace.fullWidth";
 
