@@ -1,0 +1,767 @@
+@page "/helpdesk/agent"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@implements IAsyncDisposable
+@using HRM.DTOs.Helpdesk
+@using HRM.Models
+@inject HRM.Services.Contracts.HelpdeskServiceContracts.IOperations Helpdesk
+@inject HRM.Services.ToastService Toast
+@inject IJSRuntime JS
+@inject ILogger<HelpdeskAgentConsole> Logger
+
+<section class="w-full min-w-0 @(Embedded ? "" : "p-2") flex flex-col gap-2 text-slate-900 dark:text-slate-100">
+    @if (!Embedded)
+    {
+        <header class="flex flex-wrap items-center justify-between gap-2 px-1 py-0.5">
+            <div class="min-w-0">
+                <div class="flex items-center gap-2 flex-wrap">
+                    <h1 class="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 truncate">Helpdesk Officer Console</h1>
+                    <span class="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold text-slate-900"
+                          style="background-color: #ADD8E6; border-color: #7cc0d8;">
+                        <span class="h-1.5 w-1.5 rounded-full" style="background-color: #0369a1;"></span>
+                        All Organisations
+                    </span>
+                </div>
+                <p class="text-xs text-slate-500 dark:text-slate-400">Monitor bot conversations, take over escalated chats, and maintain the Helpdesk Knowledge Base.</p>
+            </div>
+        </header>
+    }
+
+    <!-- Top Sub-Tabs + Bot Engine Status -->
+    <div class="flex flex-wrap items-center justify-between gap-2">
+        <div class="flex items-center gap-1.5">
+            <button type="button"
+                    class="rounded-xl px-3.5 py-1.5 text-xs font-semibold border transition @(subTab == "queue" ? "text-slate-900 shadow-2xs" : "bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-sky-50")"
+                    style="@(subTab == "queue" ? "background-color: #ADD8E6; border-color: #7cc0d8; color: #0f172a;" : null)"
+                    @onclick='() => SwitchSubTabAsync("queue")'>
+                <AppIcon Name="bi-headset" Class="text-xs mr-1" />
+                Support Queue
+                @if (inbox.WaitingCount > 0)
+                {
+                    <span class="ml-1 rounded-full bg-amber-600 px-1.5 py-0.5 text-[10px] font-bold text-white">@inbox.WaitingCount</span>
+                }
+            </button>
+            <button type="button"
+                    class="rounded-xl px-3.5 py-1.5 text-xs font-semibold border transition @(subTab == "kb" ? "text-slate-900 shadow-2xs" : "bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-sky-50")"
+                    style="@(subTab == "kb" ? "background-color: #ADD8E6; border-color: #7cc0d8; color: #0f172a;" : null)"
+                    @onclick='() => SwitchSubTabAsync("kb")'>
+                <AppIcon Name="bi-robot" Class="text-xs mr-1" />
+                Knowledge Base (Bot Brain)
+            </button>
+        </div>
+
+        <div class="flex items-center gap-2">
+            <span class="inline-flex items-center gap-1.5 rounded-full border border-sky-200 dark:border-sky-800 bg-sky-50 dark:bg-sky-950/50 px-2.5 py-1 text-[11px] font-semibold text-sky-800 dark:text-sky-200">
+                <AppIcon Name="bi-cpu" Class="text-xs" />
+                <span>@inbox.BotEngineMode</span>
+            </span>
+            <button type="button" class="app-button app-button-secondary app-button-sm" disabled="@busy" @onclick="RefreshCurrentAsync">
+                <AppIcon Name="refresh" Class="text-xs" />
+                <span>Refresh</span>
+            </button>
+        </div>
+    </div>
+
+    @if (error != null)
+    {
+        <div role="alert" class="flex items-center justify-between gap-2 rounded-xl border border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/40 px-3 py-2 text-xs text-rose-800 dark:text-rose-200">
+            <span>@error</span>
+            <button type="button" class="app-button app-button-ghost app-button-sm app-button-icon" @onclick="() => error = null"><AppIcon Name="close" Class="text-xs" /></button>
+        </div>
+    }
+
+    @if (subTab == "queue")
+    {
+        <!-- KPI Strip -->
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-2">
+            <button type="button" @onclick='() => SetStatusFilterAsync("waiting")'
+                    class="rounded-2xl border p-3 text-left transition flex items-center justify-between @(statusFilter == "waiting" ? "border-amber-400 bg-amber-50/70 dark:bg-amber-950/30" : "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-amber-300")">
+                <div>
+                    <p class="text-[10px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-400">Waiting for Takeover</p>
+                    <p class="text-xl font-bold text-slate-900 dark:text-white">@inbox.WaitingCount</p>
+                </div>
+                <div class="h-9 w-9 rounded-xl bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 flex items-center justify-center">
+                    <AppIcon Name="bi-hourglass-split" Class="text-base" />
+                </div>
+            </button>
+            <button type="button" @onclick='() => SetStatusFilterAsync("active")'
+                    class="rounded-2xl border p-3 text-left transition flex items-center justify-between @(statusFilter == "active" ? "border-emerald-400 bg-emerald-50/70 dark:bg-emerald-950/30" : "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-emerald-300")">
+                <div>
+                    <p class="text-[10px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">Live With Officers</p>
+                    <p class="text-xl font-bold text-slate-900 dark:text-white">@inbox.AgentAssignedCount</p>
+                </div>
+                <div class="h-9 w-9 rounded-xl bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 flex items-center justify-center">
+                    <AppIcon Name="bi-headset" Class="text-base" />
+                </div>
+            </button>
+            <button type="button" @onclick='() => SetStatusFilterAsync("bot")'
+                    class="rounded-2xl border p-3 text-left transition flex items-center justify-between @(statusFilter == "bot" ? "border-blue-400 bg-blue-50/70 dark:bg-blue-950/30" : "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-blue-300")">
+                <div>
+                    <p class="text-[10px] font-bold uppercase tracking-wider text-blue-700 dark:text-blue-400">Bot Assisting</p>
+                    <p class="text-xl font-bold text-slate-900 dark:text-white">@inbox.BotActiveCount</p>
+                </div>
+                <div class="h-9 w-9 rounded-xl bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 flex items-center justify-center">
+                    <AppIcon Name="bi-robot" Class="text-base" />
+                </div>
+            </button>
+            <button type="button" @onclick='() => SetStatusFilterAsync("resolved")'
+                    class="rounded-2xl border p-3 text-left transition flex items-center justify-between @(statusFilter == "resolved" ? "border-slate-400 bg-slate-100/70 dark:bg-slate-800/70" : "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-slate-300")">
+                <div>
+                    <p class="text-[10px] font-bold uppercase tracking-wider text-slate-500">Resolved</p>
+                    <p class="text-xl font-bold text-slate-900 dark:text-white">@inbox.ResolvedCount</p>
+                </div>
+                <div class="h-9 w-9 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center">
+                    <AppIcon Name="check_circle" Class="text-base" />
+                </div>
+            </button>
+        </div>
+
+        <!-- Filter Bar -->
+        <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-2.5 flex flex-wrap items-center gap-2">
+            <div class="flex rounded-lg border border-slate-200 dark:border-slate-700 p-0.5 bg-slate-50 dark:bg-slate-800 text-[11px] font-semibold">
+                @foreach (var tab in QueueFilters)
+                {
+                    <button type="button"
+                            class="rounded-md px-2.5 py-1 transition @(statusFilter == tab.Key ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-2xs" : "text-slate-600 dark:text-slate-400 hover:text-slate-900")"
+                            @onclick="() => SetStatusFilterAsync(tab.Key)">
+                        @tab.Label
+                    </button>
+                }
+            </div>
+
+            <select aria-label="Filter by organisation"
+                    @bind="selectedOrganisationId"
+                    @bind:after="LoadInboxAsync"
+                    class="rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs text-slate-800 dark:text-slate-100">
+                <option value="0">All Organisations (@inbox.Organisations.Count)</option>
+                @foreach (var org in inbox.Organisations)
+                {
+                    <option value="@org.Id">@org.Name</option>
+                }
+            </select>
+
+            <div class="flex items-center gap-1.5 flex-1 min-w-[200px]">
+                <input type="search"
+                       @bind="queueSearch"
+                       @bind:event="oninput"
+                       placeholder="Search ticket #, requester, subject, or organisation..."
+                       class="flex-1 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs text-slate-800 dark:text-slate-100" />
+                <button type="button" class="app-button app-button-secondary app-button-sm" disabled="@busy" @onclick="LoadInboxAsync">Search</button>
+            </div>
+        </div>
+
+        <!-- Split-Pane Live Support Console -->
+        <div class="hda-shell">
+            <!-- Queue List -->
+            <aside class="hda-queue" aria-label="Support Ticket Queue">
+                <div class="px-3 py-2 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs font-bold">
+                    <span>Tickets</span>
+                    <span class="rounded-full bg-slate-100 dark:bg-slate-800 px-2 py-0.5 text-[10px] text-slate-600 dark:text-slate-300">@inbox.Tickets.Count</span>
+                </div>
+                <div class="flex-1 min-h-0 overflow-y-auto hda-scroll divide-y divide-slate-100 dark:divide-slate-800">
+                    @if (inbox.Tickets.Count == 0)
+                    {
+                        <p class="p-6 text-center text-xs text-slate-400">No tickets match the current filter.</p>
+                    }
+                    else
+                    {
+                        @foreach (var item in inbox.Tickets)
+                        {
+                            var isSelected = selectedTicket?.Ticket.Id == item.Id;
+                            <button type="button"
+                                    @key="item.Id"
+                                    class="w-full p-3 text-left transition flex flex-col gap-1 @(isSelected ? "bg-sky-50/90 dark:bg-sky-950/40" : "hover:bg-slate-50 dark:hover:bg-slate-800/50")"
+                                    style="@(isSelected ? "border-left: 3px solid #0369a1;" : "border-left: 3px solid transparent;")"
+                                    @onclick="() => SelectTicketAsync(item.Id)">
+                                <div class="flex items-center justify-between gap-2 w-full">
+                                    <span class="font-mono text-[10px] font-bold text-blue-700 dark:text-blue-300">@item.TicketNumber</span>
+                                    <span class="rounded-full px-2 py-0.5 text-[10px] font-semibold @StatusBadgeClass(item.Status)">@StatusLabel(item.Status)</span>
+                                </div>
+                                <p class="text-xs font-bold text-slate-900 dark:text-slate-100 truncate w-full">@item.Subject</p>
+                                <div class="flex items-center justify-between gap-2 text-[11px] text-slate-500 dark:text-slate-400">
+                                    <span class="truncate">@item.RequesterName · @item.OrganisationName</span>
+                                    @if (item.UnreadCount > 0)
+                                    {
+                                        <span class="rounded-full bg-rose-600 px-1.5 py-0.5 text-[10px] font-bold text-white shrink-0">@item.UnreadCount</span>
+                                    }
+                                </div>
+                                @if (!string.IsNullOrWhiteSpace(item.EscalationReason) && item.Status == HelpdeskTicketStatuses.WaitingForAgent)
+                                {
+                                    <p class="text-[10px] text-amber-700 dark:text-amber-300 truncate">@item.EscalationReason</p>
+                                }
+                            </button>
+                        }
+                    }
+                </div>
+            </aside>
+
+            <!-- Active Ticket Conversation -->
+            <section class="hda-thread" aria-label="Selected Ticket Thread">
+                @if (selectedTicket == null)
+                {
+                    <div class="flex-1 flex flex-col items-center justify-center p-6 text-center text-slate-500">
+                        <AppIcon Name="bi-headset" Class="text-3xl mb-2 text-slate-400" />
+                        <p class="text-sm font-semibold text-slate-700 dark:text-slate-200">Select a Helpdesk ticket</p>
+                        <p class="text-xs mt-0.5">Review the bot conversation and click <strong>Take Over Chat</strong> to assist the user directly.</p>
+                    </div>
+                }
+                else
+                {
+                    var t = selectedTicket.Ticket;
+                    <!-- Thread Header -->
+                    <div class="shrink-0 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 py-2.5 flex flex-wrap items-center justify-between gap-2"
+                         style="background-color: #f4fafd;">
+                        <div class="min-w-0">
+                            <div class="flex items-center gap-1.5 flex-wrap">
+                                <span class="font-mono text-[11px] font-bold text-blue-700">@t.TicketNumber</span>
+                                <h3 class="text-sm font-bold text-slate-900 truncate">@t.Subject</h3>
+                                <span class="rounded-full px-2 py-0.5 text-[10px] font-semibold @StatusBadgeClass(t.Status)">@StatusLabel(t.Status)</span>
+                            </div>
+                            <p class="text-[11px] text-slate-600 truncate">
+                                <strong>@t.RequesterName</strong> · @t.OrganisationName · @t.Category
+                                @if (!string.IsNullOrWhiteSpace(t.AssignedAgentName))
+                                {
+                                    <span> · Assigned to <strong>@t.AssignedAgentName</strong></span>
+                                }
+                            </p>
+                        </div>
+
+                        <div class="flex flex-wrap items-center gap-1.5 shrink-0">
+                            @if (t.Status != HelpdeskTicketStatuses.AgentAssigned && t.Status != HelpdeskTicketStatuses.Resolved)
+                            {
+                                <button type="button"
+                                        class="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold shadow-xs transition"
+                                        style="background-color: #ADD8E6; color: #0f172a; border: 1px solid #7cc0d8;"
+                                        disabled="@busy"
+                                        @onclick="TakeOverAsync">
+                                    <AppIcon Name="bi-headset" Class="text-xs" />
+                                    <span>Take Over Chat</span>
+                                </button>
+                            }
+                            <button type="button"
+                                    class="app-button app-button-secondary app-button-sm"
+                                    title="Turn this issue into a Knowledge Base article so the bot can solve it next time"
+                                    @onclick="OpenKbFromTicket">
+                                <AppIcon Name="bi-journal-plus" Class="text-xs" />
+                                <span>Save to KB</span>
+                            </button>
+                            @if (t.Status != HelpdeskTicketStatuses.Resolved)
+                            {
+                                <button type="button" class="app-button app-button-success app-button-sm" disabled="@busy" @onclick="ResolveAsAgentAsync">
+                                    <AppIcon Name="check_circle" Class="text-xs" />
+                                    <span>Mark Resolved</span>
+                                </button>
+                            }
+                            else
+                            {
+                                <button type="button" class="app-button app-button-secondary app-button-sm" disabled="@busy" @onclick="ReopenAsAgentAsync">
+                                    <AppIcon Name="refresh" Class="text-xs" />
+                                    <span>Reopen</span>
+                                </button>
+                            }
+                        </div>
+                    </div>
+
+                    <!-- Messages -->
+                    <div @ref="agentMessagesEl" class="hda-messages hda-scroll">
+                        @foreach (var msg in selectedTicket.Messages)
+                        {
+                            var localTime = msg.SentAtUtc.AddHours(5);
+                            if (msg.SenderType == HelpdeskSenderTypes.System)
+                            {
+                                <div @key="msg.Id" class="flex justify-center my-1">
+                                    <span class="rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-0.5 text-[11px] text-slate-600 dark:text-slate-300">
+                                        @msg.Body · @localTime.ToString("HH:mm")
+                                    </span>
+                                </div>
+                            }
+                            else if (msg.IsInternalNote)
+                            {
+                                <div @key="msg.Id" class="mx-auto w-full max-w-2xl rounded-xl border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 px-3 py-2 text-xs text-amber-950 dark:text-amber-100">
+                                    <div class="flex items-center justify-between text-[10px] font-bold text-amber-800 dark:text-amber-300 mb-1">
+                                        <span>INTERNAL NOTE (Hidden from user) · @msg.SenderName</span>
+                                        <span>@localTime.ToString("dd MMM HH:mm")</span>
+                                    </div>
+                                    <p class="whitespace-pre-wrap break-words">@msg.Body</p>
+                                </div>
+                            }
+                            else
+                            {
+                                var isAgentMsg = msg.SenderType == HelpdeskSenderTypes.Agent;
+                                var isBotMsg = msg.SenderType == HelpdeskSenderTypes.Bot;
+                                <div @key="msg.Id" class="flex @(isAgentMsg ? "justify-end" : "justify-start")">
+                                    <div class="max-w-[82%] rounded-2xl px-3.5 py-2 text-xs shadow-2xs @(isAgentMsg ? "bg-sky-700 text-white rounded-br-sm" : isBotMsg ? "bg-indigo-50/80 dark:bg-indigo-950/50 border border-indigo-200 dark:border-indigo-800 text-slate-800 dark:text-slate-100 rounded-bl-sm" : "bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 rounded-bl-sm")">
+                                        <div class="flex items-center justify-between gap-3 text-[10px] mb-1 @(isAgentMsg ? "text-sky-100" : "text-slate-500 dark:text-slate-400")">
+                                            <span class="font-bold">
+                                                @msg.SenderName @(isBotMsg ? "· Bot" : isAgentMsg ? "· Officer" : "· Requester")
+                                                @if (isBotMsg && msg.Confidence.HasValue)
+                                                {
+                                                    <span> (@((int)Math.Round(msg.Confidence.Value * 100))% match)</span>
+                                                }
+                                            </span>
+                                            <span>@localTime.ToString("dd MMM HH:mm")</span>
+                                        </div>
+                                        <p class="whitespace-pre-wrap break-words">@msg.Body</p>
+                                    </div>
+                                </div>
+                            }
+                        }
+                    </div>
+
+                    <!-- Agent Reply Composer -->
+                    <fieldset disabled="@busy" class="shrink-0 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 flex flex-col gap-2">
+                        <div class="flex items-center justify-between gap-2">
+                            <div class="flex rounded-lg border border-slate-200 dark:border-slate-700 p-0.5 bg-slate-50 dark:bg-slate-800 text-[11px] font-semibold">
+                                <button type="button"
+                                        class="rounded-md px-2.5 py-1 transition @(!agentInternalNote ? "bg-white dark:bg-slate-700 text-sky-800 dark:text-sky-200 shadow-2xs" : "text-slate-500")"
+                                        @onclick="() => agentInternalNote = false">
+                                    Reply to Requester
+                                </button>
+                                <button type="button"
+                                        class="rounded-md px-2.5 py-1 transition @(agentInternalNote ? "bg-amber-100 dark:bg-amber-900/60 text-amber-900 dark:text-amber-200 shadow-2xs" : "text-slate-500")"
+                                        @onclick="() => agentInternalNote = true">
+                                    Internal Note
+                                </button>
+                            </div>
+                            @if (!agentInternalNote && t.Status != HelpdeskTicketStatuses.AgentAssigned)
+                            {
+                                <span class="text-[11px] text-slate-500">Sending a reply automatically takes over from the bot.</span>
+                            }
+                        </div>
+
+                        <div class="flex items-end gap-2">
+                            <textarea @bind="agentReplyBody"
+                                      @bind:event="oninput"
+                                      rows="2"
+                                      maxlength="4000"
+                                      placeholder="@(agentInternalNote ? "Add an internal note visible only to Helpdesk Officers..." : "Type your response to the requester...")"
+                                      class="flex-1 rounded-xl border px-3 py-2 text-xs outline-none @(agentInternalNote ? "border-amber-300 bg-amber-50/50 dark:border-amber-700 dark:bg-amber-950/30" : "border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800")"></textarea>
+                            <button type="button"
+                                    class="inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-bold shadow-xs transition disabled:opacity-45 shrink-0"
+                                    style="@(agentInternalNote ? "background-color: #d97706; color: #ffffff;" : "background-color: #ADD8E6; color: #0f172a; border: 1px solid #7cc0d8;")"
+                                    disabled="@(busy || string.IsNullOrWhiteSpace(agentReplyBody))"
+                                    @onclick="SendAgentReplyAsync">
+                                <AppIcon Name="bi-send-fill" Class="text-xs" />
+                                <span>@(agentInternalNote ? "Save Note" : "Send Reply")</span>
+                            </button>
+                        </div>
+                    </fieldset>
+                }
+            </section>
+        </div>
+    }
+    else
+    {
+        <!-- KNOWLEDGE BASE MANAGER (Bot Brain) -->
+        <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden">
+            <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 dark:border-slate-800 px-4 py-3">
+                <div>
+                    <h2 class="text-sm font-bold text-slate-900 dark:text-slate-100">Helpdesk Bot Knowledge Base (@articles.Count)</h2>
+                    <p class="text-[11px] text-slate-500">The Helpdesk Assistant searches these articles before escalating to a real Helpdesk Officer.</p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <input type="search"
+                           @bind="kbSearch"
+                           @bind:event="oninput"
+                           placeholder="Search articles..."
+                           class="rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs" />
+                    <button type="button" class="app-button app-button-secondary app-button-sm" disabled="@busy" @onclick="LoadArticlesAsync">Search</button>
+                    <button type="button"
+                            class="inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-bold shadow-2xs"
+                            style="background-color: #ADD8E6; color: #0f172a; border: 1px solid #7cc0d8;"
+                            @onclick="OpenNewArticleModal">
+                        <AppIcon Name="add" Class="text-xs" />
+                        <span>Add Article</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="divide-y divide-slate-100 dark:divide-slate-800">
+                @if (articles.Count == 0)
+                {
+                    <p class="p-6 text-center text-xs text-slate-400">No Knowledge Base articles found.</p>
+                }
+                else
+                {
+                    @foreach (var art in articles)
+                    {
+                        <div @key="art.Id" class="p-3.5 flex flex-wrap items-start justify-between gap-3 hover:bg-slate-50/60 dark:hover:bg-slate-800/40">
+                            <div class="min-w-0 flex-1 space-y-1">
+                                <div class="flex items-center gap-1.5 flex-wrap">
+                                    <span class="rounded-full bg-sky-50 text-sky-800 border border-sky-200 px-2 py-0.5 text-[10px] font-semibold">@art.Category</span>
+                                    <h3 class="text-xs font-bold text-slate-900 dark:text-slate-100">@art.Title</h3>
+                                    @if (!art.IsActive)
+                                    {
+                                        <span class="rounded-full bg-slate-100 text-slate-500 px-2 py-0.5 text-[10px] font-semibold">Inactive</span>
+                                    }
+                                </div>
+                                <p class="text-[11px] text-slate-600 dark:text-slate-300 line-clamp-2 whitespace-pre-line">@art.Answer</p>
+                                <p class="text-[10px] text-slate-400">Keywords: @art.Keywords</p>
+                            </div>
+                            <div class="flex items-center gap-1.5 shrink-0">
+                                <button type="button" class="app-button app-button-secondary app-button-sm" @onclick="() => OpenEditArticleModal(art)">Edit</button>
+                                <button type="button" class="app-button app-button-danger app-button-sm" disabled="@busy" @onclick="() => DeleteArticleAsync(art.Id)">Delete</button>
+                            </div>
+                        </div>
+                    }
+                }
+            </div>
+        </div>
+    }
+
+    <!-- KB Article Editor Modal -->
+    @if (showArticleModal)
+    {
+        <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4" role="dialog" aria-modal="true" aria-label="Knowledge Base Article">
+            <div class="w-full max-w-xl rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-2xl overflow-hidden">
+                <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 px-4 py-3" style="background-color: #eef8fc;">
+                    <h3 class="text-sm font-bold text-slate-900">@(articleDraft.Id == 0 ? "Add Knowledge Base Article" : "Edit Knowledge Base Article")</h3>
+                    <button type="button" class="text-slate-500 hover:text-slate-800 font-bold" @onclick="() => showArticleModal = false">✕</button>
+                </div>
+                <div class="p-4 flex flex-col gap-2.5 text-xs">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <label class="block font-medium text-slate-700 dark:text-slate-300">
+                            Category
+                            <select @bind="articleDraft.Category" class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs">
+                                <option value="Leave & Attendance">Leave &amp; Attendance</option>
+                                <option value="Payroll & Payslips">Payroll &amp; Payslips</option>
+                                <option value="Requests & Approvals">Requests &amp; Approvals</option>
+                                <option value="Account & Access">Account &amp; Access</option>
+                                <option value="Technical Issue">Technical Issue</option>
+                                <option value="General">General</option>
+                            </select>
+                        </label>
+                        <label class="block font-medium text-slate-700 dark:text-slate-300">
+                            Sort Order
+                            <input type="number" @bind="articleDraft.SortOrder" class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs" />
+                        </label>
+                    </div>
+                    <label class="block font-medium text-slate-700 dark:text-slate-300">
+                        Title
+                        <input @bind="articleDraft.Title" maxlength="200" placeholder="e.g. How to apply for medical leave" class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs" />
+                    </label>
+                    <label class="block font-medium text-slate-700 dark:text-slate-300">
+                        Trigger Keywords (comma-separated)
+                        <input @bind="articleDraft.Keywords" maxlength="500" placeholder="medical leave, sick leave, certificate, apply leave" class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs" />
+                    </label>
+                    <label class="block font-medium text-slate-700 dark:text-slate-300">
+                        Bot Answer
+                        <textarea @bind="articleDraft.Answer" rows="5" maxlength="4000" placeholder="Step-by-step answer shown by the Helpdesk Assistant..." class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-xs"></textarea>
+                    </label>
+                    <label class="inline-flex items-center gap-2 font-medium text-slate-700 dark:text-slate-300">
+                        <input type="checkbox" @bind="articleDraft.IsActive" />
+                        <span>Active (bot can use this article)</span>
+                    </label>
+                </div>
+                <div class="flex justify-end gap-2 border-t border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 px-4 py-3">
+                    <button type="button" class="app-button app-button-secondary app-button-sm" @onclick="() => showArticleModal = false">Cancel</button>
+                    <button type="button"
+                            class="inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-bold shadow-2xs"
+                            style="background-color: #ADD8E6; color: #0f172a; border: 1px solid #7cc0d8;"
+                            disabled="@busy"
+                            @onclick="SaveArticleAsync">
+                        Save Article
+                    </button>
+                </div>
+            </div>
+        </div>
+    }
+</section>
+
+@code {
+    [Parameter] public bool Embedded { get; set; }
+
+    private static readonly (string Key, string Label)[] QueueFilters =
+    [
+        ("queue", "Needs Attention"),
+        ("waiting", "Waiting"),
+        ("active", "Live"),
+        ("bot", "Bot"),
+        ("resolved", "Resolved"),
+        ("all", "All")
+    ];
+
+    private string subTab = "queue";
+    private string statusFilter = "queue";
+    private int selectedOrganisationId;
+    private string queueSearch = "", kbSearch = "";
+    private string agentReplyBody = "";
+    private bool agentInternalNote;
+    private string? error;
+    private bool busy, disposed, scroll;
+
+    private HelpdeskAgentInboxDto inbox = new();
+    private HelpdeskTicketDetailDto? selectedTicket;
+    private List<HelpdeskArticleDto> articles = [];
+    private bool showArticleModal;
+    private HelpdeskArticleDto articleDraft = new();
+
+    private ElementReference agentMessagesEl;
+    private readonly CancellationTokenSource stop = new();
+    private Task? watching;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadInboxAsync();
+        watching = WatchAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (scroll && selectedTicket != null)
+        {
+            scroll = false;
+            try { await JS.InvokeVoidAsync("hrmChat.scrollToLatest", agentMessagesEl, true); } catch { }
+        }
+    }
+
+    private async Task SwitchSubTabAsync(string next)
+    {
+        subTab = next;
+        if (next == "kb") await LoadArticlesAsync();
+        else await LoadInboxAsync();
+    }
+
+    private async Task RefreshCurrentAsync()
+    {
+        if (subTab == "kb") await LoadArticlesAsync();
+        else
+        {
+            await LoadInboxAsync();
+            if (selectedTicket != null) await SelectTicketAsync(selectedTicket.Ticket.Id);
+        }
+    }
+
+    private async Task SetStatusFilterAsync(string filterKey)
+    {
+        statusFilter = filterKey;
+        await LoadInboxAsync();
+    }
+
+    private async Task LoadInboxAsync()
+    {
+        if (busy) return;
+        busy = true;
+        error = null;
+        try { inbox = await Helpdesk.GetAgentInboxAsync(statusFilter, selectedOrganisationId, queueSearch); }
+        catch (Exception ex) { Fail(ex); }
+        finally { busy = false; }
+    }
+
+    private async Task SelectTicketAsync(long ticketId)
+    {
+        if (busy) return;
+        busy = true;
+        error = null;
+        try
+        {
+            selectedTicket = await Helpdesk.GetTicketAsync(ticketId);
+            scroll = true;
+        }
+        catch (Exception ex) { Fail(ex); }
+        finally { busy = false; }
+    }
+
+    private async Task TakeOverAsync()
+    {
+        if (busy || selectedTicket == null) return;
+        busy = true;
+        error = null;
+        try
+        {
+            selectedTicket = await Helpdesk.TakeOverTicketAsync(selectedTicket.Ticket.Id);
+            inbox = await Helpdesk.GetAgentInboxAsync(statusFilter, selectedOrganisationId, queueSearch);
+            Toast.Success($"You have taken over {selectedTicket.Ticket.TicketNumber}.");
+            scroll = true;
+        }
+        catch (Exception ex) { Fail(ex); }
+        finally { busy = false; }
+    }
+
+    private async Task SendAgentReplyAsync()
+    {
+        if (busy || selectedTicket == null || string.IsNullOrWhiteSpace(agentReplyBody)) return;
+        busy = true;
+        error = null;
+        try
+        {
+            selectedTicket = await Helpdesk.SendAgentMessageAsync(selectedTicket.Ticket.Id, agentReplyBody, agentInternalNote);
+            agentReplyBody = "";
+            inbox = await Helpdesk.GetAgentInboxAsync(statusFilter, selectedOrganisationId, queueSearch);
+            scroll = true;
+        }
+        catch (Exception ex) { Fail(ex); }
+        finally { busy = false; }
+    }
+
+    private async Task ResolveAsAgentAsync()
+    {
+        if (busy || selectedTicket == null) return;
+        busy = true;
+        error = null;
+        try
+        {
+            selectedTicket = await Helpdesk.ResolveTicketByAgentAsync(selectedTicket.Ticket.Id, "");
+            inbox = await Helpdesk.GetAgentInboxAsync(statusFilter, selectedOrganisationId, queueSearch);
+            Toast.Success($"Ticket {selectedTicket.Ticket.TicketNumber} marked resolved.");
+            scroll = true;
+        }
+        catch (Exception ex) { Fail(ex); }
+        finally { busy = false; }
+    }
+
+    private async Task ReopenAsAgentAsync()
+    {
+        if (busy || selectedTicket == null) return;
+        busy = true;
+        error = null;
+        try
+        {
+            selectedTicket = await Helpdesk.ReopenTicketAsync(selectedTicket.Ticket.Id);
+            inbox = await Helpdesk.GetAgentInboxAsync(statusFilter, selectedOrganisationId, queueSearch);
+            scroll = true;
+        }
+        catch (Exception ex) { Fail(ex); }
+        finally { busy = false; }
+    }
+
+    private async Task LoadArticlesAsync()
+    {
+        if (busy) return;
+        busy = true;
+        error = null;
+        try { articles = await Helpdesk.GetArticlesAsync(kbSearch); }
+        catch (Exception ex) { Fail(ex); }
+        finally { busy = false; }
+    }
+
+    private void OpenNewArticleModal()
+    {
+        articleDraft = new HelpdeskArticleDto { Category = "General", IsActive = true, SortOrder = (articles.Count + 1) * 10 };
+        showArticleModal = true;
+    }
+
+    private void OpenEditArticleModal(HelpdeskArticleDto art)
+    {
+        articleDraft = new HelpdeskArticleDto
+        {
+            Id = art.Id,
+            Category = art.Category,
+            Title = art.Title,
+            Keywords = art.Keywords,
+            Answer = art.Answer,
+            IsActive = art.IsActive,
+            SortOrder = art.SortOrder
+        };
+        showArticleModal = true;
+    }
+
+    private void OpenKbFromTicket()
+    {
+        if (selectedTicket == null) return;
+        var lastAgentMsg = selectedTicket.Messages.LastOrDefault(m => m.SenderType == HelpdeskSenderTypes.Agent && !m.IsInternalNote)?.Body ?? "";
+        articleDraft = new HelpdeskArticleDto
+        {
+            Category = selectedTicket.Ticket.Category,
+            Title = selectedTicket.Ticket.Subject,
+            Keywords = selectedTicket.Ticket.Category.ToLowerInvariant(),
+            Answer = lastAgentMsg,
+            IsActive = true,
+            SortOrder = 100
+        };
+        showArticleModal = true;
+    }
+
+    private async Task SaveArticleAsync()
+    {
+        if (busy) return;
+        busy = true;
+        error = null;
+        try
+        {
+            var result = await Helpdesk.SaveArticleAsync(articleDraft);
+            if (!result.Success) { error = result.Message; Toast.Error(result.Message); return; }
+            Toast.Success(result.Message);
+            showArticleModal = false;
+            articles = await Helpdesk.GetArticlesAsync(kbSearch);
+        }
+        catch (Exception ex) { Fail(ex); }
+        finally { busy = false; }
+    }
+
+    private async Task DeleteArticleAsync(int id)
+    {
+        if (busy) return;
+        busy = true;
+        error = null;
+        try
+        {
+            var result = await Helpdesk.DeleteArticleAsync(id);
+            if (!result.Success) { error = result.Message; Toast.Error(result.Message); return; }
+            Toast.Success(result.Message);
+            articles = await Helpdesk.GetArticlesAsync(kbSearch);
+        }
+        catch (Exception ex) { Fail(ex); }
+        finally { busy = false; }
+    }
+
+    private async Task WatchAsync()
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(5));
+        try
+        {
+            while (await timer.WaitForNextTickAsync(stop.Token))
+            {
+                await InvokeAsync(async () =>
+                {
+                    if (busy || disposed || subTab != "queue") return;
+                    try
+                    {
+                        inbox = await Helpdesk.GetAgentInboxAsync(statusFilter, selectedOrganisationId, queueSearch);
+                        if (selectedTicket != null)
+                        {
+                            var prevCount = selectedTicket.Messages.Count;
+                            selectedTicket = await Helpdesk.GetTicketAsync(selectedTicket.Ticket.Id);
+                            if (selectedTicket.Messages.Count > prevCount) scroll = true;
+                        }
+                        StateHasChanged();
+                    }
+                    catch { }
+                });
+            }
+        }
+        catch (OperationCanceledException) { }
+        catch (ObjectDisposedException) { }
+    }
+
+    private static string StatusLabel(string status) => status switch
+    {
+        HelpdeskTicketStatuses.BotActive => "Bot",
+        HelpdeskTicketStatuses.WaitingForAgent => "Waiting",
+        HelpdeskTicketStatuses.AgentAssigned => "Live",
+        HelpdeskTicketStatuses.Resolved => "Resolved",
+        _ => status
+    };
+
+    private static string StatusBadgeClass(string status) => status switch
+    {
+        HelpdeskTicketStatuses.BotActive => "bg-blue-50 text-blue-700 border border-blue-200",
+        HelpdeskTicketStatuses.WaitingForAgent => "bg-amber-100 text-amber-800 border border-amber-200",
+        HelpdeskTicketStatuses.AgentAssigned => "bg-emerald-100 text-emerald-800 border border-emerald-200",
+        HelpdeskTicketStatuses.Resolved => "bg-slate-100 text-slate-600 border border-slate-200",
+        _ => "bg-slate-100 text-slate-700"
+    };
+
+    private void Fail(Exception ex)
+    {
+        Logger.LogWarning(ex, "Helpdesk agent console operation failed");
+        error = ex is UnauthorizedAccessException or InvalidOperationException ? ex.Message : "Could not load Helpdesk console.";
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        disposed = true;
+        await stop.CancelAsync();
+        if (watching != null) await watching;
+        stop.Dispose();
+    }
+}

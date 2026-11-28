@@ -165,12 +165,24 @@ public sealed class LeaveFlowConfigurationService(IDbContextFactory<HrmTeContext
             catch (RequestTransitionConfigurationException ex) { missingTransitions.Add(ex.Detail); }
             catch (InvalidOperationException ex) { return ServiceResult.Fail(ex.Message); }
         }
-        if (missingTransitions.Count > 0)
-            return ServiceResult.Fail("Approval flow was not saved. The following transitions must be configured by a Developer:\n" + string.Join("\n", missingTransitions));
         await db.SaveChangesAsync();
         await tx.CommitAsync();
         model.Version = version;
         model.ImportedFromLegacy = false;
+        if (missingTransitions.Count > 0)
+        {
+            // Save the flow first; developers can configure its missing transitions later.
+            var context = new WorkflowRequestContextDto
+            {
+                OrganisationBusinessEntityId = org, JobTypeId = model.JobTypeId, RequestTypeId = requestType
+            };
+            foreach (var detail in missingTransitions)
+                await new WorkflowConfigurationException(context, detail)
+                {
+                    ConfigurationUrl = "/admin/settings/config/state-transitions"
+                }.NotifyAsync(factory);
+            return ServiceResult.Ok("Approval flow saved. The following transitions must be configured by a Developer before request actions using them can proceed:\n" + string.Join("\n", missingTransitions));
+        }
         return ServiceResult.Ok("Approval flow saved. It applies to new submissions; existing requests keep their workflow version.");
     }
 

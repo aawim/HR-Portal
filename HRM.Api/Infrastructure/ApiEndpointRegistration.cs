@@ -49,6 +49,9 @@ public static class ApiEndpointRegistration
         services.TryAddScoped<global::HRM.Services.Contracts.AttendanceLogServiceContracts.IOperations>(provider => provider.GetRequiredService<global::HRM.Services.AttendanceLogService>());
         services.TryAddScoped<global::HRM.Services.StaffChatService>();
         services.TryAddScoped<global::HRM.Services.Contracts.StaffChatServiceContracts.IOperations>(provider => provider.GetRequiredService<global::HRM.Services.StaffChatService>());
+        services.TryAddScoped<global::HRM.Api.Services.Helpdesk.IHelpdeskBotEngine, global::HRM.Api.Services.Helpdesk.HybridHelpdeskBotEngine>();
+        services.TryAddScoped<global::HRM.Services.HelpdeskService>();
+        services.TryAddScoped<global::HRM.Services.Contracts.HelpdeskServiceContracts.IOperations>(provider => provider.GetRequiredService<global::HRM.Services.HelpdeskService>());
         services.TryAddScoped<global::HRM.WorkPlanning.Services.DutyRosterService>();
         services.TryAddScoped<global::HRM.WorkPlanning.Services.Contracts.DutyRosterServiceContracts.IOperations>(provider => provider.GetRequiredService<global::HRM.WorkPlanning.Services.DutyRosterService>());
         services.TryAddScoped<global::HRM.Services.Leave.LeaveHandoverService>();

@@ -18,6 +18,7 @@ public static class ApplicationContractCatalog
         typeof(global::HRM.Services.Contracts.WeeklyWorkingHoursServiceContracts.IOperations),
         typeof(global::HRM.Services.Contracts.AttendanceLogServiceContracts.IOperations),
         typeof(global::HRM.Services.Contracts.StaffChatServiceContracts.IOperations),
+        typeof(global::HRM.Services.Contracts.HelpdeskServiceContracts.IOperations),
         typeof(global::HRM.WorkPlanning.Services.Contracts.DutyRosterServiceContracts.IOperations),
         typeof(global::HRM.Services.Leave.Contracts.LeaveHandoverServiceContracts.IOperations),
         typeof(global::HRM.Services.Leave.Contracts.LeaveCalendarServiceContracts.IOperations),
