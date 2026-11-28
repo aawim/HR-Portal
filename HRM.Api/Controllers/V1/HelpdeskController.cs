@@ -66,18 +66,25 @@ public sealed class HelpdeskController(HelpdeskServiceContracts.IOperations serv
         => Ok(await service.GetAgentInboxAsync(statusFilter ?? "queue", organisationId, search ?? ""));
 
     [HttpPost("take-over")]
-    public async Task<ActionResult<HelpdeskTicketDetailDto>> TakeOverTicket([FromBody] TicketIdRequest request)
-        => Ok(await service.TakeOverTicketAsync(request.ticketId));
+    public async Task<ActionResult<HelpdeskTicketDetailDto>> TakeOverTicket([FromBody] TakeOverTicketRequest request)
+        => Ok(await service.TakeOverTicketAsync(request.ticketId, request.pin ?? ""));
+
+    public sealed class TakeOverTicketRequest
+    {
+        public long ticketId { get; set; }
+        public string? pin { get; set; }
+    }
 
     [HttpPost("send-agent-message")]
     public async Task<ActionResult<HelpdeskTicketDetailDto>> SendAgentMessage([FromBody] SendAgentMessageRequest request)
-        => Ok(await service.SendAgentMessageAsync(request.ticketId, request.body ?? "", request.isInternalNote));
+        => Ok(await service.SendAgentMessageAsync(request.ticketId, request.body ?? "", request.isInternalNote, request.pin ?? ""));
 
     public sealed class SendAgentMessageRequest
     {
         public long ticketId { get; set; }
         public string? body { get; set; }
         public bool isInternalNote { get; set; }
+        public string? pin { get; set; }
     }
 
     [HttpPost("resolve-by-agent")]
@@ -104,8 +111,13 @@ public sealed class HelpdeskController(HelpdeskServiceContracts.IOperations serv
         => Ok(await service.GetArticlesAsync(search ?? ""));
 
     [HttpPost("save-article")]
-    public async Task<ActionResult<ServiceResult>> SaveArticle([FromBody] HelpdeskArticleDto model)
-        => Ok(await service.SaveArticleAsync(model));
+    public async Task<ActionResult<ServiceResult>> SaveArticle([FromBody] SaveArticleRequest request)
+        => Ok(await service.SaveArticleAsync(request.model));
+
+    public sealed class SaveArticleRequest
+    {
+        public HelpdeskArticleDto model { get; set; } = default!;
+    }
 
     [HttpPost("delete-article")]
     public async Task<ActionResult<ServiceResult>> DeleteArticle([FromBody] DeleteArticleRequest request)
@@ -125,6 +137,54 @@ public sealed class HelpdeskController(HelpdeskServiceContracts.IOperations serv
         => Ok(await service.GetBotSettingsAsync());
 
     [HttpPost("save-bot-settings")]
-    public async Task<ActionResult<ServiceResult>> SaveBotSettings([FromBody] SaveHelpdeskBotSettingsDto model)
-        => Ok(await service.SaveBotSettingsAsync(model));
+    public async Task<ActionResult<ServiceResult>> SaveBotSettings([FromBody] SaveBotSettingsRequest request)
+        => Ok(await service.SaveBotSettingsAsync(request.model));
+
+    public sealed class SaveBotSettingsRequest
+    {
+        public SaveHelpdeskBotSettingsDto model { get; set; } = default!;
+    }
+
+    [HttpPost("create-ticket-with-attachments")]
+    [RequestSizeLimit(30_000_000)]
+    public async Task<ActionResult<HelpdeskTicketDetailDto>> CreateTicketWithAttachments([FromBody] CreateTicketWithAttachmentsRequest request)
+        => Ok(await service.CreateTicketWithAttachmentsAsync(request.category ?? "", request.subject ?? "", request.initialMessage ?? "", request.attachments ?? []));
+
+    public sealed class CreateTicketWithAttachmentsRequest
+    {
+        public string? category { get; set; }
+        public string? subject { get; set; }
+        public string? initialMessage { get; set; }
+        public List<HelpdeskAttachmentUploadDto>? attachments { get; set; }
+    }
+
+    [HttpPost("send-user-message-with-attachments")]
+    [RequestSizeLimit(30_000_000)]
+    public async Task<ActionResult<HelpdeskTicketDetailDto>> SendUserMessageWithAttachments([FromBody] SendUserMessageWithAttachmentsRequest request)
+        => Ok(await service.SendUserMessageWithAttachmentsAsync(request.ticketId, request.body ?? "", request.attachments ?? []));
+
+    public sealed class SendUserMessageWithAttachmentsRequest
+    {
+        public long ticketId { get; set; }
+        public string? body { get; set; }
+        public List<HelpdeskAttachmentUploadDto>? attachments { get; set; }
+    }
+
+    [HttpPost("send-agent-message-with-attachments")]
+    [RequestSizeLimit(30_000_000)]
+    public async Task<ActionResult<HelpdeskTicketDetailDto>> SendAgentMessageWithAttachments([FromBody] SendAgentMessageWithAttachmentsRequest request)
+        => Ok(await service.SendAgentMessageWithAttachmentsAsync(request.ticketId, request.body ?? "", request.isInternalNote, request.pin ?? "", request.attachments ?? []));
+
+    public sealed class SendAgentMessageWithAttachmentsRequest
+    {
+        public long ticketId { get; set; }
+        public string? body { get; set; }
+        public bool isInternalNote { get; set; }
+        public string? pin { get; set; }
+        public List<HelpdeskAttachmentUploadDto>? attachments { get; set; }
+    }
+
+    [HttpGet("download-attachment")]
+    public async Task<ActionResult<HelpdeskAttachmentContentDto>> DownloadAttachment([FromQuery] long attachmentId)
+        => Ok(await service.DownloadAttachmentAsync(attachmentId));
 }

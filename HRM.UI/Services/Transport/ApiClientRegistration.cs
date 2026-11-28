@@ -61,7 +61,8 @@ public static class ApiClientRegistration
         services.AddScoped<IUserService, UserProfileClient>();
         services.AddScoped<IGeographyService, GeographyClient>();
         services.AddScoped<HRM.Services.ToastService>();
-        services.AddScoped<HRM.UI.Services.HelpdeskAvailabilityNotifier>();
+        services.AddSingleton<HRM.UI.Services.HelpdeskAvailabilityNotifier>();
+        services.AddSingleton<HRM.UI.Services.ChatTypingStateService>();
         services.AddScoped<HRM.UI.Services.WorkPlanning.IWorkforceScheduleApiClient>(provider =>
         {
             var origins = provider.GetRequiredService<BackendOrigins>();

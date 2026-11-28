@@ -82,6 +82,24 @@ public sealed class HelpdeskOrganisationAccessMapping : IEntityTypeConfiguration
     }
 }
 
+public sealed class HelpdeskAttachmentMapping : IEntityTypeConfiguration<HelpdeskAttachment>
+{
+    public void Configure(EntityTypeBuilder<HelpdeskAttachment> b)
+    {
+        b.ToTable("HD_HelpdeskAttachments");
+        b.HasKey(x => x.Id);
+        b.Property(x => x.FileName).HasMaxLength(255).IsRequired();
+        b.Property(x => x.ContentType).HasMaxLength(120).IsRequired();
+        b.Property(x => x.Content).IsRequired();
+
+        b.HasIndex(x => new { x.TicketId, x.MessageId });
+
+        b.HasOne(x => x.Ticket).WithMany().HasForeignKey(x => x.TicketId).OnDelete(DeleteBehavior.Cascade);
+        b.HasOne(x => x.Message).WithMany().HasForeignKey(x => x.MessageId).OnDelete(DeleteBehavior.NoAction);
+        b.HasOne<User>().WithMany().HasForeignKey(x => x.UploadedByUserId).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
 public partial class HrmTeContext
 {
     public DbSet<HelpdeskTicket> HelpdeskTickets => Set<HelpdeskTicket>();
@@ -89,4 +107,5 @@ public partial class HrmTeContext
     public DbSet<HelpdeskArticle> HelpdeskArticles => Set<HelpdeskArticle>();
     public DbSet<HelpdeskSettings> HelpdeskSettings => Set<HelpdeskSettings>();
     public DbSet<HelpdeskOrganisationAccess> HelpdeskOrganisationAccesses => Set<HelpdeskOrganisationAccess>();
+    public DbSet<HelpdeskAttachment> HelpdeskAttachments => Set<HelpdeskAttachment>();
 }

@@ -2,8 +2,11 @@
 @page "/admin/chat"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
 @implements IAsyncDisposable
+@using HRM.Components.Shared
 @inject HRM.Services.Contracts.StaffChatServiceContracts.IOperations Chat
 @inject HRM.Services.Contracts.HelpdeskServiceContracts.IOperations Helpdesk
+@inject HRM.Services.Interfaces.IUserAccessService UserAccess
+@inject HRM.UI.Services.ChatTypingStateService TypingState
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
 @inject ILogger<StaffChat> Logger
@@ -303,8 +306,12 @@
                                         </span>
                                     }
                                 </div>
-                                <p class="text-[11px] text-slate-500 dark:text-slate-400 truncate">
-                                    @if (activeChat.IsGroup)
+                                <p class="text-[11px] truncate @(activeTypists.Count > 0 ? "text-teal-600 dark:text-teal-400 font-semibold animate-pulse" : "text-slate-500 dark:text-slate-400")">
+                                    @if (activeTypists.Count > 0)
+                                    {
+                                        <span>@HRM.UI.Services.ChatTypingStateService.FormatTypingLabel(activeTypists)…</span>
+                                    }
+                                    else if (activeChat.IsGroup)
                                     {
                                         <span>@activeMembersCount active member@(activeMembersCount == 1 ? "" : "s")@(activeChat.CanManage ? " · You are a manager" : "")</span>
                                     }
@@ -333,6 +340,13 @@
                                     @onclick="() => showInfoDrawer = !showInfoDrawer">
                                 <AppIcon Name="@(activeChat.IsGroup ? "users" : "info")" Class="text-xs" />
                                 <span class="hidden sm:inline">@(activeChat.IsGroup ? $"Members ({activeMembersCount})" : "Details")</span>
+                            </button>
+                            <button type="button"
+                                    class="app-button app-button-ghost app-button-sm app-button-icon"
+                                    title="Close chat window"
+                                    aria-label="Close chat window"
+                                    @onclick="CloseActiveChat">
+                                <AppIcon Name="close" Class="text-sm" />
                             </button>
                         </div>
                     </div>
@@ -462,6 +476,11 @@
                                 previousMessage = message;
                             }
                         }
+
+                        @if (activeTypists.Count > 0)
+                        {
+                            <ChatTypingIndicator Label="@HRM.UI.Services.ChatTypingStateService.FormatTypingLabel(activeTypists)" />
+                        }
                     </div>
 
                     <!-- Pinned Modern Message Composer -->
@@ -556,11 +575,14 @@
                                     <AppIcon Name="bi-paperclip" Class="text-sm" />
                                 </button>
 
+                                <ChatEmojiPicker OnEmojiSelected="InsertEmoji" Disabled="@busy" />
+
                                 <label for="chat-message" class="sr-only">Message</label>
                                 <textarea id="chat-message"
                                           @ref="composerInput"
                                           @bind="body"
                                           @bind:event="oninput"
+                                          @bind:after="OnBodyTyped"
                                           maxlength="4000"
                                           rows="1"
                                           placeholder="Write a message… (Enter to send, Shift+Enter for new line)"
@@ -1052,6 +1074,13 @@
     private readonly CancellationTokenSource stop = new();
     private Task? watching;
 
+    private int currentUserId;
+    private string currentUserName = "";
+    private DateTime lastTypingNotifiedUtc = DateTime.MinValue;
+    private IReadOnlyList<HRM.UI.Services.ChatTypingParticipant> activeTypists = [];
+
+    private string CurrentTypingChannel => selected > 0 ? $"staff:{selected}" : "";
+
     private string BaseRoute => new Uri(Navigation.Uri).AbsolutePath.StartsWith("/admin/", StringComparison.OrdinalIgnoreCase)
         ? "/admin/chat"
         : "/online/chat";
@@ -1085,6 +1114,15 @@
     {
         try
         {
+            try
+            {
+                var actor = await UserAccess.RequireContextAsync();
+                currentUserId = actor.UserId;
+                currentUserName = !string.IsNullOrWhiteSpace(actor.FullName) ? actor.FullName : actor.Username;
+            }
+            catch { }
+
+            TypingState.Changed += HandleTypingChanged;
             contacts = await Chat.SearchContactsAsync("");
             threads = await Chat.ListAsync();
             try { helpdeskAvailable = (await Helpdesk.GetAvailabilityAsync()).IsAvailable; }
@@ -1092,6 +1130,48 @@
         }
         catch (Exception ex) { Fail(ex); }
         watching = WatchAsync();
+    }
+
+    private void HandleTypingChanged(string channelKey)
+    {
+        if (disposed || string.IsNullOrEmpty(CurrentTypingChannel) || !string.Equals(channelKey, CurrentTypingChannel, StringComparison.Ordinal))
+            return;
+
+        _ = InvokeAsync(() =>
+        {
+            if (disposed) return;
+            var prev = activeTypists.Count;
+            activeTypists = TypingState.GetActiveTypists(CurrentTypingChannel, currentUserId);
+            if (activeTypists.Count > 0 && prev == 0) scroll = true;
+            StateHasChanged();
+        });
+    }
+
+    private void OnBodyTyped()
+    {
+        if (selected <= 0 || currentUserId <= 0) return;
+        if (string.IsNullOrWhiteSpace(body))
+        {
+            ClearStaffTyping();
+            return;
+        }
+        var now = DateTime.UtcNow;
+        if ((now - lastTypingNotifiedUtc).TotalMilliseconds < 1400) return;
+        lastTypingNotifiedUtc = now;
+        TypingState.NotifyTyping($"staff:{selected}", currentUserId, currentUserName);
+    }
+
+    private void ClearStaffTyping()
+    {
+        if (selected > 0 && currentUserId > 0)
+            TypingState.ClearTyping($"staff:{selected}", currentUserId);
+        lastTypingNotifiedUtc = DateTime.MinValue;
+    }
+
+    private void InsertEmoji(string emoji)
+    {
+        body += emoji;
+        OnBodyTyped();
     }
 
     protected override async Task OnParametersSetAsync()
@@ -1294,14 +1374,29 @@
         finally { busy = false; }
     }
 
+    private void CloseActiveChat()
+    {
+        ClearStaffTyping();
+        conversationVersion++;
+        activeChat = null;
+        selected = 0;
+        activeTypists = [];
+        showInfoDrawer = false;
+        showAttachPanel = false;
+        mobileShowList = true;
+        Navigation.NavigateTo(BaseRoute, replace: true);
+    }
+
     private async Task OpenAsync(long id, bool navigate = true)
     {
         if (busy) return;
+        ClearStaffTyping();
         busy = true;
         error = null;
         try
         {
             await OpenCoreAsync(id);
+            activeTypists = TypingState.GetActiveTypists($"staff:{id}", currentUserId);
             if (navigate) Navigation.NavigateTo($"{BaseRoute}?conversationId={id}", replace: true);
         }
         catch (Exception ex)
@@ -1372,6 +1467,7 @@
     private async Task SendAsync()
     {
         if (busy || selected == 0 || string.IsNullOrWhiteSpace(body)) return;
+        ClearStaffTyping();
         busy = true;
         error = null;
         try
@@ -1508,6 +1604,8 @@
     public async ValueTask DisposeAsync()
     {
         disposed = true;
+        ClearStaffTyping();
+        TypingState.Changed -= HandleTypingChanged;
         await stop.CancelAsync();
         if (watching != null) await watching;
         stop.Dispose();

@@ -240,3 +240,29 @@
 :global(:root[data-theme="dark"]) .hd-messages-canvas {
     background-image: radial-gradient(rgba(148, 163, 184, 0.1) 1px, transparent 1px);
 }
+
+/* Smooth message pop-in animation */
+.hd-row {
+    animation: hdChatPopIn 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.hd-send-btn:active:not(:disabled) {
+    transform: scale(0.96);
+}
+
+@keyframes hdChatPopIn {
+    from {
+        opacity: 0;
+        transform: translateY(8px) scale(0.985);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .hd-row {
+        animation: none !important;
+    }
+}

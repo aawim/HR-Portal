@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
 using System.Threading.Tasks;
 using HRM.Api.Services.Helpdesk;
 using HRM.DTOs;
@@ -264,19 +266,88 @@ public sealed class HelpdeskService(
         return await BuildDetailAsync(db, ticket, user.UserId, isAgent);
     }
 
-    public async Task<HelpdeskTicketDetailDto> CreateTicketAsync(string category, string subject, string initialMessage)
+    private const int MaxAttachmentsPerMessage = 4;
+    private const long MaxAttachmentSizeBytes = 5 * 1024 * 1024; // 5 MB
+
+    private static readonly HashSet<string> AllowedAttachmentExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".png", ".jpg", ".jpeg", ".webp", ".gif",
+        ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".csv", ".txt", ".zip"
+    };
+
+    private static readonly HashSet<string> ImageExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".png", ".jpg", ".jpeg", ".webp", ".gif"
+    };
+
+    private sealed record ValidatedAttachment(string FileName, string ContentType, byte[] Bytes, bool IsImage);
+
+    private static List<ValidatedAttachment> ValidateAttachments(List<HelpdeskAttachmentUploadDto>? uploads)
+    {
+        if (uploads == null || uploads.Count == 0) return [];
+        if (uploads.Count > MaxAttachmentsPerMessage)
+            throw new InvalidOperationException($"You can attach up to {MaxAttachmentsPerMessage} files per message.");
+
+        var list = new List<ValidatedAttachment>(uploads.Count);
+        foreach (var item in uploads)
+        {
+            if (item == null || string.IsNullOrWhiteSpace(item.Base64Data)) continue;
+
+            var rawName = System.IO.Path.GetFileName((item.FileName ?? "attachment").Trim());
+            if (string.IsNullOrWhiteSpace(rawName)) rawName = "attachment";
+            if (rawName.Length > 255) rawName = rawName[^255..];
+
+            var ext = System.IO.Path.GetExtension(rawName);
+            if (string.IsNullOrWhiteSpace(ext) || !AllowedAttachmentExtensions.Contains(ext))
+                throw new InvalidOperationException($"File type '{ext}' is not supported. Allowed: images (PNG, JPG, WEBP, GIF), PDF, Office documents, CSV, TXT, and ZIP.");
+
+            var b64 = item.Base64Data.Trim();
+            var commaIdx = b64.IndexOf(',');
+            if (b64.StartsWith("data:", StringComparison.OrdinalIgnoreCase) && commaIdx >= 0)
+                b64 = b64[(commaIdx + 1)..];
+
+            byte[] bytes;
+            try { bytes = Convert.FromBase64String(b64); }
+            catch { throw new InvalidOperationException($"Attachment '{rawName}' could not be decoded."); }
+
+            if (bytes.Length == 0)
+                throw new InvalidOperationException($"Attachment '{rawName}' is empty.");
+            if (bytes.Length > MaxAttachmentSizeBytes)
+                throw new InvalidOperationException($"Attachment '{rawName}' exceeds the 5 MB file size limit.");
+
+            var isImage = ImageExtensions.Contains(ext);
+            var contentType = string.IsNullOrWhiteSpace(item.ContentType)
+                ? (isImage ? $"image/{ext.TrimStart('.').ToLowerInvariant().Replace("jpg", "jpeg")}" : "application/octet-stream")
+                : item.ContentType.Trim();
+            if (contentType.Length > 120) contentType = contentType[..120];
+
+            list.Add(new ValidatedAttachment(rawName, contentType, bytes, isImage));
+        }
+
+        return list;
+    }
+
+    public Task<HelpdeskTicketDetailDto> CreateTicketAsync(string category, string subject, string initialMessage)
+        => CreateTicketWithAttachmentsAsync(category, subject, initialMessage, []);
+
+    public async Task<HelpdeskTicketDetailDto> CreateTicketWithAttachmentsAsync(string category, string subject, string initialMessage, List<HelpdeskAttachmentUploadDto> attachments)
     {
         var user = await access.RequireContextAsync();
         var cleanCategory = string.IsNullOrWhiteSpace(category) ? "General" : category.Trim();
         if (cleanCategory.Length > 60) cleanCategory = cleanCategory[..60];
 
+        var validAttachments = ValidateAttachments(attachments);
         var cleanBody = (initialMessage ?? "").Trim();
-        if (string.IsNullOrWhiteSpace(cleanBody))
-            throw new InvalidOperationException("Please enter your message or question.");
+        if (string.IsNullOrWhiteSpace(cleanBody) && validAttachments.Count == 0)
+            throw new InvalidOperationException("Please enter your message or attach a file/screenshot.");
         if (cleanBody.Length > 4000) cleanBody = cleanBody[..4000];
 
+        var defaultSubject = string.IsNullOrWhiteSpace(cleanBody)
+            ? $"Attachment: {validAttachments[0].FileName}"
+            : (cleanBody.Length > 80 ? cleanBody[..77].TrimEnd() + "..." : cleanBody);
+
         var cleanSubject = string.IsNullOrWhiteSpace(subject)
-            ? (cleanBody.Length > 80 ? cleanBody[..77].TrimEnd() + "..." : cleanBody)
+            ? defaultSubject
             : subject.Trim();
         if (cleanSubject.Length > 200) cleanSubject = cleanSubject[..200];
 
@@ -328,24 +399,48 @@ public sealed class HelpdeskService(
             db.HelpdeskMessages.Add(userMsg);
             await db.SaveChangesAsync();
 
+            foreach (var att in validAttachments)
+            {
+                db.HelpdeskAttachments.Add(new HelpdeskAttachment
+                {
+                    TicketId = ticket.Id,
+                    MessageId = userMsg.Id,
+                    UploadedByUserId = user.UserId,
+                    FileName = att.FileName,
+                    ContentType = att.ContentType,
+                    FileSizeBytes = att.Bytes.LongLength,
+                    Content = att.Bytes,
+                    IsImage = att.IsImage,
+                    UploadedAtUtc = now
+                });
+            }
+
             ticket.RequesterLastReadMessageId = userMsg.Id;
             await db.SaveChangesAsync();
             await tx.CommitAsync();
         }
 
+        var botInput = string.IsNullOrWhiteSpace(cleanBody)
+            ? $"User attached file(s): {string.Join(", ", validAttachments.Select(a => a.FileName))}"
+            : cleanBody;
+
         // Let the hybrid bot engine generate the initial reply with live user context
-        await RunBotTurnAsync(db, ticket, user, orgName, requesterName, cleanBody, activeArticles);
+        await RunBotTurnAsync(db, ticket, user, orgName, requesterName, botInput, activeArticles);
 
         var isAgent = await IsHelpdeskOfficerAsync();
         return await BuildDetailAsync(db, ticket, user.UserId, isAgent);
     }
 
-    public async Task<HelpdeskTicketDetailDto> SendUserMessageAsync(long ticketId, string body)
+    public Task<HelpdeskTicketDetailDto> SendUserMessageAsync(long ticketId, string body)
+        => SendUserMessageWithAttachmentsAsync(ticketId, body, []);
+
+    public async Task<HelpdeskTicketDetailDto> SendUserMessageWithAttachmentsAsync(long ticketId, string body, List<HelpdeskAttachmentUploadDto> attachments)
     {
         var user = await access.RequireContextAsync();
+        var validAttachments = ValidateAttachments(attachments);
         var cleanBody = (body ?? "").Trim();
-        if (string.IsNullOrWhiteSpace(cleanBody))
-            throw new InvalidOperationException("Enter a message before sending.");
+        if (string.IsNullOrWhiteSpace(cleanBody) && validAttachments.Count == 0)
+            throw new InvalidOperationException("Enter a message or attach a file/screenshot before sending.");
         if (cleanBody.Length > 4000) cleanBody = cleanBody[..4000];
 
         await using var db = await factory.CreateDbContextAsync();
@@ -380,6 +475,23 @@ public sealed class HelpdeskService(
         db.HelpdeskMessages.Add(userMsg);
         ticket.UpdatedAtUtc = now;
         await db.SaveChangesAsync();
+
+        foreach (var att in validAttachments)
+        {
+            db.HelpdeskAttachments.Add(new HelpdeskAttachment
+            {
+                TicketId = ticket.Id,
+                MessageId = userMsg.Id,
+                UploadedByUserId = user.UserId,
+                FileName = att.FileName,
+                ContentType = att.ContentType,
+                FileSizeBytes = att.Bytes.LongLength,
+                Content = att.Bytes,
+                IsImage = att.IsImage,
+                UploadedAtUtc = now
+            });
+        }
+
         ticket.RequesterLastReadMessageId = userMsg.Id;
         await db.SaveChangesAsync();
 
@@ -394,7 +506,10 @@ public sealed class HelpdeskService(
                 .Where(a => a.IsActive)
                 .OrderBy(a => a.SortOrder)
                 .ToListAsync();
-            await RunBotTurnAsync(db, ticket, user, orgName, requesterName, cleanBody, activeArticles);
+            var botInput = string.IsNullOrWhiteSpace(cleanBody)
+                ? $"User attached file(s): {string.Join(", ", validAttachments.Select(a => a.FileName))}"
+                : cleanBody;
+            await RunBotTurnAsync(db, ticket, user, orgName, requesterName, botInput, activeArticles);
         }
 
         var isAgent = await IsHelpdeskOfficerAsync();
@@ -541,7 +656,66 @@ public sealed class HelpdeskService(
         };
     }
 
-    public async Task<HelpdeskTicketDetailDto> TakeOverTicketAsync(long ticketId)
+    private static bool IsValidPinFormat(string? pin) =>
+        !string.IsNullOrWhiteSpace(pin) && pin.Length is >= 4 and <= 8 && pin.All(char.IsDigit);
+
+    private static bool VerifyPinHash(string pin, string storedHash, string storedSalt)
+    {
+        try
+        {
+            var saltBytes = Convert.FromBase64String(storedSalt);
+            var expectedBytes = Convert.FromBase64String(storedHash);
+            var actualBytes = Rfc2898DeriveBytes.Pbkdf2(Encoding.UTF8.GetBytes(pin), saltBytes, 100_000, HashAlgorithmName.SHA256, expectedBytes.Length);
+            return CryptographicOperations.FixedTimeEquals(actualBytes, expectedBytes);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static async Task ValidateOfficerPinAsync(HrmTeContext db, int userId, string? suppliedPin)
+    {
+        var userSig = await db.UserSignatures.FirstOrDefaultAsync(x => x.UserId == userId && x.IsActive);
+        if (userSig == null || string.IsNullOrWhiteSpace(userSig.PinHash) || string.IsNullOrWhiteSpace(userSig.PinSalt))
+            throw new InvalidOperationException("Set up your 4–8 digit Personal Security PIN in My Profile before taking over Helpdesk chats.");
+
+        if (userSig.PinLockedUntilUtc.HasValue && userSig.PinLockedUntilUtc.Value > DateTime.UtcNow)
+        {
+            var remaining = Math.Max(1, (int)Math.Ceiling((userSig.PinLockedUntilUtc.Value - DateTime.UtcNow).TotalMinutes));
+            throw new InvalidOperationException($"Your Security PIN is temporarily locked due to too many failed attempts. Try again in {remaining} minute(s).");
+        }
+
+        var trimmedPin = suppliedPin?.Trim();
+        if (!IsValidPinFormat(trimmedPin) || !VerifyPinHash(trimmedPin!, userSig.PinHash, userSig.PinSalt))
+        {
+            userSig.PinFailedAttempts++;
+            string err;
+            if (userSig.PinFailedAttempts >= 5)
+            {
+                userSig.PinLockedUntilUtc = DateTime.UtcNow.AddMinutes(5);
+                userSig.PinFailedAttempts = 0;
+                err = "Too many incorrect PIN attempts. Verification is locked for 5 minutes.";
+            }
+            else
+            {
+                err = $"Incorrect Security PIN ({5 - userSig.PinFailedAttempts} attempt(s) remaining).";
+            }
+
+            userSig.UpdatedAtUtc = DateTime.UtcNow;
+            await db.SaveChangesAsync();
+            throw new InvalidOperationException(err);
+        }
+
+        if (userSig.PinFailedAttempts != 0 || userSig.PinLockedUntilUtc.HasValue)
+        {
+            userSig.PinFailedAttempts = 0;
+            userSig.PinLockedUntilUtc = null;
+            userSig.UpdatedAtUtc = DateTime.UtcNow;
+        }
+    }
+
+    public async Task<HelpdeskTicketDetailDto> TakeOverTicketAsync(long ticketId, string pin)
     {
         await RequireHelpdeskOfficerAsync();
         var agent = await access.RequireContextAsync();
@@ -549,6 +723,8 @@ public sealed class HelpdeskService(
 
         var ticket = await db.HelpdeskTickets.FirstOrDefaultAsync(t => t.Id == ticketId)
             ?? throw new InvalidOperationException("Helpdesk ticket was not found.");
+
+        await ValidateOfficerPinAsync(db, agent.UserId, pin);
 
         var agentName = ResolveUserDisplayName(agent.FullName, agent.Username, agent.UserId);
         var now = DateTime.UtcNow;
@@ -576,13 +752,17 @@ public sealed class HelpdeskService(
         return await BuildDetailAsync(db, ticket, agent.UserId, isAgent: true);
     }
 
-    public async Task<HelpdeskTicketDetailDto> SendAgentMessageAsync(long ticketId, string body, bool isInternalNote)
+    public Task<HelpdeskTicketDetailDto> SendAgentMessageAsync(long ticketId, string body, bool isInternalNote, string pin)
+        => SendAgentMessageWithAttachmentsAsync(ticketId, body, isInternalNote, pin, []);
+
+    public async Task<HelpdeskTicketDetailDto> SendAgentMessageWithAttachmentsAsync(long ticketId, string body, bool isInternalNote, string pin, List<HelpdeskAttachmentUploadDto> attachments)
     {
         await RequireHelpdeskOfficerAsync();
         var agent = await access.RequireContextAsync();
+        var validAttachments = ValidateAttachments(attachments);
         var cleanBody = (body ?? "").Trim();
-        if (string.IsNullOrWhiteSpace(cleanBody))
-            throw new InvalidOperationException("Enter a reply before sending.");
+        if (string.IsNullOrWhiteSpace(cleanBody) && validAttachments.Count == 0)
+            throw new InvalidOperationException("Enter a reply or attach a file/screenshot before sending.");
         if (cleanBody.Length > 4000) cleanBody = cleanBody[..4000];
 
         await using var db = await factory.CreateDbContextAsync();
@@ -592,8 +772,11 @@ public sealed class HelpdeskService(
         var agentName = ResolveUserDisplayName(agent.FullName, agent.Username, agent.UserId);
         var now = DateTime.UtcNow;
 
-        if (!isInternalNote && ticket.Status != HelpdeskTicketStatuses.AgentAssigned)
+        var requiresTakeover = !isInternalNote && (ticket.Status != HelpdeskTicketStatuses.AgentAssigned || ticket.AssignedAgentUserId != agent.UserId);
+        if (requiresTakeover)
         {
+            await ValidateOfficerPinAsync(db, agent.UserId, pin);
+
             ticket.AssignedAgentUserId = agent.UserId;
             ticket.Status = HelpdeskTicketStatuses.AgentAssigned;
             ticket.EscalatedAtUtc ??= now;
@@ -622,10 +805,65 @@ public sealed class HelpdeskService(
         db.HelpdeskMessages.Add(msg);
         ticket.UpdatedAtUtc = now;
         await db.SaveChangesAsync();
+
+        foreach (var att in validAttachments)
+        {
+            db.HelpdeskAttachments.Add(new HelpdeskAttachment
+            {
+                TicketId = ticket.Id,
+                MessageId = msg.Id,
+                UploadedByUserId = agent.UserId,
+                FileName = att.FileName,
+                ContentType = att.ContentType,
+                FileSizeBytes = att.Bytes.LongLength,
+                Content = att.Bytes,
+                IsImage = att.IsImage,
+                UploadedAtUtc = now
+            });
+        }
+
         ticket.AgentLastReadMessageId = msg.Id;
         await db.SaveChangesAsync();
 
         return await BuildDetailAsync(db, ticket, agent.UserId, isAgent: true);
+    }
+
+    public async Task<HelpdeskAttachmentContentDto> DownloadAttachmentAsync(long attachmentId)
+    {
+        var user = await access.RequireContextAsync();
+        var isAgent = await IsHelpdeskOfficerAsync();
+        await using var db = await factory.CreateDbContextAsync();
+
+        var att = await db.HelpdeskAttachments.AsNoTracking()
+            .FirstOrDefaultAsync(a => a.Id == attachmentId)
+            ?? throw new InvalidOperationException("Attachment was not found.");
+
+        var ticket = await db.HelpdeskTickets.AsNoTracking()
+            .Where(t => t.Id == att.TicketId)
+            .Select(t => new { t.Id, t.RequesterUserId })
+            .FirstOrDefaultAsync()
+            ?? throw new InvalidOperationException("Helpdesk ticket was not found.");
+
+        if (ticket.RequesterUserId != user.UserId && !isAgent)
+            throw new UnauthorizedAccessException("You do not have permission to access this attachment.");
+
+        if (!isAgent)
+        {
+            var isInternal = await db.HelpdeskMessages.AsNoTracking()
+                .Where(m => m.Id == att.MessageId)
+                .Select(m => m.IsInternalNote)
+                .FirstOrDefaultAsync();
+            if (isInternal)
+                throw new UnauthorizedAccessException("You do not have permission to access this attachment.");
+        }
+
+        return new HelpdeskAttachmentContentDto(
+            att.Id,
+            att.FileName,
+            att.ContentType,
+            att.FileSizeBytes,
+            att.IsImage,
+            Convert.ToBase64String(att.Content));
     }
 
     public async Task<HelpdeskTicketDetailDto> ResolveTicketByAgentAsync(long ticketId, string resolutionSummary)
@@ -1016,7 +1254,11 @@ public sealed class HelpdeskService(
         {
             byTicket.TryGetValue(t.Id, out var msgs);
             var last = msgs?.LastOrDefault();
-            var preview = last == null ? "" : (last.Body.Length > 100 ? last.Body[..97] + "..." : last.Body);
+            var preview = last == null
+                ? ""
+                : string.IsNullOrWhiteSpace(last.Body)
+                    ? "📎 Attachment"
+                    : (last.Body.Length > 100 ? last.Body[..97] + "..." : last.Body);
             var lastRead = isAgentView ? t.AgentLastReadMessageId : t.RequesterLastReadMessageId;
             var unread = msgs == null ? 0 : msgs.Count(m => m.Id > lastRead && (isAgentView ? m.SenderType == HelpdeskSenderTypes.User : m.SenderType != HelpdeskSenderTypes.User));
 
@@ -1047,10 +1289,29 @@ public sealed class HelpdeskService(
     private async Task<HelpdeskTicketDetailDto> BuildDetailAsync(HrmTeContext db, HelpdeskTicket ticket, int currentUserId, bool isAgent)
     {
         var summary = (await BuildSummariesAsync(db, [ticket], isAgent)).Single();
-        var messages = await db.HelpdeskMessages.AsNoTracking()
+
+        var attachments = await db.HelpdeskAttachments.AsNoTracking()
+            .Where(a => a.TicketId == ticket.Id)
+            .OrderBy(a => a.Id)
+            .Select(a => new HelpdeskAttachmentDto(
+                a.Id,
+                a.MessageId,
+                a.FileName,
+                a.ContentType,
+                a.FileSizeBytes,
+                a.IsImage,
+                a.UploadedAtUtc))
+            .ToListAsync();
+
+        var attachmentsByMsg = attachments
+            .GroupBy(a => a.MessageId)
+            .ToDictionary(g => g.Key, g => g.ToList());
+
+        var rawMessages = await db.HelpdeskMessages.AsNoTracking()
             .Where(m => m.TicketId == ticket.Id && (isAgent || !m.IsInternalNote))
             .OrderBy(m => m.Id)
-            .Select(m => new HelpdeskMessageDto(
+            .Select(m => new
+            {
                 m.Id,
                 m.TicketId,
                 m.SenderType,
@@ -1058,10 +1319,23 @@ public sealed class HelpdeskService(
                 m.SenderName,
                 m.Body,
                 m.IsInternalNote,
-                m.SenderUserId.HasValue && m.SenderUserId.Value == currentUserId && m.SenderType != HelpdeskSenderTypes.System,
                 m.Confidence,
-                m.SentAtUtc))
+                m.SentAtUtc
+            })
             .ToListAsync();
+
+        var messages = rawMessages.Select(m => new HelpdeskMessageDto(
+            m.Id,
+            m.TicketId,
+            m.SenderType,
+            m.SenderUserId,
+            m.SenderName,
+            m.Body,
+            m.IsInternalNote,
+            m.SenderUserId.HasValue && m.SenderUserId.Value == currentUserId && m.SenderType != HelpdeskSenderTypes.System,
+            m.Confidence,
+            m.SentAtUtc,
+            attachmentsByMsg.GetValueOrDefault(m.Id))).ToList();
 
         var isRequester = ticket.RequesterUserId == currentUserId;
         var canEscalate = isRequester && ticket.Status == HelpdeskTicketStatuses.BotActive;

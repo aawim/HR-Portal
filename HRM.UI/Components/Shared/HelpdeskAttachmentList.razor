@@ -1,0 +1,195 @@
+@using System.Collections.Concurrent
+@using HRM.DTOs.Helpdesk
+@using HRM.UI.Helpers
+@inject HRM.Services.Contracts.HelpdeskServiceContracts.IOperations Helpdesk
+@inject IJSRuntime JS
+
+@if (Attachments != null && Attachments.Count > 0)
+{
+    <div class="mt-1.5 flex flex-col gap-1.5">
+        @foreach (var att in Attachments)
+        {
+            var current = att;
+            if (current.IsImage)
+            {
+                var dataUrl = GetCachedImageUrl(current.Id);
+                <div @key="current.Id" class="flex flex-col gap-1">
+                    @if (!string.IsNullOrEmpty(dataUrl))
+                    {
+                        <button type="button"
+                                class="group relative overflow-hidden rounded-lg border @(DarkSurface ? "border-white/20 bg-black/15" : "border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800") text-left transition hover:opacity-95"
+                                title="Click to preview @current.FileName"
+                                @onclick="() => OpenLightbox(current, dataUrl)">
+                            <img src="@dataUrl"
+                                 alt="@current.FileName"
+                                 class="@(Compact ? "max-h-36" : "max-h-52") max-w-full rounded-lg object-contain" />
+                            <span class="absolute bottom-1 right-1 rounded-md bg-slate-900/70 px-1.5 py-0.5 text-[9px] font-semibold text-white opacity-90 group-hover:opacity-100">
+                                Preview
+                            </span>
+                        </button>
+                    }
+                    else
+                    {
+                        <button type="button"
+                                class="inline-flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold transition @(DarkSurface ? "border-white/25 bg-white/10 text-white hover:bg-white/20" : "border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100")"
+                                disabled="@(downloadingId == current.Id)"
+                                @onclick="() => LoadOrDownloadAsync(current, openPreview: true)">
+                            <AppIcon Name="bi-image" Class="text-xs shrink-0" />
+                            <span class="truncate max-w-[14rem]">@(downloadingId == current.Id ? "Loading image..." : current.FileName)</span>
+                            <span class="text-[10px] opacity-75 shrink-0">@HelpdeskAttachmentUiHelper.FormatSize(current.FileSizeBytes)</span>
+                        </button>
+                    }
+                </div>
+            }
+            else
+            {
+                <button type="button"
+                        @key="current.Id"
+                        class="inline-flex items-center justify-between gap-2 rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold transition text-left @(DarkSurface ? "border-white/25 bg-white/10 text-white hover:bg-white/20" : "border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-700")"
+                        title="Download @current.FileName"
+                        disabled="@(downloadingId == current.Id)"
+                        @onclick="() => LoadOrDownloadAsync(current, openPreview: false)">
+                    <span class="flex items-center gap-1.5 min-w-0">
+                        <AppIcon Name="@HelpdeskAttachmentUiHelper.FileIcon(current.FileName, false)" Class="text-xs shrink-0" />
+                        <span class="truncate max-w-[13rem]">@current.FileName</span>
+                    </span>
+                    <span class="flex items-center gap-1 text-[10px] opacity-80 shrink-0">
+                        <span>@HelpdeskAttachmentUiHelper.FormatSize(current.FileSizeBytes)</span>
+                        <AppIcon Name="bi-download" Class="text-[10px]" />
+                    </span>
+                </button>
+            }
+        }
+    </div>
+}
+
+@if (lightboxAttachment != null && !string.IsNullOrEmpty(lightboxUrl))
+{
+    <div class="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-[2px]"
+         role="dialog"
+         aria-modal="true"
+         aria-label="Image attachment preview"
+         @onclick="CloseLightbox">
+        <div class="relative max-w-4xl max-h-[90vh] w-full flex flex-col rounded-2xl border border-slate-700 bg-slate-900 overflow-hidden shadow-2xl"
+             @onclick:stopPropagation="true">
+            <div class="flex items-center justify-between gap-2 border-b border-slate-800 px-4 py-2.5 text-xs text-white">
+                <span class="truncate font-semibold">@lightboxAttachment.FileName · @HelpdeskAttachmentUiHelper.FormatSize(lightboxAttachment.FileSizeBytes)</span>
+                <div class="flex items-center gap-2 shrink-0">
+                    <button type="button"
+                            class="inline-flex items-center gap-1 rounded-lg bg-teal-600 hover:bg-teal-500 px-2.5 py-1 text-[11px] font-semibold text-white transition"
+                            @onclick="() => LoadOrDownloadAsync(lightboxAttachment, openPreview: false)">
+                        <AppIcon Name="bi-download" Class="text-xs" />
+                        <span>Download</span>
+                    </button>
+                    <button type="button"
+                            class="inline-flex items-center justify-center h-7 w-7 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 transition"
+                            aria-label="Close preview"
+                            @onclick="CloseLightbox">
+                        <AppIcon Name="close" Class="text-xs" />
+                    </button>
+                </div>
+            </div>
+            <div class="flex-1 min-h-0 overflow-auto p-4 flex items-center justify-center bg-slate-950">
+                <img src="@lightboxUrl" alt="@lightboxAttachment.FileName" class="max-h-[76vh] max-w-full object-contain rounded-lg" />
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public List<HelpdeskAttachmentDto>? Attachments { get; set; }
+    [Parameter] public bool DarkSurface { get; set; }
+    [Parameter] public bool Compact { get; set; }
+
+    private static readonly ConcurrentDictionary<long, (string ContentType, string Base64)> ImageCache = new();
+    private readonly HashSet<long> loadingIds = [];
+    private long downloadingId;
+    private HelpdeskAttachmentDto? lightboxAttachment;
+    private string? lightboxUrl;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Attachments == null || Attachments.Count == 0) return;
+
+        foreach (var att in Attachments)
+        {
+            if (att.IsImage && !ImageCache.ContainsKey(att.Id) && loadingIds.Add(att.Id))
+            {
+                _ = FetchImageThumbnailAsync(att.Id);
+            }
+        }
+        await Task.CompletedTask;
+    }
+
+    private async Task FetchImageThumbnailAsync(long id)
+    {
+        try
+        {
+            var data = await Helpdesk.DownloadAttachmentAsync(id);
+            if (!string.IsNullOrEmpty(data.Base64Data))
+            {
+                if (ImageCache.Count > 120) ImageCache.Clear();
+                ImageCache[id] = (data.ContentType, data.Base64Data);
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch { }
+        finally
+        {
+            loadingIds.Remove(id);
+        }
+    }
+
+    private static string? GetCachedImageUrl(long id)
+        => ImageCache.TryGetValue(id, out var entry) ? $"data:{entry.ContentType};base64,{entry.Base64}" : null;
+
+    private async Task LoadOrDownloadAsync(HelpdeskAttachmentDto att, bool openPreview)
+    {
+        if (downloadingId == att.Id) return;
+        downloadingId = att.Id;
+        try
+        {
+            string contentType;
+            string base64;
+            if (ImageCache.TryGetValue(att.Id, out var cached))
+            {
+                contentType = cached.ContentType;
+                base64 = cached.Base64;
+            }
+            else
+            {
+                var content = await Helpdesk.DownloadAttachmentAsync(att.Id);
+                contentType = content.ContentType;
+                base64 = content.Base64Data;
+                if (att.IsImage && !string.IsNullOrEmpty(base64))
+                    ImageCache[att.Id] = (contentType, base64);
+            }
+
+            if (openPreview && att.IsImage)
+            {
+                OpenLightbox(att, $"data:{contentType};base64,{base64}");
+            }
+            else
+            {
+                await JS.InvokeVoidAsync("hrmChat.downloadFile", att.FileName, contentType, base64);
+            }
+        }
+        catch { }
+        finally
+        {
+            downloadingId = 0;
+        }
+    }
+
+    private void OpenLightbox(HelpdeskAttachmentDto att, string url)
+    {
+        lightboxAttachment = att;
+        lightboxUrl = url;
+    }
+
+    private void CloseLightbox()
+    {
+        lightboxAttachment = null;
+        lightboxUrl = null;
+    }
+}

@@ -27,6 +27,30 @@ public sealed record HelpdeskTicketSummaryDto(
     DateTime? ResolvedAtUtc,
     int? Rating);
 
+public sealed record HelpdeskAttachmentDto(
+    long Id,
+    long MessageId,
+    string FileName,
+    string ContentType,
+    long FileSizeBytes,
+    bool IsImage,
+    DateTime UploadedAtUtc);
+
+public sealed class HelpdeskAttachmentUploadDto
+{
+    public string FileName { get; set; } = "";
+    public string ContentType { get; set; } = "application/octet-stream";
+    public string Base64Data { get; set; } = "";
+}
+
+public sealed record HelpdeskAttachmentContentDto(
+    long Id,
+    string FileName,
+    string ContentType,
+    long FileSizeBytes,
+    bool IsImage,
+    string Base64Data);
+
 public sealed record HelpdeskMessageDto(
     long Id,
     long TicketId,
@@ -37,7 +61,8 @@ public sealed record HelpdeskMessageDto(
     bool IsInternalNote,
     bool IsMine,
     decimal? Confidence,
-    DateTime SentAtUtc);
+    DateTime SentAtUtc,
+    List<HelpdeskAttachmentDto>? Attachments = null);
 
 public sealed record HelpdeskTicketDetailDto(
     HelpdeskTicketSummaryDto Ticket,

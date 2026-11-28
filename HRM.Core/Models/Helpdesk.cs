@@ -93,3 +93,20 @@ public sealed class HelpdeskOrganisationAccess
     public int? UpdatedByUserId { get; set; }
     public DateTime UpdatedAtUtc { get; set; }
 }
+
+public sealed class HelpdeskAttachment
+{
+    public long Id { get; set; }
+    public long TicketId { get; set; }
+    public long MessageId { get; set; }
+    public int UploadedByUserId { get; set; }
+    public string FileName { get; set; } = "";
+    public string ContentType { get; set; } = "application/octet-stream";
+    public long FileSizeBytes { get; set; }
+    public byte[] Content { get; set; } = [];
+    public bool IsImage { get; set; }
+    public DateTime UploadedAtUtc { get; set; }
+
+    public HelpdeskTicket Ticket { get; set; } = null!;
+    public HelpdeskMessage Message { get; set; } = null!;
+}

@@ -1,9 +1,12 @@
 @page "/helpdesk/agent"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
 @implements IAsyncDisposable
+@using HRM.Components.Shared
 @using HRM.DTOs.Helpdesk
 @using HRM.Models
 @inject HRM.Services.Contracts.HelpdeskServiceContracts.IOperations Helpdesk
+@inject HRM.Services.Interfaces.IUserAccessService UserAccess
+@inject HRM.UI.Services.ChatTypingStateService TypingState
 @inject HRM.Services.ToastService Toast
 @inject HRM.UI.Services.HelpdeskAvailabilityNotifier HelpdeskNotifier
 @inject IJSRuntime JS
@@ -253,14 +256,14 @@
                                 <AppIcon Name="bi-journal-plus" Class="text-xs" />
                                 <span>Save to KB</span>
                             </button>
-                            @if (t.Status != HelpdeskTicketStatuses.AgentAssigned && t.Status != HelpdeskTicketStatuses.Resolved)
+                            @if (RequiresTakeoverForCurrentOfficer(t))
                             {
                                 <button type="button"
                                         class="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold shadow-xs transition"
                                         style="@(OnlineTheme ? "background-color: #0f766e; color: #ffffff; border: 1px solid #0d9488;" : "background-color: #ADD8E6; color: #0f172a; border: 1px solid #7cc0d8;")"
                                         disabled="@busy"
-                                        @onclick="TakeOverAsync">
-                                    <AppIcon Name="bi-headset" Class="text-xs" />
+                                        @onclick="RequestTakeOverPin">
+                                    <AppIcon Name="bi-shield-lock" Class="text-xs" />
                                     <span>Take Over Chat</span>
                                 </button>
                             }
@@ -278,6 +281,13 @@
                                     <span>Reopen</span>
                                 </button>
                             }
+                            <button type="button"
+                                    class="app-button app-button-ghost app-button-sm app-button-icon"
+                                    title="Close chat window"
+                                    aria-label="Close chat window"
+                                    @onclick="CloseSelectedTicket">
+                                <AppIcon Name="close" Class="text-sm" />
+                            </button>
                         </div>
                     </div>
 
@@ -301,14 +311,18 @@
                                         <span>INTERNAL NOTE (Hidden from user) · @msg.SenderName</span>
                                         <span>@localTime.ToString("dd MMM HH:mm")</span>
                                     </div>
-                                    <p class="whitespace-pre-wrap break-words">@msg.Body</p>
+                                    @if (!string.IsNullOrWhiteSpace(msg.Body))
+                                    {
+                                        <p class="whitespace-pre-wrap break-words">@msg.Body</p>
+                                    }
+                                    <HelpdeskAttachmentList Attachments="msg.Attachments" DarkSurface="false" />
                                 </div>
                             }
                             else
                             {
                                 var isAgentMsg = msg.SenderType == HelpdeskSenderTypes.Agent;
                                 var isBotMsg = msg.SenderType == HelpdeskSenderTypes.Bot;
-                                <div @key="msg.Id" class="flex @(isAgentMsg ? "justify-end" : "justify-start")">
+                                <div @key="msg.Id" class="hda-msg-row flex @(isAgentMsg ? "justify-end" : "justify-start")">
                                     <div class="max-w-[82%] rounded-2xl px-3.5 py-2 text-xs shadow-2xs @(isAgentMsg ? (OnlineTheme ? "bg-teal-700 text-white rounded-br-sm" : "bg-sky-700 text-white rounded-br-sm") : isBotMsg ? "bg-indigo-50/80 dark:bg-indigo-950/50 border border-indigo-200 dark:border-indigo-800 text-slate-800 dark:text-slate-100 rounded-bl-sm" : "bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 rounded-bl-sm")">
                                         <div class="flex items-center justify-between gap-3 text-[10px] mb-1 @(isAgentMsg ? (OnlineTheme ? "text-teal-100" : "text-sky-100") : "text-slate-500 dark:text-slate-400")">
                                             <span class="font-bold">
@@ -324,10 +338,11 @@
                                         {
                                             <div class="break-words space-y-1">@HRM.UI.Helpers.HelpdeskMessageFormatter.Format(msg.Body)</div>
                                         }
-                                        else
+                                        else if (!string.IsNullOrWhiteSpace(msg.Body))
                                         {
                                             <p class="whitespace-pre-wrap break-words">@msg.Body</p>
                                         }
+                                        <HelpdeskAttachmentList Attachments="msg.Attachments" DarkSurface="isAgentMsg" />
                                         @if (isAgentMsg)
                                         {
                                             <div class="mt-1.5 flex justify-end">
@@ -344,6 +359,12 @@
                                 </div>
                             }
                         }
+
+                        @if (activeTypists.Count > 0)
+                        {
+                            <ChatTypingIndicator Label="@HRM.UI.Services.ChatTypingStateService.FormatTypingLabel(activeTypists)"
+                                                 IsOfficer="@activeTypists.Any(x => x.RoleLabel == "Officer")" />
+                        }
                     </div>
 
                     <!-- Agent Reply Composer -->
@@ -352,32 +373,49 @@
                             <div class="flex rounded-lg border border-slate-200 dark:border-slate-700 p-0.5 bg-slate-50 dark:bg-slate-800 text-[11px] font-semibold">
                                 <button type="button"
                                         class="rounded-md px-2.5 py-1 transition @(!agentInternalNote ? (OnlineTheme ? "bg-white dark:bg-slate-700 text-teal-800 dark:text-teal-200 shadow-2xs" : "bg-white dark:bg-slate-700 text-sky-800 dark:text-sky-200 shadow-2xs") : "text-slate-500")"
-                                        @onclick="() => agentInternalNote = false">
+                                        @onclick="() => SetAgentNoteMode(false)">
                                     Reply to Requester
                                 </button>
                                 <button type="button"
                                         class="rounded-md px-2.5 py-1 transition @(agentInternalNote ? "bg-amber-100 dark:bg-amber-900/60 text-amber-900 dark:text-amber-200 shadow-2xs" : "text-slate-500")"
-                                        @onclick="() => agentInternalNote = true">
+                                        @onclick="() => SetAgentNoteMode(true)">
                                     Internal Note
                                 </button>
                             </div>
-                            @if (!agentInternalNote && t.Status != HelpdeskTicketStatuses.AgentAssigned)
+                            @if (!agentInternalNote && RequiresTakeoverForCurrentOfficer(t))
                             {
-                                <span class="text-[11px] text-slate-500">Sending a reply automatically takes over from the bot.</span>
+                                <span class="text-[11px] text-slate-500">Sending a reply requires PIN verification to take over this chat.</span>
                             }
                         </div>
 
+                        <HelpdeskPendingAttachments Items="pendingAgentAttachments"
+                                                    Disabled="@busy"
+                                                    OnRemove="idx => RemoveAgentAttachment(idx)" />
+
                         <div class="flex items-end gap-2">
-                            <textarea @bind="agentReplyBody"
+                            <label class="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-teal-50 hover:text-teal-700 dark:hover:bg-teal-950/50 transition shrink-0"
+                                   title="Attach files, images, or screenshots (or Ctrl+V to paste screenshot)">
+                                <AppIcon Name="bi-paperclip" Class="text-sm" />
+                                <InputFile OnChange="OnAgentFilesSelectedAsync"
+                                           accept="@HRM.UI.Helpers.HelpdeskAttachmentUiHelper.AcceptFilter"
+                                           multiple
+                                           disabled="@busy"
+                                           class="hidden" />
+                            </label>
+                            <ChatEmojiPicker OnEmojiSelected="InsertAgentEmoji" Disabled="@busy" />
+                            <textarea @ref="agentReplyEl"
+                                      @bind="agentReplyBody"
                                       @bind:event="oninput"
+                                      @bind:after="OnAgentReplyTyped"
+                                      data-has-attachments="@(pendingAgentAttachments.Count > 0 ? "true" : "false")"
                                       rows="2"
                                       maxlength="4000"
-                                      placeholder="@(agentInternalNote ? "Add an internal note visible only to Helpdesk Officers..." : "Type your response to the requester...")"
+                                      placeholder="@(agentInternalNote ? "Add an internal note visible only to Helpdesk Officers..." : "Type your response or paste a screenshot (Ctrl+V)...")"
                                       class="flex-1 rounded-xl border px-3 py-2 text-xs outline-none @(agentInternalNote ? "border-amber-300 bg-amber-50/50 dark:border-amber-700 dark:bg-amber-950/30" : "border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800")"></textarea>
                             <button type="button"
                                     class="inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-bold shadow-xs transition disabled:opacity-45 shrink-0"
                                     style="@(agentInternalNote ? "background-color: #d97706; color: #ffffff;" : OnlineTheme ? "background-color: #0f766e; color: #ffffff; border: 1px solid #0d9488;" : "background-color: #ADD8E6; color: #0f172a; border: 1px solid #7cc0d8;")"
-                                    disabled="@(busy || string.IsNullOrWhiteSpace(agentReplyBody))"
+                                    disabled="@(busy || (string.IsNullOrWhiteSpace(agentReplyBody) && pendingAgentAttachments.Count == 0))"
                                     @onclick="SendAgentReplyAsync">
                                 <AppIcon Name="bi-send-fill" Class="text-xs" />
                                 <span>@(agentInternalNote ? "Save Note" : "Send Reply")</span>
@@ -605,9 +643,89 @@
             </div>
         </div>
     }
+
+    @if (showTakeoverPinModal && selectedTicket != null)
+    {
+        var tPin = selectedTicket.Ticket;
+        <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/55 p-4 backdrop-blur-[1px]"
+             role="dialog"
+             aria-modal="true"
+             aria-labelledby="takeover-pin-title"
+             @onclick="CloseTakeoverPinModal">
+            <div class="w-full max-w-md rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-2xl overflow-hidden"
+                 @onclick:stopPropagation="true">
+                <div class="flex items-center justify-between gap-2 border-b border-slate-200 dark:border-slate-800 px-4 py-3"
+                     style="@(OnlineTheme ? "background-color: #f0fdfa;" : "background-color: #eef8fc;")">
+                    <div class="flex items-center gap-2 min-w-0">
+                        <span class="inline-flex h-8 w-8 items-center justify-center rounded-xl shrink-0"
+                              style="@(OnlineTheme ? "background-color: #0f766e; color: #ffffff;" : "background-color: #0369a1; color: #ffffff;")">
+                            <AppIcon Name="bi-shield-lock" Class="text-sm" />
+                        </span>
+                        <div class="min-w-0">
+                            <h3 id="takeover-pin-title" class="text-sm font-bold text-slate-900 truncate">Verify Security PIN</h3>
+                            <p class="text-[11px] text-slate-600 truncate">@tPin.TicketNumber · @tPin.RequesterName</p>
+                        </div>
+                    </div>
+                    <button type="button" class="app-button app-button-ghost app-button-sm app-button-icon" disabled="@verifyingPin" @onclick="CloseTakeoverPinModal">
+                        <AppIcon Name="close" Class="text-xs" />
+                    </button>
+                </div>
+
+                <div class="p-4 space-y-3 text-xs">
+                    <p class="text-slate-600 dark:text-slate-300">
+                        @(pendingPinAction == TakeoverPinAction.TakeOverAndReply
+                            ? "Enter your personal 4–8 digit Security PIN to take over this conversation and send your reply."
+                            : "Enter your personal 4–8 digit Security PIN to take over this conversation and pause automated bot replies.")
+                    </p>
+
+                    <label class="block font-semibold text-slate-700 dark:text-slate-200">
+                        Personal Security PIN
+                        <input type="password"
+                               inputmode="numeric"
+                               autocomplete="one-time-code"
+                               maxlength="8"
+                               placeholder="••••"
+                               disabled="@verifyingPin"
+                               @bind="takeoverPinInput"
+                               @bind:event="oninput"
+                               @onkeydown="HandleTakeoverPinKeyDownAsync"
+                               class="mt-1.5 w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-center font-mono text-base tracking-[0.35em] text-slate-900 dark:text-slate-100 focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-500" />
+                    </label>
+
+                    @if (!string.IsNullOrWhiteSpace(takeoverPinError))
+                    {
+                        <div role="alert" class="rounded-xl border border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/40 px-3 py-2 text-[11px] text-rose-800 dark:text-rose-200">
+                            @takeoverPinError
+                            @if (takeoverPinError.Contains("My Profile", StringComparison.OrdinalIgnoreCase))
+                            {
+                                <a href="/profile" class="ml-1 font-bold underline">Go to My Profile</a>
+                            }
+                        </div>
+                    }
+
+                    <div class="flex items-center justify-between gap-2 pt-1">
+                        <a href="/profile" class="text-[11px] font-semibold text-teal-700 dark:text-teal-300 hover:underline">Set / Manage PIN in Profile</a>
+                        <div class="flex items-center gap-2 shrink-0">
+                            <button type="button" class="app-button app-button-neutral app-button-sm" disabled="@verifyingPin" @onclick="CloseTakeoverPinModal">Cancel</button>
+                            <button type="button"
+                                    class="inline-flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-xs font-bold shadow-2xs transition disabled:opacity-50"
+                                    style="@(OnlineTheme ? "background-color: #0f766e; color: #ffffff;" : "background-color: #ADD8E6; color: #0f172a; border: 1px solid #7cc0d8;")"
+                                    disabled="@(verifyingPin || takeoverPinInput.Trim().Length < 4)"
+                                    @onclick="ConfirmTakeOverWithPinAsync">
+                                <AppIcon Name="bi-unlock" Class="text-xs" />
+                                <span>@(verifyingPin ? "Verifying..." : pendingPinAction == TakeoverPinAction.TakeOverAndReply ? "Verify & Send" : "Verify & Take Over")</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
 </section>
 
 @code {
+    private enum TakeoverPinAction { TakeOverOnly, TakeOverAndReply }
+
     [Parameter] public bool Embedded { get; set; }
     [Parameter] public bool ShowSettingsTab { get; set; } = true;
     [Parameter] public bool OnlineTheme { get; set; }
@@ -631,6 +749,12 @@
     private string? error;
     private bool busy, disposed, scroll;
 
+    private bool showTakeoverPinModal;
+    private bool verifyingPin;
+    private string takeoverPinInput = "";
+    private string? takeoverPinError;
+    private TakeoverPinAction pendingPinAction = TakeoverPinAction.TakeOverOnly;
+
     private bool showSaveKbModal;
     private bool savingKb;
     private string? kbModalError;
@@ -642,13 +766,146 @@
     private string settingsOrgSearch = "";
 
     private ElementReference agentMessagesEl;
+    private ElementReference agentReplyEl;
+    private long agentComposerBoundForId;
+    private DotNetObjectReference<HelpdeskAgentConsole>? dotNetRef;
+    private readonly List<HRM.UI.Helpers.StagedHelpdeskAttachment> pendingAgentAttachments = [];
     private readonly CancellationTokenSource stop = new();
     private Task? watching;
 
+    private int currentUserId;
+    private string currentUserName = "Helpdesk Officer";
+    private DateTime lastTypingNotifiedUtc = DateTime.MinValue;
+    private IReadOnlyList<HRM.UI.Services.ChatTypingParticipant> activeTypists = [];
+
+    private string CurrentTypingChannel => selectedTicket != null ? $"helpdesk:{selectedTicket.Ticket.Id}" : "";
+
     protected override async Task OnInitializedAsync()
     {
+        try
+        {
+            var actor = await UserAccess.RequireContextAsync();
+            currentUserId = actor.UserId;
+            currentUserName = !string.IsNullOrWhiteSpace(actor.FullName) ? actor.FullName : actor.Username;
+        }
+        catch { }
+
+        TypingState.Changed += HandleTypingChanged;
         await LoadInboxAsync();
         watching = WatchAsync();
+    }
+
+    private void HandleTypingChanged(string channelKey)
+    {
+        if (disposed || string.IsNullOrEmpty(CurrentTypingChannel) || !string.Equals(channelKey, CurrentTypingChannel, StringComparison.Ordinal))
+            return;
+
+        _ = InvokeAsync(() =>
+        {
+            if (disposed) return;
+            var prev = activeTypists.Count;
+            activeTypists = TypingState.GetActiveTypists(CurrentTypingChannel, currentUserId);
+            if (activeTypists.Count > 0 && prev == 0) scroll = true;
+            StateHasChanged();
+        });
+    }
+
+    private void RefreshTypistsForSelected()
+    {
+        activeTypists = string.IsNullOrEmpty(CurrentTypingChannel)
+            ? []
+            : TypingState.GetActiveTypists(CurrentTypingChannel, currentUserId);
+    }
+
+    private void SetAgentNoteMode(bool isInternal)
+    {
+        agentInternalNote = isInternal;
+        if (isInternal) ClearAgentTyping();
+    }
+
+    private void OnAgentReplyTyped()
+    {
+        if (agentInternalNote || selectedTicket == null || currentUserId <= 0) return;
+        if (string.IsNullOrWhiteSpace(agentReplyBody))
+        {
+            ClearAgentTyping();
+            return;
+        }
+        var now = DateTime.UtcNow;
+        if ((now - lastTypingNotifiedUtc).TotalMilliseconds < 1400) return;
+        lastTypingNotifiedUtc = now;
+        TypingState.NotifyTyping($"helpdesk:{selectedTicket.Ticket.Id}", currentUserId, currentUserName, "Officer");
+    }
+
+    private void ClearAgentTyping()
+    {
+        if (selectedTicket != null && currentUserId > 0)
+            TypingState.ClearTyping($"helpdesk:{selectedTicket.Ticket.Id}", currentUserId);
+        lastTypingNotifiedUtc = DateTime.MinValue;
+    }
+
+    private void InsertAgentEmoji(string emoji)
+    {
+        agentReplyBody += emoji;
+        OnAgentReplyTyped();
+    }
+
+    private void CloseSelectedTicket()
+    {
+        ClearAgentTyping();
+        selectedTicket = null;
+        activeTypists = [];
+        agentReplyBody = "";
+        pendingAgentAttachments.Clear();
+        agentComposerBoundForId = 0;
+    }
+
+    private async Task OnAgentFilesSelectedAsync(InputFileChangeEventArgs e)
+    {
+        error = null;
+        try
+        {
+            var err = await HRM.UI.Helpers.HelpdeskAttachmentUiHelper.AddFilesAsync(e, pendingAgentAttachments);
+            if (!string.IsNullOrWhiteSpace(err)) error = err;
+        }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private void RemoveAgentAttachment(int index)
+    {
+        if (index >= 0 && index < pendingAgentAttachments.Count)
+            pendingAgentAttachments.RemoveAt(index);
+    }
+
+    [JSInvokable]
+    public async Task OnClipboardImagePastedAsync(string fileName, string contentType, string dataUrl)
+    {
+        if (disposed || selectedTicket == null) return;
+        await InvokeAsync(() =>
+        {
+            error = null;
+            var err = HRM.UI.Helpers.HelpdeskAttachmentUiHelper.AddClipboardImage(fileName, contentType, dataUrl, pendingAgentAttachments);
+            if (!string.IsNullOrWhiteSpace(err)) error = err;
+            StateHasChanged();
+        });
+    }
+
+    [JSInvokable]
+    public async Task OnClipboardPasteErrorAsync(string message)
+    {
+        if (disposed) return;
+        await InvokeAsync(() => { error = message; StateHasChanged(); });
+    }
+
+    [JSInvokable]
+    public async Task SubmitFromKeyboardAsync()
+    {
+        if (disposed || busy || selectedTicket == null || (string.IsNullOrWhiteSpace(agentReplyBody) && pendingAgentAttachments.Count == 0)) return;
+        await InvokeAsync(async () =>
+        {
+            await SendAgentReplyAsync();
+            StateHasChanged();
+        });
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -657,6 +914,18 @@
         {
             scroll = false;
             try { await JS.InvokeVoidAsync("hrmChat.scrollToLatest", agentMessagesEl, true); } catch { }
+        }
+
+        if (selectedTicket != null && agentComposerBoundForId != selectedTicket.Ticket.Id)
+        {
+            agentComposerBoundForId = selectedTicket.Ticket.Id;
+            dotNetRef ??= DotNetObjectReference.Create(this);
+            try { await JS.InvokeVoidAsync("hrmChat.bindComposer", agentReplyEl, dotNetRef); }
+            catch { agentComposerBoundForId = 0; }
+        }
+        else if (selectedTicket == null)
+        {
+            agentComposerBoundForId = 0;
         }
     }
 
@@ -736,42 +1005,126 @@
     private async Task SelectTicketAsync(long ticketId)
     {
         if (busy) return;
+        ClearAgentTyping();
         busy = true;
         error = null;
         try
         {
             selectedTicket = await Helpdesk.GetTicketAsync(ticketId);
+            RefreshTypistsForSelected();
             scroll = true;
         }
         catch (Exception ex) { Fail(ex); }
         finally { busy = false; }
     }
 
-    private async Task TakeOverAsync()
+    private bool RequiresTakeoverForCurrentOfficer(HelpdeskTicketSummaryDto t)
+        => t.Status != HelpdeskTicketStatuses.Resolved
+           && (t.Status != HelpdeskTicketStatuses.AgentAssigned
+               || !t.AssignedAgentUserId.HasValue
+               || (currentUserId > 0 && t.AssignedAgentUserId.Value != currentUserId));
+
+    private void RequestTakeOverPin()
     {
         if (busy || selectedTicket == null) return;
-        busy = true;
+        pendingPinAction = TakeoverPinAction.TakeOverOnly;
+        takeoverPinInput = "";
+        takeoverPinError = null;
+        showTakeoverPinModal = true;
+    }
+
+    private void CloseTakeoverPinModal()
+    {
+        if (verifyingPin) return;
+        showTakeoverPinModal = false;
+        takeoverPinInput = "";
+        takeoverPinError = null;
+    }
+
+    private async Task HandleTakeoverPinKeyDownAsync(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !verifyingPin && takeoverPinInput.Trim().Length >= 4)
+            await ConfirmTakeOverWithPinAsync();
+    }
+
+    private async Task ConfirmTakeOverWithPinAsync()
+    {
+        if (verifyingPin || selectedTicket == null) return;
+        var pin = takeoverPinInput.Trim();
+        if (pin.Length < 4)
+        {
+            takeoverPinError = "Enter your 4–8 digit Personal Security PIN.";
+            return;
+        }
+
+        verifyingPin = true;
+        takeoverPinError = null;
         error = null;
         try
         {
-            selectedTicket = await Helpdesk.TakeOverTicketAsync(selectedTicket.Ticket.Id);
-            inbox = await Helpdesk.GetAgentInboxAsync(statusFilter, selectedOrganisationId, queueSearch);
-            Toast.Success($"You have taken over {selectedTicket.Ticket.TicketNumber}.");
+            if (pendingPinAction == TakeoverPinAction.TakeOverAndReply)
+            {
+                ClearAgentTyping();
+                var uploads = pendingAgentAttachments.Select(a => a.ToUploadDto()).ToList();
+                selectedTicket = uploads.Count > 0
+                    ? await Helpdesk.SendAgentMessageWithAttachmentsAsync(selectedTicket.Ticket.Id, agentReplyBody, false, pin, uploads)
+                    : await Helpdesk.SendAgentMessageAsync(selectedTicket.Ticket.Id, agentReplyBody, false, pin);
+                agentReplyBody = "";
+                pendingAgentAttachments.Clear();
+                try { await JS.InvokeVoidAsync("hrmChat.resetComposerHeight", agentReplyEl); } catch { }
+                inbox = await Helpdesk.GetAgentInboxAsync(statusFilter, selectedOrganisationId, queueSearch);
+                Toast.Success($"PIN verified — you have taken over {selectedTicket.Ticket.TicketNumber} and sent your reply.");
+            }
+            else
+            {
+                selectedTicket = await Helpdesk.TakeOverTicketAsync(selectedTicket.Ticket.Id, pin);
+                inbox = await Helpdesk.GetAgentInboxAsync(statusFilter, selectedOrganisationId, queueSearch);
+                Toast.Success($"PIN verified — you have taken over {selectedTicket.Ticket.TicketNumber}.");
+            }
+
+            takeoverPinInput = "";
+            showTakeoverPinModal = false;
             scroll = true;
         }
-        catch (Exception ex) { Fail(ex); }
-        finally { busy = false; }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Helpdesk takeover PIN verification failed");
+            takeoverPinInput = "";
+            takeoverPinError = ex is UnauthorizedAccessException or InvalidOperationException
+                ? ex.Message
+                : "Could not verify Security PIN. Please try again.";
+        }
+        finally
+        {
+            verifyingPin = false;
+        }
     }
 
     private async Task SendAgentReplyAsync()
     {
-        if (busy || selectedTicket == null || string.IsNullOrWhiteSpace(agentReplyBody)) return;
+        if (busy || selectedTicket == null || (string.IsNullOrWhiteSpace(agentReplyBody) && pendingAgentAttachments.Count == 0)) return;
+
+        if (!agentInternalNote && RequiresTakeoverForCurrentOfficer(selectedTicket.Ticket))
+        {
+            pendingPinAction = TakeoverPinAction.TakeOverAndReply;
+            takeoverPinInput = "";
+            takeoverPinError = null;
+            showTakeoverPinModal = true;
+            return;
+        }
+
+        ClearAgentTyping();
         busy = true;
         error = null;
         try
         {
-            selectedTicket = await Helpdesk.SendAgentMessageAsync(selectedTicket.Ticket.Id, agentReplyBody, agentInternalNote);
+            var uploads = pendingAgentAttachments.Select(a => a.ToUploadDto()).ToList();
+            selectedTicket = uploads.Count > 0
+                ? await Helpdesk.SendAgentMessageWithAttachmentsAsync(selectedTicket.Ticket.Id, agentReplyBody, agentInternalNote, "", uploads)
+                : await Helpdesk.SendAgentMessageAsync(selectedTicket.Ticket.Id, agentReplyBody, agentInternalNote, "");
             agentReplyBody = "";
+            pendingAgentAttachments.Clear();
+            try { await JS.InvokeVoidAsync("hrmChat.resetComposerHeight", agentReplyEl); } catch { }
             inbox = await Helpdesk.GetAgentInboxAsync(statusFilter, selectedOrganisationId, queueSearch);
             scroll = true;
         }
@@ -950,8 +1303,11 @@
     public async ValueTask DisposeAsync()
     {
         disposed = true;
+        ClearAgentTyping();
+        TypingState.Changed -= HandleTypingChanged;
         await stop.CancelAsync();
         if (watching != null) await watching;
         stop.Dispose();
+        dotNetRef?.Dispose();
     }
 }

@@ -1,0 +1,192 @@
+.cep-root {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.cep-trigger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 1.95rem;
+    width: 1.95rem;
+    border-radius: 0.55rem;
+    border: 1px solid transparent;
+    background: transparent;
+    color: #64748b;
+    transition: background-color 0.15s ease, color 0.15s ease, transform 0.12s ease;
+}
+
+.cep-trigger-compact {
+    height: 1.75rem;
+    width: 1.75rem;
+}
+
+.cep-trigger:hover:not(:disabled) {
+    background: rgba(13, 148, 136, 0.1);
+    color: #0f766e;
+    transform: scale(1.06);
+}
+
+.cep-trigger-active {
+    background: rgba(13, 148, 136, 0.14);
+    color: #0f766e;
+    border-color: rgba(13, 148, 136, 0.3);
+}
+
+.cep-trigger:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.cep-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 55;
+    background: transparent;
+}
+
+.cep-popover {
+    position: absolute;
+    bottom: calc(100% + 0.5rem);
+    z-index: 60;
+    width: 17.5rem;
+    max-width: calc(100vw - 2rem);
+    border-radius: 0.9rem;
+    border: 1px solid var(--app-border-color, #e2e8f0);
+    background: var(--app-surface-bg, #ffffff);
+    box-shadow: 0 14px 32px -8px rgba(15, 23, 42, 0.22);
+    padding: 0.45rem;
+    animation: cepPopIn 0.16s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.cep-popover-left {
+    left: 0;
+}
+
+.cep-popover-right {
+    right: 0;
+}
+
+.cep-popover-compact {
+    width: 15.75rem;
+}
+
+.cep-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.25rem;
+    border-bottom: 1px solid var(--app-border-subtle, #f1f5f9);
+    padding-bottom: 0.35rem;
+    margin-bottom: 0.35rem;
+}
+
+.cep-tabs {
+    display: flex;
+    align-items: center;
+    gap: 0.2rem;
+}
+
+.cep-tab {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 1.7rem;
+    width: 2rem;
+    border-radius: 0.45rem;
+    font-size: 0.95rem;
+    transition: background-color 0.12s ease, transform 0.12s ease;
+}
+
+.cep-tab:hover {
+    background: rgba(148, 163, 184, 0.16);
+}
+
+.cep-tab-active {
+    background: rgba(13, 148, 136, 0.14);
+    box-shadow: inset 0 -2px 0 #0d9488;
+}
+
+.cep-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 1.5rem;
+    width: 1.5rem;
+    border-radius: 0.4rem;
+    color: #94a3b8;
+    transition: background-color 0.12s ease, color 0.12s ease;
+}
+
+.cep-close:hover {
+    background: rgba(148, 163, 184, 0.18);
+    color: #334155;
+}
+
+.cep-category-title {
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #64748b;
+    padding: 0 0.25rem 0.25rem;
+}
+
+.cep-grid {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 0.15rem;
+    max-height: 11rem;
+    overflow-y: auto;
+}
+
+.cep-emoji-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 2rem;
+    border-radius: 0.45rem;
+    font-size: 1.15rem;
+    line-height: 1;
+    transition: background-color 0.12s ease, transform 0.12s ease;
+}
+
+.cep-emoji-btn:hover {
+    background: rgba(13, 148, 136, 0.12);
+    transform: scale(1.22);
+}
+
+.cep-emoji-btn:active {
+    transform: scale(0.95);
+}
+
+@keyframes cepPopIn {
+    from {
+        opacity: 0;
+        transform: translateY(6px) scale(0.96);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+:global(:root[data-theme="dark"]) .cep-trigger {
+    color: #94a3b8;
+}
+
+:global(:root[data-theme="dark"]) .cep-trigger:hover:not(:disabled),
+:global(:root[data-theme="dark"]) .cep-trigger-active {
+    color: #5eead4;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .cep-popover,
+    .cep-emoji-btn,
+    .cep-trigger {
+        animation: none !important;
+        transition: none !important;
+    }
+}

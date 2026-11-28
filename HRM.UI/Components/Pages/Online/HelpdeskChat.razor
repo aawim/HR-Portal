@@ -2,9 +2,12 @@
 @page "/admin/helpdesk"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
 @implements IAsyncDisposable
+@using HRM.Components.Shared
 @using HRM.DTOs.Helpdesk
 @using HRM.Models
 @inject HRM.Services.Contracts.HelpdeskServiceContracts.IOperations Helpdesk
+@inject HRM.Services.Interfaces.IUserAccessService UserAccess
+@inject HRM.UI.Services.ChatTypingStateService TypingState
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
 @inject ILogger<HelpdeskChat> Logger
@@ -226,16 +229,38 @@
                                 </label>
                             </div>
 
+                            <HelpdeskPendingAttachments Items="pendingNewAttachments"
+                                                        Disabled="@busy"
+                                                        OnRemove="idx => RemovePendingAttachment(pendingNewAttachments, idx)" />
+
                             <div class="flex items-center justify-between gap-2 pt-1">
-                                <span class="text-[11px] text-slate-500 dark:text-slate-400">Topic: <strong>@newCategory</strong></span>
+                                <div class="flex items-center gap-2">
+                                    <label class="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-teal-50 hover:text-teal-700 dark:hover:bg-teal-950/50 transition"
+                                           title="Attach files, images, or screenshots (max 5 MB each)">
+                                        <AppIcon Name="bi-paperclip" Class="text-sm" />
+                                        <InputFile OnChange="OnNewTicketFilesSelectedAsync"
+                                                   accept="@HRM.UI.Helpers.HelpdeskAttachmentUiHelper.AcceptFilter"
+                                                   multiple
+                                                   disabled="@busy"
+                                                   class="hidden" />
+                                    </label>
+                                    <ChatEmojiPicker OnEmojiSelected="InsertNewMessageEmoji" Disabled="@(busy || !availability.IsAvailable)" />
+                                    <span class="text-[11px] text-slate-500 dark:text-slate-400">Topic: <strong>@newCategory</strong></span>
+                                </div>
                                 <button type="button"
                                         class="app-button app-button-primary app-button-sm"
-                                        disabled="@(busy || !availability.IsAvailable || string.IsNullOrWhiteSpace(newMessage))"
+                                        disabled="@(busy || !availability.IsAvailable || (string.IsNullOrWhiteSpace(newMessage) && pendingNewAttachments.Count == 0))"
                                         @onclick="CreateTicketAsync">
                                     <AppIcon Name="bi-send-fill" Class="text-xs" />
                                     <span>@(busy ? "Starting..." : "Start Helpdesk Chat")</span>
                                 </button>
                             </div>
+                            @if (botTyping)
+                            {
+                                <div class="pt-1">
+                                    <ChatTypingIndicator Label="Helpdesk Bot is preparing your answer" IsBot="true" />
+                                </div>
+                            }
                         </div>
                     </div>
                 }
@@ -295,6 +320,13 @@
                                     <span>Reopen</span>
                                 </button>
                             }
+                            <button type="button"
+                                    class="app-button app-button-ghost app-button-sm app-button-icon"
+                                    title="Close chat window"
+                                    aria-label="Close chat window"
+                                    @onclick="CloseActiveTicket">
+                                <AppIcon Name="close" Class="text-sm" />
+                            </button>
                         </div>
                     </div>
 
@@ -348,32 +380,40 @@
                                         <div class="hd-bubble @(isUser ? "hd-bubble-user" : isBot ? "hd-bubble-bot" : "hd-bubble-agent")">
                                             @if (isUser)
                                             {
-                                                <p class="whitespace-pre-wrap break-words">@msg.Body</p>
+                                                @if (!string.IsNullOrWhiteSpace(msg.Body))
+                                                {
+                                                    <p class="whitespace-pre-wrap break-words">@msg.Body</p>
+                                                }
+                                                <HelpdeskAttachmentList Attachments="msg.Attachments" DarkSurface="true" />
                                             }
                                             else
                                             {
-                                                var parsed = HRM.UI.Helpers.HelpdeskMessageFormatter.SplitRelatedGuides(msg.Body);
-                                                <div class="break-words space-y-1">@HRM.UI.Helpers.HelpdeskMessageFormatter.Format(parsed.MainBody)</div>
-                                                @if (parsed.RelatedGuides.Count > 0)
+                                                @if (!string.IsNullOrWhiteSpace(msg.Body))
                                                 {
-                                                    <div class="mt-2 pt-2 border-t border-slate-200/80 dark:border-slate-700/80 space-y-1.5">
-                                                        <p class="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Related guides — click to ask</p>
-                                                        <div class="flex flex-wrap gap-1.5">
-                                                            @foreach (var guide in parsed.RelatedGuides)
-                                                            {
-                                                                var topic = guide;
-                                                                <button type="button"
-                                                                        disabled="@(busy || !availability.IsAvailable)"
-                                                                        class="inline-flex items-center gap-1 rounded-full border border-teal-200 dark:border-teal-800 bg-teal-50/80 dark:bg-teal-950/50 px-2.5 py-1 text-[11px] font-semibold text-teal-800 dark:text-teal-200 hover:bg-teal-100 dark:hover:bg-teal-900/60 disabled:opacity-45 transition text-left"
-                                                                        @onclick="() => AskRelatedGuideAsync(topic)">
-                                                                    <AppIcon Name="chat" Class="text-[10px] shrink-0" />
-                                                                    <span>@topic</span>
-                                                                    <AppIcon Name="chevron_right" Class="text-[10px] shrink-0" />
-                                                                </button>
-                                                            }
+                                                    var parsed = HRM.UI.Helpers.HelpdeskMessageFormatter.SplitRelatedGuides(msg.Body);
+                                                    <div class="break-words space-y-1">@HRM.UI.Helpers.HelpdeskMessageFormatter.Format(parsed.MainBody)</div>
+                                                    @if (parsed.RelatedGuides.Count > 0)
+                                                    {
+                                                        <div class="mt-2 pt-2 border-t border-slate-200/80 dark:border-slate-700/80 space-y-1.5">
+                                                            <p class="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Related guides — click to ask</p>
+                                                            <div class="flex flex-wrap gap-1.5">
+                                                                @foreach (var guide in parsed.RelatedGuides)
+                                                                {
+                                                                    var topic = guide;
+                                                                    <button type="button"
+                                                                            disabled="@(busy || !availability.IsAvailable)"
+                                                                            class="inline-flex items-center gap-1 rounded-full border border-teal-200 dark:border-teal-800 bg-teal-50/80 dark:bg-teal-950/50 px-2.5 py-1 text-[11px] font-semibold text-teal-800 dark:text-teal-200 hover:bg-teal-100 dark:hover:bg-teal-900/60 disabled:opacity-45 transition text-left"
+                                                                            @onclick="() => AskRelatedGuideAsync(topic)">
+                                                                        <AppIcon Name="chat" Class="text-[10px] shrink-0" />
+                                                                        <span>@topic</span>
+                                                                        <AppIcon Name="chevron_right" Class="text-[10px] shrink-0" />
+                                                                    </button>
+                                                                }
+                                                            </div>
                                                         </div>
-                                                    </div>
+                                                    }
                                                 }
+                                                <HelpdeskAttachmentList Attachments="msg.Attachments" DarkSurface="false" />
                                             }
                                             <div class="mt-1 flex items-center justify-end gap-1 text-[10px] @(isUser ? "text-teal-100/90" : "text-slate-400")">
                                                 <time>@localTime.ToString("dd MMM HH:mm")</time>
@@ -382,6 +422,16 @@
                                     </div>
                                 </article>
                             }
+                        }
+
+                        @if (botTyping)
+                        {
+                            <ChatTypingIndicator Label="Helpdesk Bot is typing" IsBot="true" />
+                        }
+                        else if (activeTypists.Count > 0)
+                        {
+                            <ChatTypingIndicator Label="@HRM.UI.Services.ChatTypingStateService.FormatTypingLabel(activeTypists)"
+                                                 IsOfficer="@activeTypists.Any(x => x.RoleLabel == "Officer")" />
                         }
                     </div>
 
@@ -404,19 +454,34 @@
 
                     <!-- Pinned Composer -->
                     <fieldset disabled="@busy" class="shrink-0 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 sm:px-4 py-2.5 flex flex-col gap-1.5">
+                        <HelpdeskPendingAttachments Items="pendingReplyAttachments"
+                                                    Disabled="@busy"
+                                                    OnRemove="idx => RemovePendingAttachment(pendingReplyAttachments, idx)" />
                         <div class="hd-composer-shell">
+                            <label class="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg text-slate-500 hover:bg-teal-50 hover:text-teal-700 dark:hover:bg-teal-950/50 transition shrink-0"
+                                   title="Attach files, images, or screenshots (or Ctrl+V to paste screenshot)">
+                                <AppIcon Name="bi-paperclip" Class="text-sm" />
+                                <InputFile OnChange="OnReplyFilesSelectedAsync"
+                                           accept="@HRM.UI.Helpers.HelpdeskAttachmentUiHelper.AcceptFilter"
+                                           multiple
+                                           disabled="@busy"
+                                           class="hidden" />
+                            </label>
+                            <ChatEmojiPicker OnEmojiSelected="InsertReplyEmoji" Disabled="@busy" />
                             <label for="hd-user-reply" class="sr-only">Message</label>
                             <textarea id="hd-user-reply"
                                       @ref="composerInput"
                                       @bind="replyBody"
                                       @bind:event="oninput"
+                                      @bind:after="OnReplyTyped"
+                                      data-has-attachments="@(pendingReplyAttachments.Count > 0 ? "true" : "false")"
                                       rows="1"
                                       maxlength="4000"
-                                      placeholder="@(t.Status == HelpdeskTicketStatuses.Resolved ? "Send a reply to reopen this ticket..." : "Write a message… (Enter to send, Shift+Enter for new line)")"
+                                      placeholder="@(t.Status == HelpdeskTicketStatuses.Resolved ? "Send a reply to reopen this ticket..." : "Write a message or paste screenshot (Ctrl+V)…")"
                                       class="hd-composer-input"></textarea>
                             <button type="button"
                                     class="hd-send-btn"
-                                    disabled="@(busy || string.IsNullOrWhiteSpace(replyBody))"
+                                    disabled="@(busy || (string.IsNullOrWhiteSpace(replyBody) && pendingReplyAttachments.Count == 0))"
                                     @onclick="SendReplyAsync">
                                 <AppIcon Name="bi-send-fill" Class="text-xs" />
                                 <span class="hidden sm:inline">Send</span>
@@ -474,6 +539,16 @@
     private readonly CancellationTokenSource stop = new();
     private Task? watching;
 
+    private int currentUserId;
+    private string currentUserName = "";
+    private bool botTyping;
+    private DateTime lastTypingNotifiedUtc = DateTime.MinValue;
+    private IReadOnlyList<HRM.UI.Services.ChatTypingParticipant> activeTypists = [];
+    private readonly List<HRM.UI.Helpers.StagedHelpdeskAttachment> pendingNewAttachments = [];
+    private readonly List<HRM.UI.Helpers.StagedHelpdeskAttachment> pendingReplyAttachments = [];
+
+    private string CurrentTypingChannel => activeTicket != null ? $"helpdesk:{activeTicket.Ticket.Id}" : "";
+
     private string BaseRoute => new Uri(Navigation.Uri).AbsolutePath.StartsWith("/admin/", StringComparison.OrdinalIgnoreCase) ? "/admin/helpdesk" : "/online/helpdesk";
     private string StaffChatRoute => new Uri(Navigation.Uri).AbsolutePath.StartsWith("/admin/", StringComparison.OrdinalIgnoreCase) ? "/admin/chat" : "/online/chat";
     private string PortalHomeRoute => new Uri(Navigation.Uri).AbsolutePath.StartsWith("/admin/", StringComparison.OrdinalIgnoreCase) ? "/admin" : "/online";
@@ -489,6 +564,15 @@
     {
         try
         {
+            try
+            {
+                var actor = await UserAccess.RequireContextAsync();
+                currentUserId = actor.UserId;
+                currentUserName = !string.IsNullOrWhiteSpace(actor.FullName) ? actor.FullName : actor.Username;
+            }
+            catch { }
+
+            TypingState.Changed += HandleTypingChanged;
             availability = await Helpdesk.GetAvailabilityAsync();
             if (!availability.IsAvailable)
                 return;
@@ -503,6 +587,60 @@
         {
             checkingAvailability = false;
         }
+    }
+
+    private void HandleTypingChanged(string channelKey)
+    {
+        if (disposed || string.IsNullOrEmpty(CurrentTypingChannel) || !string.Equals(channelKey, CurrentTypingChannel, StringComparison.Ordinal))
+            return;
+
+        _ = InvokeAsync(() =>
+        {
+            if (disposed) return;
+            var prev = activeTypists.Count;
+            activeTypists = TypingState.GetActiveTypists(CurrentTypingChannel, currentUserId);
+            if (activeTypists.Count > 0 && prev == 0) scroll = true;
+            StateHasChanged();
+        });
+    }
+
+    private void RefreshTypistsForTicket()
+    {
+        activeTypists = string.IsNullOrEmpty(CurrentTypingChannel)
+            ? []
+            : TypingState.GetActiveTypists(CurrentTypingChannel, currentUserId);
+    }
+
+    private void OnReplyTyped()
+    {
+        if (activeTicket == null || currentUserId <= 0) return;
+        if (string.IsNullOrWhiteSpace(replyBody))
+        {
+            ClearUserTyping();
+            return;
+        }
+        var now = DateTime.UtcNow;
+        if ((now - lastTypingNotifiedUtc).TotalMilliseconds < 1400) return;
+        lastTypingNotifiedUtc = now;
+        TypingState.NotifyTyping($"helpdesk:{activeTicket.Ticket.Id}", currentUserId, currentUserName);
+    }
+
+    private void ClearUserTyping()
+    {
+        if (activeTicket != null && currentUserId > 0)
+            TypingState.ClearTyping($"helpdesk:{activeTicket.Ticket.Id}", currentUserId);
+        lastTypingNotifiedUtc = DateTime.MinValue;
+    }
+
+    private void InsertReplyEmoji(string emoji)
+    {
+        replyBody += emoji;
+        OnReplyTyped();
+    }
+
+    private void InsertNewMessageEmoji(string emoji)
+    {
+        newMessage += emoji;
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -547,13 +685,78 @@
         try { await JS.InvokeVoidAsync("localStorage.setItem", FullWidthStorageKey, isFullWidth ? "true" : "false"); } catch { }
     }
 
+    private void CloseActiveTicket()
+    {
+        ClearUserTyping();
+        activeTicket = null;
+        activeTypists = [];
+        pendingReplyAttachments.Clear();
+        replyBody = "";
+        composerBoundForId = 0;
+        mobileShowList = true;
+        error = null;
+        Navigation.NavigateTo(BaseRoute, replace: true);
+    }
+
     private void StartNewView()
     {
+        ClearUserTyping();
         activeTicket = null;
+        activeTypists = [];
+        pendingReplyAttachments.Clear();
         composerBoundForId = 0;
         mobileShowList = false;
         error = null;
         Navigation.NavigateTo(BaseRoute, replace: true);
+    }
+
+    private async Task OnNewTicketFilesSelectedAsync(InputFileChangeEventArgs e)
+    {
+        error = null;
+        try
+        {
+            var err = await HRM.UI.Helpers.HelpdeskAttachmentUiHelper.AddFilesAsync(e, pendingNewAttachments);
+            if (!string.IsNullOrWhiteSpace(err)) error = err;
+        }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task OnReplyFilesSelectedAsync(InputFileChangeEventArgs e)
+    {
+        error = null;
+        try
+        {
+            var err = await HRM.UI.Helpers.HelpdeskAttachmentUiHelper.AddFilesAsync(e, pendingReplyAttachments);
+            if (!string.IsNullOrWhiteSpace(err)) error = err;
+        }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private static void RemovePendingAttachment(List<HRM.UI.Helpers.StagedHelpdeskAttachment> list, int index)
+    {
+        if (index >= 0 && index < list.Count)
+            list.RemoveAt(index);
+    }
+
+    [JSInvokable]
+    public async Task OnClipboardImagePastedAsync(string fileName, string contentType, string dataUrl)
+    {
+        if (disposed) return;
+        await InvokeAsync(() =>
+        {
+            error = null;
+            var target = activeTicket != null ? pendingReplyAttachments : pendingNewAttachments;
+            var err = HRM.UI.Helpers.HelpdeskAttachmentUiHelper.AddClipboardImage(fileName, contentType, dataUrl, target);
+            if (!string.IsNullOrWhiteSpace(err)) error = err;
+            StateHasChanged();
+        });
+    }
+
+    [JSInvokable]
+    public async Task OnClipboardPasteErrorAsync(string message)
+    {
+        if (disposed) return;
+        await InvokeAsync(() => { error = message; StateHasChanged(); });
     }
 
     private void SelectQuickTopic(QuickTopic topic)
@@ -573,31 +776,40 @@
 
     private async Task CreateTicketAsync()
     {
-        if (busy || string.IsNullOrWhiteSpace(newMessage)) return;
+        if (busy || (string.IsNullOrWhiteSpace(newMessage) && pendingNewAttachments.Count == 0)) return;
         busy = true;
+        botTyping = true;
         error = null;
+        StateHasChanged();
         try
         {
-            activeTicket = await Helpdesk.CreateTicketAsync(newCategory, newSubject, newMessage);
+            var uploads = pendingNewAttachments.Select(a => a.ToUploadDto()).ToList();
+            activeTicket = uploads.Count > 0
+                ? await Helpdesk.CreateTicketWithAttachmentsAsync(newCategory, newSubject, newMessage, uploads)
+                : await Helpdesk.CreateTicketAsync(newCategory, newSubject, newMessage);
             newSubject = "";
             newMessage = "";
+            pendingNewAttachments.Clear();
             mobileShowList = false;
+            RefreshTypistsForTicket();
             tickets = await Helpdesk.GetMyTicketsAsync();
             scroll = forceScroll = true;
             Navigation.NavigateTo($"{BaseRoute}?ticketId={activeTicket.Ticket.Id}", replace: true);
         }
         catch (Exception ex) { Fail(ex); }
-        finally { busy = false; }
+        finally { botTyping = false; busy = false; }
     }
 
     private async Task OpenTicketAsync(long id, bool navigate = true)
     {
         if (busy) return;
+        ClearUserTyping();
         busy = true;
         error = null;
         try
         {
             activeTicket = await Helpdesk.GetTicketAsync(id);
+            RefreshTypistsForTicket();
             mobileShowList = false;
             replyBody = "";
             composerBoundForId = 0;
@@ -612,7 +824,7 @@
     [JSInvokable]
     public async Task SubmitFromKeyboardAsync()
     {
-        if (disposed || busy || activeTicket == null || string.IsNullOrWhiteSpace(replyBody)) return;
+        if (disposed || busy || activeTicket == null || (string.IsNullOrWhiteSpace(replyBody) && pendingReplyAttachments.Count == 0)) return;
         await InvokeAsync(async () =>
         {
             await SendReplyAsync();
@@ -629,19 +841,31 @@
 
     private async Task SendReplyAsync()
     {
-        if (busy || activeTicket == null || string.IsNullOrWhiteSpace(replyBody)) return;
+        if (busy || activeTicket == null || (string.IsNullOrWhiteSpace(replyBody) && pendingReplyAttachments.Count == 0)) return;
+        ClearUserTyping();
+        var uploads = pendingReplyAttachments.Select(a => a.ToUploadDto()).ToList();
+        var expectBotReply = activeTicket.Ticket.Status == HelpdeskTicketStatuses.BotActive;
         busy = true;
+        botTyping = expectBotReply;
         error = null;
+        if (expectBotReply)
+        {
+            scroll = forceScroll = true;
+            StateHasChanged();
+        }
         try
         {
-            activeTicket = await Helpdesk.SendUserMessageAsync(activeTicket.Ticket.Id, replyBody);
+            activeTicket = uploads.Count > 0
+                ? await Helpdesk.SendUserMessageWithAttachmentsAsync(activeTicket.Ticket.Id, replyBody, uploads)
+                : await Helpdesk.SendUserMessageAsync(activeTicket.Ticket.Id, replyBody);
             replyBody = "";
+            pendingReplyAttachments.Clear();
             try { await JS.InvokeVoidAsync("hrmChat.resetComposerHeight", composerInput); } catch { }
             tickets = await Helpdesk.GetMyTicketsAsync();
             scroll = forceScroll = true;
         }
         catch (Exception ex) { Fail(ex); }
-        finally { busy = false; }
+        finally { botTyping = false; busy = false; }
     }
 
     private async Task EscalateAsync()
@@ -767,6 +991,8 @@
     public async ValueTask DisposeAsync()
     {
         disposed = true;
+        ClearUserTyping();
+        TypingState.Changed -= HandleTypingChanged;
         await stop.CancelAsync();
         if (watching != null) await watching;
         stop.Dispose();
