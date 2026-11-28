@@ -10,6 +10,8 @@ namespace HRM.DTOs.Leave
 
         public DateTime? EffectiveToDate { get; set; }
 
+        public DateTime? RenewedDate { get; set; }
+
         public bool IsLeaveInfoUpdated { get; set; }
         public bool IsValid { get; set; }
 

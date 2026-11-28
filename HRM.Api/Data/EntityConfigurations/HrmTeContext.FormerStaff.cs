@@ -47,7 +47,8 @@ public partial class HrmTeContext
                     ReferenceEquals(entry.Entity,staffAppointmentRequest) ||
                     entry.Metadata.ClrType.Name is "StaffOnboardingRequest" ||
                     entry.Metadata.ClrType.Name.StartsWith("WfRequest",StringComparison.Ordinal) ||
-                    entry.State==EntityState.Added && entry.Metadata.ClrType.Name is "Job" or "JobPosition" or "JobPositionsRequest" or "JobRequest" or "RequestJob" or "FrameworkJobStepHistory" or "Staff" or "User");
+                    (entry.State==EntityState.Added && entry.Metadata.ClrType.Name is "Job" or "JobPosition" or "JobPositionsRequest" or "JobRequest" or "RequestJob" or "FrameworkJobStepHistory" or "JobLeaveType" or "Staff" or "User") ||
+                    (entry.State==EntityState.Modified && entry.Metadata.ClrType.Name is "Job" or "JobPosition" or "User"));
             var key=entry.Metadata.FindPrimaryKey();
             var identity=entry.Metadata.Name+":"+string.Join(":",key?.Properties.Select(p=>entry.Property(p.Name).CurrentValue)??[]);
             if(!visited.Add(identity))return;

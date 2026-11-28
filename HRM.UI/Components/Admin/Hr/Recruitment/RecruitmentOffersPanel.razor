@@ -230,6 +230,13 @@
                                                 <i class="bi bi-box-arrow-up-right" aria-hidden="true"></i>
                                                 <span>Onboarding #@o.OnboardingRequestId</span>
                                             </a>
+                                            <button type="button"
+                                                    class="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-400 cursor-not-allowed"
+                                                    disabled
+                                                    title="Onboarding has already been initiated for this offer">
+                                                <i class="bi bi-lock-fill" aria-hidden="true"></i>
+                                                <span>Onboarding Initiated</span>
+                                            </button>
                                         }
                                         @if (o.Status == "Accepted" && !o.OnboardingRequestId.HasValue)
                                         {
@@ -285,14 +292,21 @@
                 {
                     var selectedPos = workspace.Context.VacantPositions.FirstOrDefault(p => p.Id == positionId);
                     var requiresStep = selectedPos is not null && selectedPos.PaySteps.Count > 0;
+                    var isOnboardingLocked = busy || selectedOffer.OnboardingRequestId.HasValue || !string.Equals(selectedOffer.Status, "Accepted", StringComparison.OrdinalIgnoreCase);
 
-                    <div class="rounded-xl border border-blue-200 bg-blue-50/40 p-4 space-y-3">
+                    <div class="rounded-xl border @(isOnboardingLocked ? "border-slate-200 bg-slate-50/70 opacity-80" : "border-blue-200 bg-blue-50/40") p-4 space-y-3">
                         <div class="flex items-center justify-between gap-2 border-b border-blue-200/70 pb-2">
-                            <div>
-                                <h4 class="text-xs font-bold text-slate-900">Initiate Staff Onboarding: @selectedOffer.ApplicantName</h4>
-                                <p class="text-[11px] text-slate-600">Offer #@selectedOffer.Id · @selectedOffer.ApplicationReference</p>
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <div>
+                                    <h4 class="text-xs font-bold text-slate-900">Initiate Staff Onboarding: @selectedOffer.ApplicantName</h4>
+                                    <p class="text-[11px] text-slate-600">Offer #@selectedOffer.Id · @selectedOffer.ApplicationReference</p>
+                                </div>
+                                @if (selectedOffer.OnboardingRequestId.HasValue || !string.Equals(selectedOffer.Status, "Accepted", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    <span class="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-semibold text-slate-700">Onboarding Initiated · Disabled</span>
+                                }
                             </div>
-                            <button type="button" class="text-xs font-semibold text-slate-500 hover:text-slate-800" @onclick="() => selectedOffer = null">Cancel</button>
+                            <button type="button" class="text-xs font-semibold text-slate-500 hover:text-slate-800" @onclick="() => selectedOffer = null">Close</button>
                         </div>
 
                         <!-- Auto-matched Individual Identity -->
@@ -301,6 +315,10 @@
                             <div class="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
                                 <i class="bi bi-patch-check-fill text-emerald-600" aria-hidden="true"></i>
                                 <span>Identity verified: <strong>@selectedOffer.ApplicantName</strong> (eFaas <span class="font-mono">@selectedOffer.EfaasIdNumber</span> · Individual #@selectedOffer.MatchedIndividualId)</span>
+                            </div>
+                            <div class="rounded-lg border border-sky-200 bg-sky-50/70 px-3 py-2 text-[11px] text-sky-900">
+                                <i class="bi bi-info-circle-fill text-sky-600 mr-1" aria-hidden="true"></i>
+                                If this staff member already holds an overlapping active employment of the same job type, approving onboarding will automatically terminate the previous job, activate this new approved job, and preserve existing leave update/reset dates (which remain manually editable in Leave Assignment Manager).
                             </div>
                         }
                         else
@@ -311,6 +329,7 @@
                             </div>
                         }
 
+                        <fieldset disabled="@isOnboardingLocked" class="space-y-3">
                         <div class="grid gap-3 sm:grid-cols-2">
                             <label class="block text-xs font-medium text-slate-700">
                                 Department <span class="text-rose-600">*</span>
@@ -380,13 +399,14 @@
 
                         <div class="flex justify-end pt-1">
                             <button type="button"
-                                    class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 disabled:opacity-50 transition-colors"
-                                    disabled="@(busy || (selectedOffer.MatchedIndividualId ?? 0) <= 0 || structureId <= 0 || jobTypeId <= 0 || (requiresStep && jobMatrixStepId <= 0))"
+                                    class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                    disabled="@(isOnboardingLocked || (selectedOffer.MatchedIndividualId ?? 0) <= 0 || structureId <= 0 || jobTypeId <= 0 || (requiresStep && jobMatrixStepId <= 0))"
                                     @onclick="SubmitOnboarding">
                                 <i class="bi bi-check2-circle" aria-hidden="true"></i>
-                                <span>Submit Onboarding Request</span>
+                                <span>@(selectedOffer.OnboardingRequestId.HasValue ? "Onboarding Submitted" : "Submit Onboarding Request")</span>
                             </button>
                         </div>
+                        </fieldset>
                     </div>
                 }
             </div>
