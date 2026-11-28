@@ -51,5 +51,9 @@ Task<ServiceResult> SaveTeamSummaryAsync(int organisationId, int teamId, string 
 ;
 Task<ServiceResult> SoftDeleteTeamAsync(int organisationId, int teamId)
 ;
+Task<List<UnassignedIndividualOption>> GetUnassignedIndividualsAsync(int organisationId, string? query)
+;
+Task<ServiceResult> AddStaffToDepartmentAsync(int organisationId, int departmentId, int individualId, int jobTypeId, DateTime joinedDate, string? employeeNumber)
+;
 }
 }

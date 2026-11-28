@@ -726,24 +726,177 @@
 
         @if (showDeptModal)
         {
-            <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4" role="dialog" aria-modal="true" aria-label="Edit Department">
-                <div class="w-full max-w-md rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl overflow-hidden">
-                    <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 px-4 py-3">
+            var deptModalStaff = deptDraftId > 0
+                ? links.DepartmentStaff.Where(s => s.DepartmentId == deptDraftId).OrderBy(s => s.Name, StringComparer.OrdinalIgnoreCase).ToList()
+                : new List<OrganisationDepartmentStaffDto>();
+            <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4" role="dialog" aria-modal="true" aria-label="@(deptDraftId == 0 ? "Add Department" : "Edit Department")">
+                <div class="w-full @(deptDraftId > 0 ? "max-w-lg" : "max-w-md") rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl overflow-hidden">
+                    <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 px-4 py-3"
+                         style="@(IsSuperAdminContext ? "background-color: #eef8fc;" : null)">
                         <h3 class="text-sm font-bold text-slate-900 dark:text-slate-100">@(deptDraftId == 0 ? "Add Department" : "Edit Department")</h3>
-                        <button type="button" class="text-slate-400 hover:text-slate-600 text-sm font-bold" @onclick="() => showDeptModal = false">✕</button>
+                        <button type="button" class="text-slate-400 hover:text-slate-600 text-sm font-bold" @onclick="CloseDeptModal">✕</button>
                     </div>
-                    <div class="flex flex-col gap-2 p-4">
-                        <label class="@Label">Department name<input class="@Input" maxlength="250" @bind="deptDraftName" /></label>
-                        <label class="@Label">Department type
-                            <select class="@Input" @bind="deptDraftTypeId">
-                                <option value="0">Select type</option>
-                                @foreach (var t in data.DepartmentTypes) { <option value="@t.Id">@t.Name</option> }
-                            </select>
-                        </label>
+                    <div class="flex flex-col gap-3 p-4">
+                        <div class="flex flex-col gap-2">
+                            <label class="@Label">Department name<input class="@Input" maxlength="250" @bind="deptDraftName" /></label>
+                            <label class="@Label">Department type
+                                <select class="@Input" @bind="deptDraftTypeId">
+                                    <option value="0">Select type</option>
+                                    @foreach (var t in data.DepartmentTypes) { <option value="@t.Id">@t.Name</option> }
+                                </select>
+                            </label>
+                        </div>
+
+                        @if (deptDraftId > 0)
+                        {
+                            <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 overflow-hidden">
+                                <div class="flex items-center justify-between gap-2 border-b border-slate-200 dark:border-slate-800 px-3 py-2">
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="text-xs font-bold text-slate-800 dark:text-slate-100">Department Staff</span>
+                                        <span class="rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 px-1.5 py-0.5 text-[10px] font-semibold">@deptModalStaff.Count</span>
+                                    </div>
+                                    <button type="button"
+                                            class="inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-semibold transition shadow-2xs hover:opacity-90"
+                                            style="@(IsSuperAdminContext ? "background-color: #ADD8E6; color: #0f172a;" : "background-color: #0f766e; color: #ffffff;")"
+                                            disabled="@busy"
+                                            @onclick="OpenAddDeptStaffModalAsync">
+                                        <AppIcon Name="person_add" Class="text-xs" />
+                                        <span>Add Staff</span>
+                                    </button>
+                                </div>
+                                @if (deptModalStaff.Count == 0)
+                                {
+                                    <p class="px-3 py-3 text-center text-[11px] text-slate-500">No active staff assigned to this department yet.</p>
+                                }
+                                else
+                                {
+                                    <div class="divide-y divide-slate-200/70 dark:divide-slate-800 max-h-40 overflow-y-auto bg-white dark:bg-slate-900">
+                                        @foreach (var st in deptModalStaff)
+                                        {
+                                            <div class="flex items-center justify-between gap-2 px-3 py-1.5 text-xs">
+                                                <div class="min-w-0">
+                                                    <p class="font-semibold text-slate-800 dark:text-slate-100 truncate">@st.Name</p>
+                                                    <p class="text-[10px] text-slate-500 truncate">@st.JobType</p>
+                                                </div>
+                                                @if (!string.IsNullOrWhiteSpace(st.EmployeeNumber))
+                                                {
+                                                    <span class="font-mono text-[10px] text-slate-500 shrink-0">@st.EmployeeNumber</span>
+                                                }
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        }
                     </div>
                     <div class="flex justify-end gap-2 border-t border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 px-4 py-3">
-                        <button type="button" class="app-button app-button-secondary app-button-sm" @onclick="() => showDeptModal = false">Cancel</button>
+                        <button type="button" class="app-button app-button-secondary app-button-sm" @onclick="CloseDeptModal">Cancel</button>
                         <button type="button" class="app-button app-button-primary app-button-sm" disabled="@busy" @onclick="SaveDepartmentModalAsync">Save Department</button>
+                    </div>
+                </div>
+            </div>
+        }
+
+        @if (showAddDeptStaffModal && deptDraftId > 0)
+        {
+            <div class="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 p-4" role="dialog" aria-modal="true" aria-label="Add Staff to Department">
+                <div class="w-full max-w-xl rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-2xl overflow-hidden">
+                    <div class="flex items-center justify-between gap-2 border-b border-slate-200 dark:border-slate-800 px-4 py-3"
+                         style="@(IsSuperAdminContext ? "background-color: #eef8fc;" : null)">
+                        <div class="min-w-0">
+                            <h3 class="text-sm font-bold text-slate-900 dark:text-slate-100 truncate">Add Staff to @deptDraftName</h3>
+                            <p class="text-[11px] text-slate-500">Only individuals who do not belong to any organisation are listed.</p>
+                        </div>
+                        <button type="button" class="text-slate-400 hover:text-slate-600 text-sm font-bold shrink-0" @onclick="CloseAddDeptStaffModal">✕</button>
+                    </div>
+
+                    <div class="flex flex-col gap-3 p-4">
+                        <div class="flex items-center gap-2">
+                            <input type="search"
+                                   class="flex-1 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs text-slate-800 dark:text-slate-100 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                   placeholder="Search unassigned individuals by name or ID card..."
+                                   @bind="addDeptStaffSearch"
+                                   @bind:event="oninput"
+                                   @onkeydown="HandleAddDeptStaffSearchKeyDownAsync" />
+                            <button type="button" class="app-button app-button-secondary app-button-sm shrink-0" disabled="@loadingUnassignedIndividuals" @onclick="LoadUnassignedIndividualsAsync">
+                                @(loadingUnassignedIndividuals ? "Searching..." : "Search")
+                            </button>
+                        </div>
+
+                        <div class="rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+                            <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 px-3 py-1.5 text-[11px] font-semibold text-slate-600 dark:text-slate-300">
+                                <span>Unassigned Individuals</span>
+                                <span>@unassignedIndividuals.Count found</span>
+                            </div>
+                            <div class="max-h-56 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800">
+                                @if (loadingUnassignedIndividuals)
+                                {
+                                    <p class="p-4 text-center text-xs text-slate-400">Loading unassigned individuals...</p>
+                                }
+                                else if (unassignedIndividuals.Count == 0)
+                                {
+                                    <p class="p-4 text-center text-xs text-slate-400">No unassigned individuals match your search.</p>
+                                }
+                                else
+                                {
+                                    @foreach (var person in unassignedIndividuals)
+                                    {
+                                        var isSelected = selectedUnassignedIndividualId == person.IndividualId;
+                                        <button type="button"
+                                                class="w-full flex items-center justify-between gap-2 px-3 py-2 text-left text-xs transition @(isSelected ? "bg-sky-50 dark:bg-sky-950/40 text-slate-900 dark:text-slate-100" : "hover:bg-slate-50 dark:hover:bg-slate-800/50 text-slate-700 dark:text-slate-200")"
+                                                @onclick="() => selectedUnassignedIndividualId = person.IndividualId">
+                                            <div class="min-w-0">
+                                                <p class="font-semibold truncate">@person.Name</p>
+                                                @if (!string.IsNullOrWhiteSpace(person.IdCardNumber))
+                                                {
+                                                    <p class="text-[10px] font-mono text-slate-500">ID: @person.IdCardNumber</p>
+                                                }
+                                            </div>
+                                            @if (isSelected)
+                                            {
+                                                <span class="rounded-full px-2 py-0.5 text-[10px] font-bold shrink-0"
+                                                      style="@(IsSuperAdminContext ? "background-color: #ADD8E6; color: #0f172a;" : "background-color: #ccfbf1; color: #115e59;")">
+                                                    ✓ Selected
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-[10px] text-slate-400 shrink-0">Select</span>
+                                            }
+                                        </button>
+                                    }
+                                }
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                            <label class="@Label">Job type
+                                <select class="@Input" @bind="addDeptStaffJobTypeId">
+                                    <option value="0">Select type</option>
+                                    @foreach (var jt in data.JobTypes)
+                                    {
+                                        <option value="@jt.Id">@jt.Name</option>
+                                    }
+                                </select>
+                            </label>
+                            <label class="@Label">Joined date
+                                <input type="date" class="@Input" @bind="addDeptStaffJoinedDate" />
+                            </label>
+                            <label class="@Label">Employee No. (optional)
+                                <input class="@Input" maxlength="50" placeholder="e.g. EMP-001" @bind="addDeptStaffEmployeeNumber" />
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="flex justify-end gap-2 border-t border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 px-4 py-3">
+                        <button type="button" class="app-button app-button-secondary app-button-sm" disabled="@addingDeptStaff" @onclick="CloseAddDeptStaffModal">Close</button>
+                        <button type="button"
+                                class="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold shadow-xs transition disabled:opacity-50"
+                                style="@(IsSuperAdminContext ? "background-color: #ADD8E6; color: #0f172a;" : "background-color: #0f766e; color: #ffffff;")"
+                                disabled="@(busy || addingDeptStaff || selectedUnassignedIndividualId <= 0 || addDeptStaffJobTypeId <= 0)"
+                                @onclick="ConfirmAddStaffToDepartmentAsync">
+                            @(addingDeptStaff ? "Adding..." : "Add Staff to Department")
+                        </button>
                     </div>
                 </div>
             </div>
@@ -866,7 +1019,13 @@
     private bool busy, loading, addingAddress, addingContact, useExisting;
     private int? deletingAddress;
     private int? deletingContact;
-    private bool showEditOrgModal, showDeleteOrgModal, showDeptModal, showGroupModal, showTeamModal;
+    private bool showEditOrgModal, showDeleteOrgModal, showDeptModal, showAddDeptStaffModal, showGroupModal, showTeamModal;
+    private bool loadingUnassignedIndividuals, addingDeptStaff;
+    private List<UnassignedIndividualOption> unassignedIndividuals = new();
+    private string addDeptStaffSearch = "";
+    private int selectedUnassignedIndividualId, addDeptStaffJobTypeId;
+    private DateTime addDeptStaffJoinedDate = DateTime.Today;
+    private string? addDeptStaffEmployeeNumber;
     private OrganisationSettingsDto editOrgDraft = new();
     private int deptDraftId, deptDraftTypeId, groupDraftId, teamDraftId;
     private int? teamDraftDeptId;
@@ -963,7 +1122,8 @@
         deletingAddress = null;
         deletingContact = null;
         showEditOrgModal = false; showDeleteOrgModal = false;
-        showDeptModal = false; deletingDepartment = null;
+        showDeptModal = false; showAddDeptStaffModal = false; deletingDepartment = null;
+        selectedUnassignedIndividualId = 0; addDeptStaffSearch = ""; addDeptStaffEmployeeNumber = null; unassignedIndividuals.Clear();
         showGroupModal = false; deletingGroup = null;
         showTeamModal = false; deletingTeam = null;
         CloseDetailView();
@@ -996,7 +1156,83 @@
     private void OpenEditDepartmentModal(OrganisationDepartmentSummaryDto dept)
     {
         deptDraftId = dept.Id; deptDraftName = dept.Name; deptDraftTypeId = dept.TypeId;
+        showAddDeptStaffModal = false;
         showDeptModal = true;
+    }
+    private void CloseDeptModal()
+    {
+        showAddDeptStaffModal = false;
+        showDeptModal = false;
+    }
+    private async Task OpenAddDeptStaffModalAsync()
+    {
+        if (deptDraftId <= 0 || model.Id <= 0) return;
+        addDeptStaffSearch = "";
+        selectedUnassignedIndividualId = 0;
+        addDeptStaffEmployeeNumber = null;
+        addDeptStaffJoinedDate = DateTime.Today;
+        addDeptStaffJobTypeId = data?.JobTypes.FirstOrDefault(x => x.Name.Equals("Permanent", StringComparison.OrdinalIgnoreCase))?.Id
+            ?? data?.JobTypes.FirstOrDefault()?.Id
+            ?? 0;
+        showAddDeptStaffModal = true;
+        await LoadUnassignedIndividualsAsync();
+    }
+    private void CloseAddDeptStaffModal()
+    {
+        showAddDeptStaffModal = false;
+        selectedUnassignedIndividualId = 0;
+        addDeptStaffEmployeeNumber = null;
+    }
+    private async Task LoadUnassignedIndividualsAsync()
+    {
+        if (model.Id <= 0 || loadingUnassignedIndividuals) return;
+        loadingUnassignedIndividuals = true;
+        error = null;
+        try
+        {
+            unassignedIndividuals = await Settings.GetUnassignedIndividualsAsync(model.Id, addDeptStaffSearch);
+            if (!unassignedIndividuals.Any(x => x.IndividualId == selectedUnassignedIndividualId))
+                selectedUnassignedIndividualId = 0;
+        }
+        catch (Exception ex) { Fail(ex); }
+        finally { loadingUnassignedIndividuals = false; }
+    }
+    private async Task HandleAddDeptStaffSearchKeyDownAsync(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+            await LoadUnassignedIndividualsAsync();
+    }
+    private async Task ConfirmAddStaffToDepartmentAsync()
+    {
+        if (addingDeptStaff || model.Id <= 0 || deptDraftId <= 0 || selectedUnassignedIndividualId <= 0 || addDeptStaffJobTypeId <= 0) return;
+        addingDeptStaff = true;
+        error = null;
+        try
+        {
+            var result = await Settings.AddStaffToDepartmentAsync(
+                model.Id,
+                deptDraftId,
+                selectedUnassignedIndividualId,
+                addDeptStaffJobTypeId,
+                addDeptStaffJoinedDate,
+                addDeptStaffEmployeeNumber);
+            if (!result.Success)
+            {
+                error = result.Message;
+                Toast.Error(result.Message);
+                return;
+            }
+
+            Toast.Success(result.Message);
+            links = await Settings.GetLinksAsync(model.Id);
+            if (viewedDepartment != null)
+                viewedDepartment = links.Departments.FirstOrDefault(d => d.Id == viewedDepartment.Id);
+            selectedUnassignedIndividualId = 0;
+            addDeptStaffEmployeeNumber = null;
+            unassignedIndividuals = await Settings.GetUnassignedIndividualsAsync(model.Id, addDeptStaffSearch);
+        }
+        catch (Exception ex) { Fail(ex); }
+        finally { addingDeptStaff = false; }
     }
     private Task SaveDepartmentModalAsync() => ExecuteAsync(() => Settings.SaveDepartmentAsync(model.Id, deptDraftId, deptDraftName, deptDraftTypeId));
     private Task ConfirmSoftDeleteDepartmentAsync() => deletingDepartment == null ? Task.CompletedTask : ExecuteAsync(() => Settings.SoftDeleteDepartmentAsync(model.Id, deletingDepartment.Id));

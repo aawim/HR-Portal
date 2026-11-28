@@ -51,7 +51,8 @@ public partial class OrganisationSettingsService(IDbContextFactory<HrmTeContext>
             ContactTypes = await db.ContactInformationTypes.AsNoTracking().Select(x => new OrganisationSettingsOption(x.ContactInformationTypeId, x.TypeName)).ToListAsync(),
             Islands = await db.Islands.AsNoTracking().OrderBy(x => x.NameEnglish).Select(x => new OrganisationAreaOption(x.IslandId, x.AtollId, x.NameEnglish)).ToListAsync(),
             Wards = await db.Wards.AsNoTracking().OrderBy(x => x.NameEnglish).Select(x => new OrganisationAreaOption(x.WardId, x.IslandId, x.NameEnglish)).ToListAsync(),
-            DepartmentTypes = await db.OrganisationStructureTypes.AsNoTracking().OrderBy(x => x.TypeName).Select(x => new OrganisationSettingsOption(x.OrganisationStructureTypeId, x.TypeName)).ToListAsync()
+            DepartmentTypes = await db.OrganisationStructureTypes.AsNoTracking().OrderBy(x => x.TypeName).Select(x => new OrganisationSettingsOption(x.OrganisationStructureTypeId, x.TypeName)).ToListAsync(),
+            JobTypes = await db.JobTypes.AsNoTracking().OrderBy(x => x.TypeName).Select(x => new OrganisationSettingsOption(x.JobTypeId, x.TypeName)).ToListAsync()
         };
     }
     public async Task<OrganisationLinksDto> GetLinksAsync(int id)
@@ -697,5 +698,150 @@ public partial class OrganisationSettingsService(IDbContextFactory<HrmTeContext>
         await db.SaveChangesAsync();
         await tx.CommitAsync();
         return ServiceResult.Ok("Team soft-deleted.");
+    }
+
+    public async Task<List<UnassignedIndividualOption>> GetUnassignedIndividualsAsync(int organisationId, string? query)
+    {
+        await RequireAsync(organisationId, "UserOrganisations.View", "UserOrganisations.Admin.View", "Organisation.Edit", "UserOrganisations.Edit", "Staff.Add", "Employee.Create");
+        await using var db = await factory.CreateDbContextAsync();
+
+        var inactiveEntityStateIds = await db.BusinessEntityStates.AsNoTracking()
+            .Where(s => s.StateName.Contains("Deleted") || s.StateName.Contains("Inactive") || s.StateName.Contains("Closed") || s.StateName.Contains("Disabled"))
+            .Select(s => s.BusinessEntityStateId)
+            .ToListAsync();
+
+        var individualsQuery = db.Individuals.AsNoTracking()
+            .Where(i =>
+                !db.Jobs.Any(j => j.IndividualID == i.BusinessEntityId) &&
+                !db.BusinessEntities.Any(b => b.BusinessEntityID == i.BusinessEntityId && b.BusinessEntityStateId.HasValue && inactiveEntityStateIds.Contains(b.BusinessEntityStateId.Value)));
+
+        var term = query?.Trim();
+        if (!string.IsNullOrWhiteSpace(term))
+        {
+            individualsQuery = individualsQuery.Where(i =>
+                (i.FirstNameEnglish != null && i.FirstNameEnglish.Contains(term)) ||
+                (i.MiddleNameEnglish != null && i.MiddleNameEnglish.Contains(term)) ||
+                (i.LastNameEnglish != null && i.LastNameEnglish.Contains(term)) ||
+                ((i.FirstNameEnglish + " " + (i.MiddleNameEnglish ?? "") + " " + (i.LastNameEnglish ?? "")).Contains(term)) ||
+                i.Idcards.Any(c => c.IdcardNumber.Contains(term)));
+        }
+
+        var rows = await individualsQuery
+            .OrderBy(i => i.FirstNameEnglish)
+            .ThenBy(i => i.MiddleNameEnglish)
+            .ThenBy(i => i.LastNameEnglish)
+            .Take(200)
+            .Select(i => new
+            {
+                i.BusinessEntityId,
+                Name = (i.FirstNameEnglish + " " + (i.MiddleNameEnglish ?? "") + " " + (i.LastNameEnglish ?? "")).Trim(),
+                IdCardNumber = i.Idcards
+                    .OrderByDescending(c => c.IdcardId)
+                    .Select(c => c.IdcardNumber)
+                    .FirstOrDefault()
+            })
+            .ToListAsync();
+
+        return rows
+            .Select(r => new UnassignedIndividualOption(
+                r.BusinessEntityId,
+                string.Join(" ", r.Name.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)),
+                string.IsNullOrWhiteSpace(r.IdCardNumber) ? null : r.IdCardNumber.Trim()))
+            .Where(r => !string.IsNullOrWhiteSpace(r.Name))
+            .OrderBy(r => r.Name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    public async Task<ServiceResult> AddStaffToDepartmentAsync(int organisationId, int departmentId, int individualId, int jobTypeId, DateTime joinedDate, string? employeeNumber)
+    {
+        await RequireAsync(organisationId, "Organisation.Edit", "UserOrganisations.Edit", "Staff.Add", "Employee.Create");
+        if (organisationId <= 0) return ServiceResult.Fail("Select a valid organisation.");
+        if (departmentId <= 0) return ServiceResult.Fail("Select a valid department.");
+        if (individualId <= 0) return ServiceResult.Fail("Select an individual to add as staff.");
+        if (jobTypeId <= 0) return ServiceResult.Fail("Select a job type.");
+        if (joinedDate == default) return ServiceResult.Fail("Select a valid joining date.");
+
+        var cleanEmpNo = string.IsNullOrWhiteSpace(employeeNumber) ? null : employeeNumber.Trim();
+        if (cleanEmpNo != null && cleanEmpNo.Length > 50)
+            return ServiceResult.Fail("Employee number must be 50 characters or fewer.");
+
+        await using var db = await factory.CreateDbContextAsync();
+        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted);
+        try
+        {
+            var dept = await db.OrganisationStructures.AsNoTracking()
+                .FirstOrDefaultAsync(x => x.OrganisationStructureId == departmentId && x.OrganisationBusinessEntityID == organisationId && x.OrganisationStructureStateId == 3);
+            if (dept == null) return ServiceResult.Fail("Department was not found in this organisation.");
+
+            if (!await db.JobTypes.AsNoTracking().AnyAsync(x => x.JobTypeId == jobTypeId))
+                return ServiceResult.Fail("Selected job type was not found.");
+
+            var individual = await db.Individuals.AsNoTracking()
+                .Where(i => i.BusinessEntityId == individualId)
+                .Select(i => new
+                {
+                    i.BusinessEntityId,
+                    Name = (i.FirstNameEnglish + " " + (i.MiddleNameEnglish ?? "") + " " + (i.LastNameEnglish ?? "")).Trim()
+                })
+                .FirstOrDefaultAsync();
+            if (individual == null) return ServiceResult.Fail("Selected individual was not found.");
+
+            if (await db.Jobs.AsNoTracking().AnyAsync(j => j.IndividualID == individualId))
+                return ServiceResult.Fail("This individual already belongs to an organisation.");
+
+            var existingStaff = await db.Staffs.FirstOrDefaultAsync(s => s.IndividualId == individualId);
+            if (existingStaff == null)
+            {
+                var staffLog = await logs.CreateAsync(db, SharedConfig.OperationLogActionTypes.STAFF_CREATE, $"Created staff profile for individual #{individualId}");
+                db.Staffs.Add(new Staff
+                {
+                    IndividualId = individualId,
+                    EmployeeNumber = cleanEmpNo,
+                    OperationLogId = staffLog.OperationLogId
+                });
+                await db.SaveChangesAsync();
+            }
+            else if (cleanEmpNo != null && string.IsNullOrWhiteSpace(existingStaff.EmployeeNumber))
+            {
+                existingStaff.EmployeeNumber = cleanEmpNo;
+            }
+
+            var jobLog = await logs.CreateAsync(db, SharedConfig.OperationLogActionTypes.JOB_CREATE, $"Added staff #{individualId} to department '{dept.Name}' (#{departmentId}) in organisation #{organisationId}");
+            db.Jobs.Add(new Job
+            {
+                IndividualID = individualId,
+                OrganisationID = organisationId,
+                OrganisationStructureId = departmentId,
+                JobStateId = 4,
+                JobTypeId = jobTypeId,
+                JoinedDate = joinedDate.Date,
+                OperationLogId = jobLog.OperationLogId
+            });
+
+            var linkedUser = await db.Users.FirstOrDefaultAsync(u => u.BusinessEntityID == individualId);
+            if (linkedUser != null)
+            {
+                var userOrgId = await db.UserOrganisations.AsNoTracking()
+                    .Where(uo => uo.BusinessEntityID == organisationId)
+                    .Select(uo => (int?)uo.UserOrganisationID)
+                    .FirstOrDefaultAsync();
+                if (userOrgId.HasValue)
+                    linkedUser.UserOrganisationId = userOrgId.Value;
+            }
+
+            await db.SaveChangesAsync();
+            await tx.CommitAsync();
+
+            if (linkedUser != null && contexts != null)
+                await contexts.InvalidateAsync(linkedUser.UserId);
+
+            var cleanName = string.Join(" ", individual.Name.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+            return ServiceResult.Ok($"Added {cleanName} to {dept.Name}.");
+        }
+        catch (DbUpdateException ex)
+        {
+            await tx.RollbackAsync();
+            return ServiceResult.Fail($"Could not add staff to department: {ex.InnerException?.Message ?? ex.Message}");
+        }
     }
 }

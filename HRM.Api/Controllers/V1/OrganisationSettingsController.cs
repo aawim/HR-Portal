@@ -197,6 +197,28 @@ public sealed class OrganisationSettingsController(global::HRM.Services.Contract
         public global::System.Int32 teamId { get; set; }
     }
 
+    [HttpGet("get-unassigned-individuals")]
+    public async Task<ActionResult<global::System.Collections.Generic.List<global::HRM.DTOs.Organisation.UnassignedIndividualOption>>> GetUnassignedIndividuals([FromQuery] global::System.Int32 organisationId, [FromQuery] global::System.String? query)
+    {
+        return Ok(await service.GetUnassignedIndividualsAsync(organisationId, query));
+    }
+
+    [HttpPost("add-staff-to-department")]
+    public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> AddStaffToDepartment([FromBody] OrganisationSettingsAddStaffToDepartmentRequest request)
+    {
+        return Ok(await service.AddStaffToDepartmentAsync(request.organisationId, request.departmentId, request.individualId, request.jobTypeId, request.joinedDate, request.employeeNumber));
+    }
+
+    public sealed class OrganisationSettingsAddStaffToDepartmentRequest
+    {
+        public global::System.Int32 organisationId { get; set; }
+        public global::System.Int32 departmentId { get; set; }
+        public global::System.Int32 individualId { get; set; }
+        public global::System.Int32 jobTypeId { get; set; }
+        public global::System.DateTime joinedDate { get; set; }
+        public global::System.String? employeeNumber { get; set; }
+    }
+
     public sealed class OrganisationSettingsSoftDeleteGroupRequest
     {
         public global::System.Int32 organisationId { get; set; }

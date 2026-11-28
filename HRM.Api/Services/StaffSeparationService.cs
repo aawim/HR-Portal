@@ -20,7 +20,9 @@ namespace HRM.Services;
 
 public sealed class StaffSeparationService(
     IDbContextFactory<HrmTeContext> factory,
-    IUserAccessService access)
+    IUserAccessService access,
+    IOperationLogService? operationLogs = null,
+    IUserContextService? userContexts = null)
     : global::HRM.Services.Contracts.StaffSeparationServiceContracts,
       global::HRM.Services.Contracts.StaffSeparationServiceContracts.IOperations
 {
@@ -1169,6 +1171,7 @@ public sealed class StaffSeparationService(
         sep.ExitInterviewNotes = input.ExitInterviewNotes;
         sep.Status = StaffSeparationStatuses.Approved;
 
+        List<int> revokedUserIds = [];
         if (input.ExecuteTerminationNow)
         {
             var job = await db.Jobs.Include(j => j.JobPositions).FirstOrDefaultAsync(j => j.JobId == sep.JobId);
@@ -1183,16 +1186,17 @@ public sealed class StaffSeparationService(
                 }
             }
 
-            // Revoke organization roles
-            var userOrgs = await db.UserOrganisations.Where(uo => uo.BusinessEntityID == org).Select(uo => uo.UserOrganisationID).ToListAsync();
-            var userRoles = await db.UserOrganisationRoles
-                .Where(ur => userOrgs.Contains(ur.UserOrganisationID))
-                .ToListAsync();
-
-            foreach (var r in userRoles)
+            // Revoke all roles, direct permissions, access scopes/grants, and portal access for the terminated staff member
+            int? revokeLogId = null;
+            if (operationLogs != null)
             {
-                r.IsActive = false;
+                var log = await operationLogs.CreateAsync(db, HRM.Components.Shared.SharedConfig.OperationLogActionTypes.USER_ROLE_UPDATE,
+                    $"Revoked all roles and portal access for terminated staff #{sep.IndividualId} (separation #{sep.StaffSeparationId}).");
+                revokeLogId = log.OperationLogId;
             }
+            revokedUserIds = await HRM.Helpers.StaffTerminationAccessRevoker.RevokeAllAccessForTerminatedStaffAsync(
+                db, sep.IndividualId, sep.JobId, org, revokeLogId, actor.UserId,
+                $"Employment terminated (separation #{sep.StaffSeparationId})");
 
             var hasUnresolved = sep.ClearanceTasks.Any(t => t.OutstandingObligation) ||
                                 sep.AssetClearances.Any(a => a.DisposalAction == StaffSeparationAssetDisposalActions.ReportedLost || a.Status == "Disputed") ||
@@ -1230,6 +1234,11 @@ public sealed class StaffSeparationService(
         });
 
         await db.SaveChangesAsync();
+        if (userContexts != null)
+        {
+            foreach (var uid in revokedUserIds)
+                await userContexts.InvalidateAsync(uid);
+        }
         return ServiceResult.Ok(input.ExecuteTerminationNow ? "Separation executed and employment terminated." : "Separation approved.");
     }
 

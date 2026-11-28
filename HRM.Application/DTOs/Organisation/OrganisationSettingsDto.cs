@@ -46,6 +46,7 @@ public class OrganisationSettingsData
     public List<OrganisationAreaOption> Islands { get; set; } = new();
     public List<OrganisationAreaOption> Wards { get; set; } = new();
     public List<OrganisationSettingsOption> DepartmentTypes { get; set; } = new();
+    public List<OrganisationSettingsOption> JobTypes { get; set; } = new();
 }
 public class OrganisationLinksDto
 {
@@ -69,3 +70,4 @@ public record OrganisationStaffRow(int JobId, string Name, string? EmployeeNumbe
 {
     public int IndividualId { get; init; }
 }
+public record UnassignedIndividualOption(int IndividualId, string Name, string? IdCardNumber);

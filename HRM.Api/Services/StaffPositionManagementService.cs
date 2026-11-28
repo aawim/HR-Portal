@@ -11,7 +11,8 @@ public sealed partial class StaffPositionManagementService(IDbContextFactory<Hrm
     IUserAccessService access, IOperationLogService logs, IRequestService requests,
     HRM.Services.Interfaces.AppovalWF.IWorkflowEngine workflow,
     HRM.Services.Interfaces.AppovalWF.IWorkflowApproverResolver resolver,
-    HRM.Services.Interfaces.AppovalWF.IWorkflowRequestContextResolver contextResolver)
+    HRM.Services.Interfaces.AppovalWF.IWorkflowRequestContextResolver contextResolver,
+    IUserContextService? userContexts = null)
 :global::HRM.Services.Contracts.StaffPositionManagementServiceContracts,global::HRM.Services.Contracts.StaffPositionManagementServiceContracts.IOperations{
     
     
