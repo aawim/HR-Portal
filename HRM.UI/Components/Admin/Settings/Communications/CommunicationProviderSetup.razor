@@ -4,17 +4,29 @@
 <section class="w-full min-w-0 p-2 space-y-4">
   @if (error is not null) { <p role="alert" class="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">@error</p> }
   @if (notice is not null) { <p role="status" class="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800">@notice</p> }
+  @if (ProviderCode == "WHATSAPP")
+  {
+    <details class="rounded-xl border border-teal-200 dark:border-teal-800 bg-teal-50/50 dark:bg-teal-950/30 p-3 text-xs text-slate-700 dark:text-slate-200">
+      <summary class="cursor-pointer font-bold text-teal-900 dark:text-teal-200">WhatsApp Cloud API Setup Checklist (4 Steps)</summary>
+      <ol class="mt-2 list-decimal pl-5 space-y-1 text-[11px] leading-relaxed">
+        <li>In <strong>Meta for Developers</strong>, create a Business app with <strong>WhatsApp</strong> enabled, create a permanent <strong>System User Access Token</strong> (with <code>whatsapp_business_messaging</code>), and note your numeric <strong>Phone Number ID</strong>.</li>
+        <li>In <strong>Meta WhatsApp Manager</strong>, create and get an approved <strong>Utility</strong> template with <strong>one</strong> body variable <code>@("{{1}}")</code> (lowercase name with underscores only, e.g. <code>schedule_update_notice</code>).</li>
+        <li>On the <strong>Communications Worker</strong> server config, set <code>Communications:OutboundEnabled = true</code>, <code>Communications:Meta:GraphApiVersion = "v21.0"</code>, and store the token under <code>Communications:Organisations:{OrgId}:Credentials:{CredentialReference}</code>.</li>
+        <li>Below, save the <strong>Connection</strong> (enabled), add each opted-in employee as a <strong>Destination</strong> (digits only with country code, e.g. <code>9607771234</code>, consent checked), and save an enabled <strong>Automation Rule</strong>.</li>
+      </ol>
+    </details>
+  }
   <div class="grid gap-4 lg:grid-cols-2">
     <form @onsubmit="SaveConnectionAsync" @onsubmit:preventDefault="true" class="app-surface rounded-2xl border border-slate-200 p-4 shadow-xs space-y-3">
       <h2 class="p-1 font-bold text-slate-800 dark:text-slate-100">@ProviderName connection</h2>
       <p class="text-xs text-slate-500">@(ProviderCode == "MSTEAMS" ? "Store the Teams Workflow URL securely on the server and enter its reference here." : "Store the provider access token securely on the server and enter its reference here.")</p>
-      <label class="block p-1 text-xs font-medium text-slate-700 dark:text-slate-200">Name<input class="@Input" maxlength="120" @bind="connection.Name" /></label>
-      <label class="block p-1 text-xs font-medium text-slate-700 dark:text-slate-200">Credential reference<input class="@Input" maxlength="256" @bind="connection.CredentialReference" /></label>
+      <label class="block p-1 text-xs font-medium text-slate-700 dark:text-slate-200">Name<input class="@Input" maxlength="120" @bind="connection.Name" /><span class="@Help">Friendly label to identify this @ProviderName connection (e.g. "NCIT @ProviderName Prod", max 120 characters).</span></label>
+      <label class="block p-1 text-xs font-medium text-slate-700 dark:text-slate-200">Credential reference<input class="@Input" maxlength="256" @bind="connection.CredentialReference" placeholder="@(ProviderCode == "WHATSAPP" ? "whatsapp-prod" : ProviderCode == "MSTEAMS" ? "msteams-workflow" : "facebook-page-prod")" /><span class="@Help">@(ProviderCode == "MSTEAMS" ? "Server config key holding the Teams/Power Automate HTTPS Workflow URL under Communications:Organisations:{OrgId}:Credentials:{ref}. Never paste the raw URL here." : ProviderCode == "WHATSAPP" ? "Server config key holding the Meta permanent access token under Communications:Organisations:{OrgId}:Credentials:{ref} (e.g. whatsapp-prod). Never paste the raw token here." : "Server config key holding the Meta Page Access Token under Communications:Organisations:{OrgId}:Credentials:{ref}. Never paste the raw token here.")</span></label>
       @if (ProviderCode == "WHATSAPP")
       {
-        <label class="block p-1 text-xs font-medium text-slate-700 dark:text-slate-200">Meta phone-number ID<input class="@Input" @bind="connection.PhoneNumberId" /></label>
-        <label class="block p-1 text-xs font-medium text-slate-700 dark:text-slate-200">Approved template name<input class="@Input" @bind="connection.TemplateName" /></label>
-        <label class="block p-1 text-xs font-medium text-slate-700 dark:text-slate-200">Approved template language<input class="@Input" @bind="connection.TemplateLanguage" placeholder="en_US" /></label>
+        <label class="block p-1 text-xs font-medium text-slate-700 dark:text-slate-200">Meta phone-number ID<input class="@Input" @bind="connection.PhoneNumberId" placeholder="123456789012345" /><span class="@Help">Numeric Phone Number ID from Meta Developer Portal → WhatsApp → API Setup (digits only — not your phone number).</span></label>
+        <label class="block p-1 text-xs font-medium text-slate-700 dark:text-slate-200">Approved template name<input class="@Input" @bind="connection.TemplateName" placeholder="schedule_update_notice" /><span class="@Help">Exact approved Meta template name using lowercase letters, digits, and underscores only (<code>a-z</code>, <code>0-9</code>, <code>_</code>) with one body placeholder <code>@("{{1}}")</code>.</span></label>
+        <label class="block p-1 text-xs font-medium text-slate-700 dark:text-slate-200">Approved template language<input class="@Input" @bind="connection.TemplateLanguage" placeholder="en_US" /><span class="@Help">Exact Meta locale code of the approved template (e.g. <code>en_US</code> or <code>en</code>).</span></label>
         <p class="text-xs text-slate-500">Use an approved template with one text body parameter for the notification. Provider charges may apply.</p>
       }
       <label class="flex items-center gap-2 text-xs"><input type="checkbox" @bind="connection.IsEnabled" />Enable connection</label>
@@ -24,14 +36,14 @@
     <form @onsubmit="SaveDestinationAsync" @onsubmit:preventDefault="true" class="app-surface rounded-2xl border border-slate-200 p-4 shadow-xs space-y-3">
       <h2 class="p-1 font-bold text-slate-800 dark:text-slate-100">Destination</h2>
       <label class="block p-1 text-xs font-medium text-slate-700 dark:text-slate-200">Connection<select class="@Input" @bind="destination.ConnectionId"><option value="0">Select connection</option>@foreach (var item in Connections) { <option value="@item.Id">@item.Name</option> }</select></label>
-      <label class="block p-1 text-xs font-medium text-slate-700 dark:text-slate-200">Display name<input class="@Input" maxlength="160" @bind="destination.DisplayName" /></label>
-      <label class="block p-1 text-xs font-medium text-slate-700 dark:text-slate-200">@(ProviderCode == "FACEBOOK_PAGE" ? "Numeric Facebook Page ID" : ProviderCode == "WHATSAPP" ? "Employee phone number (international format)" : "Destination identifier: workflow")<input class="@Input" @bind="destination.ExternalId" /></label>
+      <label class="block p-1 text-xs font-medium text-slate-700 dark:text-slate-200">Display name<input class="@Input" maxlength="160" @bind="destination.DisplayName" /><span class="@Help">@(ProviderCode == "WHATSAPP" ? "Friendly recipient label shown in rules and delivery logs (e.g. employee full name, max 160 characters)." : "Friendly destination label shown in rules and delivery logs (max 160 characters).")</span></label>
+      <label class="block p-1 text-xs font-medium text-slate-700 dark:text-slate-200">@(ProviderCode == "FACEBOOK_PAGE" ? "Numeric Facebook Page ID" : ProviderCode == "WHATSAPP" ? "Employee phone number (international format)" : "Destination identifier: workflow")<input class="@Input" @bind="destination.ExternalId" placeholder="@(ProviderCode == "WHATSAPP" ? "9607771234" : ProviderCode == "FACEBOOK_PAGE" ? "102938475610293" : "workflow")" /><span class="@Help">@(ProviderCode == "FACEBOOK_PAGE" ? "Numeric Facebook Page ID found in your Page's About → Page Transparency section (digits only)." : ProviderCode == "WHATSAPP" ? "International mobile number using digits only with country code — no '+', spaces, or dashes (7–15 digits, e.g. 9607771234)." : "Keep 'workflow' — the target Teams channel is defined inside the Workflow URL stored under the Credential reference.")</span></label>
       <label class="block p-1 text-xs font-medium text-slate-700 dark:text-slate-200">Message language<select class="@Input" @bind="destination.LanguageCode"><option value="en">English</option><option value="dv">Dhivehi</option></select></label>
       @if (ProviderCode == "WHATSAPP")
       {
-        <label class="block p-1 text-xs font-medium text-slate-700 dark:text-slate-200">Employee individual ID<input type="number" min="1" class="@Input" @bind="destination.IndividualId" /></label>
+        <label class="block p-1 text-xs font-medium text-slate-700 dark:text-slate-200">Employee individual ID<input type="number" min="1" class="@Input" @bind="destination.IndividualId" /><span class="@Help">Numeric Individual ID (BusinessEntityID) of the employee in HRM so schedule change events match this recipient.</span></label>
         <label class="flex items-center gap-2 text-xs"><input type="checkbox" @bind="destination.ConsentConfirmed" />Employee consent for schedule notifications is recorded</label>
-        <label class="block p-1 text-xs font-medium text-slate-700 dark:text-slate-200">Opt-in source / evidence reference<input class="@Input" maxlength="400" @bind="destination.ConsentSource" /></label>
+        <label class="block p-1 text-xs font-medium text-slate-700 dark:text-slate-200">Opt-in source / evidence reference<input class="@Input" maxlength="400" @bind="destination.ConsentSource" placeholder="Signed HR opt-in form #2026-14" /><span class="@Help">Audit reference showing where/when the employee opted in to WhatsApp notifications (required when consent is checked, max 400 characters).</span></label>
         <p class="text-xs text-slate-500">Clearing consent disables this destination and blocks queued schedule notifications.</p>
       }
       <label class="flex items-center gap-2 text-xs"><input type="checkbox" @bind="destination.IsActive" />Activate destination</label>
@@ -41,15 +53,15 @@
   </div>
   <form @onsubmit="SaveRuleAsync" @onsubmit:preventDefault="true" class="app-surface rounded-2xl border border-slate-200 p-4 shadow-xs space-y-3">
     <h2 class="p-1 font-bold text-slate-800 dark:text-slate-100">Automation rule · template version @rule.TemplateVersion</h2>
-    <label class="block p-1 text-xs font-medium text-slate-700 dark:text-slate-200">Name<input class="@Input" @bind="rule.Name" /></label>
+    <label class="block p-1 text-xs font-medium text-slate-700 dark:text-slate-200">Name<input class="@Input" @bind="rule.Name" /><span class="@Help">Descriptive name for this automation rule (e.g. "@(ProviderCode == "WHATSAPP" ? "Notify Staff on Schedule Change" : "Publish Organisation Events")").</span></label>
     <label class="block p-1 text-xs font-medium text-slate-700 dark:text-slate-200">Destination<select class="@Input" @bind="rule.DestinationId"><option value="">Select destination</option>@foreach (var item in Destinations) { <option value="@item.Id">@item.DisplayName</option> }</select></label>
     <label class="block p-1 text-xs font-medium text-slate-700 dark:text-slate-200">Trigger<select class="@Input" @bind="rule.EventCode">
       @if (ProviderCode == "WHATSAPP") { <option value="employee.schedule-changed.v1">Employee schedule changed</option> }
       else { <option value="organisation-event.published.v1">Organisation event published</option><option value="organisation-event.cancelled.v1">Organisation event cancelled</option> }
     </select></label>
     @if (ProviderCode == "FACEBOOK_PAGE") { <p class="text-xs text-amber-800">Only events explicitly marked Public can be posted to Facebook. Manual approval is required.</p> }
-    <label class="block p-1 text-xs font-medium text-slate-700 dark:text-slate-200">English template<textarea rows="3" class="@Input" @bind="rule.TemplateBody"></textarea></label>
-    <label class="block p-1 text-xs font-medium text-slate-700 dark:text-slate-200">Dhivehi template (optional)<textarea rows="3" dir="rtl" class="@Input" @bind="rule.DhivehiTemplateBody"></textarea></label>
+    <label class="block p-1 text-xs font-medium text-slate-700 dark:text-slate-200">English template<textarea rows="3" class="@Input" @bind="rule.TemplateBody"></textarea><span class="@Help">@(ProviderCode == "WHATSAPP" ? "Text injected into the approved WhatsApp template's {{1}} body parameter (max 1,024 characters). Supports {{Title}}, {{Description}}, {{EffectiveDate}}, and {{EmployeeName}}." : "English message body sent when this trigger fires. Supports {{Title}}, {{Description}}, {{StartDateTime}}, and {{EndDateTime}}.")</span></label>
+    <label class="block p-1 text-xs font-medium text-slate-700 dark:text-slate-200">Dhivehi template (optional)<textarea rows="3" dir="rtl" class="@Input" @bind="rule.DhivehiTemplateBody"></textarea><span class="@Help">Optional Dhivehi (RTL) message body used automatically when the selected destination's language is set to Dhivehi (dv).</span></label>
     @if (ProviderCode == "WHATSAPP")
     {
       <p class="text-xs text-slate-500">Use variables such as <code>@("{{Title}}")</code>, <code>@("{{Description}}")</code>, <code>@("{{EffectiveDate}}")</code> and <code>@("{{EmployeeName}}")</code>. The selected destination determines message language.</p>
@@ -76,6 +88,7 @@
     private CommunicationDestinationDto destination = new();
     private CommunicationRuleDto rule = new();
     private const string Input = "mt-1 w-full rounded-lg border border-slate-300 bg-white p-1 text-xs text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100";
+    private const string Help = "mt-1 block text-[11px] font-normal text-slate-500 dark:text-slate-400";
     private string ProviderName => Data.Platforms.FirstOrDefault(x => x.Code == ProviderCode)?.Name ?? ProviderCode;
     private IEnumerable<CommunicationIntegrationDto> Connections => Data.Integrations.Where(x => x.ProviderCode == ProviderCode);
     private IEnumerable<CommunicationDestinationDto> Destinations => Data.Destinations.Where(x => x.ProviderCode == ProviderCode);
