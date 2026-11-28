@@ -26,11 +26,17 @@ public abstract class AttendanceLogServiceContracts
 
 public interface IOperations
 {
-Task<List<TeamAttendanceDto>> GetMyTeamAttendanceTodayAsync()
+Task<List<TeamAttendanceDto>> GetMyTeamAttendanceTodayAsync(bool includeAllStaff = false)
 ;
 Task<bool> CanUseTestClockAsync() ;
 Task AddClockEventAsync(
             int individualId,
+            DateTime? checkTime = null)
+;
+Task AddClockEventWithLocationAsync(
+            int individualId,
+            double? latitude = null,
+            double? longitude = null,
             DateTime? checkTime = null)
 ;
 [Obsolete("Use AddClockEventAsync so official and duty events share the same clock processing.")]

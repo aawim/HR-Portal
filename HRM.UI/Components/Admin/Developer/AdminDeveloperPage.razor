@@ -1,0 +1,860 @@
+@page "/developer"
+@page "/developer/{ActiveTab}"
+@using HRM.Components.Admin.Settings
+@using HRM.Components.Admin.Settings.JobTypes
+@using HRM.DTOs
+@using HRM.Services.Interfaces
+@using HRM.Services
+@using HRM.Enum
+@using HRM.UI.Services.Developer
+@using Microsoft.AspNetCore.Components.Authorization
+@attribute [Authorize]
+@rendermode InteractiveServer
+@implements IDisposable
+
+@inject IUserAccessService UserAccess
+@inject PortalContext PortalContext
+@inject NavigationManager Navigation
+@inject ToastService ToastService
+@inject IJSRuntime JS
+@inject DeveloperTestClockService TestClockPreference
+@inject HRM.Services.Contracts.RequestTransitionSettingsServiceContracts.IOperations TransitionService
+@inject HRM.Services.Contracts.RequestNotificationServiceContracts.IOperations NotificationService
+
+<PageTitle>Developer Workspace - HR Portal</PageTitle>
+
+<AuthorizeView>
+    <Authorized>
+        @if (checking)
+        {
+            <div class="mx-auto max-w-7xl p-4">
+                <div class="flex flex-col items-center justify-center p-12 my-6 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs">
+                    <div class="w-12 h-12 border-4 border-amber-500 border-t-transparent rounded-full animate-spin"></div>
+                    <p class="mt-4 text-sm font-semibold text-slate-700 dark:text-slate-200">Loading Developer Dashboard...</p>
+                    <p class="text-xs text-slate-400 mt-0.5">Verifying developer permissions and workspace configuration</p>
+                </div>
+            </div>
+        }
+        else if (!isDeveloper)
+        {
+            <div class="mx-auto max-w-7xl p-4">
+                <div class="rounded-xl border border-amber-200 bg-amber-50 p-6 text-sm text-amber-900 shadow-sm space-y-2">
+                    <h2 class="font-bold text-base">Developer Access Required</h2>
+                    <p>Your account does not currently hold Developer permissions or group membership.</p>
+                    <a href="/online" class="inline-block font-semibold text-blue-700 underline mt-2">Return to Employee Portal</a>
+                </div>
+            </div>
+        }
+        else
+        {
+            <section class="developer-workspace-page w-full min-w-0 p-2 space-y-3 text-slate-900 dark:text-slate-100">
+                <style>
+                    .dev-panels {
+                        display: grid;
+                        grid-template-columns: minmax(0, 1fr);
+                        align-items: start;
+                        gap: 1rem;
+                        width: 100%;
+                        min-width: 0;
+                    }
+                    @@media (min-width: 1024px) {
+                        .dev-panels {
+                            grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+                        }
+                    }
+                </style>
+
+                <!-- 1. Compact, Transparent, Borderless Header (UI_DESIGN_STANDARD §3) -->
+                <header class="developer-workspace-header staff-overview-no-print flex flex-wrap items-center justify-between gap-2 px-1 py-0.5">
+                    <div class="min-w-0">
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <h1 class="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 truncate">Developer Workspace</h1>
+                            <span class="inline-flex items-center gap-1 rounded-full bg-amber-50 dark:bg-amber-950/60 border border-amber-200/80 dark:border-amber-800 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-300">
+                                <span class="h-1.5 w-1.5 rounded-full bg-amber-500"></span>
+                                Developer Portal
+                            </span>
+                        </div>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">
+                            Centralized configuration for request types, state transition rules, approval workflows, and system diagnostics.
+                        </p>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-1.5">
+                        <button type="button"
+                                class="app-button app-button-neutral app-button-sm"
+                                @onclick="ToggleFullWidthAsync">
+                            <AppIcon Name="@(isFullWidth ? "fullscreen_exit" : "fullscreen")" />
+                            <span>@(isFullWidth ? "Shrink View" : "Full Width")</span>
+                        </button>
+                        <button type="button"
+                                class="app-button app-button-secondary app-button-sm"
+                                disabled="@loading"
+                                @onclick="RefreshAsync">
+                            <AppIcon Name="arrow-clockwise" Class="@(loading ? "animate-spin" : "")" />
+                            <span>Refresh</span>
+                        </button>
+                    </div>
+                </header>
+
+                <!-- 2. Enterprise Contextual Tab Strip (Always Full Width) -->
+                <div class="developer-workspace-tabs staff-overview-no-print w-full border-b-2 border-amber-600 dark:border-amber-500 overflow-x-auto">
+                    <nav class="flex items-end gap-1 min-w-max pb-0" aria-label="Developer Workspace Tabs">
+                        <button type="button"
+                                class="rounded-t-xl px-3.5 py-2 font-semibold text-xs transition-all border-t border-l border-r @(activeTab == "overview" ? "bg-amber-600 text-white border-amber-600 shadow-xs" : "bg-white text-amber-800 hover:bg-amber-50 dark:bg-slate-800/90 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-700 border-slate-200 dark:border-slate-700")"
+                                @onclick="@(e => SetTab("overview"))">
+                            Overview
+                        </button>
+                        <button type="button"
+                                class="rounded-t-xl px-3.5 py-2 font-semibold text-xs transition-all border-t border-l border-r @(activeTab == "error-logs" ? "bg-amber-600 text-white border-amber-600 shadow-xs" : "bg-white text-amber-800 hover:bg-amber-50 dark:bg-slate-800/90 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-700 border-slate-200 dark:border-slate-700")"
+                                @onclick="@(e => SetTab("error-logs"))">
+                            <span class="inline-flex items-center gap-1.5">
+                                <span>Error Logs</span>
+                                <span class="rounded-full bg-rose-500 text-white px-1.5 py-0.2 text-[10px] font-bold">ERR</span>
+                            </span>
+                        </button>
+                        <button type="button"
+                                class="rounded-t-xl px-3.5 py-2 font-semibold text-xs transition-all border-t border-l border-r @(activeTab == "request-types" ? "bg-amber-600 text-white border-amber-600 shadow-xs" : "bg-white text-amber-800 hover:bg-amber-50 dark:bg-slate-800/90 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-700 border-slate-200 dark:border-slate-700")"
+                                @onclick="@(e => SetTab("request-types"))">
+                            Request Types
+                            @if (requestTypesCount > 0)
+                            {
+                                <span class="ml-1.5 rounded-full px-2 py-0.5 text-[10px] font-bold @(activeTab == "request-types" ? "bg-white/20 text-white" : "bg-amber-50 text-amber-800 border border-amber-200")">
+                                    @requestTypesCount
+                                </span>
+                            }
+                        </button>
+                        <button type="button"
+                                class="rounded-t-xl px-3.5 py-2 font-semibold text-xs transition-all border-t border-l border-r @(activeTab == "transitions" ? "bg-amber-600 text-white border-amber-600 shadow-xs" : "bg-white text-amber-800 hover:bg-amber-50 dark:bg-slate-800/90 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-700 border-slate-200 dark:border-slate-700")"
+                                @onclick="@(e => SetTab("transitions"))">
+                            Transition States
+                        </button>
+                        <button type="button"
+                                class="rounded-t-xl px-3.5 py-2 font-semibold text-xs transition-all border-t border-l border-r @(activeTab == "notification-resolution" ? "bg-amber-600 text-white border-amber-600 shadow-xs" : "bg-white text-amber-800 hover:bg-amber-50 dark:bg-slate-800/90 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-700 border-slate-200 dark:border-slate-700")"
+                                @onclick="@(e => SetTab("notification-resolution"))">
+                            Notification Resolution
+                            @if (configurationAlerts.Count > 0)
+                            {
+                                <span class="ml-1 rounded-full bg-rose-500 px-1.5 py-0.5 text-[10px] text-white">@configurationAlerts.Count</span>
+                            }
+                        </button>
+                        <button type="button"
+                                class="rounded-t-xl px-3.5 py-2 font-semibold text-xs transition-all border-t border-l border-r @(activeTab == "workflows" ? "bg-amber-600 text-white border-amber-600 shadow-xs" : "bg-white text-amber-800 hover:bg-amber-50 dark:bg-slate-800/90 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-700 border-slate-200 dark:border-slate-700")"
+                                @onclick="@(e => SetTab("workflows"))">
+                            Approval Workflows
+                        </button>
+                        <button type="button"
+                                class="rounded-t-xl px-3.5 py-2 font-semibold text-xs transition-all border-t border-l border-r @(activeTab == "health" ? "bg-amber-600 text-white border-amber-600 shadow-xs" : "bg-white text-amber-800 hover:bg-amber-50 dark:bg-slate-800/90 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-700 border-slate-200 dark:border-slate-700")"
+                                @onclick="@(e => SetTab("health"))">
+                            Application Health
+                        </button>
+                        <button type="button"
+                                class="rounded-t-xl px-3.5 py-2 font-semibold text-xs transition-all border-t border-l border-r @(activeTab == "edge-agents" ? "bg-amber-600 text-white border-amber-600 shadow-xs" : "bg-white text-amber-800 hover:bg-amber-50 dark:bg-slate-800/90 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-700 border-slate-200 dark:border-slate-700")"
+                                @onclick="@(e => SetTab("edge-agents"))">
+                            Client Agents
+                        </button>
+                        <button type="button"
+                                class="rounded-t-xl px-3.5 py-2 font-semibold text-xs transition-all border-t border-l border-r @(activeTab == "bot-resources" ? "bg-amber-600 text-white border-amber-600 shadow-xs" : "bg-white text-amber-800 hover:bg-amber-50 dark:bg-slate-800/90 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-700 border-slate-200 dark:border-slate-700")"
+                                @onclick="@(e => SetTab("bot-resources"))">
+                            Bot Resources
+                        </button>
+                        <button type="button"
+                                class="rounded-t-xl px-3.5 py-2 font-semibold text-xs transition-all border-t border-l border-r @(activeTab == "diagnostics" ? "bg-amber-600 text-white border-amber-600 shadow-xs" : "bg-white text-amber-800 hover:bg-amber-50 dark:bg-slate-800/90 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-700 border-slate-200 dark:border-slate-700")"
+                                @onclick="@(e => SetTab("diagnostics"))">
+                            System &amp; Diagnostics
+                        </button>
+                    </nav>
+                </div>
+
+                <!-- 3. Workspace Tab Content Area (Shrinks to max-w-7xl when in Shrink View) -->
+                <div class="developer-workspace-content w-full min-w-0 transition-all duration-300 @(isFullWidth ? "max-w-none" : "max-w-7xl mx-auto")">
+                    @if (activeTab == "overview")
+                    {
+                        @if (loading)
+                        {
+                            <div class="flex flex-col items-center justify-center p-12 my-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs">
+                                <div class="w-10 h-10 border-4 border-amber-600 border-t-transparent rounded-full animate-spin"></div>
+                                <p class="mt-3 text-sm font-semibold text-slate-700 dark:text-slate-200">Loading Developer Dashboard...</p>
+                                <p class="text-xs text-slate-400 mt-0.5">Fetching request types, transition states, and telemetry</p>
+                            </div>
+                        }
+                        else
+                        {
+                        <!-- Overview Dashboard -->
+                        <div class="space-y-4">
+                            <!-- Quick Stat Summary Cards -->
+                            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                                <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs flex items-center gap-3">
+                                    <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-700 border border-blue-100">
+                                        <AppIcon Name="bi-card-list" Class="text-lg" />
+                                    </div>
+                                    <div>
+                                        <p class="text-[11px] font-medium text-slate-500">Request Types</p>
+                                        <p class="text-lg font-bold text-slate-900">@requestTypesCount</p>
+                                    </div>
+                                </div>
+                                <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs flex items-center gap-3">
+                                    <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-teal-50 text-teal-700 border border-teal-100">
+                                        <AppIcon Name="bi-arrow-left-right" Class="text-lg" />
+                                    </div>
+                                    <div>
+                                        <p class="text-[11px] font-medium text-slate-500">Known States</p>
+                                        <p class="text-lg font-bold text-slate-900">@statesCount</p>
+                                    </div>
+                                </div>
+                                <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs flex items-center gap-3">
+                                    <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-100">
+                                        <AppIcon Name="bi-patch-check" Class="text-lg" />
+                                    </div>
+                                    <div>
+                                        <p class="text-[11px] font-medium text-slate-500">Developer Role</p>
+                                        <p class="text-sm font-bold text-emerald-700">Active (Verified)</p>
+                                    </div>
+                                </div>
+                                <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs flex items-center gap-3">
+                                    <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-700 border border-slate-200">
+                                        <AppIcon Name="bi-terminal" Class="text-lg" />
+                                    </div>
+                                    <div>
+                                        <p class="text-[11px] font-medium text-slate-500">Active Context</p>
+                                        <p class="text-sm font-bold text-slate-900 font-mono">/developer</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Diagnostic Toggles Card -->
+                            <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-xs">
+                                <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                                    <div class="flex items-start gap-3">
+                                        <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal-50 dark:bg-teal-950/40 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800">
+                                            <AppIcon Name="bi-stopwatch" Class="text-lg" />
+                                        </div>
+                                        <div>
+                                            <div class="flex items-center gap-2 flex-wrap">
+                                                <h3 class="font-bold text-sm text-slate-900 dark:text-slate-100">Test Attendance Time Card</h3>
+                                                @if (testClockEnabled)
+                                                {
+                                                    <span class="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-800">
+                                                        <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
+                                                        Enabled
+                                                    </span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-semibold text-slate-600">
+                                                        <span class="h-1.5 w-1.5 rounded-full bg-slate-400"></span>
+                                                        Disabled
+                                                    </span>
+                                                }
+                                            </div>
+                                            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                                                Controls whether the custom attendance test clock card is displayed on the employee portal (<a href="/online" class="font-semibold text-blue-600 dark:text-blue-400 underline">/online</a>). Use to simulate check-in and check-out punches at arbitrary dates and times.
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center gap-2 shrink-0">
+                                        <button type="button"
+                                                class="app-button @(testClockEnabled ? "app-button-danger" : "app-button-success") app-button-sm"
+                                                @onclick="ToggleTestClockAsync">
+                                            <span>@(testClockEnabled ? "Disable Test Card" : "Enable Test Card")</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Fast Navigation Feature Panels -->
+                            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs flex flex-col justify-between gap-3">
+                                    <div>
+                                        <div class="flex items-center gap-2 mb-1">
+                                            <AppIcon Name="bi-card-list" Class="text-blue-600" />
+                                            <h3 class="font-bold text-sm text-slate-900">Request Type Configuration</h3>
+                                        </div>
+                                        <p class="text-xs text-slate-500">
+                                            Create and manage system request types, sequence numbering definitions, Dhivehi localized names, and active flags.
+                                        </p>
+                                    </div>
+                                    <button type="button" class="app-button app-button-primary app-button-sm w-full justify-center"
+                                            @onclick="@(e => SetTab("request-types"))">
+                                        <span>Manage Request Types</span>
+                                        <AppIcon Name="bi-arrow-right" />
+                                    </button>
+                                </div>
+
+                                <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs flex flex-col justify-between gap-3">
+                                    <div>
+                                        <div class="flex items-center gap-2 mb-1">
+                                            <AppIcon Name="bi-arrow-left-right" Class="text-blue-600" />
+                                            <h3 class="font-bold text-sm text-slate-900">Request State Transitions</h3>
+                                        </div>
+                                        <p class="text-xs text-slate-500">
+                                            Control allowable From State → To State transitions per request type. Block invalid or out-of-order state updates.
+                                        </p>
+                                    </div>
+                                    <button type="button" class="app-button app-button-primary app-button-sm w-full justify-center"
+                                            @onclick="@(e => SetTab("transitions"))">
+                                        <span>Manage Transitions</span>
+                                        <AppIcon Name="bi-arrow-right" />
+                                    </button>
+                                </div>
+
+                                <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs flex flex-col justify-between gap-3">
+                                    <div>
+                                        <div class="flex items-center gap-2 mb-1">
+                                            <AppIcon Name="bi-diagram-3" Class="text-blue-600" />
+                                            <h3 class="font-bold text-sm text-slate-900">Approval Workflows</h3>
+                                        </div>
+                                        <p class="text-xs text-slate-500">
+                                            Assign multi-stage approval levels and user groups by Job Type and Request Type for automated workflow dispatch.
+                                        </p>
+                                    </div>
+                                    <button type="button" class="app-button app-button-primary app-button-sm w-full justify-center"
+                                            @onclick="@(e => SetTab("workflows"))">
+                                        <span>Configure Workflows</span>
+                                        <AppIcon Name="bi-arrow-right" />
+                                    </button>
+                                </div>
+
+                                <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs flex flex-col justify-between gap-3">
+                                    <div>
+                                        <div class="flex items-center gap-2 mb-1">
+                                            <AppIcon Name="bi-bell" Class="text-blue-600" />
+                                            <h3 class="font-bold text-sm text-slate-900">Notification Resolution</h3>
+                                        </div>
+                                        <p class="text-xs text-slate-500">
+                                            Inspect missing state transition alerts and resolve workflow configuration directly without leaving the portal.
+                                        </p>
+                                    </div>
+                                    <button type="button" class="app-button app-button-primary app-button-sm w-full justify-center"
+                                            @onclick="@(e => SetTab("notification-resolution"))">
+                                        <span>Open Resolution Queue</span>
+                                        <AppIcon Name="bi-arrow-right" />
+                                    </button>
+                                </div>
+
+                                <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs flex flex-col justify-between gap-3">
+                                    <div>
+                                        <div class="flex items-center gap-2 mb-1">
+                                            <AppIcon Name="bi-heart-pulse" Class="text-blue-600" />
+                                            <h3 class="font-bold text-sm text-slate-900">Application Health</h3>
+                                        </div>
+                                        <p class="text-xs text-slate-500">
+                                            Live health telemetry for Backend API, Payroll.Worker background service, pages directory, and most visited pages.
+                                        </p>
+                                    </div>
+                                    <button type="button" class="app-button app-button-secondary app-button-sm w-full justify-center"
+                                            @onclick="@(e => SetTab("health"))">
+                                        <span>View App Health</span>
+                                        <AppIcon Name="bi-arrow-right" />
+                                    </button>
+                                </div>
+
+                                <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs flex flex-col justify-between gap-3">
+                                    <div>
+                                        <div class="flex items-center gap-2 mb-1">
+                                            <AppIcon Name="bi-bug" Class="text-rose-600" />
+                                            <h3 class="font-bold text-sm text-slate-900">Application Error Logs</h3>
+                                        </div>
+                                        <p class="text-xs text-slate-500">
+                                            Pinpoint source line numbers, exception stack traces, context metadata, and prescriptive fix recommendations.
+                                        </p>
+                                    </div>
+                                    <button type="button" class="app-button app-button-secondary app-button-sm w-full justify-center"
+                                            @onclick="@(e => SetTab("error-logs"))">
+                                        <span>Inspect Error Logs</span>
+                                        <AppIcon Name="bi-arrow-right" />
+                                    </button>
+                                </div>
+
+                                <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs flex flex-col justify-between gap-3">
+                                    <div>
+                                        <div class="flex items-center gap-2 mb-1">
+                                            <AppIcon Name="bi-robot" Class="text-amber-600" />
+                                            <h3 class="font-bold text-sm text-slate-900">Helpdesk Bot Resources</h3>
+                                        </div>
+                                        <p class="text-xs text-slate-500">
+                                            Add, edit, or import Knowledge Base guides and policies that train the platform Helpdesk Chatbot.
+                                        </p>
+                                    </div>
+                                    <button type="button" class="app-button app-button-primary app-button-sm w-full justify-center"
+                                            @onclick="@(e => SetTab("bot-resources"))">
+                                        <span>Manage Bot Resources</span>
+                                        <AppIcon Name="bi-arrow-right" />
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        }
+                    }
+                    else if (activeTab == "error-logs")
+                    {
+                        <ErrorLogsTab />
+                    }
+                    else if (activeTab == "request-types")
+                    {
+                        <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
+                            <JobTypeConfiguration RequestTypesMode="true" />
+                        </div>
+                    }
+                    else if (activeTab == "transitions")
+                    {
+                        <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
+                            <RequestStateTransitionSettings Embedded="true" />
+                        </div>
+                    }
+                    else if (activeTab == "notification-resolution")
+                    {
+                        <section class="space-y-3">
+                            <header class="flex flex-wrap items-center justify-between gap-2 px-1 py-0.5">
+                                <div class="min-w-0">
+                                    <div class="flex items-center gap-2 flex-wrap">
+                                        <h2 class="text-base font-bold text-slate-900 dark:text-slate-100 truncate">Notification Resolution</h2>
+                                        <span class="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-[11px] font-semibold text-amber-800">@configurationAlerts.Count recent</span>
+                                    </div>
+                                    <p class="text-xs text-slate-500">Resolve workflow configuration without leaving the Developer Portal.</p>
+                                </div>
+                                <button type="button" class="app-button app-button-secondary app-button-sm" @onclick="LoadConfigurationAlertsAsync" disabled="@loading">
+                                    <AppIcon Name="arrow-clockwise" />
+                                    <span>Refresh Notifications</span>
+                                </button>
+                            </header>
+                            <div class="dev-panels">
+                                <div class="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-xs dark:border-slate-800 dark:bg-slate-900 flex flex-col gap-3">
+                                    @if (ResolutionJobTypeId.HasValue &&
+                                        !ResolutionFromStateId.HasValue && !ResolutionToStateId.HasValue &&
+                                        string.IsNullOrWhiteSpace(ResolutionFromStateName) && string.IsNullOrWhiteSpace(ResolutionToStateName))
+                                    {
+                                        <div class="border-b border-slate-100 pb-2 dark:border-slate-800">
+                                            <h3 class="text-sm font-bold text-slate-900 dark:text-slate-100">Approval Workflow Configuration</h3>
+                                            <p class="text-xs text-slate-500">Job Type and Request Type are pre-populated from the workflow notification. Configure and save the approval flow below.</p>
+                                        </div>
+                                        <LeaveFlowSettings Embedded="true"
+                                                           InitialJobTypeId="@ResolutionJobTypeId"
+                                                           InitialRequestTypeId="@ResolutionRequestTypeId" />
+                                    }
+                                    else
+                                    {
+                                        <div class="border-b border-slate-100 pb-2 dark:border-slate-800">
+                                            <h3 class="text-sm font-bold text-slate-900 dark:text-slate-100">Transition Configuration</h3>
+                                            <p class="text-xs text-slate-500">Enter Request Type, From State and To State in the order shown in the notification.</p>
+                                        </div>
+                                        <RequestStateTransitionSettings Embedded="true"
+                                                                        InitialRequestTypeId="@ResolutionRequestTypeId"
+                                                                        InitialFromStateId="@ResolutionFromStateId"
+                                                                        InitialToStateId="@ResolutionToStateId"
+                                                                        InitialRequestTypeName="@ResolutionRequestTypeName"
+                                                                        InitialFromStateName="@ResolutionFromStateName"
+                                                                        InitialToStateName="@ResolutionToStateName"
+                                                                        OnConfigurationChanged="LoadConfigurationAlertsAsync" />
+                                    }
+                                </div>
+                                <aside class="flex min-w-0 max-h-[75vh] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-xs dark:border-slate-800 dark:bg-slate-900" aria-label="Configuration notification details">
+                                    <div class="border-b border-slate-100 pb-2 dark:border-slate-800">
+                                        <div class="flex items-center justify-between gap-2">
+                                            <h3 class="text-sm font-bold text-slate-900 dark:text-slate-100">Notification Details</h3>
+                                            <span class="rounded-full bg-amber-100 px-2.5 py-0.5 text-[11px] font-semibold text-amber-800">@configurationAlerts.Count recent</span>
+                                        </div>
+                                        <p class="text-xs text-slate-500">Newest notification appears first.</p>
+                                    </div>
+                                    <div class="mt-3 flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto overscroll-contain pr-1">
+                                    @if (configurationAlerts.Count == 0)
+                                    {
+                                        <div class="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center text-xs text-slate-500">No recent configuration-resolution notifications.</div>
+                                    }
+                                    else
+                                    {
+                                        @foreach (var alert in configurationAlerts)
+                                        {
+                                            <article class="flex flex-col gap-2 rounded-xl border border-slate-200 bg-slate-50/70 p-3 text-xs dark:border-slate-800 dark:bg-slate-800/40">
+                                                <div class="flex flex-wrap items-center justify-between gap-2">
+                                                    <div class="flex items-center gap-2">
+                                                        <strong class="font-mono text-[11px] font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md">@alert.Item.Reference</strong>
+                                                        @if (alert.Resolved)
+                                                        {
+                                                            <span class="rounded-full bg-emerald-100 px-2.5 py-0.5 text-[10px] font-semibold text-emerald-800">Resolved</span>
+                                                        }
+                                                    </div>
+                                                    <time class="text-[11px] text-slate-500">@alert.Item.CreatedAtUtc.ToLocalTime().ToString("dd MMM yyyy HH:mm")</time>
+                                                </div>
+                                                <p class="whitespace-pre-wrap text-slate-700 dark:text-slate-300">@alert.Item.Message</p>
+                                                @if (alert.Resolved)
+                                                {
+                                                    <button type="button" class="app-button app-button-secondary app-button-sm self-start" disabled><AppIcon Name="check-circle" />Configuration already exists</button>
+                                                }
+                                                else
+                                                {
+                                                    <a class="app-button app-button-primary app-button-sm self-start" href="@alert.Url"><AppIcon Name="arrow-left-right" />Populate configuration form</a>
+                                                }
+                                            </article>
+                                        }
+                                    }
+                                    </div>
+                                </aside>
+                            </div>
+                        </section>
+                    }
+                    else if (activeTab == "workflows")
+                    {
+                        <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
+                            <LeaveFlowSettings Embedded="true" />
+                        </div>
+                    }
+                    else if (activeTab == "health")
+                    {
+                        <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
+                            <ApplicationHealthTab />
+                        </div>
+                    }
+                    else if (activeTab == "edge-agents")
+                    {
+                        <HRM.Components.Admin.Settings.EdgeAgentManagementPage />
+                    }
+                    else if (activeTab == "diagnostics")
+                    {
+                        <div class="space-y-4">
+                            <!-- Diagnostic Feature Toggles -->
+                            <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-xs">
+                                <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                                    <div class="flex items-start gap-3">
+                                        <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal-50 dark:bg-teal-950/40 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800">
+                                            <AppIcon Name="bi-stopwatch" Class="text-lg" />
+                                        </div>
+                                        <div>
+                                            <div class="flex items-center gap-2 flex-wrap">
+                                                <h3 class="font-bold text-sm text-slate-900 dark:text-slate-100">Test Attendance Time Card</h3>
+                                                @if (testClockEnabled)
+                                                {
+                                                    <span class="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-800">
+                                                        <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
+                                                        Enabled
+                                                    </span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-semibold text-slate-600">
+                                                        <span class="h-1.5 w-1.5 rounded-full bg-slate-400"></span>
+                                                        Disabled
+                                                    </span>
+                                                }
+                                            </div>
+                                            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                                                Controls whether the custom attendance test clock card is displayed on the employee portal (<a href="/online" class="font-semibold text-blue-600 dark:text-blue-400 underline">/online</a>). Use to simulate check-in and check-out punches at arbitrary dates and times.
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center gap-2 shrink-0">
+                                        <button type="button"
+                                                class="app-button @(testClockEnabled ? "app-button-danger" : "app-button-success") app-button-sm"
+                                                @onclick="ToggleTestClockAsync">
+                                            <span>@(testClockEnabled ? "Disable Test Card" : "Enable Test Card")</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs space-y-3">
+                                    <h3 class="font-bold text-sm text-slate-900 border-b border-slate-100 pb-2">Developer Environment</h3>
+                                    <dl class="divide-y divide-slate-100 text-xs">
+                                        <div class="py-2 flex justify-between gap-2">
+                                            <dt class="text-slate-500">Framework</dt>
+                                            <dd class="font-semibold text-slate-800">.NET 8 / ASP.NET Core Blazor</dd>
+                                        </div>
+                                        <div class="py-2 flex justify-between gap-2">
+                                            <dt class="text-slate-500">Rendering Mode</dt>
+                                            <dd class="font-semibold text-slate-800">InteractiveServer</dd>
+                                        </div>
+                                        <div class="py-2 flex justify-between gap-2">
+                                            <dt class="text-slate-500">Portal Context</dt>
+                                            <dd class="font-mono text-[11px] font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md">@PortalContext.CurrentContext.ToString()</dd>
+                                        </div>
+                                        <div class="py-2 flex justify-between gap-2">
+                                            <dt class="text-slate-500">Developer Role</dt>
+                                            <dd class="rounded-full bg-emerald-100 text-emerald-800 px-2.5 py-0.5 text-[11px] font-semibold">Active (Verified)</dd>
+                                        </div>
+                                        <div class="py-2 flex justify-between gap-2">
+                                            <dt class="text-slate-500">Current URL</dt>
+                                            <dd class="font-semibold text-slate-800 font-mono text-[11px] truncate max-w-[20rem]">@Navigation.Uri</dd>
+                                        </div>
+                                    </dl>
+                                </div>
+
+                                <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs space-y-3">
+                                    <h3 class="font-bold text-sm text-slate-900 border-b border-slate-100 pb-2">Developer Monitoring</h3>
+                                    <ul class="space-y-2 text-xs">
+                                        <li>
+                                            <a href="/developer/audit-logs" class="app-button app-button-secondary app-button-sm w-full justify-start">
+                                                <AppIcon Name="bi-shield-check" />
+                                                <span>Audit Logs</span>
+                                            </a>
+                                        </li>
+                                        <li>
+                                            <a href="/developer/activity-logs" class="app-button app-button-secondary app-button-sm w-full justify-start">
+                                                <AppIcon Name="bi-activity" />
+                                                <span>Activity Logs</span>
+                                            </a>
+                                        </li>
+                                        <li>
+                                            <a href="/developer/health" class="app-button app-button-secondary app-button-sm w-full justify-start">
+                                                <AppIcon Name="bi-heart-pulse" />
+                                                <span>Application Health</span>
+                                            </a>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                    else if (activeTab == "bot-resources")
+                    {
+                        <HelpdeskBotResourcesManager />
+                    }
+                </div>
+            </section>
+        }
+    </Authorized>
+</AuthorizeView>
+
+@code {
+    [Parameter] public string? ActiveTab { get; set; }
+    [SupplyParameterFromQuery(Name = "tab")] public string? TabQuery { get; set; }
+    [SupplyParameterFromQuery(Name = "jobTypeId")] public int? ResolutionJobTypeId { get; set; }
+    [SupplyParameterFromQuery(Name = "requestTypeId")] public int? ResolutionRequestTypeId { get; set; }
+    [SupplyParameterFromQuery(Name = "fromStateId")] public int? ResolutionFromStateId { get; set; }
+    [SupplyParameterFromQuery(Name = "toStateId")] public int? ResolutionToStateId { get; set; }
+    [SupplyParameterFromQuery(Name = "requestTypeName")] public string? ResolutionRequestTypeName { get; set; }
+    [SupplyParameterFromQuery(Name = "fromStateName")] public string? ResolutionFromStateName { get; set; }
+    [SupplyParameterFromQuery(Name = "toStateName")] public string? ResolutionToStateName { get; set; }
+
+    private bool checking = true;
+    private bool isDeveloper;
+    private bool loading;
+    private bool isFullWidth;
+    private bool testClockEnabled = true;
+    private string activeTab = "overview";
+    private int requestTypesCount;
+    private int statesCount;
+    private sealed record ResolutionTarget(int RequestTypeId, int FromStateId, int ToStateId);
+    private sealed record ConfigurationAlertView(RequestNotificationItem Item, string Url, bool Resolved);
+    private List<ConfigurationAlertView> configurationAlerts = [];
+    private static string DeveloperResolutionUrl(RequestNotificationItem alert)
+    {
+        if (alert.Url.StartsWith("/developer/", StringComparison.OrdinalIgnoreCase) &&
+            alert.Url.Contains("requestTypeId=", StringComparison.OrdinalIgnoreCase)) return alert.Url;
+        var text = alert.Message ?? string.Empty;
+        var ids = System.Text.RegularExpressions.Regex.Match(text,
+            @"Request Type\s*=.*?\(ID\s+(\d+)\).*?From State\s*=.*?\(ID\s+(\d+)\).*?To State\s*=.*?\(ID\s+(\d+)\)",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        if (ids.Success)
+            return $"/developer/notification-resolution?requestTypeId={ids.Groups[1].Value}&fromStateId={ids.Groups[2].Value}&toStateId={ids.Groups[3].Value}";
+        var request = System.Text.RegularExpressions.Regex.Match(text,
+            @"Request Type:\s*(.*?)\.\s*(?:Transition not allowed|Missing transition)",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        var states = System.Text.RegularExpressions.Regex.Match(text,
+            @"Transition not allowed for .*?:\s*(.*?)\s*→\s*(.*?)\.\s*Configure",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        if (request.Success && states.Success)
+            return "/developer/notification-resolution?requestTypeName=" + Uri.EscapeDataString(request.Groups[1].Value.Trim()) +
+                "&fromStateName=" + Uri.EscapeDataString(states.Groups[1].Value.Trim()) +
+                "&toStateName=" + Uri.EscapeDataString(states.Groups[2].Value.Trim());
+        return "/developer/notification-resolution";
+    }
+
+    private static ResolutionTarget? ResolutionTargetFor(RequestNotificationItem alert, RequestTransitionSettingsDto settings)
+    {
+        var text = alert.Message ?? string.Empty;
+        var ids = System.Text.RegularExpressions.Regex.Match(text,
+            @"Request Type\s*=.*?\(ID\s+(\d+)\).*?From State\s*=.*?\(ID\s+(\d+)\).*?To State\s*=.*?\(ID\s+(\d+)\)",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        if (ids.Success && int.TryParse(ids.Groups[1].Value, out var requestId) && int.TryParse(ids.Groups[2].Value, out var fromId) && int.TryParse(ids.Groups[3].Value, out var toId))
+            return new(requestId, fromId, toId);
+        var request = System.Text.RegularExpressions.Regex.Match(text, @"Request Type:\s*(.*?)\.\s*(?:Transition not allowed|Missing transition)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        var states = System.Text.RegularExpressions.Regex.Match(text, @"Transition not allowed for .*?:\s*(.*?)\s*→\s*(.*?)\.\s*Configure", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        if (!request.Success || !states.Success) return null;
+        var requestOption = settings.RequestTypes.FirstOrDefault(x => x.Name.Trim().Equals(request.Groups[1].Value.Trim(), StringComparison.OrdinalIgnoreCase));
+        var fromOption = settings.States.FirstOrDefault(x => x.Name.Trim().Equals(states.Groups[1].Value.Trim(), StringComparison.OrdinalIgnoreCase));
+        var toOption = settings.States.FirstOrDefault(x => x.Name.Trim().Equals(states.Groups[2].Value.Trim(), StringComparison.OrdinalIgnoreCase));
+        return requestOption is null || fromOption is null || toOption is null ? null : new(requestOption.Id, fromOption.Id, toOption.Id);
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        TestClockPreference.OnChange += TestClockPreferenceChanged;
+        testClockEnabled = TestClockPreference.CurrentState;
+        var path = new Uri(Navigation.Uri).AbsolutePath;
+        if (path.StartsWith("/admin/developer", StringComparison.OrdinalIgnoreCase))
+        {
+            var target = "/developer" + path.Substring("/admin/developer".Length);
+            Navigation.NavigateTo(target, replace: true);
+            return;
+        }
+        try
+        {
+            isDeveloper = await UserAccess.HasUserGroupAsync("Developer") || await UserAccess.HasPermissionAsync("Developer");
+            if (isDeveloper)
+            {
+                await LoadOverviewStatsAsync();
+                await LoadConfigurationAlertsAsync();
+            }
+        }
+        catch
+        {
+            isDeveloper = false;
+        }
+        finally
+        {
+            checking = false;
+        }
+    }
+
+    protected override void OnParametersSet()
+    {
+        var selected = !string.IsNullOrWhiteSpace(ActiveTab) ? ActiveTab : TabQuery;
+        if (!string.IsNullOrWhiteSpace(selected))
+        {
+            var normalized = selected.ToLowerInvariant();
+            if (normalized is "overview" or "error-logs" or "errors" or "request-types" or "transitions" or "notification-resolution" or "workflows" or "health" or "edge-agents" or "bot-resources" or "diagnostics")
+            {
+                activeTab = normalized == "errors" ? "error-logs" : normalized;
+            }
+        }
+    }
+
+    private void SetTab(string tab)
+    {
+        activeTab = tab;
+        var uri = Navigation.ToAbsoluteUri(Navigation.Uri);
+        var baseUri = uri.AbsolutePath.TrimEnd('/');
+        if (baseUri.Contains("/developer/"))
+        {
+            var root = baseUri.Substring(0, baseUri.LastIndexOf('/'));
+            Navigation.NavigateTo($"{root}/{tab}", replace: true);
+        }
+        else
+        {
+            Navigation.NavigateTo($"/developer/{tab}", replace: true);
+        }
+    }
+
+    private async Task LoadOverviewStatsAsync()
+    {
+        try
+        {
+            var data = await TransitionService.LoadAsync();
+            requestTypesCount = data.RequestTypes.Count;
+            statesCount = data.States.Count;
+        }
+        catch
+        {
+            // Non-critical stat loading
+        }
+    }
+
+    private async Task LoadConfigurationAlertsAsync()
+    {
+        try
+        {
+            var inbox = await NotificationService.GetInboxAsync();
+            var settings = await TransitionService.LoadAsync();
+            var items = inbox.Items
+                .Where(x => x.Id < 0 && x.Reference.Contains("needs attention", StringComparison.OrdinalIgnoreCase))
+                .OrderByDescending(x => x.CreatedAtUtc)
+                .ToList();
+            var transitionCache = new Dictionary<int, List<AllowedRequestTransitionDto>>();
+            configurationAlerts = [];
+            foreach (var item in items)
+            {
+                var target = ResolutionTargetFor(item, settings);
+                var resolved = false;
+                if (target is not null)
+                {
+                    if (!transitionCache.TryGetValue(target.RequestTypeId, out var transitions))
+                    {
+                        transitions = await TransitionService.GetAsync(target.RequestTypeId);
+                        transitionCache[target.RequestTypeId] = transitions;
+                    }
+                    resolved = transitions.Any(x => x.FromStateId == target.FromStateId && x.ToStateId == target.ToStateId);
+                }
+                configurationAlerts.Add(new(item, DeveloperResolutionUrl(item), resolved));
+            }
+        }
+        catch
+        {
+            configurationAlerts = [];
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                var savedFullWidth = await JS.InvokeAsync<string?>("localStorage.getItem", "hrm.developer.full-width");
+                if (bool.TryParse(savedFullWidth, out var val))
+                {
+                    isFullWidth = val;
+                }
+                await TestClockPreference.InitializeAsync();
+                testClockEnabled = TestClockPreference.CurrentState;
+                StateHasChanged();
+            }
+            catch
+            {
+                // Browser JS unavailable or test environment
+            }
+        }
+    }
+
+    private async Task ToggleTestClockAsync()
+    {
+        testClockEnabled = !testClockEnabled;
+        await TestClockPreference.SetEnabledAsync(testClockEnabled);
+        if (testClockEnabled)
+        {
+            ToastService.Success("Test Time Clock card enabled on Employee Portal.");
+        }
+        else
+        {
+            ToastService.Info("Test Time Clock card disabled on Employee Portal.");
+        }
+        StateHasChanged();
+    }
+
+    private void TestClockPreferenceChanged()
+    {
+        _ = InvokeAsync(() =>
+        {
+            testClockEnabled = TestClockPreference.CurrentState;
+            StateHasChanged();
+        });
+    }
+
+    public void Dispose()
+    {
+        TestClockPreference.OnChange -= TestClockPreferenceChanged;
+    }
+
+    private async Task ToggleFullWidthAsync()
+    {
+        isFullWidth = !isFullWidth;
+        try
+        {
+            await JS.InvokeVoidAsync("localStorage.setItem", "hrm.developer.full-width", isFullWidth ? "true" : "false");
+        }
+        catch { }
+    }
+
+    private async Task RefreshAsync()
+    {
+        loading = true;
+        try
+        {
+            await LoadOverviewStatsAsync();
+            await LoadConfigurationAlertsAsync();
+            StateHasChanged();
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+}

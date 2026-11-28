@@ -83,7 +83,9 @@ public partial class TeamService(IDbContextFactory<HrmTeContext> factory, IUserA
             x.IsValid == true && (x.StartDate == null || x.StartDate <= today) && (x.EndDate == null || x.EndDate >= today))
             .OrderBy(x => x.Name).Select(x => new TeamDto
             {
-                TeamId = x.TeamId, Name = x.Name, NameDhivehi = x.NameDhivehi ?? "",
+                TeamId = x.TeamId, ParentTeamId = x.ParentTeamId, OrganisationStructureId = x.OrganisationStructureId,
+                Name = x.Name, NameDhivehi = x.NameDhivehi ?? "",
+                SubTeamCount = db.Teams.Count(st => st.ParentTeamId == x.TeamId && st.IsValid == true && (st.StartDate == null || st.StartDate <= today) && (st.EndDate == null || st.EndDate >= today)),
                 Staffs = x.TeamStaffs.Where(m => m.IsValid && m.StartDate <= today && (m.EndDate == null || m.EndDate >= today) &&
                     db.Jobs.Any(j => j.IndividualID == m.StaffId && j.OrganisationID == organisationId &&
                         j.JobStateId == SharedConfig.JobStates.APPROVED && j.TerminatedDate == null && j.JoinedDate <= today))
@@ -99,7 +101,24 @@ public partial class TeamService(IDbContextFactory<HrmTeContext> factory, IUserA
         return teams;
     }
 
-    public async Task<List<TeamSearchItemDto>> SearchTeamsAsync(string query, CancellationToken ct = default)
+    public async Task<MyOrganisationStructureDto?> GetMyOrganisationStructureAsync()
+    {
+        var actor = await access.RequireContextAsync();
+        if (actor.ActiveJob == null) return null;
+        await using var db = await factory.CreateDbContextAsync();
+        return await db.Jobs.AsNoTracking()
+            .Where(x => x.JobId == actor.ActiveJob.JobId && x.IndividualID == actor.IndividualId &&
+                x.JobStateId == SharedConfig.JobStates.APPROVED && x.TerminatedDate == null && x.OrganisationStructureId > 0)
+            .Select(x => new MyOrganisationStructureDto
+            {
+                StructureId = x.OrganisationStructureId,
+                Name = x.OrganisationStructure!.Name,
+                TypeName = x.OrganisationStructure.OrganisationStructureType.TypeName
+            })
+            .SingleOrDefaultAsync();
+    }
+
+    public async Task<List<TeamSearchItemDto>> SearchTeamsAsync(string? query, CancellationToken ct = default)
     {
         var actor = await access.RequireContextAsync();
         var orgId = await access.GetCurrentOrganisationIdAsync();
@@ -156,7 +175,9 @@ public partial class TeamService(IDbContextFactory<HrmTeContext> factory, IUserA
         var team = await db.Teams.AsNoTracking().FirstOrDefaultAsync(t => t.TeamId == teamId && (t.OrganisationId == orgId || actor.IsSuperAdministrator), ct);
         if (team == null) return null;
 
-        var staffs = await db.TeamStaffs.AsNoTracking().Where(m => m.TeamId == teamId && m.IsValid && m.StartDate <= today && (m.EndDate == null || m.EndDate >= today))
+        var staffs = await db.TeamStaffs.AsNoTracking().Where(m => m.TeamId == teamId && m.IsValid && m.StartDate <= today &&
+            (m.EndDate == null || m.EndDate >= today) &&
+            FormerStaffPolicy.CurrentJobs(db).Any(j => j.IndividualID == m.StaffId && j.OrganisationID == team.OrganisationId))
             .Select(m => new TeamStaffDto
             {
                 StaffId = m.StaffId,
@@ -167,14 +188,19 @@ public partial class TeamService(IDbContextFactory<HrmTeContext> factory, IUserA
         staffs = staffs.GroupBy(x => x.StaffId).Select(x => x.OrderByDescending(m => m.IsSuperVisor).First())
             .OrderByDescending(x => x.IsSuperVisor).ThenBy(x => x.FullName).ToList();
 
+        var subTeamCount = await db.Teams.CountAsync(st => st.ParentTeamId == team.TeamId && st.IsValid == true && (st.StartDate == null || st.StartDate <= today) && (st.EndDate == null || st.EndDate >= today), ct);
+
         return new TeamDto
         {
             TeamId = team.TeamId,
+            ParentTeamId = team.ParentTeamId,
+            OrganisationStructureId = team.OrganisationStructureId,
             Name = team.Name,
             NameDhivehi = team.NameDhivehi ?? "",
             FromDate = team.StartDate,
             ToDate = team.EndDate,
             IsValid = team.IsValid ?? true,
+            SubTeamCount = subTeamCount,
             Staffs = staffs
         };
     }
@@ -192,11 +218,20 @@ public partial class TeamService(IDbContextFactory<HrmTeContext> factory, IUserA
         if (!actor.IsSuperAdministrator && team.OrganisationId != orgId && !await access.HasOrganisationAccessAsync(team.OrganisationId))
             return [];
 
+        // ONLY supervisors can see their team projects and tasks
+        bool isSupervisor = actor.IsSuperAdministrator ||
+            await access.HasPermissionAsync("Admin") ||
+            await access.HasPermissionAsync("Organisation.Edit") ||
+            await db.TeamStaffs.AnyAsync(x => x.TeamId == teamId && x.StaffId == actor.IndividualId && x.IsSuperVisor && x.IsValid, ct);
+
+        if (!isSupervisor) return [];
+
         var projects = await db.Projects.AsNoTracking()
             .Include(p => p.Team)
             .Include(p => p.Members)
             .Include(p => p.Tasks)
-            .Where(p => p.TeamId == teamId || (p.TeamId == null && (p.OrganisationId == orgId || p.OrganisationId == team.OrganisationId || p.OrganisationId == 0)))
+            .Include(p => p.OrganisationStructure)
+            .Where(p => p.TeamId == teamId)
             .OrderByDescending(p => p.StartDate)
             .ToListAsync(ct);
 
@@ -245,16 +280,16 @@ public partial class TeamService(IDbContextFactory<HrmTeContext> factory, IUserA
             ProjectName = task.Project?.Name ?? "General Project",
             TaskReference = task.TaskReference,
             Title = task.Title,
-            Description = task.Description,
+            Description = task.Description ?? string.Empty,
             AssignedStaffId = task.AssignedStaffId,
-            AssignedStaffName = task.AssignedStaffName,
+            AssignedStaffName = task.AssignedStaffName ?? string.Empty,
             StartDate = task.StartDate,
             ExpectedEndDate = task.ExpectedEndDate,
             ActualCompletionDate = task.ActualCompletionDate,
             Status = task.Status,
             Priority = task.Priority,
             Progress = task.Progress,
-            Remarks = task.Remarks
+            Remarks = task.Remarks ?? string.Empty
         };
     }
 
@@ -286,6 +321,14 @@ public partial class TeamService(IDbContextFactory<HrmTeContext> factory, IUserA
             {
                 await db.Database.ExecuteSqlRawAsync(script2, ct);
             }
+            try
+            {
+                await db.Database.ExecuteSqlRawAsync(@"IF OBJECT_ID(N'dbo.PR_Projects', N'U') IS NOT NULL AND COL_LENGTH(N'dbo.PR_Projects', N'OrganisationStructureId') IS NULL
+                BEGIN
+                    ALTER TABLE dbo.PR_Projects ADD OrganisationStructureId int NULL;
+                END;", ct);
+            }
+            catch { }
             _tablesInitialized = true;
         }
         catch
@@ -375,7 +418,8 @@ public partial class TeamService(IDbContextFactory<HrmTeContext> factory, IUserA
             {
                 ProjectMemberId = m.ProjectMemberId, ProjectId = m.ProjectId, ProjectReference = m.Project.Reference,
                 ProjectName = m.Project.Name, ProjectStatus = m.Project.Status, Role = m.Role, AssignedDate = m.AssignedDate,
-                ExpectedEndDate = m.ExpectedEndDate, RemovedAt = m.RemovedAt, Remarks = m.Remarks, IsActive = m.IsActive,
+                ExpectedEndDate = m.ExpectedEndDate, RemovedAt = m.RemovedAt,
+                Remarks = m.Remarks ?? string.Empty, IsActive = m.IsActive,
                 CanManage = m.IsActive && await CanManageProjectAsync(db, m.Project)
             });
 
@@ -388,16 +432,16 @@ public partial class TeamService(IDbContextFactory<HrmTeContext> factory, IUserA
                 ProjectName = t.Project?.Name ?? "Project",
                 TaskReference = t.TaskReference,
                 Title = t.Title,
-                Description = t.Description,
+                Description = t.Description ?? string.Empty,
                 AssignedStaffId = t.AssignedStaffId,
-                AssignedStaffName = t.AssignedStaffName,
+                AssignedStaffName = t.AssignedStaffName ?? string.Empty,
                 StartDate = t.StartDate,
                 ExpectedEndDate = t.ExpectedEndDate,
                 ActualCompletionDate = t.ActualCompletionDate,
                 Status = t.Status,
                 Priority = t.Priority,
                 Progress = t.Progress,
-                Remarks = t.Remarks
+                Remarks = t.Remarks ?? string.Empty
             }).ToList();
         }
 
@@ -789,6 +833,8 @@ public partial class TeamService(IDbContextFactory<HrmTeContext> factory, IUserA
                 FullName = (m.Staff.Individual.FirstNameEnglish + " " + (m.Staff.Individual.MiddleNameEnglish ?? "") + " " + (m.Staff.Individual.LastNameEnglish ?? "")).Trim()
             }).ToListAsync(ct);
 
+        var subTeamCount = await db.Teams.CountAsync(st => st.ParentTeamId == team.TeamId && st.IsValid == true && (st.StartDate == null || st.StartDate <= today) && (st.EndDate == null || st.EndDate >= today), ct);
+
         return new TeamDto
         {
             TeamId = team.TeamId,
@@ -796,6 +842,7 @@ public partial class TeamService(IDbContextFactory<HrmTeContext> factory, IUserA
             NameDhivehi = team.NameDhivehi ?? "",
             FromDate = team.StartDate,
             IsValid = team.IsValid ?? true,
+            SubTeamCount = subTeamCount,
             Staffs = staffs
         };
     }
@@ -811,11 +858,13 @@ public partial class TeamService(IDbContextFactory<HrmTeContext> factory, IUserA
             ProjectId = p.ProjectId,
             Reference = p.Reference,
             Name = p.Name,
-            Description = p.Description,
+            Description = p.Description ?? string.Empty,
             TeamId = p.TeamId,
             TeamName = p.Team?.Name ?? "General Team",
+            OrganisationStructureId = p.OrganisationStructureId,
+            OrganisationStructureName = p.OrganisationStructure?.Name ?? "",
             ProjectManagerStaffId = p.ProjectManagerStaffId,
-            ProjectManagerName = p.ProjectManagerName,
+            ProjectManagerName = p.ProjectManagerName ?? string.Empty,
             StartDate = p.StartDate,
             PlannedEndDate = p.PlannedEndDate,
             ActualEndDate = p.ActualEndDate,
@@ -830,11 +879,11 @@ public partial class TeamService(IDbContextFactory<HrmTeContext> factory, IUserA
                 ProjectMemberId = m.ProjectMemberId,
                 ProjectId = m.ProjectId,
                 StaffId = m.StaffId,
-                StaffName = m.StaffName,
+                StaffName = m.StaffName ?? string.Empty,
                 Role = m.Role,
                 AssignedDate = m.AssignedDate,
                 ExpectedEndDate = m.ExpectedEndDate,
-                Remarks = m.Remarks,
+                Remarks = m.Remarks ?? string.Empty,
                 IsActive = m.IsActive
             }).ToList(),
             Tasks = p.Tasks.Select(t => new TeamProjectTaskDto
@@ -844,16 +893,16 @@ public partial class TeamService(IDbContextFactory<HrmTeContext> factory, IUserA
                 ProjectName = p.Name,
                 TaskReference = t.TaskReference,
                 Title = t.Title,
-                Description = t.Description,
+                Description = t.Description ?? string.Empty,
                 AssignedStaffId = t.AssignedStaffId,
-                AssignedStaffName = t.AssignedStaffName,
+                AssignedStaffName = t.AssignedStaffName ?? string.Empty,
                 StartDate = t.StartDate,
                 ExpectedEndDate = t.ExpectedEndDate,
                 ActualCompletionDate = t.ActualCompletionDate,
                 Status = t.Status,
                 Priority = t.Priority,
                 Progress = t.Progress,
-                Remarks = t.Remarks
+                Remarks = t.Remarks ?? string.Empty
             }).ToList()
         };
     }

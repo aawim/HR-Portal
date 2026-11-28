@@ -76,13 +76,15 @@ public static class WeeklyWorkingHours
                 if (intervals.Count == 0)
                 {
                     var assignment = EffectiveStaffSchedules.On(effectiveSchedules,day).FirstOrDefault(c=>c.Assignment.SchedulePurpose=="Official")?.Assignment;
-                    var templateId = assignment == null ? 0 : StaffScheduleCalendar.TemplateOn(assignment, day);
+                    var slot = assignment == null ? null : StaffScheduleCalendar.SlotOn(assignment, day);
+                    var templateId = slot?.TemplateId ?? 0;
                     var template = templateId == 0 ? null : await db.WorkTemplates.AsNoTracking().SingleOrDefaultAsync(t => t.WorkTemplateId == templateId, ct);
-                    var clock = assignment?.ScheduledStartTime ?? template?.DefaultStartTime;
-                    if (clock.HasValue && template?.DefaultEndTime is TimeOnly finish)
+                    var clock = slot?.StartTime ?? assignment?.ScheduledStartTime ?? template?.DefaultStartTime;
+                    var finish = slot?.EndTime ?? template?.DefaultEndTime;
+                    if (clock.HasValue && finish.HasValue)
                     {
-                        var first = day.Add(clock.Value.ToTimeSpan()); var last = day.Add(finish.ToTimeSpan());
-                        if (template.EndsNextDay || last <= first) last = last.AddDays(1);
+                        var first = day.Add(clock.Value.ToTimeSpan()); var last = day.Add(finish.Value.ToTimeSpan());
+                        if ((slot?.EndTime == null && template?.EndsNextDay == true) || last <= first) last = last.AddDays(1);
                         intervals.Add((first, last));
                     }
                 }

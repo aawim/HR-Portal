@@ -6,6 +6,7 @@ namespace HRM.Services.Interfaces
     public interface IWorkTypeService
     {
         Task<bool> CanClockAsync();
+        Task<List<WorkTypeGeofenceDto>> GetActiveClockGeofencesAsync();
         Task<List<WorkTypeStaffOption>> GetEligibleStaffAsync();
         Task<List<WorkTypeDto>> GetAllAsync(bool includeInactive = false);
 

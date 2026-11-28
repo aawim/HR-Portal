@@ -16,195 +16,196 @@
 @inject IAttendanceService AttendanceService
 
 
-<BackButton Url="/online/attendance" Text="Back to Attendance Hub" />
+<div class="mx-auto min-w-7xl max-w-full p-2 flex flex-col gap-2">
+    <!-- Full-Width Sticky Header Matching Admin Workspace Standard -->
+    <header class="sticky top-0 z-30 m-0 border-b border-slate-200 bg-white/95 backdrop-blur-xs px-3 py-3 shadow-xs rounded-2xl flex flex-wrap items-center justify-between gap-3">
+        <div class="min-w-0">
+            <div class="flex items-center gap-2">
+                <a href="/online/attendance" class="inline-flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-800 transition-colors">
+                    <AppIcon Name="arrow_back" Class="w-3.5 h-3.5" />
+                    <span>Attendance Hub</span>
+                </a>
+                <span class="text-slate-300">/</span>
+                <span class="rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-semibold text-blue-800">Employee Attendance</span>
+            </div>
+            <h1 class="text-lg font-bold text-slate-900 truncate mt-0.5">My Attendance</h1>
+            <p class="text-xs text-slate-500 mt-0.5">Review your personal attendance logs, history, and metrics.</p>
+        </div>
 
-<!-- Header & Action Bar -->
-<div class="flex justify-between items-end border-b border-slate-100 mb-4 mt-[-10px]">
-    <div>
-        <h2 class="text-xl font-bold text-slate-800">My Attendance</h2>
-        <p class="text-sm text-slate-500 mt-1">Review your personal attendance logs, history, and metrics.</p>
-    </div>
-</div>
+        <!-- Filter Controls - Clean Inline Toolbar (Panel Removed) -->
+        <div class="flex flex-wrap items-center gap-2">
+            <div class="inline-flex items-center rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs shadow-2xs">
+                <input type="date" @bind="startDate" class="text-xs text-slate-700 bg-transparent focus:outline-none" />
+                <span class="text-slate-400 px-1.5 text-xs font-medium">to</span>
+                <input type="date" @bind="endDate" class="text-xs text-slate-700 bg-transparent focus:outline-none" />
+            </div>
+            <button type="button" @onclick="() => SearchCustomPeriod()" class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-2xs hover:bg-blue-700 transition-colors">
+                <AppIcon Name="search" Class="w-3.5 h-3.5" />
+                <span>Search</span>
+            </button>
+            <button type="button" @onclick="ResetToCurrentPeriod" class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs hover:bg-slate-50 transition-colors">
+                <span>Reset</span>
+            </button>
+            <AttendanceExportButtons CreateReport="BuildExport" Disabled="@(isLoading || !exportReady)" />
+        </div>
+    </header>
 
-<div class="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden p-0">
-
-    <!-- Tab Navigation -->
-    <div class="border-b border-slate-200 bg-slate-50/50">
-        <nav class="flex overflow-x-auto" aria-label="Tabs">
+    <!-- Solid Folder Navigation Tabs (Matching Admin Workspace with Online Portal Blue) -->
+    <div class="online-workspace-tabs staff-overview-no-print w-full border-b-2 border-blue-600 dark:border-blue-500 overflow-x-auto">
+        <nav class="flex items-end gap-1 min-w-max pb-0" aria-label="Attendance Tabs">
             @foreach (var tab in Tabs)
             {
-                <button @onclick="() => SetActiveTab(tab)"
-                class="whitespace-nowrap py-4 px-6 border-b-2 font-medium text-sm transition-all duration-200 outline-none
-                               @(activeTab == tab
-                                   ? "border-blue-600 text-blue-600 bg-white"
-                                   : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 hover:bg-slate-100")">
-                    @tab
+                var isTabActive = activeTab == tab;
+                <button type="button"
+                        @onclick="() => SetActiveTab(tab)"
+                        class="rounded-t-xl px-4 py-2 font-bold text-xs md:text-sm transition-all border-t border-l border-r @(isTabActive ? "bg-blue-600 dark:bg-blue-600 text-white border-blue-600 dark:border-blue-500 shadow-sm" : "bg-blue-50/70 text-slate-700 hover:text-slate-900 hover:bg-blue-100/70 dark:bg-slate-800/90 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-700 border-slate-300 dark:border-slate-700")">
+                    <span>@tab</span>
                 </button>
-
             }
         </nav>
     </div>
 
     <!-- Tab Content Area -->
-    <div class="p-6 min-h-[800px]">
-
-        <!-- Quick fade-in animation container -->
+    <div class="w-full flex flex-col gap-2 p-1">
         <div class="animate-in fade-in duration-300">
             @switch (activeTab)
             {
                 case "Attendance":
-                    <div>
-
-                        <!-- TOP: Date Range Search & Toggle Controls -->
-                        <div class="flex flex-col md:flex-row justify-between items-center mb-8 pb-4 border-b border-slate-100 gap-4">
-                            <div>
-                                <h3 class="text-lg font-bold text-slate-800">Attendance Overview</h3>
-                                <p class="text-sm text-slate-500">Reviewing metrics for the selected salary period.</p>
+                    <div class="flex flex-col gap-3">
+                        <!-- Restyled Executive Bar Chart Card -->
+                        <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs flex flex-col gap-3">
+                            <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2">
+                                <div>
+                                    <h3 class="text-sm font-bold text-slate-800">Period Attendance Breakdown</h3>
+                                    <p class="text-xs text-slate-500">Summary metrics for period: @startDate.ToString("dd MMM yyyy") – @endDate.ToString("dd MMM yyyy")</p>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <span class="inline-flex items-center gap-1 rounded-md bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700 border border-blue-200">
+                                        Total Required: @dailyRecords.Count(r => r.RequiresAttendance) days
+                                    </span>
+                                </div>
                             </div>
 
-                            <div class="flex min-w-0 flex-wrap items-center justify-end gap-3 bg-slate-50 p-2 rounded-lg border border-slate-200">
-                                <div class="flex min-w-0 flex-wrap items-center bg-white border border-slate-200 rounded-md overflow-hidden">
-                                    <input type="date" @bind="startDate" class="px-3 py-1.5 text-sm text-slate-700 focus:outline-none" />
-                                    <span class="text-slate-400 px-2 text-sm font-medium">to</span>
-                                    <input type="date" @bind="endDate" class="px-3 py-1.5 text-sm text-slate-700 focus:outline-none" />
+                            <!-- Bar Chart -->
+                            <div class="w-full pt-2 pb-1">
+                                <div class="h-40 w-full flex items-end justify-around gap-2 sm:gap-4 md:gap-8 px-2 border-b border-slate-200">
+                                    @foreach (var stat in attendanceStats)
+                                    {
+                                        int heightPercentage = Math.Clamp(stat.Percentage, 0, 100);
+                                        var barColor = stat.Label switch
+                                        {
+                                            "To Attend" => "bg-slate-400 hover:bg-slate-500",
+                                            "Absent" => "bg-rose-500 hover:bg-rose-600",
+                                            "Attended late" => "bg-amber-500 hover:bg-amber-600",
+                                            "Perfectly attended" => "bg-emerald-500 hover:bg-emerald-600",
+                                            "Attended" => "bg-blue-600 hover:bg-blue-700",
+                                            "Leaves" => "bg-sky-400 hover:bg-sky-500",
+                                            _ => stat.ColorClass
+                                        };
+
+                                        <div class="relative flex flex-col items-center flex-1 max-w-[90px] h-full justify-end group">
+                                            <!-- Value on top of bar -->
+                                            <div class="mb-1 text-center">
+                                                <span class="text-xs font-bold text-slate-700">@stat.Days</span>
+                                                <span class="text-[10px] text-slate-400 block font-medium">@stat.Percentage%</span>
+                                            </div>
+
+                                            <!-- Track & Bar -->
+                                            <div class="w-full h-24 bg-slate-100 rounded-t-lg overflow-hidden flex flex-col justify-end p-0.5">
+                                                <div class="w-full @barColor rounded-t-md transition-all duration-500 ease-out shadow-xs min-h-[4px]"
+                                                     style="height: @(Math.Max(4, heightPercentage))%"
+                                                     title="@stat.Label: @stat.Days Days (@stat.Percentage%)">
+                                                </div>
+                                            </div>
+
+                                            <!-- Label below baseline -->
+                                            <div class="mt-2 text-center">
+                                                <span class="text-xs font-semibold text-slate-600 truncate block max-w-full" title="@stat.Label">@stat.Label</span>
+                                            </div>
+                                        </div>
+                                    }
                                 </div>
-                                <button @onclick="() => SearchCustomPeriod()" class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-1.5 rounded-md text-sm font-medium transition-colors shadow-sm flex items-center gap-2">
-                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
-                                    Search
-                                </button>
-                                <!-- NEW Reset Button -->
-                                <button @onclick="ResetToCurrentPeriod" class="bg-slate-100 hover:bg-slate-200 text-slate-600 px-4 py-1.5 rounded-md text-sm font-medium transition-colors border border-slate-200">
-                                    Reset
-                                </button>
-                                <div class="ml-auto"><AttendanceExportButtons CreateReport="BuildExport" Disabled="@(isLoading || !exportReady)" /></div>
                             </div>
                         </div>
 
-                        <!-- DYNAMIC CONTENT AREA -->
-                        <div class="max-w-5xl mx-auto w-full transition-all duration-300">
-
-
-                            <!-- ========================================== -->
-                            <!-- STATE 1: BAR GRAPH (DEFAULT)               -->
-                            <!-- ========================================== -->
-                            <div class="relative h-12 w-full flex items-end justify-center gap-4 sm:gap-8 md:gap-12 mt-8 pb-8 animate-in fade-in duration-500">
-
-                                <!-- Background Grid Lines -->
-                                <div class="absolute inset-0 flex flex-col justify-between pb-8 pointer-events-none border-b border-slate-200">
-                                    <div class="border-t border-slate-100 w-full"></div>
-                                    <div class="border-t border-slate-100 w-full"></div>
-                                    <div class="border-t border-slate-100 w-full"></div>
-                                    <div class="border-t border-slate-100 w-full"></div>
-                                </div>
-
-                                <!-- BARS -->
-                                @foreach (var stat in attendanceStats)
-                                {
-                                    int heightPercentage = maxDays > 0 ? (int)Math.Round((double)stat.Days / maxDays * 100) : 0;
-
-                                    <div class="relative flex flex-col items-center group z-10 w-12 sm:w-16">
-                                        <div class="absolute -top-10 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-800 text-white text-xs py-1 px-2 rounded whitespace-nowrap pointer-events-none z-20">
-                                            @stat.Days Days (@stat.Percentage%)
-                                        </div>
-
-                                        <div class="w-full @stat.ColorClass rounded-t-md transition-all duration-700 ease-out shadow-sm flex items-start justify-center pt-2 min-h-[4px]"
-                                        style="height: @(heightPercentage)%">
-                                            @if (heightPercentage > 10)
-                                            {
-                                                <span class="text-[10px] font-bold text-white/90">@stat.Days</span>
-                                            }
-                                        </div>
-
-                                        <div class="absolute -bottom-8 text-center w-24">
-                                            <span class="text-xs font-semibold text-slate-600">@stat.Label</span>
-                                        </div>
-                                    </div>
-                                }
-                            </div>
-                        </div>
-                        <div>
-                            <!-- ========================================== -->
-                            <!-- STATE 2: ATTENDANCE LOGS TABLE             -->
-                            <!-- ========================================== -->
-                            <div class="overflow-x-auto rounded-xl border border-slate-200 shadow-sm animate-in mt-6 slide-in-from-bottom-4 fade-in duration-500">
-                                <table class="w-full text-left border-collapse whitespace-nowrap">
-                                    <thead>
-                                        <tr class="bg-slate-50 border-b border-slate-200 text-slate-500 text-[11px] uppercase tracking-wider font-bold">
-                                            <th class="px-4 py-3 text-center">#</th>
-                                            <th class="px-4 py-3">Date</th>
-                                            <th class="px-4 py-3">Day</th>
-                                            <th class="px-4 py-3">Clock In</th>
-                                            <th class="px-4 py-3">Break Out</th>
-                                            <th class="px-4 py-3">Break In</th>
-                                            <th class="px-4 py-3">Clock Out</th>
-                                            <th class="px-4 py-3">Status</th>
-                                            <th class="px-4 py-3">Details</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody class="divide-y divide-slate-100">
-                                        @if (isLoading)
+                        <!-- Compact Attendance Logs Table with p-2 padding -->
+                        <div class="overflow-x-auto rounded-xl border border-slate-200 shadow-xs bg-white">
+                            <table class="w-full text-left border-collapse whitespace-nowrap text-xs">
+                                <thead>
+                                    <tr class="bg-slate-50 border-b border-slate-200 text-slate-600 text-[11px] uppercase tracking-wider font-bold">
+                                        <th class="p-2 text-center">#</th>
+                                        <th class="p-2">Date</th>
+                                        <th class="p-2">Day</th>
+                                        <th class="p-2">Clock In</th>
+                                        <th class="p-2">Break Out</th>
+                                        <th class="p-2">Break In</th>
+                                        <th class="p-2">Clock Out</th>
+                                        <th class="p-2">Status</th>
+                                        <th class="p-2">Details</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-100">
+                                    @if (isLoading)
+                                    {
+                                        @for (int i = 0; i < 5; i++)
                                         {
-                                            @for (int i = 0; i < 5; i++)
-                                            {
-                                                <tr class="animate-pulse hover:bg-slate-50 transition-colors duration-150">
-                                                    <td class="px-4 py-4 text-center"><div class="h-3 bg-slate-200 rounded w-4 mx-auto"></div></td>
-                                                    <td class="px-4 py-4"><div class="h-3 bg-slate-200 rounded w-24"></div></td>
-                                                    <td class="px-4 py-4"><div class="h-3 bg-slate-200 rounded w-16"></div></td>
-                                                    <td class="px-4 py-4"><div class="h-3 bg-slate-200 rounded w-12"></div></td>
-                                                    <td class="px-4 py-4"><div class="h-3 bg-slate-200 rounded w-12"></div></td>
-                                                    <td class="px-4 py-4"><div class="h-3 bg-slate-200 rounded w-12"></div></td>
-                                                    <td class="px-4 py-4"><div class="h-3 bg-slate-200 rounded w-12"></div></td>
-                                                    <td class="px-4 py-4"><div class="h-5 bg-slate-200 rounded w-16"></div></td>
-                                                    <td class="px-4 py-4"><div class="h-3 bg-slate-200 rounded w-full max-w-[100px]"></div></td>
-                                                </tr>
-                                            }
-                                        }
-                                        else if (dailyRecords != null && dailyRecords.Any())
-                                        {
-                                            int index = 1;
-                                            @foreach (var record in dailyRecords)
-                                            {
-                                                <tr class="hover:bg-slate-50 transition-colors duration-150 text-sm text-slate-700">
-                                                    <td class="px-4 py-3 text-center text-slate-400 text-xs">@index</td>
-                                                    <td class="px-4 py-3 font-medium">@record.Date.ToString("dd MMM yyyy")</td>
-                                                    <td class="px-4 py-3 text-slate-500">@record.Date.ToString("dddd")</td>
-
-                                                    <td class="px-4 py-3 font-semibold @(record.ClockIn == "--:--" ? "text-slate-300" : "text-emerald-600")">@record.ClockIn</td>
-                                                    <td class="px-4 py-3 text-amber-600">@record.BreakOut</td>
-                                                    <td class="px-4 py-3 text-amber-600">@record.BreakIn</td>
-                                                    <td class="px-4 py-3 font-semibold @(record.ClockOut == "--:--" ? "text-slate-300" : "text-rose-600")">@record.ClockOut</td>
-
-                                                    <td class="px-4 py-3">
-                                                        @{
-                                                            string statusBg = record.IsLate && record.IsPresent ? "bg-amber-50 text-amber-800 border-amber-100" : record.IsPresent ? "bg-emerald-50 text-emerald-700 border-emerald-100" :
-                                                            record.Status == "Absent" ? "bg-rose-50 text-rose-700 border-rose-100" :
-                                                            record.Status == "Weekend" ? "bg-slate-100 text-slate-500 border-slate-200" :
-                                                            "bg-blue-50 text-blue-700 border-blue-100";
-                                                        }
-                                                        <span class="inline-flex px-2 py-0.5 rounded text-[10px] font-bold border uppercase tracking-wider @statusBg">
-                                                            @record.Status
-                                                        </span>
-                                                    </td>
-
-                                                    <td class="px-4 py-3 text-xs text-slate-500 truncate max-w-[150px]" title="@record.Details">
-                                                        @(string.IsNullOrEmpty(record.Details) ? "-" : record.Details)
-                                                    </td>
-                                                </tr>
-                                                index++;
-                                            }
-                                        }
-                                        else
-                                        {
-                                            <tr>
-                                                <td colspan="9" class="px-4 py-8 text-center text-slate-500">
-                                                    No attendance records found for this period.
-                                                </td>
+                                            <tr class="animate-pulse hover:bg-slate-50/70 transition-colors">
+                                                <td class="p-2 text-center"><div class="h-3 bg-slate-200 rounded w-4 mx-auto"></div></td>
+                                                <td class="p-2"><div class="h-3 bg-slate-200 rounded w-24"></div></td>
+                                                <td class="p-2"><div class="h-3 bg-slate-200 rounded w-16"></div></td>
+                                                <td class="p-2"><div class="h-3 bg-slate-200 rounded w-12"></div></td>
+                                                <td class="p-2"><div class="h-3 bg-slate-200 rounded w-12"></div></td>
+                                                <td class="p-2"><div class="h-3 bg-slate-200 rounded w-12"></div></td>
+                                                <td class="p-2"><div class="h-3 bg-slate-200 rounded w-12"></div></td>
+                                                <td class="p-2"><div class="h-5 bg-slate-200 rounded w-16"></div></td>
+                                                <td class="p-2"><div class="h-3 bg-slate-200 rounded w-full max-w-[100px]"></div></td>
                                             </tr>
                                         }
-                                    </tbody>
-                                </table>
-                            </div>
+                                    }
+                                    else if (dailyRecords != null && dailyRecords.Any())
+                                    {
+                                        int index = 1;
+                                        @foreach (var record in dailyRecords)
+                                        {
+                                            <tr class="hover:bg-slate-50/70 transition-colors text-xs text-slate-700">
+                                                <td class="p-2 text-center text-slate-400 text-xs">@index</td>
+                                                <td class="p-2 font-medium">@record.Date.ToString("dd MMM yyyy")</td>
+                                                <td class="p-2 text-slate-500">@record.Date.ToString("dddd")</td>
 
+                                                <td class="p-2 font-semibold @(record.ClockIn == "--:--" ? "text-slate-300" : "text-emerald-600")">@record.ClockIn</td>
+                                                <td class="p-2 text-amber-600">@record.BreakOut</td>
+                                                <td class="p-2 text-amber-600">@record.BreakIn</td>
+                                                <td class="p-2 font-semibold @(record.ClockOut == "--:--" ? "text-slate-300" : "text-rose-600")">@record.ClockOut</td>
+
+                                                <td class="p-2">
+                                                    @{
+                                                        string statusBg = record.IsLate && record.IsPresent ? "bg-amber-50 text-amber-800 border-amber-200" : record.IsPresent ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
+                                                        record.Status == "Absent" ? "bg-rose-50 text-rose-700 border-rose-200" :
+                                                        record.Status == "Weekend" ? "bg-slate-100 text-slate-500 border-slate-200" :
+                                                        "bg-blue-50 text-blue-700 border-blue-200";
+                                                    }
+                                                    <span class="inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold border @statusBg">
+                                                        @record.Status
+                                                    </span>
+                                                </td>
+
+                                                <td class="p-2 text-xs text-slate-500 truncate max-w-[150px]" title="@record.Details">
+                                                    @(string.IsNullOrEmpty(record.Details) ? "-" : record.Details)
+                                                </td>
+                                            </tr>
+                                            index++;
+                                        }
+                                    }
+                                    else
+                                    {
+                                        <tr>
+                                            <td colspan="9" class="p-6 text-center text-slate-500 text-xs">
+                                                No attendance records found for this period.
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                     break;
@@ -346,9 +347,7 @@
                                     <p class="text-3xl font-black text-slate-900">@TotalAbsentDays</p>
                                 </div>
                                 <div class="text-slate-400">
-                                    <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
-                                    </svg>
+                                    <AppIcon Name="calendar_month" Class="w-10 h-10" />
                                 </div>
                             </div>
 
@@ -433,7 +432,6 @@
     private DateTime startDate;
     private DateTime endDate;
 
-    private int maxDays = 30;
 
     private TimeSpan shiftStart = new TimeSpan(8, 30, 0);
     private TimeSpan allowedBreakDuration = TimeSpan.FromMinutes(60);

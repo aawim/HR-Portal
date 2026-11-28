@@ -530,8 +530,57 @@ public sealed class StaffTransferActivationService(
                     targetUser.LastUpdatedDate = cutoffTime;
                 }
 
+                // Automatically revoke obsolete division/unit UserAccessScopes on division or organisation transfer
+                // and record in AC_UserAccessScopeAudits (never automatically carry privileged division access to destination).
+                var revokedScopeCount = 0;
+                if (targetUser != null && (transfer.FromOrganisationId != transfer.ToOrganisationId ||
+                                           transfer.FromOrganisationStructureId != transfer.ToOrganisationStructureId ||
+                                           hasAdminRevoke))
+                {
+                    var obsoleteScopes = await db.UserAccessScopes
+                        .Where(s => s.UserId == targetUser.UserId &&
+                                    s.IsActive &&
+                                    s.OrganisationId == transfer.FromOrganisationId &&
+                                    (transfer.FromOrganisationId != transfer.ToOrganisationId ||
+                                     hasAdminRevoke ||
+                                     s.UnitId == null ||
+                                     s.UnitId != transfer.ToOrganisationStructureId))
+                        .ToListAsync(cancellationToken);
+
+                    var actorUserId = transfer.FinalApprovedByUserId ?? targetUser.UserId;
+                    foreach (var scope in obsoleteScopes)
+                    {
+                        scope.IsActive = false;
+                        scope.ValidTo = cutoffTime;
+                        scope.RevokedAtUtc = DateTime.UtcNow;
+                        scope.RevokedByUserId = actorUserId;
+                        scope.RevocationReason = $"Revoked on Staff Transfer #{transfer.StaffTransferId} (from unit #{transfer.FromOrganisationStructureId} to #{transfer.ToOrganisationStructureId} effective {effectiveDate:yyyy-MM-dd}).";
+                        scope.OperationLogId = auditLog.OperationLogId;
+                        revokedScopeCount++;
+
+                        db.UserAccessScopeAudits.Add(new UserAccessScopeAudit
+                        {
+                            UserAccessScopeId = scope.UserAccessScopeId > 0 ? scope.UserAccessScopeId : null,
+                            OrganisationId = scope.OrganisationId,
+                            TargetUserId = scope.UserId,
+                            TargetUserGroupId = scope.UserGroupId,
+                            Action = AccessScopeAuditActions.TransferRevoked,
+                            ScopeType = scope.ScopeType,
+                            UnitId = scope.UnitId,
+                            TeamId = scope.TeamId,
+                            IncludeDescendants = scope.IncludeDescendants,
+                            ValidFrom = scope.ValidFrom,
+                            ValidTo = scope.ValidTo,
+                            PerformedByUserId = actorUserId,
+                            TimestampUtc = DateTime.UtcNow,
+                            Detail = scope.RevocationReason,
+                            OperationLogId = auditLog.OperationLogId
+                        });
+                    }
+                }
+
                 RecordStepIfNotSucceeded(db, transfer, attempt, StaffTransferActivationSteps.OrganisationalAccessProvisioning,
-                    accessStepKey, new { count = transfer.AccessChanges.Count });
+                    accessStepKey, new { count = transfer.AccessChanges.Count, revokedScopeCount });
             }
 
             // Step 7: Physical Door Access Provisioning Task Dispatch
@@ -735,6 +784,10 @@ public sealed class StaffTransferActivationWorker(
                 var factory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<HrmTeContext>>();
                 var activator = scope.ServiceProvider.GetRequiredService<IStaffTransferActivationService>();
                 await using var db = await factory.CreateDbContextAsync(stoppingToken);
+
+                await using var lockLease = await HRM.Api.Infrastructure.SqlAppLock.TryAcquireAsync(db, "HRM_StaffTransferActivationWorker", stoppingToken);
+                if (lockLease == null)
+                    continue;
 
                 var today = StaffTransferActivationService.TodayMaldives;
                 var dueTransferIds = await db.StaffTransfers.AsNoTracking()

@@ -1,35 +1,103 @@
 @using HRM.DTOs.WorkTypes
 @using HRM.Components.Shared
+@using System.Globalization
 @inject HRM.Services.Interfaces.IWorkTypeService WorkTypes
 @inject HRM.Services.Interfaces.IUserAccessService Access
 @inject ILogger<WorkTypeManagement> Logger
 @inject HRM.Services.Interfaces.Profile.IProfileService Profile
-@implements IDisposable
+@inject IJSRuntime JS
+@implements IAsyncDisposable
 
-<section class="w-full p-2 flex flex-col gap-2" aria-busy="@busy">
-    <!-- Header -->
-    <header class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-3">
-        <div>
-            <div class="flex items-center gap-2">
-                <h2 class="text-lg font-bold text-slate-900">
-                    @(StaffId > 0 ? "Staff Work Types & Time-Clock Authorization" : "Work Types Configuration")
+<style>
+    .wt-grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 0.75rem;
+        align-items: start;
+    }
+
+    @@media (min-width: 1024px) {
+        .wt-grid {
+            grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+        }
+
+        .wt-grid.wt-grid-geo {
+            grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+        }
+
+        .wt-grid.wt-grid-geo-expanded {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    .wt-two-col {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 0.625rem;
+    }
+
+    @@media (min-width: 640px) {
+        .wt-two-col {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+
+    .wt-three-col {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 0.5rem;
+    }
+
+    @@media (min-width: 640px) {
+        .wt-three-col {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+    }
+
+    .wt-map-shell {
+        width: 100%;
+        height: 420px;
+        border-radius: 0.625rem;
+        border: 1px solid #cbd5e1;
+        overflow: hidden;
+        position: relative;
+        z-index: 1;
+    }
+
+    .wt-map-shell.wt-map-expanded {
+        height: 560px;
+    }
+
+    .wt-map-canvas {
+        width: 100%;
+        height: 100%;
+    }
+</style>
+
+<section class="w-full min-w-0 flex flex-col gap-3" aria-busy="@busy">
+    <!-- Compact Transparent Borderless Header (UI_DESIGN_STANDARD Section 3) -->
+    <header class="bg-transparent px-1 py-1 flex flex-wrap items-center justify-between gap-2">
+        <div class="min-w-0">
+            <div class="flex flex-wrap items-center gap-2">
+                <h2 class="text-base font-bold tracking-tight text-slate-900 dark:text-slate-100">
+                    @(StaffId > 0 ? "Work Types & Time-Clock Authorization" : "Work Types Configuration")
                 </h2>
-                <span class="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-800 border border-emerald-200">
+                <span class="inline-flex items-center rounded-full border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300">
                     @(StaffId > 0 ? "Staff Assignment" : "Global Settings")
                 </span>
             </div>
-            <p class="text-xs text-slate-500 mt-0.5">
+            <p class="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
                 @(StaffId > 0
-                    ? "Staff can clock in and log shifts while an active Work Type assignment covers today."
-                    : "Define organization work types, categories, and operational time tracking options.")
+                    ? "Manage active work types and geo-fenced clock-in boundaries for this staff member."
+                    : "Define organisation work types, categories, and operational time tracking options.")
             </p>
         </div>
         <div class="flex items-center gap-2">
             <button type="button"
-                    class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-50 transition-colors"
+                    class="app-button app-button-secondary app-button-sm"
                     disabled="@busy"
                     @onclick="LoadAsync">
-                <span>↻</span>
+                <i class="bi bi-arrow-clockwise text-xs" aria-hidden="true"></i>
                 <span>Refresh</span>
             </button>
         </div>
@@ -37,9 +105,9 @@
 
     @if (message != null)
     {
-        <div role="status" class="flex items-center justify-between rounded-xl border p-3 text-xs shadow-2xs @(isError ? "border-rose-200 bg-rose-50 text-rose-800" : "border-emerald-200 bg-emerald-50/70 text-emerald-900")">
+        <div role="status" class="flex items-center justify-between rounded-xl border px-3.5 py-2.5 text-xs shadow-2xs @(isError ? "border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-900/50 dark:bg-rose-950/40 dark:text-rose-200" : "border-emerald-200 bg-emerald-50/80 text-emerald-900 dark:border-emerald-900/50 dark:bg-emerald-950/40 dark:text-emerald-200")">
             <span>@message</span>
-            <button type="button" @onclick="() => message = null" class="font-bold @(isError ? "text-rose-700 hover:text-rose-900" : "text-emerald-700 hover:text-emerald-900")">✕</button>
+            <button type="button" @onclick="() => message = null" class="font-bold opacity-75 hover:opacity-100">✕</button>
         </div>
     }
 
@@ -50,29 +118,29 @@
             <!-- Global Admin Work Types Settings -->
             @if (isSuperAdmin)
             {
-                <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm space-y-3">
-                    <h3 class="text-sm font-bold text-slate-900">
-                        @(editingType == 0 ? "Create New Work Type" : "Edit Work Type")
+                <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-xs space-y-3">
+                    <h3 class="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-100">
+                        @(editingType == 0 ? "Create Work Type" : "Edit Work Type")
                     </h3>
                     <div class="flex flex-wrap items-end gap-3 text-xs">
                         <div class="flex-1 min-w-[15rem]">
-                            <label class="block font-medium text-slate-700">Work Type Name *</label>
-                            <input class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-xs focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                            <label class="block font-medium text-slate-700 dark:text-slate-300">Work Type Name *</label>
+                            <input class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs text-slate-800 dark:text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                                    maxlength="100"
-                                   placeholder="e.g. Standard Shift, Remote Work, Field Duty"
+                                   placeholder="e.g. Standard Shift, Geo Location, Remote Work"
                                    @bind="name" />
                         </div>
-                        <label class="flex items-center gap-2 text-xs font-medium text-slate-700 pb-2">
+                        <label class="inline-flex items-center gap-2 text-xs font-medium text-slate-700 dark:text-slate-300 pb-1.5">
                             <input type="checkbox" class="h-4 w-4 rounded border-slate-300 text-blue-600" @bind="valid" />
-                            <span>Active / Valid</span>
+                            <span>Active</span>
                         </label>
                         <div class="flex items-center gap-2">
-                            <button class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-2xs hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+                            <button type="button" class="app-button app-button-primary app-button-sm"
                                     disabled="@(busy || string.IsNullOrWhiteSpace(name))"
                                     @onclick="SaveType">
                                 <span>@(editingType == 0 ? "Add Work Type" : "Save Work Type")</span>
                             </button>
-                            <button class="inline-flex items-center justify-center rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+                            <button type="button" class="app-button app-button-secondary app-button-sm"
                                     @onclick="ResetType">
                                 Clear
                             </button>
@@ -81,36 +149,37 @@
                 </div>
             }
 
-            <div class="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-                <div class="border-b border-slate-200 bg-slate-50/70 px-4 py-3 flex items-center justify-between">
-                    <h3 class="font-bold text-slate-800 text-xs">Defined Work Types</h3>
-                    <span class="rounded-full bg-slate-200 px-2 py-0.5 text-[11px] font-semibold text-slate-700">@types.Count</span>
+            <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs overflow-hidden">
+                <div class="border-b border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/60 px-4 py-2.5 flex items-center justify-between">
+                    <h3 class="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-100">Defined Work Types</h3>
+                    <span class="rounded-full bg-slate-200/80 dark:bg-slate-700 px-2 py-0.5 text-[10px] font-semibold text-slate-700 dark:text-slate-200">@types.Count</span>
                 </div>
                 <div class="overflow-x-auto">
                     <table class="w-full text-left text-xs">
-                        <thead class="bg-slate-50 text-slate-700 font-semibold border-b border-slate-200">
+                        <thead class="bg-slate-50 dark:bg-slate-800/80 text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-800">
                             <tr>
-                                <th class="p-3">Work Type</th>
-                                <th class="p-3">Status</th>
-                                <th class="p-3">Active Assignments</th>
-                                <th class="p-3 text-right">Actions</th>
+                                <th class="px-3.5 py-2">Work Type</th>
+                                <th class="px-3.5 py-2">Status</th>
+                                <th class="px-3.5 py-2">Active Assignments</th>
+                                <th class="px-3.5 py-2 text-right">Actions</th>
                             </tr>
                         </thead>
-                        <tbody class="divide-y divide-slate-100">
-                            @foreach (var type in types)
+                        <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                            @for (var i = 0; i < types.Count; i++)
                             {
-                                <tr class="hover:bg-slate-50/50">
-                                    <td class="p-3 font-semibold text-slate-900">@type.Name</td>
-                                    <td class="p-3">
-                                        <span class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold @(type.IsValid ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-slate-100 text-slate-600 border border-slate-200")">
+                                var type = types[i];
+                                <tr class="@(i % 2 == 1 ? "bg-[#f3f8fd] dark:bg-slate-800/30" : "bg-white dark:bg-slate-900")">
+                                    <td class="px-3.5 py-2 font-semibold text-slate-900 dark:text-slate-100">@type.Name</td>
+                                    <td class="px-3.5 py-2">
+                                        <span class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold @(type.IsValid ? "bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800" : "bg-slate-100 text-slate-600 border border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700")">
                                             @(type.IsValid ? "Active" : "Inactive")
                                         </span>
                                     </td>
-                                    <td class="p-3 font-mono text-slate-600">@type.AssignmentCount</td>
-                                    <td class="p-3 text-right">
+                                    <td class="px-3.5 py-2 font-mono text-slate-600 dark:text-slate-300">@type.AssignmentCount</td>
+                                    <td class="px-3.5 py-2 text-right">
                                         @if (isSuperAdmin)
                                         {
-                                            <button class="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 transition"
+                                            <button type="button" class="app-button app-button-secondary app-button-sm"
                                                     @onclick="() => EditType(type)">
                                                 Edit
                                             </button>
@@ -128,11 +197,11 @@
             <!-- Staff Specific Work Types -->
             @if (jobId == 0)
             {
-                <div role="alert" class="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-900 flex items-start gap-3">
-                    <span class="text-amber-600 font-bold text-base">⚠️</span>
+                <div role="alert" class="rounded-xl border border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-950/40 p-3.5 text-xs text-amber-900 dark:text-amber-200 flex items-start gap-2.5">
+                    <i class="bi bi-exclamation-triangle-fill text-amber-600 mt-0.5" aria-hidden="true"></i>
                     <div>
                         <strong class="font-bold">No Active Job Found</strong>
-                        <p class="mt-0.5 text-amber-800">
+                        <p class="mt-0.5 text-amber-800 dark:text-amber-300">
                             This staff member does not have an active approved job in the current organisation. A valid job position is required before assigning work types.
                         </p>
                     </div>
@@ -140,22 +209,22 @@
             }
             else
             {
-                <div class="grid grid-cols-1 lg:grid-cols-12 gap-2 p-2 items-start">
+                <div class="wt-grid @(IsGeoSelected ? (mapExpanded ? "wt-grid-geo-expanded" : "wt-grid-geo") : "")">
                     <!-- Left Column: Assignment Form Card -->
-                    <div class="lg:col-span-5 min-w-0 space-y-4">
-                        <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm space-y-4">
-                            <div class="flex items-center justify-between border-b border-slate-200 pb-2.5">
+                    <div class="min-w-0 flex flex-col gap-3">
+                        <section class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-xs space-y-3">
+                            <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2">
                                 <div>
-                                    <h3 class="text-sm font-bold text-slate-900">
-                                        @(editingAssignment == 0 ? "Assign Work Type to Staff" : "Update Work Type Assignment")
+                                    <h3 class="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-100">
+                                        @(editingAssignment == 0 ? "Assign Work Type" : "Update Work Type Assignment")
                                     </h3>
-                                    <p class="text-[11px] text-slate-500 mt-0.5">
-                                        Select an active work type to enable attendance and shift recording.
+                                    <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                                        Select a work type and effective period. Geo Location assignments include a map boundary.
                                     </p>
                                 </div>
                                 @if (editingAssignment != 0)
                                 {
-                                    <button type="button" class="text-xs text-blue-600 hover:underline font-semibold" @onclick="ResetAssignment">
+                                    <button type="button" class="text-xs font-semibold text-blue-600 hover:underline" @onclick="ResetAssignment">
                                         Cancel Edit
                                     </button>
                                 }
@@ -163,34 +232,127 @@
 
                             <div class="space-y-3 text-xs">
                                 <div>
-                                    <SearchableSelect Label="Work Type *" Options="typeOptions" @bind-Value="typeId" Disabled="@busy" />
+                                    <SearchableSelect Label="Work Type *" Options="typeOptions" Value="typeId" ValueChanged="OnWorkTypeChangedAsync" Disabled="@busy" />
                                 </div>
-                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+
+                                <div class="wt-two-col">
                                     <div>
-                                        <label class="block font-medium text-slate-700">From Date *</label>
+                                        <label class="block font-medium text-slate-700 dark:text-slate-300">From Date *</label>
                                         <input type="date"
-                                               class="mt-1 block w-full rounded-lg border border-slate-300 p-2 text-xs focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+                                               class="mt-1 block w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs text-slate-800 dark:text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                                                @bind="from" />
                                     </div>
                                     <div>
-                                        <label class="block font-medium text-slate-700">To Date <span class="text-slate-400 font-normal">(Optional)</span></label>
+                                        <label class="block font-medium text-slate-700 dark:text-slate-300">To Date <span class="text-slate-400 font-normal">(Optional)</span></label>
                                         <input type="date"
-                                               class="mt-1 block w-full rounded-lg border border-slate-300 p-2 text-xs focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+                                               class="mt-1 block w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs text-slate-800 dark:text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                                                @bind="to" />
                                     </div>
                                 </div>
-                                <div>
-                                    <label class="block font-medium text-slate-700">Location <span class="text-slate-400 font-normal">(Optional)</span></label>
-                                    <input type="text"
-                                           class="mt-1 block w-full rounded-lg border border-slate-300 p-2 text-xs focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
-                                           maxlength="250"
-                                           placeholder="e.g. Head Office, Site A, Remote"
-                                           @bind="location" />
-                                </div>
+
+                                @if (IsGeoSelected)
+                                {
+                                    <div class="rounded-xl border border-emerald-200 dark:border-emerald-800/70 bg-emerald-50/40 dark:bg-emerald-950/20 p-3 space-y-2.5">
+                                        <div class="flex flex-wrap items-center justify-between gap-2">
+                                            <div class="flex items-center gap-1.5 text-xs font-bold text-emerald-900 dark:text-emerald-200">
+                                                <i class="bi bi-geo-alt-fill text-emerald-600" aria-hidden="true"></i>
+                                                <span>Geo Location Boundary</span>
+                                            </div>
+                                            <div class="flex items-center gap-1.5">
+                                                <button type="button"
+                                                        class="app-button app-button-secondary app-button-sm"
+                                                        disabled="@busy"
+                                                        @onclick="ToggleMapExpandedAsync">
+                                                    <i class="bi @(mapExpanded ? "bi-arrows-angle-contract" : "bi-arrows-angle-expand") text-xs" aria-hidden="true"></i>
+                                                    <span>@(mapExpanded ? "Compact Map" : "Expand Map")</span>
+                                                </button>
+                                                <button type="button"
+                                                        class="app-button app-button-secondary app-button-sm"
+                                                        disabled="@(busy || locating)"
+                                                        @onclick="UseCurrentLocationAsync">
+                                                    <i class="bi bi-crosshair text-xs" aria-hidden="true"></i>
+                                                    <span>@(locating ? "Locating..." : "Use My Location")</span>
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <p class="text-[11px] text-slate-600 dark:text-slate-400">
+                                            Click anywhere on the map or drag the marker to set the allowed clock-in center and adjust the boundary radius.
+                                        </p>
+
+                                        <div class="wt-map-shell @(mapExpanded ? "wt-map-expanded" : "")">
+                                            <div id="@mapElementId" class="wt-map-canvas"></div>
+                                        </div>
+
+                                        @if (!string.IsNullOrWhiteSpace(mapError))
+                                        {
+                                            <p class="text-[11px] text-amber-700 dark:text-amber-300">@mapError</p>
+                                        }
+
+                                        <div class="wt-three-col">
+                                            <div>
+                                                <label class="block text-[11px] font-medium text-slate-700 dark:text-slate-300">Latitude *</label>
+                                                <input type="number" step="0.000001" min="-90" max="90"
+                                                       class="mt-1 block w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs font-mono text-slate-800 dark:text-slate-100"
+                                                       @bind="geoLat"
+                                                       @bind:after="SyncMapFromInputsAsync" />
+                                            </div>
+                                            <div>
+                                                <label class="block text-[11px] font-medium text-slate-700 dark:text-slate-300">Longitude *</label>
+                                                <input type="number" step="0.000001" min="-180" max="180"
+                                                       class="mt-1 block w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs font-mono text-slate-800 dark:text-slate-100"
+                                                       @bind="geoLng"
+                                                       @bind:after="SyncMapFromInputsAsync" />
+                                            </div>
+                                            <div>
+                                                <label class="block text-[11px] font-medium text-slate-700 dark:text-slate-300">Radius (m) *</label>
+                                                <input type="number" min="@WorkTypeGeofenceHelper.MinRadiusMeters" max="@WorkTypeGeofenceHelper.MaxRadiusMeters" step="25"
+                                                       class="mt-1 block w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs font-mono text-slate-800 dark:text-slate-100"
+                                                       @bind="geoRadiusMeters"
+                                                       @bind:after="SyncMapFromInputsAsync" />
+                                            </div>
+                                        </div>
+
+                                        <div>
+                                            <div class="flex items-center justify-between text-[11px] text-slate-600 dark:text-slate-400">
+                                                <span>Boundary Radius</span>
+                                                <strong class="font-mono text-emerald-700 dark:text-emerald-300">@geoRadiusMeters m</strong>
+                                            </div>
+                                            <input type="range"
+                                                   min="@WorkTypeGeofenceHelper.MinRadiusMeters"
+                                                   max="2000"
+                                                   step="25"
+                                                   class="w-full accent-emerald-600"
+                                                   @bind="geoRadiusMeters"
+                                                   @bind:event="oninput"
+                                                   @bind:after="SyncMapFromInputsAsync" />
+                                        </div>
+
+                                        <div>
+                                            <label class="block text-[11px] font-medium text-slate-700 dark:text-slate-300">Location Name / Label <span class="text-slate-400 font-normal">(Optional)</span></label>
+                                            <input type="text"
+                                                   class="mt-1 block w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs text-slate-800 dark:text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                                   maxlength="120"
+                                                   placeholder="e.g. Malé Head Office, Hulhumalé Site"
+                                                   @bind="location" />
+                                        </div>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div>
+                                        <label class="block font-medium text-slate-700 dark:text-slate-300">Location <span class="text-slate-400 font-normal">(Optional)</span></label>
+                                        <input type="text"
+                                               class="mt-1 block w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs text-slate-800 dark:text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                               maxlength="250"
+                                               placeholder="e.g. Head Office, Site A, Remote"
+                                               @bind="location" />
+                                    </div>
+                                }
                             </div>
 
-                            <div class="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-100">
-                                <label class="flex items-center gap-2 text-xs font-medium text-slate-700 cursor-pointer">
+                            <div class="flex flex-wrap items-center justify-between gap-2 pt-2.5 border-t border-slate-100 dark:border-slate-800">
+                                <label class="inline-flex items-center gap-2 text-xs font-medium text-slate-700 dark:text-slate-300 cursor-pointer">
                                     <input type="checkbox"
                                            class="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
                                            @bind="assignmentActive"
@@ -198,109 +360,129 @@
                                     <span>Active Assignment</span>
                                 </label>
                                 <div class="flex items-center gap-2">
-                                    <button class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-2xs hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+                                    <button type="button"
+                                            class="app-button app-button-primary app-button-sm"
                                             disabled="@(busy || jobId == 0 || typeId == 0)"
                                             @onclick="SaveAssignment">
-                                        <span>✓</span>
+                                        <i class="bi bi-check2 text-xs" aria-hidden="true"></i>
                                         <span>@(editingAssignment == 0 ? "Assign Work Type" : "Save Assignment")</span>
                                     </button>
-                                    <button class="inline-flex items-center justify-center rounded-lg border border-slate-300 bg-white px-3.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+                                    <button type="button"
+                                            class="app-button app-button-secondary app-button-sm"
                                             @onclick="ResetAssignment">
                                         Clear
                                     </button>
                                 </div>
                             </div>
-                        </div>
+                        </section>
 
-                        <!-- Policy Card -->
-                        <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-4 text-xs text-slate-600 space-y-2">
-                            <div class="flex items-center gap-2 text-slate-800 font-semibold text-xs">
-                                <span>💡</span>
-                                <span>Assignment Policy & Clocking</span>
+                        <!-- Compact Policy Note -->
+                        <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/60 px-3.5 py-2.5 text-[11px] text-slate-600 dark:text-slate-400 space-y-1">
+                            <div class="flex items-center gap-1.5 font-semibold text-slate-800 dark:text-slate-200">
+                                <i class="bi bi-info-circle text-blue-600" aria-hidden="true"></i>
+                                <span>Assignment &amp; Geo-Fence Rules</span>
                             </div>
-                            <ul class="list-disc pl-4 space-y-1 text-slate-600 text-[11px] leading-relaxed">
-                                <li>Staff must have at least one active work type assignment spanning the current date to clock in/out.</li>
-                                <li>Leave empty the "To Date" for continuous, ongoing assignments.</li>
-                                <li>Deactivating an assignment preserves historical duty records while revoking active clocking permission.</li>
+                            <ul class="list-disc pl-4 space-y-0.5 leading-relaxed">
+                                <li>Staff require an active work type covering today to clock in or out.</li>
+                                <li>For <strong>Geo Location</strong> assignments, staff are notified and blocked if they attempt to clock in outside the saved boundary radius.</li>
+                                <li>Leave <strong>To Date</strong> empty for ongoing assignments.</li>
                             </ul>
                         </div>
                     </div>
 
                     <!-- Right Column: Assigned Work Types Table -->
-                    <div class="lg:col-span-7 min-w-0">
-                        <div class="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-                            <div class="border-b border-slate-200 bg-slate-50/70 px-4 py-3 flex items-center justify-between">
-                                <div>
-                                    <h3 class="font-bold text-slate-800 text-xs">Assigned Work Types</h3>
-                                    <p class="text-[11px] text-slate-500">History of active and completed work type periods</p>
-                                </div>
-                                <span class="rounded-full bg-slate-200 px-2.5 py-0.5 text-[11px] font-semibold text-slate-700">@assignments.Count</span>
+                    <section class="min-w-0 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs overflow-hidden">
+                        <div class="border-b border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/60 px-4 py-2.5 flex items-center justify-between gap-2">
+                            <div>
+                                <h3 class="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-100">Assigned Work Types</h3>
+                                <p class="text-[11px] text-slate-500 dark:text-slate-400">Active and historical work type periods</p>
                             </div>
-
-                            @if (assignments.Count == 0)
-                            {
-                                <div class="p-8 text-center text-slate-500 text-xs space-y-1">
-                                    <span class="text-2xl">📋</span>
-                                    <p class="font-semibold text-slate-700">No Work Type Assignments</p>
-                                    <p class="text-slate-400">Use the form to assign a work type for attendance tracking.</p>
-                                </div>
-                            }
-                            else
-                            {
-                                <div class="overflow-x-auto">
-                                    <table class="w-full text-left text-xs">
-                                        <thead class="bg-slate-50 text-slate-700 font-semibold border-b border-slate-200">
-                                            <tr>
-                                                <th class="p-3">Work Type</th>
-                                                <th class="p-3">Effective Period</th>
-                                                <th class="p-3">Location</th>
-                                                <th class="p-3">Status</th>
-                                                <th class="p-3 text-right">Actions</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody class="divide-y divide-slate-100">
-                                            @foreach (var row in assignments)
-                                            {
-                                                <tr class="hover:bg-slate-50/50">
-                                                    <td class="p-3 font-semibold text-slate-900">@row.WorkTypeName</td>
-                                                    <td class="p-3 text-slate-700">
-                                                        <span class="font-medium">@row.FromDate.ToString("dd MMM yyyy")</span>
-                                                        <span class="text-slate-400"> → </span>
-                                                        <span>@(row.ToDate?.ToString("dd MMM yyyy") ?? "Ongoing")</span>
-                                                    </td>
-                                                    <td class="p-3 text-slate-600">
-                                                        @(string.IsNullOrWhiteSpace(row.Location) ? "—" : row.Location)
-                                                    </td>
-                                                    <td class="p-3">
-                                                        <span class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold @(row.IsValid ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-slate-100 text-slate-600 border border-slate-200")">
-                                                            @(row.IsValid ? "Active" : "Inactive")
-                                                        </span>
-                                                    </td>
-                                                    <td class="p-3 text-right">
-                                                        <div class="inline-flex items-center gap-1.5">
-                                                            <button class="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 transition"
-                                                                    disabled="@busy"
-                                                                    @onclick="() => EditAssignment(row)">
-                                                                Edit
-                                                            </button>
-                                                            @if (row.IsValid)
-                                                            {
-                                                                <button class="inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-white px-2.5 py-1 text-xs font-medium text-rose-700 hover:bg-rose-50 transition"
-                                                                        disabled="@busy"
-                                                                        @onclick="() => RemoveAssignment(row)">
-                                                                    Deactivate
-                                                                </button>
-                                                            }
-                                                        </div>
-                                                    </td>
-                                                </tr>
-                                            }
-                                        </tbody>
-                                    </table>
-                                </div>
-                            }
+                            <span class="rounded-full bg-slate-200/80 dark:bg-slate-700 px-2.5 py-0.5 text-[10px] font-semibold text-slate-700 dark:text-slate-200">@assignments.Count records</span>
                         </div>
-                    </div>
+
+                        @if (assignments.Count == 0)
+                        {
+                            <div class="p-8 text-center text-slate-500 dark:text-slate-400 text-xs space-y-1">
+                                <i class="bi bi-sliders text-2xl text-slate-300 dark:text-slate-600" aria-hidden="true"></i>
+                                <p class="font-semibold text-slate-700 dark:text-slate-200">No Work Type Assignments</p>
+                                <p class="text-slate-400">Use the form to assign a work type for attendance tracking.</p>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-left text-xs">
+                                    <thead class="bg-slate-50 dark:bg-slate-800/80 text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-800">
+                                        <tr>
+                                            <th class="px-3.5 py-2">Work Type</th>
+                                            <th class="px-3.5 py-2">Effective Period</th>
+                                            <th class="px-3.5 py-2">Location / Boundary</th>
+                                            <th class="px-3.5 py-2">Status</th>
+                                            <th class="px-3.5 py-2 text-right">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                                        @for (var i = 0; i < assignments.Count; i++)
+                                        {
+                                            var row = assignments[i];
+                                            var hasGeo = WorkTypeGeofenceHelper.TryParse(row.Location, out var rLat, out var rLng, out var rRad, out var rLabel);
+                                            <tr class="@(i % 2 == 1 ? "bg-[#f3f8fd] dark:bg-slate-800/30" : "bg-white dark:bg-slate-900")">
+                                                <td class="px-3.5 py-2.5 font-semibold text-slate-900 dark:text-slate-100 whitespace-nowrap">@row.WorkTypeName</td>
+                                                <td class="px-3.5 py-2.5 text-slate-700 dark:text-slate-300 whitespace-nowrap">
+                                                    <span class="font-medium">@row.FromDate.ToString("dd MMM yyyy")</span>
+                                                    <span class="text-slate-400"> → </span>
+                                                    <span>@(row.ToDate?.ToString("dd MMM yyyy") ?? "Ongoing")</span>
+                                                </td>
+                                                <td class="px-3.5 py-2.5 text-slate-600 dark:text-slate-300">
+                                                    @if (hasGeo)
+                                                    {
+                                                        <div class="flex flex-col gap-0.5">
+                                                            <div class="flex flex-wrap items-center gap-1.5">
+                                                                <i class="bi bi-geo-alt-fill text-emerald-600 text-[11px]" aria-hidden="true"></i>
+                                                                <span class="font-medium text-slate-800 dark:text-slate-100">@(string.IsNullOrWhiteSpace(rLabel) ? "Pinned Location" : rLabel)</span>
+                                                                <span class="rounded-full bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 px-1.5 py-0.2 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300">@rRad m</span>
+                                                            </div>
+                                                            <span class="font-mono text-[10px] text-slate-500 dark:text-slate-400">
+                                                                @rLat.ToString("F5", CultureInfo.InvariantCulture), @rLng.ToString("F5", CultureInfo.InvariantCulture)
+                                                            </span>
+                                                        </div>
+                                                    }
+                                                    else
+                                                    {
+                                                        @(string.IsNullOrWhiteSpace(row.Location) ? "—" : row.Location)
+                                                    }
+                                                </td>
+                                                <td class="px-3.5 py-2.5 whitespace-nowrap">
+                                                    <span class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold @(row.IsValid ? "bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800" : "bg-slate-100 text-slate-600 border border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700")">
+                                                        @(row.IsValid ? "Active" : "Inactive")
+                                                    </span>
+                                                </td>
+                                                <td class="px-3.5 py-2.5 text-right whitespace-nowrap">
+                                                    <div class="inline-flex items-center gap-1.5">
+                                                        <button type="button"
+                                                                class="app-button app-button-secondary app-button-sm"
+                                                                disabled="@busy"
+                                                                @onclick="() => EditAssignmentAsync(row)">
+                                                            Edit
+                                                        </button>
+                                                        @if (row.IsValid)
+                                                        {
+                                                            <button type="button"
+                                                                    class="inline-flex items-center rounded-lg border border-rose-200 dark:border-rose-800 bg-white dark:bg-slate-800 px-2.5 py-1 text-xs font-semibold text-rose-700 dark:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/40 disabled:opacity-50 transition"
+                                                                    disabled="@busy"
+                                                                    @onclick="() => RemoveAssignment(row)">
+                                                                Deactivate
+                                                            </button>
+                                                        }
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                    </section>
                 </div>
             }
         }
@@ -314,20 +496,147 @@
     private int selectedStaffJobId;
     private bool assignmentActive = true;
     private IEnumerable<SearchableSelect.Option> typeOptions => types.Where(t => t.IsValid).Select(t => new SearchableSelect.Option(t.WorkTypeId, t.Name));
-    private bool busy, loaded, isSuperAdmin, valid = true, isError;
+    private bool busy, loaded, isSuperAdmin, valid = true, isError, locating;
     private bool disposed;
     private int editingType, editingAssignment, jobId, typeId;
     private string name = "", location = "";
-    private string? message;
+    private string? message, mapError;
     private DateTime from = DateTime.UtcNow.AddHours(5).Date;
     private DateTime? to;
 
-    public void Dispose()
+    private readonly string mapElementId = $"wt-geo-map-{Guid.NewGuid():N}";
+    private DotNetObjectReference<WorkTypeManagement>? dotNetRef;
+    private bool mapInitialized;
+    private bool needsMapInit;
+    private bool needsMapResize;
+    private bool mapExpanded;
+    private double geoLat = WorkTypeGeofenceHelper.DefaultLatitude;
+    private double geoLng = WorkTypeGeofenceHelper.DefaultLongitude;
+    private int geoRadiusMeters = WorkTypeGeofenceHelper.DefaultRadiusMeters;
+
+    private string SelectedWorkTypeName => types.FirstOrDefault(t => t.WorkTypeId == typeId)?.Name ?? "";
+    private bool IsGeoSelected => WorkTypeGeofenceHelper.IsGeoWorkTypeName(SelectedWorkTypeName);
+
+    public async ValueTask DisposeAsync()
     {
         disposed = true;
+        if (mapInitialized)
+        {
+            try { await JS.InvokeVoidAsync("hrmGeoMap.destroy", mapElementId); }
+            catch { }
+            mapInitialized = false;
+        }
+        dotNetRef?.Dispose();
+        dotNetRef = null;
     }
 
     protected override Task OnInitializedAsync() => LoadAsync();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (disposed) return;
+
+        if (IsGeoSelected && needsMapInit)
+        {
+            needsMapInit = false;
+            dotNetRef ??= DotNetObjectReference.Create(this);
+            try
+            {
+                var res = await JS.InvokeAsync<GeoInitResult>("hrmGeoMap.init", mapElementId, geoLat, geoLng, geoRadiusMeters, dotNetRef);
+                mapInitialized = res?.Ok == true;
+                mapError = res?.Ok == true ? null : res?.Error;
+                if (!string.IsNullOrWhiteSpace(mapError)) StateHasChanged();
+            }
+            catch
+            {
+                mapInitialized = false;
+                mapError = "Map could not be initialized. You can still enter coordinates manually or use your current location.";
+                StateHasChanged();
+            }
+        }
+        else if (!IsGeoSelected && mapInitialized)
+        {
+            mapInitialized = false;
+            try { await JS.InvokeVoidAsync("hrmGeoMap.destroy", mapElementId); }
+            catch { }
+        }
+        else if (IsGeoSelected && mapInitialized && needsMapResize)
+        {
+            needsMapResize = false;
+            try { await JS.InvokeVoidAsync("hrmGeoMap.resize", mapElementId); }
+            catch { }
+        }
+    }
+
+    [JSInvokable]
+    public void OnMapCoordinatesSelected(double lat, double lng)
+    {
+        if (disposed) return;
+        geoLat = Math.Round(lat, 6);
+        geoLng = Math.Round(lng, 6);
+        StateHasChanged();
+    }
+
+    private async Task OnWorkTypeChangedAsync(int newTypeId)
+    {
+        typeId = newTypeId;
+        mapError = null;
+        if (IsGeoSelected)
+        {
+            needsMapInit = true;
+        }
+        else if (mapInitialized)
+        {
+            mapInitialized = false;
+            try { await JS.InvokeVoidAsync("hrmGeoMap.destroy", mapElementId); }
+            catch { }
+        }
+    }
+
+    private async Task SyncMapFromInputsAsync()
+    {
+        geoRadiusMeters = Math.Clamp(geoRadiusMeters, WorkTypeGeofenceHelper.MinRadiusMeters, WorkTypeGeofenceHelper.MaxRadiusMeters);
+        if (mapInitialized && !disposed)
+        {
+            try { await JS.InvokeVoidAsync("hrmGeoMap.update", mapElementId, geoLat, geoLng, geoRadiusMeters); }
+            catch { }
+        }
+    }
+
+    private void ToggleMapExpandedAsync()
+    {
+        mapExpanded = !mapExpanded;
+        needsMapResize = true;
+    }
+
+    private async Task UseCurrentLocationAsync()
+    {
+        if (locating || disposed) return;
+        locating = true;
+        mapError = null;
+        try
+        {
+            var pos = await JS.InvokeAsync<GeoPositionResult>("hrmGeoMap.getCurrentPosition");
+            if (pos is { Ok: true })
+            {
+                geoLat = pos.Lat;
+                geoLng = pos.Lng;
+                await SyncMapFromInputsAsync();
+            }
+            else
+            {
+                mapError = pos?.Error ?? "Could not determine your current location.";
+            }
+        }
+        catch
+        {
+            mapError = "Could not access browser geolocation.";
+        }
+        finally
+        {
+            locating = false;
+        }
+    }
 
     private async Task LoadAsync()
     {
@@ -417,35 +726,65 @@
         valid = true;
     }
 
-    private Task SaveAssignment() => Act(() => editingAssignment == 0
-        ? WorkTypes.AssignAsync(new()
-        {
-            JobId = jobId,
-            WorkTypeId = typeId,
-            FromDate = DateOnly.FromDateTime(from),
-            ToDate = to.HasValue ? DateOnly.FromDateTime(to.Value) : null,
-            Location = location,
-            IsValid = assignmentActive
-        })
-        : WorkTypes.UpdateAssignmentAsync(new()
-        {
-            AssignedWorkTypeId = editingAssignment,
-            WorkTypeId = typeId,
-            FromDate = DateOnly.FromDateTime(from),
-            ToDate = to.HasValue ? DateOnly.FromDateTime(to.Value) : null,
-            Location = location,
-            IsValid = assignmentActive
-        }));
+    private Task SaveAssignment()
+    {
+        var resolvedLocation = IsGeoSelected
+            ? WorkTypeGeofenceHelper.Format(geoLat, geoLng, geoRadiusMeters, location)
+            : location;
 
-    private void EditAssignment(AssignedWorkTypeDto a)
+        return Act(() => editingAssignment == 0
+            ? WorkTypes.AssignAsync(new()
+            {
+                JobId = jobId,
+                WorkTypeId = typeId,
+                FromDate = DateOnly.FromDateTime(from),
+                ToDate = to.HasValue ? DateOnly.FromDateTime(to.Value) : null,
+                Location = resolvedLocation,
+                IsValid = assignmentActive
+            })
+            : WorkTypes.UpdateAssignmentAsync(new()
+            {
+                AssignedWorkTypeId = editingAssignment,
+                WorkTypeId = typeId,
+                FromDate = DateOnly.FromDateTime(from),
+                ToDate = to.HasValue ? DateOnly.FromDateTime(to.Value) : null,
+                Location = resolvedLocation,
+                IsValid = assignmentActive
+            }));
+    }
+
+    private async Task EditAssignmentAsync(AssignedWorkTypeDto a)
     {
         editingAssignment = a.AssignedWorkTypeId;
         jobId = a.JobId;
         typeId = a.WorkTypeId;
         from = a.FromDate.ToDateTime(TimeOnly.MinValue);
         to = a.ToDate?.ToDateTime(TimeOnly.MinValue);
-        location = a.Location ?? "";
         assignmentActive = a.IsValid;
+        mapError = null;
+
+        if (WorkTypeGeofenceHelper.TryParse(a.Location, out var lat, out var lng, out var rad, out var label))
+        {
+            geoLat = lat;
+            geoLng = lng;
+            geoRadiusMeters = rad;
+            location = label;
+        }
+        else
+        {
+            geoLat = WorkTypeGeofenceHelper.DefaultLatitude;
+            geoLng = WorkTypeGeofenceHelper.DefaultLongitude;
+            geoRadiusMeters = WorkTypeGeofenceHelper.DefaultRadiusMeters;
+            location = a.Location ?? "";
+        }
+
+        if (IsGeoSelected)
+        {
+            if (mapInitialized)
+                await SyncMapFromInputsAsync();
+            else
+                needsMapInit = true;
+        }
     }
 
     private Task RemoveAssignment(AssignedWorkTypeDto a) => Act(() => WorkTypes.DeactivateAssignmentAsync(a.AssignedWorkTypeId));
@@ -458,5 +797,25 @@
         to = null;
         location = "";
         assignmentActive = true;
+        geoLat = WorkTypeGeofenceHelper.DefaultLatitude;
+        geoLng = WorkTypeGeofenceHelper.DefaultLongitude;
+        geoRadiusMeters = WorkTypeGeofenceHelper.DefaultRadiusMeters;
+        mapError = null;
+        needsMapInit = false;
+    }
+
+    private sealed class GeoInitResult
+    {
+        public bool Ok { get; set; }
+        public string? Error { get; set; }
+    }
+
+    private sealed class GeoPositionResult
+    {
+        public bool Ok { get; set; }
+        public double Lat { get; set; }
+        public double Lng { get; set; }
+        public int Accuracy { get; set; }
+        public string? Error { get; set; }
     }
 }

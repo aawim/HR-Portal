@@ -1,154 +1,591 @@
+@using System.IO
+@using HRM.Application.Contracts.Positions
+@using HRM.DTOs.Documents
 @using HRM.Services
+@using HRM.Services.Contracts
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.JSInterop
 @using static HRM.Services.Contracts.StaffPositionManagementServiceContracts
 @inject HRM.Services.Contracts.StaffPositionManagementServiceContracts.IOperations Positions
+@inject DocumentManagementServiceContracts.IOperations DmsService
+@inject HRM.UI.Services.Positions.IPositionContractApiClient ContractApi
 @inject ToastService Toasts
+@inject IJSRuntime JS
 @inject ILogger<StaffPositions> Logger
 
-<section class="w-full p-2 flex flex-col gap-2" aria-label="Staff positions">
-    <div class="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100">
-        <div>
-            <h3 class="text-base font-bold text-slate-800">Staff Positions & Appointments</h3>
-            <p class="text-xs text-slate-500 mt-0.5">Manage assignments, effective dates, pay steps, and termination requests.</p>
+<section class="w-full min-w-0 flex flex-col gap-3 text-slate-900 dark:text-slate-100" aria-label="Staff positions">
+    <!-- Compact Header (no background/border) -->
+    <header class="flex flex-wrap items-center justify-between gap-2 px-1 py-0.5">
+        <div class="min-w-0">
+            <div class="flex items-center gap-2 flex-wrap">
+                <h3 class="text-base font-bold text-slate-900 dark:text-slate-100">Staff Positions &amp; Appointments</h3>
+                @if (data != null)
+                {
+                    <span class="inline-flex items-center gap-1 rounded-full bg-teal-50 dark:bg-teal-950/60 border border-teal-200/80 dark:border-teal-800 px-2 py-0.5 text-[10px] font-semibold text-teal-700 dark:text-teal-300">
+                        <span class="h-1.5 w-1.5 rounded-full bg-teal-500"></span>
+                        @ActiveAssignments.Count active @(ActiveAssignments.Count == 1 ? "position" : "positions")
+                    </span>
+                }
+            </div>
+            <p class="text-xs text-slate-500 dark:text-slate-400">Manage assignments, effective dates, pay steps, and termination requests.</p>
         </div>
-        <div class="flex flex-wrap gap-2">
+        <div class="flex flex-wrap items-center gap-1.5">
+            <button type="button" class="app-button app-button-secondary app-button-sm" disabled="@busy" @onclick="LoadAsync">
+                <AppIcon Name="refresh" Class="@(loading ? "animate-spin text-xs" : "text-xs")" />
+                <span>Refresh</span>
+            </button>
             @if (CanAssign)
             {
-                <button type="button" class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-2xs hover:bg-emerald-700 disabled:opacity-50 transition-colors" disabled="@busy" @onclick="New">
-                    <span>+</span>
+                <button type="button" class="app-button app-button-primary app-button-sm" disabled="@busy" @onclick="New">
+                    <AppIcon Name="add" Class="text-xs" />
                     <span>Assign Position</span>
                 </button>
             }
-            <button type="button" class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs hover:bg-slate-50 disabled:opacity-50 transition-colors" disabled="@busy" @onclick="LoadAsync">
-                <span class="@(loading ? "animate-spin" : "")">↻</span>
-                <span>Refresh</span>
-            </button>
         </div>
-    </div>
+    </header>
+
     @if (message != null)
     {
-        <p role="alert" class="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 shadow-2xs">@message</p>
+        <div role="alert" class="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50/80 dark:bg-amber-950/40 px-3.5 py-2.5 text-xs text-amber-800 dark:text-amber-200">@message</div>
     }
+
     @if (loading)
     {
-        <p role="status" class="text-xs text-slate-500">Loading positions…</p>
+        <div role="status" class="flex items-center justify-center gap-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-8 text-xs text-slate-500">
+            <span class="h-4 w-4 rounded-full border-2 border-blue-600 border-t-transparent animate-spin"></span>
+            <span>Loading positions…</span>
+        </div>
     }
     else if (data != null)
     {
         <div class="staff-position-layout">
-            <div class="position-editor min-w-0">
-                @if (editing)
+            <div class="position-editor min-w-0 flex flex-col gap-3">
+                @if (attachingContractFor != null)
                 {
-                    <form @onsubmit="SaveAsync" @onsubmit:preventDefault class="space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-2xs">
-                        <h4 class="font-bold text-sm text-slate-800">@(ending ? "Job termination request" : changing ? "Change position" : original != null ? "Edit position dates" : "Assign position")</h4>
-                        @if (changing)
-                        {
-                            <p class="text-xs text-slate-500">@original!.Name will end the day before the new position starts.</p>
-                        }
-                        <fieldset disabled="@busy" class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                            <label class="block text-xs font-semibold text-slate-600">Employment
-                                <select class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500" @bind="jobId" disabled="@(original != null)" required>
-                                    <option value="0">Select employment</option>
-                                    @foreach (var job in data.Jobs) { <option value="@job.Id">@job.Name</option> }
-                                    @if (original != null && !data.Jobs.Any(j => j.Id == original.JobId))
-                                    { <option value="@original.JobId">Job @original.JobId</option> }
-                                </select>
+                    <div class="rounded-xl border border-blue-200 dark:border-blue-800 bg-white dark:bg-slate-900 overflow-hidden">
+                        <div class="bg-blue-50/70 dark:bg-blue-950/40 border-b border-blue-200 dark:border-blue-800 px-3.5 py-2.5 flex items-center justify-between gap-2">
+                            <div>
+                                <h4 class="text-[11px] font-bold uppercase tracking-wider text-blue-900 dark:text-blue-200">
+                                    Attach Contract / Agreement
+                                </h4>
+                                <p class="text-[11px] text-slate-600 dark:text-slate-400 mt-0.5">
+                                    @attachingContractFor.Name · Job #@attachingContractFor.JobId
+                                </p>
+                            </div>
+                            <button type="button" class="text-xs font-semibold text-slate-500 hover:text-slate-800" disabled="@uploadingContract" @onclick="CloseContractAttach">✕</button>
+                        </div>
+                        <div class="p-3.5 space-y-3 text-xs">
+                            <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 sm:col-span-2">
+                                    Document Title *
+                                    <input type="text"
+                                           maxlength="200"
+                                           class="mt-1 w-full h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 text-xs text-slate-900 dark:text-slate-100 focus:border-teal-600 focus:outline-none"
+                                           placeholder="e.g. Employment Contract / Appointment Agreement"
+                                           @bind="contractUpload.Title"
+                                           @bind:event="oninput" />
+                                </label>
+                                <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                                    Document Type *
+                                    <select class="mt-1 w-full h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 text-xs text-slate-900 dark:text-slate-100 focus:border-teal-600 focus:outline-none"
+                                            @bind="contractUpload.DmsDocumentTypeId">
+                                        @foreach (var dt in docTypes)
+                                        {
+                                            <option value="@dt.DmsDocumentTypeId">[@dt.CategoryName] @dt.Name</option>
+                                        }
+                                    </select>
+                                </label>
+                                <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                                    Classification
+                                    <select class="mt-1 w-full h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 text-xs text-slate-900 dark:text-slate-100 focus:border-teal-600 focus:outline-none"
+                                            @bind="contractUpload.Classification">
+                                        <option value="Confidential">Confidential</option>
+                                        <option value="Internal">Internal</option>
+                                        <option value="Restricted">Restricted</option>
+                                    </select>
+                                </label>
+                                <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                                    Effective From
+                                    <InputDate class="mt-1 w-full h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 text-xs text-slate-900 dark:text-slate-100 focus:border-teal-600 focus:outline-none"
+                                               @bind-Value="contractUpload.EffectiveFromDate" />
+                                </label>
+                                <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                                    Expiry Date (optional)
+                                    <InputDate class="mt-1 w-full h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 text-xs text-slate-900 dark:text-slate-100 focus:border-teal-600 focus:outline-none"
+                                               @bind-Value="contractUpload.ExpiryDate" />
+                                </label>
+                                <div class="sm:col-span-2">
+                                    <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                                        Contract / Agreement File * <span class="font-normal text-slate-400">(PDF, DOCX, PNG, JPG · max 20 MB)</span>
+                                    </label>
+                                    <InputFile OnChange="HandleContractFileSelected" accept=".pdf,.doc,.docx,.png,.jpg,.jpeg" class="block w-full text-xs text-slate-700 dark:text-slate-300" />
+                                    @if (!string.IsNullOrWhiteSpace(contractUpload.FileName))
+                                    {
+                                        <p class="mt-1 text-[11px] text-emerald-700 dark:text-emerald-300">
+                                            Selected: <strong>@contractUpload.FileName</strong> (@((contractUpload.FileContent.Length / 1024.0).ToString("N1")) KB)
+                                        </p>
+                                    }
+                                </div>
+                            </div>
+                            <div class="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+                                <button type="button"
+                                        class="app-button app-button-primary app-button-sm"
+                                        disabled="@(uploadingContract || contractUpload.DmsDocumentTypeId <= 0 || string.IsNullOrWhiteSpace(contractUpload.Title) || contractUpload.FileContent.Length == 0)"
+                                        @onclick="SubmitContractUploadAsync">
+                                    <i class="bi bi-paperclip text-xs" aria-hidden="true"></i>
+                                    <span>@(uploadingContract ? "Uploading…" : "Attach Contract / Agreement")</span>
+                                </button>
+                                <button type="button" class="app-button app-button-secondary app-button-sm" disabled="@uploadingContract" @onclick="CloseContractAttach">Cancel</button>
+                            </div>
+                        </div>
+                    </div>
+                }
+                else if (requestingUnlockFor != null)
+                {
+                    <div class="rounded-xl border border-amber-300 dark:border-amber-800 bg-white dark:bg-slate-900 overflow-hidden">
+                        <div class="bg-amber-50/80 dark:bg-amber-950/40 border-b border-amber-200 dark:border-amber-800 px-3.5 py-2.5 flex items-center justify-between gap-2">
+                            <div>
+                                <h4 class="text-[11px] font-bold uppercase tracking-wider text-amber-900 dark:text-amber-200">
+                                    Request Staff to Unlock Finalised Contract
+                                </h4>
+                                <p class="text-[11px] text-slate-600 dark:text-slate-400 mt-0.5">
+                                    @requestingUnlockFor.PositionName · @requestingUnlockFor.DocumentNumber
+                                </p>
+                            </div>
+                            <button type="button" class="text-xs font-semibold text-slate-500 hover:text-slate-800" disabled="@submittingUnlock" @onclick="CloseUnlockRequest">✕</button>
+                        </div>
+                        <div class="p-3.5 space-y-3 text-xs">
+                            <p class="text-[11px] text-slate-600 dark:text-slate-300">
+                                This contract has been finalised and accepted by the staff member. Provide a clear reason for the change — the staff member will receive a notification and must unlock edit access before HR can attach a revised contract.
+                            </p>
+                            <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                                Reason for Contract Change *
+                                <textarea rows="3"
+                                          maxlength="500"
+                                          class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 p-2 text-xs text-slate-900 dark:text-slate-100 focus:border-teal-600 focus:outline-none"
+                                          placeholder="Explain what needs to be amended in the contract…"
+                                          @bind="unlockReason"
+                                          @bind:event="oninput"></textarea>
                             </label>
-                            @if(SelectingPosition)
+                            <div class="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+                                <button type="button"
+                                        class="app-button app-button-primary app-button-sm"
+                                        disabled="@(submittingUnlock || string.IsNullOrWhiteSpace(unlockReason))"
+                                        @onclick="SubmitUnlockRequestAsync">
+                                    <i class="bi bi-unlock text-xs" aria-hidden="true"></i>
+                                    <span>@(submittingUnlock ? "Sending Request…" : "Send Unlock Request to Staff")</span>
+                                </button>
+                                <button type="button" class="app-button app-button-secondary app-button-sm" disabled="@submittingUnlock" @onclick="CloseUnlockRequest">Cancel</button>
+                            </div>
+                        </div>
+                    </div>
+                }
+                else if (editing)
+                {
+                    <form @onsubmit="SaveAsync" @onsubmit:preventDefault class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden">
+                        <div class="bg-slate-50/80 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 px-3.5 py-2.5">
+                            <h4 class="text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-200">
+                                @(ending ? "Job Termination Request" : changing ? "Change Position" : original != null ? "Edit Position Dates" : "Assign Position")
+                            </h4>
+                            @if (changing)
                             {
-                                <label class="block text-xs font-semibold text-slate-600">Framework<select class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500" @bind="selectedFrameworkId" @bind:after="FrameworkChanged" required><option value="0">Select framework</option>@foreach(var framework in data.Frameworks){<option value="@framework.Id">@framework.Name</option>}</select></label>
-                                <label class="block text-xs font-semibold text-slate-600">Position matrix<select class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500" @bind="selectedMatrixId" @bind:after="MatrixChanged" disabled="@(selectedFrameworkId==0)" required><option value="0">Select position matrix</option>@foreach(var matrix in data.PositionMatrices.Where(x=>x.FrameworkId==selectedFrameworkId)){<option value="@matrix.Id" disabled="@(matrix.AvailableSlots==0)">@matrix.Name · @matrix.AvailableSlots / @matrix.ApprovedSlots slots available@(matrix.AvailableSlots==0?" · Full":"")</option>}</select></label>
+                                <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">@original!.Name will end the day before the new position starts.</p>
                             }
-                            <label class="block text-xs font-semibold text-slate-600">@(SelectingPosition?"Vacant position slot":"Position")
-                                <select class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500" @bind="positionId" @bind:after="()=>jobMatrixStepId=null" disabled="@(!SelectingPosition||(SelectingPosition&&selectedMatrixId==0))" required>
-                                    <option value="0">Select position</option>
-                                    @foreach (var position in data.Positions.Where(p=>!SelectingPosition||p.FrameworkId==selectedFrameworkId&&p.MatrixId==selectedMatrixId)) { <option value="@position.Id">@position.Name · #@position.Id</option> }
-                                    @if (!SelectingPosition && original != null && !data.Positions.Any(p => p.Id == original.PositionId))
-                                    { <option value="@original.PositionId">@original.Name</option> }
-                                </select>
-                            </label>
-                            @if(ending)
+                        </div>
+                        <div class="p-3.5 space-y-3">
+                            <fieldset disabled="@busy" class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">Employment
+                                    <select class="mt-1 w-full h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 text-xs text-slate-900 dark:text-slate-100 focus:border-teal-600 focus:outline-none" @bind="jobId" disabled="@(original != null)" required>
+                                        <option value="0">Select employment</option>
+                                        @foreach (var job in data.Jobs) { <option value="@job.Id">@job.Name</option> }
+                                        @if (original != null && !data.Jobs.Any(j => j.Id == original.JobId))
+                                        { <option value="@original.JobId">Job @original.JobId</option> }
+                                    </select>
+                                </label>
+                                @if (SelectingPosition)
+                                {
+                                    <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">Framework
+                                        <select class="mt-1 w-full h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 text-xs text-slate-900 dark:text-slate-100 focus:border-teal-600 focus:outline-none" @bind="selectedFrameworkId" @bind:after="FrameworkChanged" required>
+                                            <option value="0">Select framework</option>
+                                            @foreach (var framework in data.Frameworks) { <option value="@framework.Id">@framework.Name</option> }
+                                        </select>
+                                    </label>
+                                    <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">Position Matrix
+                                        <select class="mt-1 w-full h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 text-xs text-slate-900 dark:text-slate-100 focus:border-teal-600 focus:outline-none" @bind="selectedMatrixId" @bind:after="MatrixChanged" disabled="@(selectedFrameworkId == 0)" required>
+                                            <option value="0">Select position matrix</option>
+                                            @foreach (var matrix in data.PositionMatrices.Where(x => x.FrameworkId == selectedFrameworkId))
+                                            {
+                                                <option value="@matrix.Id" disabled="@(matrix.AvailableSlots == 0)">@matrix.Name · @matrix.AvailableSlots / @matrix.ApprovedSlots slots available@(matrix.AvailableSlots == 0 ? " · Full" : "")</option>
+                                            }
+                                        </select>
+                                    </label>
+                                }
+                                <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">@(SelectingPosition ? "Vacant Position Slot" : "Position")
+                                    <select class="mt-1 w-full h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 text-xs text-slate-900 dark:text-slate-100 focus:border-teal-600 focus:outline-none" @bind="positionId" @bind:after="() => jobMatrixStepId = null" disabled="@(!SelectingPosition || (SelectingPosition && selectedMatrixId == 0))" required>
+                                        <option value="0">Select position</option>
+                                        @foreach (var position in data.Positions.Where(p => !SelectingPosition || p.FrameworkId == selectedFrameworkId && p.MatrixId == selectedMatrixId)) { <option value="@position.Id">@position.Name · #@position.Id</option> }
+                                        @if (!SelectingPosition && original != null && !data.Positions.Any(p => p.Id == original.PositionId))
+                                        { <option value="@original.PositionId">@original.Name</option> }
+                                    </select>
+                                </label>
+                                @if (ending)
+                                {
+                                    <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">Job Termination Request Type
+                                        <select class="mt-1 w-full h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 text-xs text-slate-900 dark:text-slate-100 focus:border-teal-600 focus:outline-none" @bind="terminationRequestTypeId" required>
+                                            <option value="">Select request type</option>
+                                            @foreach (var type in data.TerminationRequestTypes) { <option value="@type.Id">@type.Name</option> }
+                                        </select>
+                                    </label>
+                                    @if (data.TerminationRequestTypes.Count == 0) { <p role="status" class="text-xs text-amber-700">Job termination requests are unavailable. Please contact HR.</p> }
+                                }
+                                else
+                                {
+                                    <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">From Date
+                                        <InputDate class="mt-1 w-full h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 text-xs text-slate-900 dark:text-slate-100 focus:border-teal-600 focus:outline-none" @bind-Value="from" disabled="@ending" />
+                                    </label>
+                                }
+                                @if (data.Positions.FirstOrDefault(x => x.Id == positionId)?.Pay is { } payDefinition && (original == null || changing))
+                                {
+                                    <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">Employee Job Pay Step
+                                        <select class="mt-1 w-full h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 text-xs text-slate-900 dark:text-slate-100 focus:border-teal-600 focus:outline-none" @bind="jobMatrixStepId">
+                                            <option value="">Select pay step</option>
+                                            @foreach (var s in payDefinition.Steps) { <option value="@s.Id">Step @s.Number · @s.JobAllowance.ToString("N2") @payDefinition.Currency</option> }
+                                        </select>
+                                    </label>
+                                }
+                                <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">@(ending ? "Termination Effective Date" : "To Date (optional)")
+                                    <InputDate class="mt-1 w-full h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 text-xs text-slate-900 dark:text-slate-100 focus:border-teal-600 focus:outline-none" @bind-Value="to" />
+                                </label>
+                                <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 sm:col-span-2">Reason
+                                    <textarea class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 p-2 text-xs text-slate-900 dark:text-slate-100 focus:border-teal-600 focus:outline-none" @bind="reason" maxlength="500" required rows="2"></textarea>
+                                </label>
+                            </fieldset>
+                            @if (data.Positions.FirstOrDefault(x => x.Id == positionId)?.Pay is { } selectedPay)
                             {
-                                <label class="block text-xs font-semibold text-slate-600">Job termination request type<select class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500" @bind="terminationRequestTypeId" required><option value="">Select request type</option>@foreach(var type in data.TerminationRequestTypes){<option value="@type.Id">@type.Name</option>}</select></label>
-                                @if(data.TerminationRequestTypes.Count==0){<p role="status" class="text-xs text-amber-700">Job termination requests are unavailable. Please contact HR.</p>}
+                                <div class="text-xs bg-slate-50/70 dark:bg-slate-800/40 p-2.5 rounded-lg border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300">
+                                    <p class="font-semibold">Basic salary: <span class="tabular-nums">@selectedPay.BasicSalary.ToString("N2") @selectedPay.Currency</span> · Job allowance: <span class="tabular-nums">@selectedPay.JobAllowance.ToString("N2")</span></p>
+                                    @foreach (var b in selectedPay.Benefits) { <p class="text-[11px] text-slate-500">@b.Name · @(b.Amount?.ToString("N2") ?? "Non-cash") · @b.Frequency</p> }
+                                </div>
                             }
-                            else
-                            {
-                            <label class="block text-xs font-semibold text-slate-600">From date
-                                <InputDate class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500" @bind-Value="from" disabled="@ending" />
-                            </label>
-                            }
-                            @if(data.Positions.FirstOrDefault(x=>x.Id==positionId)?.Pay is {} payDefinition && (original==null||changing))
-                            {
-                                <label class="block text-xs font-semibold text-slate-600">Employee Job pay step<select class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500" @bind="jobMatrixStepId"><option value="">Select pay step</option>@foreach(var s in payDefinition.Steps){<option value="@s.Id">Step @s.Number · @s.JobAllowance.ToString("N2") @payDefinition.Currency</option>}</select></label>
-                            }
-                            <label class="block text-xs font-semibold text-slate-600">@(ending ? "Termination effective date (first day no longer employed)" : "To date (optional)")
-                                <InputDate class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500" @bind-Value="to" />
-                            </label>
-                            <label class="block text-xs font-semibold text-slate-600 sm:col-span-2">Reason
-                                <textarea class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500" @bind="reason" maxlength="500" required rows="2"></textarea>
-                            </label>
-                        </fieldset>
-                        @if(data.Positions.FirstOrDefault(x=>x.Id==positionId)?.Pay is {} selectedPay)
-                        {
-                            <div class="text-xs bg-slate-50 p-2.5 rounded-lg border border-slate-200 text-slate-700"><p class="font-medium">Basic salary: @selectedPay.BasicSalary.ToString("N2") @selectedPay.Currency · Job allowance: @selectedPay.JobAllowance.ToString("N2")</p>@foreach(var b in selectedPay.Benefits){<p class="text-slate-500">@b.Name · @(b.Amount?.ToString("N2")??"Non-cash") · @b.Frequency</p>}</div>
-                        }
-                        <div class="flex flex-wrap gap-2 pt-2">
-                            <button type="submit" class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-2xs hover:bg-emerald-700 disabled:opacity-50 transition-colors" disabled="@busy">@(busy ? "Submitting…" : "Submit for approval")</button>
-                            <button type="button" class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs hover:bg-slate-50 disabled:opacity-50 transition-colors" disabled="@busy" @onclick="() => editing = false">Cancel</button>
+                            <div class="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+                                <button type="submit" class="app-button app-button-primary app-button-sm" disabled="@busy">@(busy ? "Submitting…" : "Submit for Approval")</button>
+                                <button type="button" class="app-button app-button-secondary app-button-sm" disabled="@busy" @onclick="() => editing = false">Cancel</button>
+                            </div>
                         </div>
                     </form>
                 }
                 else
                 {
-                    <div class="rounded-xl border border-slate-200 bg-white p-4 text-xs text-slate-500 shadow-2xs">
-                        @(data.Jobs.Count==0?"No active employment is available. A new employment appointment must be approved before a position can be assigned.":"Select a position action to start.")
+                    <div class="rounded-xl border border-dashed border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-6 text-center text-xs text-slate-500">
+                        @(data.Jobs.Count == 0 ? "No active employment is available. A new employment appointment must be approved before a position can be assigned." : "Select a position action to start.")
                     </div>
                 }
+                <HRM.Components.Shared.StaffPositionRequests StaffId="StaffId" RefreshVersion="requestVersion" OnChanged="LoadAsync" />
             </div>
-            <div class="position-list-panel min-w-0 space-y-4">
-                <div class="position-list rounded-xl border border-slate-200 bg-white p-4 shadow-2xs space-y-3" aria-label="Position assignments">
-                    <h4 class="font-bold text-sm text-slate-800 pb-2 border-b border-slate-100 flex items-center justify-between">
-                        <span>Positions</span>
-                        <span class="text-xs font-normal text-slate-500">(@data.Assignments.Count assignments)</span>
-                    </h4>
-                    @if (data.Assignments.Count == 0)
+
+            <div class="position-list-panel min-w-0 flex flex-col gap-3">
+                <div class="position-list rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden" aria-label="Active position assignments">
+                    <div class="bg-slate-50/80 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 px-3.5 py-2.5 flex items-center justify-between gap-2">
+                        <h4 class="text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-200">Active Positions</h4>
+                        <span class="rounded-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-2 py-0.5 text-[10px] font-semibold text-slate-600 dark:text-slate-300">@ActiveAssignments.Count</span>
+                    </div>
+                    <div class="p-3 space-y-2.5">
+                        @if (ActiveAssignments.Count == 0)
+                        {
+                            <p class="py-3 text-center text-xs text-slate-500">No active position assignments found in this organisation.</p>
+                        }
+                        else
+                        {
+                            @foreach (var assignment in ActiveAssignments)
+                            {
+                                <article class="p-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950/40 text-xs space-y-2" @key="assignment.Id">
+                                    <div class="flex items-start justify-between gap-2 flex-wrap">
+                                        <h5 class="font-semibold text-slate-900 dark:text-slate-100">@assignment.Name <span class="font-mono font-normal text-slate-400">· #@assignment.PositionId</span></h5>
+                                        <span class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold bg-teal-50 dark:bg-teal-950/50 text-teal-800 dark:text-teal-300 border border-teal-200 dark:border-teal-800">@Status(assignment)</span>
+                                    </div>
+                                    <p class="text-[11px] text-slate-500 dark:text-slate-400">Job @assignment.JobId · @assignment.From.ToString("dd MMM yyyy") – @(assignment.To?.ToString("dd MMM yyyy") ?? "Ongoing")</p>
+                                    @if (assignment.Pay is { } pay)
+                                    {
+                                        <details class="rounded-md border border-slate-200/80 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40 px-2.5 py-1.5 text-[11px] text-slate-600 dark:text-slate-300">
+                                            <summary class="cursor-pointer font-semibold text-teal-700 dark:text-teal-300 select-none">Framework pay details</summary>
+                                            <p class="mt-1">Basic salary: <strong class="tabular-nums">@pay.BasicSalary.ToString("N2") @pay.Currency</strong> · Job allowance: <strong class="tabular-nums">@pay.JobAllowance.ToString("N2")</strong></p>
+                                            @foreach (var b in pay.Benefits) { <p>@b.Name · @(b.Amount?.ToString("N2") ?? "Non-cash") · @b.Frequency</p> }
+                                        </details>
+                                    }
+                                    @{
+                                        var contracts = GetContractsForAssignment(assignment);
+                                        var activeContract = GetActiveContractWorkflow(assignment);
+                                        var isContractFinalised = string.Equals(activeContract?.WorkflowStatus, "Finalised", StringComparison.OrdinalIgnoreCase);
+                                        var isUnlockRequested = string.Equals(activeContract?.WorkflowStatus, "UnlockRequested", StringComparison.OrdinalIgnoreCase);
+                                        var isUnlockedForEdit = string.Equals(activeContract?.WorkflowStatus, "UnlockedForEdit", StringComparison.OrdinalIgnoreCase);
+                                    }
+                                    @if (contracts.Count > 0)
+                                    {
+                                        <div class="rounded-md border border-blue-200/80 dark:border-blue-900/60 bg-blue-50/40 dark:bg-blue-950/20 px-2.5 py-2 space-y-1.5">
+                                            <div class="flex items-center justify-between gap-2 text-[10px] font-bold uppercase tracking-wider text-blue-800 dark:text-blue-300">
+                                                <span class="inline-flex items-center gap-1"><i class="bi bi-file-earmark-check" aria-hidden="true"></i> Contract / Agreement</span>
+                                                <span>@contracts.Count file@(contracts.Count == 1 ? "" : "s")</span>
+                                            </div>
+                                            @foreach (var doc in contracts)
+                                            {
+                                                var wf = GetContractWorkflow(doc.DocumentId);
+                                                <div class="flex items-center justify-between gap-2 rounded bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 px-2 py-1.5 text-[11px]">
+                                                    <div class="min-w-0 space-y-0.5">
+                                                        <div class="flex items-center gap-1.5 flex-wrap">
+                                                            <span class="font-semibold text-slate-800 dark:text-slate-100 truncate">@doc.Title</span>
+                                                            @if (wf != null)
+                                                            {
+                                                                <span class="inline-flex items-center rounded-full px-1.5 py-0.5 text-[9px] font-semibold border @WorkflowStatusBadgeClass(wf.WorkflowStatus)">
+                                                                    @WorkflowStatusLabel(wf.WorkflowStatus)
+                                                                </span>
+                                                            }
+                                                        </div>
+                                                        <div class="text-[10px] text-slate-500 font-mono">@doc.DocumentNumber · v@(doc.CurrentVersionNumber).0</div>
+                                                        @if (wf != null)
+                                                        {
+                                                            @if (wf.AcceptedAtUtc.HasValue && string.Equals(wf.WorkflowStatus, "Finalised", StringComparison.OrdinalIgnoreCase))
+                                                            {
+                                                                <div class="text-[10px] text-emerald-700 dark:text-emerald-300">
+                                                                    Accepted by @(wf.AcceptedByName ?? "Staff") on @wf.AcceptedAtUtc.Value.AddHours(5).ToString("dd MMM yyyy HH:mm")
+                                                                </div>
+                                                            }
+                                                            @if (string.Equals(wf.WorkflowStatus, "UnlockRequested", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(wf.UnlockRequestReason))
+                                                            {
+                                                                <div class="text-[10px] text-amber-700 dark:text-amber-300">
+                                                                    Unlock reason: @wf.UnlockRequestReason
+                                                                </div>
+                                                            }
+                                                            @if (string.Equals(wf.WorkflowStatus, "UnlockedForEdit", StringComparison.OrdinalIgnoreCase))
+                                                            {
+                                                                <div class="text-[10px] text-blue-700 dark:text-blue-300">
+                                                                    Unlocked by @(wf.UnlockedByName ?? "Staff")@(wf.UnlockedAtUtc.HasValue ? $" on {wf.UnlockedAtUtc.Value.AddHours(5):dd MMM yyyy HH:mm}" : "") — ready for revised contract upload.
+                                                                </div>
+                                                            }
+                                                            @if (!string.IsNullOrWhiteSpace(wf.StaffDecisionNote) && string.Equals(wf.WorkflowStatus, "Finalised", StringComparison.OrdinalIgnoreCase))
+                                                            {
+                                                                <div class="text-[10px] text-slate-500 dark:text-slate-400">
+                                                                    Staff note: @wf.StaffDecisionNote
+                                                                </div>
+                                                            }
+                                                        }
+                                                    </div>
+                                                    <div class="inline-flex items-center gap-1 shrink-0">
+                                                        <button type="button"
+                                                                class="app-button app-button-primary app-button-sm"
+                                                                disabled="@loadingPreview"
+                                                                @onclick="() => ViewContractAsync(doc)">
+                                                            <i class="bi bi-eye text-[11px]" aria-hidden="true"></i>
+                                                            <span>View</span>
+                                                        </button>
+                                                        <button type="button"
+                                                                class="app-button app-button-secondary app-button-sm"
+                                                                @onclick="() => DownloadContractAsync(doc.DocumentId)">
+                                                            <i class="bi bi-download text-[11px]" aria-hidden="true"></i>
+                                                            <span>Download</span>
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            }
+                                        </div>
+                                    }
+                                    @if (contracts.Count > 0 || (data.CanManage && IsActivePosition(assignment)))
+                                    {
+                                        <div class="flex flex-wrap items-center gap-1.5 pt-2 border-t border-slate-100 dark:border-slate-800">
+                                            @if (contracts.Count > 0)
+                                            {
+                                                <button type="button" class="app-button app-button-primary app-button-sm" disabled="@loadingPreview" @onclick="() => ViewContractAsync(contracts[0])">
+                                                    <i class="bi bi-eye text-xs" aria-hidden="true"></i>
+                                                    <span>View Contract</span>
+                                                </button>
+                                            }
+                                            @if (data.CanManage && IsActivePosition(assignment))
+                                            {
+                                                @if (isContractFinalised && activeContract != null)
+                                                {
+                                                    <button type="button" class="inline-flex items-center gap-1 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-800 hover:bg-amber-100 disabled:opacity-50 transition-colors" disabled="@(busy || submittingUnlock)" @onclick="() => OpenUnlockRequest(activeContract)">
+                                                        <i class="bi bi-unlock text-xs" aria-hidden="true"></i>
+                                                        <span>Request Unlock to Edit</span>
+                                                    </button>
+                                                }
+                                                else if (isUnlockRequested)
+                                                {
+                                                    <span class="inline-flex items-center gap-1 rounded-lg border border-amber-200 bg-amber-50/70 px-2.5 py-1 text-[11px] font-semibold text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
+                                                        <i class="bi bi-hourglass-split text-xs" aria-hidden="true"></i>
+                                                        <span>Unlock Requested (Awaiting Staff)</span>
+                                                    </span>
+                                                }
+                                                else
+                                                {
+                                                    <button type="button" class="app-button app-button-secondary app-button-sm" disabled="@(busy || uploadingContract)" @onclick="() => OpenContractAttach(assignment)">
+                                                        <i class="bi bi-paperclip text-xs" aria-hidden="true"></i>
+                                                        <span>@(isUnlockedForEdit ? "Attach Revised Contract" : "Attach Contract / Agreement")</span>
+                                                    </button>
+                                                }
+                                                <button type="button" class="app-button app-button-secondary app-button-sm" disabled="@busy" @onclick="() => Edit(assignment)">Edit dates</button>
+                                                <button type="button" class="app-button app-button-secondary app-button-sm" disabled="@busy" @onclick="() => Edit(assignment, change: true)">Change position</button>
+                                            }
+                                        </div>
+                                    }
+                                </article>
+                            }
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (previewDocument != null)
+    {
+        <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-2 sm:p-3"
+             role="dialog"
+             aria-modal="true"
+             aria-label="Contract preview"
+             @onclick="ClosePreview">
+            <div class="contract-preview-modal w-full max-w-6xl rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-2xl overflow-hidden flex flex-col"
+                 @onclick:stopPropagation="true">
+                <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 dark:border-slate-800 bg-slate-50/90 dark:bg-slate-800/80 px-4 py-2.5 shrink-0">
+                    <div class="min-w-0">
+                        <h4 class="text-sm font-bold text-slate-900 dark:text-slate-100 truncate">@previewDocument.Title</h4>
+                        <p class="text-[11px] text-slate-500 dark:text-slate-400 font-mono">
+                            @previewDocument.DocumentNumber · v@(previewDocument.CurrentVersionNumber).0@(string.IsNullOrWhiteSpace(previewFileName) ? "" : $" · {previewFileName}")
+                        </p>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-1.5">
+                        @if (!loadingPreview && string.IsNullOrWhiteSpace(previewError) && (IsPdfPreview || IsImagePreview))
+                        {
+                            <div class="inline-flex items-center rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 overflow-hidden">
+                                <button type="button"
+                                        class="px-2 py-1 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40"
+                                        title="Zoom out"
+                                        disabled="@(previewZoom <= 50)"
+                                        @onclick="ZoomOut">
+                                    <i class="bi bi-zoom-out" aria-hidden="true"></i>
+                                </button>
+                                <button type="button"
+                                        class="px-2 py-1 text-[11px] font-mono font-semibold text-slate-700 dark:text-slate-200 border-x border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800"
+                                        title="Reset zoom to 100%"
+                                        @onclick="ResetZoom">
+                                    @previewZoom%
+                                </button>
+                                <button type="button"
+                                        class="px-2 py-1 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40"
+                                        title="Zoom in"
+                                        disabled="@(previewZoom >= 250)"
+                                        @onclick="ZoomIn">
+                                    <i class="bi bi-zoom-in" aria-hidden="true"></i>
+                                </button>
+                            </div>
+                        }
+                        <button type="button"
+                                class="app-button app-button-secondary app-button-sm"
+                                @onclick="() => DownloadContractAsync(previewDocument.DocumentId)">
+                            <i class="bi bi-download text-xs" aria-hidden="true"></i>
+                            <span>Download</span>
+                        </button>
+                        <button type="button"
+                                class="app-button app-button-secondary app-button-sm"
+                                @onclick="ClosePreview">
+                            <span>Close</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="contract-preview-body p-3 overflow-auto flex-1 bg-slate-100/70 dark:bg-slate-950/60">
+                    @if (loadingPreview)
                     {
-                        <p class="py-2 text-xs text-slate-500">No position assignments found in this organisation.</p>
+                        <div class="flex items-center justify-center gap-2 py-16 text-xs text-slate-500">
+                            <span class="h-4 w-4 rounded-full border-2 border-blue-600 border-t-transparent animate-spin"></span>
+                            <span>Loading contract preview…</span>
+                        </div>
+                    }
+                    else if (!string.IsNullOrWhiteSpace(previewError))
+                    {
+                        <div role="alert" class="rounded-xl border border-rose-200 bg-rose-50 p-4 text-xs text-rose-800">
+                            @previewError
+                        </div>
+                    }
+                    else if (IsPdfPreview && !string.IsNullOrWhiteSpace(previewDataUrl))
+                    {
+                        <div class="contract-preview-stage" style="width: @(previewZoom)%; height: @(Math.Max(100, previewZoom))%;">
+                            <iframe @key="@($"pdf-{previewDocument.DocumentId}-{previewZoom}")"
+                                    src="@($"{previewDataUrl}#zoom={previewZoom}")"
+                                    title="@previewDocument.Title"
+                                    class="w-full h-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white"></iframe>
+                        </div>
+                    }
+                    else if (IsImagePreview && !string.IsNullOrWhiteSpace(previewDataUrl))
+                    {
+                        <div class="flex justify-center">
+                            <img src="@previewDataUrl"
+                                 alt="@previewDocument.Title"
+                                 style="width: @(previewZoom)%; max-width: none;"
+                                 class="rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm bg-white" />
+                        </div>
                     }
                     else
                     {
-                        @foreach (var assignment in data.Assignments)
-                        {
-                            <article class="p-3 rounded-lg border border-slate-100 bg-slate-50/50 text-xs space-y-2 hover:bg-slate-50 transition-colors" @key="assignment.Id">
-                                <div class="flex items-start justify-between gap-2 flex-wrap">
-                                    <h5 class="font-bold text-slate-800">@assignment.Name <span class="font-normal text-slate-400">· #@assignment.PositionId</span></h5>
-                                    <span class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">@Status(assignment)</span>
-                                </div>
-                                <p class="text-slate-500">Job @assignment.JobId · @assignment.From.ToString("dd MMM yyyy") – @(assignment.To?.ToString("dd MMM yyyy") ?? "Ongoing")</p>
-                                @if(assignment.Pay is {} pay){<details class="text-[11px] text-slate-600"><summary class="cursor-pointer font-medium text-emerald-700">Framework pay details</summary><p class="mt-1">Basic salary: @pay.BasicSalary.ToString("N2") @pay.Currency · Job allowance: @pay.JobAllowance.ToString("N2")</p>@foreach(var b in pay.Benefits){<p>@b.Name · @(b.Amount?.ToString("N2")??"Non-cash") · @b.Frequency</p>}</details>}
-                                @if (data.CanManage && assignment.StateId == 4 && (!assignment.To.HasValue || assignment.To.Value.Date > Today))
-                                {
-                                    <div class="flex flex-wrap gap-1.5 pt-1">
-                                        <button type="button" class="inline-flex items-center rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 shadow-2xs hover:bg-slate-50 disabled:opacity-50 transition-colors" disabled="@busy" @onclick="() => Edit(assignment)">Edit dates</button>
-                                        <button type="button" class="inline-flex items-center rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 shadow-2xs hover:bg-slate-50 disabled:opacity-50 transition-colors" disabled="@busy" @onclick="() => Edit(assignment, change: true)">Change position</button>
-                                        <button type="button" class="inline-flex items-center rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1 text-xs font-medium text-rose-700 shadow-2xs hover:bg-rose-100 disabled:opacity-50 transition-colors" disabled="@busy" @onclick="() => Edit(assignment, end: true)">Job termination</button>
-                                    </div>
-                                }
-                            </article>
-                        }
+                        <div class="rounded-xl border border-dashed border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-8 text-center text-xs text-slate-600 dark:text-slate-300 space-y-3">
+                            <i class="bi bi-file-earmark-text text-3xl text-slate-400" aria-hidden="true"></i>
+                            <p class="font-semibold text-slate-800 dark:text-slate-100">Inline preview is not available for this file format (@previewContentType).</p>
+                            <button type="button"
+                                    class="app-button app-button-primary app-button-sm"
+                                    @onclick="() => DownloadContractAsync(previewDocument.DocumentId)">
+                                <i class="bi bi-download text-xs" aria-hidden="true"></i>
+                                <span>Download File</span>
+                            </button>
+                        </div>
                     }
                 </div>
-                <HRM.Components.Shared.StaffPositionRequests StaffId="StaffId" RefreshVersion="requestVersion" OnChanged="LoadAsync" />
             </div>
         </div>
     }
 </section>
 
+<style>
+    .staff-position-layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 0.75rem;
+        align-items: start;
+    }
+
+    @@media (min-width: 1024px) {
+        .staff-position-layout {
+            grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+        }
+    }
+
+    .contract-preview-modal {
+        height: calc(100vh - 1.5rem);
+        max-height: calc(100vh - 1.5rem);
+    }
+
+    .contract-preview-body {
+        min-height: 0;
+    }
+
+    .contract-preview-stage {
+        min-width: 100%;
+        min-height: 100%;
+    }
+</style>
+
 @code {
     [Parameter] public int StaffId { get; set; }
     private Data? data;
     private Assignment? original;
-    private bool loading, busy, editing, changing, ending;
+    private Assignment? attachingContractFor;
+    private PositionContractDto? requestingUnlockFor;
+    private string unlockReason = "";
+    private DmsDocumentSummaryDto? previewDocument;
+    private string? previewDataUrl, previewContentType, previewFileName, previewError;
+    private int previewZoom = 100;
+    private List<DmsDocumentSummaryDto> staffDocuments = [];
+    private List<PositionContractDto> positionContracts = [];
+    private List<DmsDocumentTypeDto> docTypes = [];
+    private DmsDocumentUploadInput contractUpload = new();
+    private bool loading, busy, editing, changing, ending, uploadingContract, loadingPreview, submittingUnlock;
     private int jobId, positionId, requestVersion,selectedFrameworkId,selectedMatrixId;
     private int? jobMatrixStepId,terminationRequestTypeId;
     private DateTime from = Today;
@@ -159,21 +596,387 @@
     protected override Task OnInitializedAsync() => LoadAsync();
     private async Task LoadAsync()
     {
-        loading = true; message = null; editing = false;
-        try { data = await Positions.LoadAsync(StaffId);if(CanAssign)New(); }
+        loading = true; message = null; editing = false; attachingContractFor = null; requestingUnlockFor = null; unlockReason = "";
+        try
+        {
+            data = await Positions.LoadAsync(StaffId);
+            await LoadContractsAsync();
+            if (CanAssign) New();
+        }
         catch (UnauthorizedAccessException ex) { data = null; message = ex.Message; }
         catch (Exception ex) { data = null; message = "Positions could not be loaded. Please try again."; Logger.LogError(ex, "Loading positions for staff {StaffId}", StaffId); }
         finally { loading = false; }
     }
+
+    private async Task LoadContractsAsync()
+    {
+        try
+        {
+            staffDocuments = await DmsService.GetStaffDocumentsAsync(StaffId);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Loading staff DMS documents for staff {StaffId}", StaffId);
+        }
+
+        try
+        {
+            positionContracts = await ContractApi.GetStaffContractsAsync(StaffId);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Loading position contract workflow for staff {StaffId}", StaffId);
+        }
+
+        if (docTypes.Count == 0)
+        {
+            try
+            {
+                docTypes = await DmsService.GetDocumentTypesAsync();
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning(ex, "Loading DMS document types for staff {StaffId}", StaffId);
+            }
+        }
+    }
+
+    private PositionContractDto? GetActiveContractWorkflow(Assignment assignment) =>
+        positionContracts
+            .Where(c => c.JobPositionId == assignment.Id && !string.Equals(c.WorkflowStatus, "Superseded", StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(c => c.DocumentId)
+            .FirstOrDefault();
+
+    private PositionContractDto? GetContractWorkflow(long documentId) =>
+        positionContracts.FirstOrDefault(c => c.DocumentId == documentId);
+
+    private static string WorkflowStatusLabel(string status) => status switch
+    {
+        "PendingAcceptance" => "Awaiting Staff Acceptance",
+        "Finalised" => "Finalised & Locked",
+        "UnlockRequested" => "Unlock Requested",
+        "UnlockedForEdit" => "Unlocked for HR Edit",
+        "Superseded" => "Superseded",
+        _ => status
+    };
+
+    private static string WorkflowStatusBadgeClass(string status) => status switch
+    {
+        "PendingAcceptance" => "bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-800",
+        "Finalised" => "bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800",
+        "UnlockRequested" => "bg-orange-50 text-orange-800 border-orange-200 dark:bg-orange-950/50 dark:text-orange-300 dark:border-orange-800",
+        "UnlockedForEdit" => "bg-blue-50 text-blue-800 border-blue-200 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-800",
+        "Superseded" => "bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700",
+        _ => "bg-slate-100 text-slate-700 border-slate-200"
+    };
+
+    private void OpenUnlockRequest(PositionContractDto contract)
+    {
+        requestingUnlockFor = contract;
+        unlockReason = "";
+        attachingContractFor = null;
+        editing = false;
+        message = null;
+    }
+
+    private void CloseUnlockRequest()
+    {
+        requestingUnlockFor = null;
+        unlockReason = "";
+    }
+
+    private async Task SubmitUnlockRequestAsync()
+    {
+        if (submittingUnlock || requestingUnlockFor == null || string.IsNullOrWhiteSpace(unlockReason)) return;
+        submittingUnlock = true;
+        try
+        {
+            var res = await ContractApi.RequestUnlockAsync(new RequestContractUnlockInput(requestingUnlockFor.DocumentId, unlockReason.Trim()));
+            if (res.Success)
+            {
+                Toasts.Success(res.Message);
+                CloseUnlockRequest();
+                await LoadContractsAsync();
+            }
+            else
+            {
+                Toasts.Error(res.Message);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Requesting contract unlock for staff {StaffId}", StaffId);
+            Toasts.Error("Unlock request could not be sent. Please try again.");
+        }
+        finally
+        {
+            submittingUnlock = false;
+        }
+    }
+
+    private List<DmsDocumentSummaryDto> GetContractsForAssignment(Assignment assignment)
+    {
+        var refCode = $"POS-{assignment.Id}";
+        var posTag = $"Position:{assignment.PositionId}";
+        var jobTag = $"Job:{assignment.JobId}";
+
+        var matched = staffDocuments
+            .Where(d => string.Equals(d.ReferenceCode, refCode, StringComparison.OrdinalIgnoreCase)
+                || (!string.IsNullOrWhiteSpace(d.Description) && d.Description.Contains($"Position Assignment #{assignment.Id}", StringComparison.OrdinalIgnoreCase))
+                || (!string.IsNullOrWhiteSpace(d.Tags) && (d.Tags.Contains(posTag, StringComparison.OrdinalIgnoreCase) || d.Tags.Contains(jobTag, StringComparison.OrdinalIgnoreCase)))
+                || string.Equals(d.ReferenceCode, posTag, StringComparison.OrdinalIgnoreCase))
+            .ToDictionary(d => d.DocumentId);
+
+        foreach (var wf in positionContracts.Where(c => c.JobPositionId == assignment.Id))
+        {
+            if (!matched.ContainsKey(wf.DocumentId))
+            {
+                matched[wf.DocumentId] = new DmsDocumentSummaryDto
+                {
+                    DocumentId = wf.DocumentId,
+                    DocumentNumber = wf.DocumentNumber,
+                    Title = wf.Title,
+                    ReferenceCode = refCode,
+                    CurrentVersionNumber = wf.CurrentVersionNumber,
+                    CreatedAtUtc = wf.CreatedAtUtc
+                };
+            }
+        }
+
+        return matched.Values
+            .OrderByDescending(d => d.DocumentId)
+            .ToList();
+    }
+
+    private static bool IsActivePosition(Assignment a) =>
+        a.StateId == 4 && (!a.To.HasValue || a.To.Value.Date > Today);
+
+    private bool IsPdfPreview =>
+        string.Equals(previewContentType, "application/pdf", StringComparison.OrdinalIgnoreCase)
+        || (previewFileName?.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase) == true);
+
+    private bool IsImagePreview =>
+        previewContentType?.StartsWith("image/", StringComparison.OrdinalIgnoreCase) == true;
+
+    private void OpenContractAttach(Assignment assignment)
+    {
+        if (!IsActivePosition(assignment))
+        {
+            Toasts.Error("Contracts can only be attached to active positions.");
+            return;
+        }
+        var activeContract = GetActiveContractWorkflow(assignment);
+        if (activeContract != null && (string.Equals(activeContract.WorkflowStatus, "Finalised", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(activeContract.WorkflowStatus, "UnlockRequested", StringComparison.OrdinalIgnoreCase)))
+        {
+            Toasts.Error("This position contract is finalised and locked. Request the staff member to unlock it before making changes.");
+            return;
+        }
+        attachingContractFor = assignment;
+        requestingUnlockFor = null;
+        editing = false;
+        message = null;
+        var preferredType = docTypes.FirstOrDefault(t =>
+                t.Name.Contains("Contract", StringComparison.OrdinalIgnoreCase)
+                || t.Name.Contains("Agreement", StringComparison.OrdinalIgnoreCase)
+                || t.Name.Contains("Appointment", StringComparison.OrdinalIgnoreCase))
+            ?? docTypes.FirstOrDefault(t => t.CategoryName.Contains("Employment", StringComparison.OrdinalIgnoreCase))
+            ?? docTypes.FirstOrDefault();
+
+        contractUpload = new DmsDocumentUploadInput
+        {
+            SubjectIndividualId = StaffId,
+            DmsDocumentTypeId = preferredType?.DmsDocumentTypeId ?? 0,
+            Title = $"Employment Contract — {assignment.Name}",
+            Description = $"Contract / Agreement attached to position {assignment.Name} (Job #{assignment.JobId}, Position Assignment #{assignment.Id}).",
+            ReferenceCode = $"POS-{assignment.Id}",
+            Classification = "Confidential",
+            AccessScope = "EmployeeAndHr",
+            DocumentDate = DateTime.UtcNow.AddHours(5).Date,
+            EffectiveFromDate = assignment.From,
+            ExpiryDate = assignment.To,
+            Tags = $"PositionContract,Job:{assignment.JobId},Position:{assignment.PositionId}",
+            PrimaryLinkEntityType = "JobPosition",
+            PrimaryLinkEntityId = assignment.Id,
+            PrimaryLinkReferenceCode = $"POS-{assignment.Id}",
+            PrimaryLinkDisplayName = assignment.Name
+        };
+    }
+
+    private void CloseContractAttach()
+    {
+        attachingContractFor = null;
+        contractUpload = new DmsDocumentUploadInput();
+    }
+
+    private async Task HandleContractFileSelected(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        using var ms = new MemoryStream();
+        await file.OpenReadStream(maxAllowedSize: 20 * 1024 * 1024).CopyToAsync(ms);
+        contractUpload.FileName = file.Name;
+        contractUpload.ContentType = file.ContentType;
+        contractUpload.FileContent = ms.ToArray();
+        if (string.IsNullOrWhiteSpace(contractUpload.Title))
+        {
+            contractUpload.Title = Path.GetFileNameWithoutExtension(file.Name);
+        }
+    }
+
+    private async Task SubmitContractUploadAsync()
+    {
+        if (uploadingContract || attachingContractFor == null) return;
+        uploadingContract = true;
+        var posId = attachingContractFor.Id;
+        var posName = attachingContractFor.Name;
+        var previousDocIds = staffDocuments.Select(d => d.DocumentId).ToHashSet();
+        try
+        {
+            contractUpload.SubjectIndividualId = StaffId;
+            var res = await DmsService.UploadDocumentAsync(contractUpload);
+            if (res.Success)
+            {
+                staffDocuments = await DmsService.GetStaffDocumentsAsync(StaffId);
+                var refCode = $"POS-{posId}";
+                var newDoc = staffDocuments
+                    .Where(d => !previousDocIds.Contains(d.DocumentId)
+                        && string.Equals(d.ReferenceCode, refCode, StringComparison.OrdinalIgnoreCase))
+                    .OrderByDescending(d => d.DocumentId)
+                    .FirstOrDefault()
+                    ?? staffDocuments
+                        .Where(d => string.Equals(d.ReferenceCode, refCode, StringComparison.OrdinalIgnoreCase))
+                        .OrderByDescending(d => d.DocumentId)
+                        .FirstOrDefault();
+
+                if (newDoc != null)
+                {
+                    var reg = await ContractApi.RegisterUploadedAsync(new RegisterPositionContractInput(newDoc.DocumentId, posId, posName));
+                    if (reg.Success)
+                    {
+                        Toasts.Success(reg.Message);
+                    }
+                    else
+                    {
+                        Toasts.Error(reg.Message);
+                    }
+                }
+                else
+                {
+                    Toasts.Success(res.Message);
+                }
+
+                CloseContractAttach();
+                await LoadContractsAsync();
+            }
+            else
+            {
+                Toasts.Error(res.Message);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Uploading contract for staff {StaffId}", StaffId);
+            Toasts.Error("Contract could not be uploaded. Please try again.");
+        }
+        finally
+        {
+            uploadingContract = false;
+        }
+    }
+
+    private async Task ViewContractAsync(DmsDocumentSummaryDto doc)
+    {
+        previewDocument = doc;
+        previewDataUrl = null;
+        previewContentType = null;
+        previewFileName = null;
+        previewError = null;
+        previewZoom = 100;
+        loadingPreview = true;
+        try
+        {
+            var dl = await DmsService.DownloadDocumentVersionAsync(doc.DocumentId, null, isPreview: true);
+            if (!dl.Success)
+            {
+                previewError = dl.ErrorMessage ?? "Contract preview could not be loaded.";
+                return;
+            }
+            previewFileName = dl.FileName;
+            previewContentType = string.IsNullOrWhiteSpace(dl.ContentType) ? "application/octet-stream" : dl.ContentType;
+            if (dl.Content.Length > 0)
+            {
+                previewDataUrl = $"data:{previewContentType};base64,{Convert.ToBase64String(dl.Content)}";
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Previewing contract document {DocumentId}", doc.DocumentId);
+            previewError = "Contract preview could not be loaded. Try downloading instead.";
+        }
+        finally
+        {
+            loadingPreview = false;
+        }
+    }
+
+    private void ZoomIn() => previewZoom = Math.Min(250, previewZoom + 25);
+    private void ZoomOut() => previewZoom = Math.Max(50, previewZoom - 25);
+    private void ResetZoom() => previewZoom = 100;
+
+    private void ClosePreview()
+    {
+        previewDocument = null;
+        previewDataUrl = null;
+        previewContentType = null;
+        previewFileName = null;
+        previewError = null;
+        previewZoom = 100;
+        loadingPreview = false;
+    }
+
+    private async Task DownloadContractAsync(long documentId)
+    {
+        try
+        {
+            var dl = await DmsService.DownloadDocumentVersionAsync(documentId, null, isPreview: false);
+            if (!dl.Success)
+            {
+                Toasts.Error(dl.ErrorMessage ?? "Download failed.");
+                return;
+            }
+            await using var module = await JS.InvokeAsync<IJSObjectReference>("import", "./organisationStaffExport.js");
+            using var stream = new MemoryStream(dl.Content);
+            using var reference = new DotNetStreamReference(stream);
+            await module.InvokeVoidAsync("download", dl.FileName, dl.ContentType, reference);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Downloading contract document {DocumentId}", documentId);
+            Toasts.Error("Download failed. Please try again.");
+        }
+    }
+    private IReadOnlyList<Assignment> ActiveAssignments =>
+        data == null ? [] : data.Assignments.Where(IsActivePosition).ToList();
+
     private void New()
     {
-        if(!CanAssign)return;
-        selectedFrameworkId=selectedMatrixId=0;
-        terminationRequestTypeId=null;jobMatrixStepId=null;original = null; changing = ending = false; editing = true; message = null;
-        jobId = data!.Jobs.FirstOrDefault()?.Id ?? 0; positionId = 0; from = Today; to = null; reason = "";
+        if (!CanAssign) return;
+        attachingContractFor = null;
+        requestingUnlockFor = null;
+        selectedFrameworkId = selectedMatrixId = 0;
+        terminationRequestTypeId = null; jobMatrixStepId = null; original = null; changing = ending = false; editing = true; message = null;
+        var unassignedJob = data!.Jobs.FirstOrDefault(j => !ActiveAssignments.Any(a => a.JobId == j.Id));
+        jobId = unassignedJob?.Id ?? data.Jobs.FirstOrDefault()?.Id ?? 0; positionId = 0; from = Today; to = null; reason = "";
     }
     private void Edit(Assignment item, bool change = false, bool end = false)
     {
+        if (!IsActivePosition(item))
+        {
+            Toasts.Error("Only active positions can be edited.");
+            return;
+        }
+        attachingContractFor = null;
+        requestingUnlockFor = null;
         selectedFrameworkId=selectedMatrixId=0;
         terminationRequestTypeId=null;original = item; changing = change; ending = end; editing = true; message = null;
         jobMatrixStepId=null;jobId = item.JobId; positionId = change ? 0 : item.PositionId;
@@ -199,8 +1002,8 @@
         catch (Exception ex) { message = "The position could not be saved. Refresh and try again."; Logger.LogError(ex, "Saving position for staff {StaffId}", StaffId); Toasts.Error(message); }
         finally { busy = false; }
     }
-    private bool SelectingPosition=>original==null||changing;
-    private bool CanAssign=>data?.CanManage==true&&data.Jobs.Count>0&&!data.Assignments.Any(a=>a.StateId==4&&a.From.Date<=Today&&(!a.To.HasValue||a.To.Value.Date>Today)&&data.Jobs.Any(j=>j.Id==a.JobId));
+    private bool SelectingPosition => original == null || changing;
+    private bool CanAssign => data?.CanManage == true && data.Jobs.Any(j => !ActiveAssignments.Any(a => a.JobId == j.Id));
     private void FrameworkChanged(){selectedMatrixId=positionId=0;jobMatrixStepId=null;}
     private void MatrixChanged(){positionId=0;jobMatrixStepId=null;}
     private static string Status(Assignment a)

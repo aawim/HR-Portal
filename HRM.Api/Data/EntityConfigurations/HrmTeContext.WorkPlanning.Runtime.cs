@@ -297,6 +297,14 @@ public partial class HrmTeContext
             entity.Property(e => e.RequiresDeviceValidation)
                 .HasColumnName("RequiresDeviceValidation");
 
+            entity.Property(e => e.Latitude)
+                .HasColumnName("Latitude")
+                .HasPrecision(10, 7);
+
+            entity.Property(e => e.Longitude)
+                .HasColumnName("Longitude")
+                .HasPrecision(10, 7);
+
             entity.Property(e => e.IsValid)
                 .HasColumnName("IsValid")
                 .HasDefaultValue(true);

@@ -3,7 +3,6 @@
 @using HRM.Components.Admin.My.Workspace.Staff.Tabs
 @using HRM.Enum
 @using HRM.Models
-
 @using HRM.DTOs
 @inject HRM.Services.Interfaces.IWorkspaceDirectoryService Directory
 @inject HRM.Services.Interfaces.IUserAccessService Access
@@ -22,7 +21,7 @@
             Staff not found.
         </div>
     }
-    else if(former)
+    else if (former)
     {
         <HRM.Components.Admin.Hr.Staff.FormerStaffRecord StaffId="StaffId" />
     }
@@ -30,104 +29,265 @@
     {
         <div class="w-full flex flex-col gap-2">
 
-                    @if (ActiveTab == WorkspaceTab.Overview)
-                    {
-                       <StaffOverview StaffId="StaffId" />
-                    }
-                    else if (ActiveTab == WorkspaceTab.Performance)
-                    {
-                       <StaffPerformance @key="StaffId" StaffId="StaffId" StaffName="@Staff.Name" />
-                    }
-                    else if (ActiveTab == WorkspaceTab.Leave)
-                    {
-                        <StaffLeave @key="StaffId" StaffId="StaffId" />
-                    }
-                    else if (ActiveTab == WorkspaceTab.OT)
-                    {
-                        <StaffOvertime StaffId="StaffId" StaffName="@Staff.Name" />
-                    }
-                    else if (ActiveTab == WorkspaceTab.JobRelatedItems)
-                    {
-                        <HRM.Components.Admin.Hr.Items.StaffItemRequestPanel @key="@($"job-{StaffId}")" IndividualId="StaffId" JobRelatedOnly="true" />
-                    }
-                    else if (ActiveTab == WorkspaceTab.PersonalItems)
-                    {
-                        <HRM.Components.Admin.Hr.Items.StaffItemRequestPanel @key="@($"personal-{StaffId}")" IndividualId="StaffId" PersonalItemsOnly="true" />
-                    }
-                    else if (ActiveTab == WorkspaceTab.Attendance)
-                    {
-                        <StaffAttendance @key="StaffId" StaffId="StaffId" StaffName="@Staff.Name" ShowOverview="false" />
-                    }
-                    else if (ActiveTab == WorkspaceTab.Position)
-                    {
-                        <StaffPositions @key="StaffId" StaffId="StaffId" />
-                    }
-                    else if (ActiveTab == WorkspaceTab.Documents)
-                    {
-                        <StaffDocuments StaffId="StaffId" />
-                    }
+            @if (IsEmploymentCategory)
+            {
+                <div class="staff-subtab-bar w-full overflow-x-auto">
+                    <nav class="flex items-end gap-1.5 min-w-max" aria-label="Employment Sub-Tabs">
+                        @RenderSubTab(WorkspaceTab.Position, "Positions", "bi-briefcase")
+                        @RenderSubTab(WorkspaceTab.JobHistory, "Job History", "bi-clock-history")
+                        @RenderSubTab(WorkspaceTab.StaffTransfer, "Transfer", "bi-arrow-left-right")
+                        @RenderSubTab(WorkspaceTab.Performance, "Performance", "bi-graph-up-arrow")
+                        @RenderSubTab(WorkspaceTab.StaffSeparation, "Separation & Offboarding", "bi-box-arrow-right")
+                    </nav>
+                </div>
+            }
+            else if (IsTimeAttendanceCategory)
+            {
+                <div class="staff-subtab-bar w-full overflow-x-auto">
+                    <nav class="flex items-end gap-1.5 min-w-max" aria-label="Time & Attendance Sub-Tabs">
+                        @RenderSubTab(WorkspaceTab.Attendance, "Attendance", "bi-person-check", PendingAttendanceCount)
+                        @RenderSubTab(WorkspaceTab.Leave, "Leave", "bi-calendar-event", PendingLeaveCount)
+                        @RenderSubTab(WorkspaceTab.OT, "Overtime", "bi-stopwatch")
+                        @RenderSubTab(WorkspaceTab.Schedule, "Schedule", "bi-calendar-week")
+                        @RenderSubTab(WorkspaceTab.WorkTypes, "Work Types", "bi-sliders")
+                    </nav>
+                </div>
+            }
+            else if (IsFinanceCategory)
+            {
+                <div class="staff-subtab-bar w-full overflow-x-auto">
+                    <nav class="flex items-end gap-1.5 min-w-max" aria-label="Finance Sub-Tabs">
+                        @RenderSubTab(WorkspaceTab.Finance, "Allowances & Deductions", "bi-cash-coin")
+                        @RenderSubTab(WorkspaceTab.GoodsLoans, "Goods Loans", "bi-receipt")
+                        @RenderSubTab(WorkspaceTab.Bank, "Bank Details", "bi-bank")
+                    </nav>
+                </div>
+            }
+            else if (IsItemsCategory)
+            {
+                <div class="staff-subtab-bar w-full overflow-x-auto">
+                    <nav class="flex items-end gap-1.5 min-w-max" aria-label="Items Sub-Tabs">
+                        @RenderSubTab(WorkspaceTab.JobRelatedItems, "Job Items", "bi-box-seam", PendingJobItemsCount)
+                        @RenderSubTab(WorkspaceTab.PersonalItems, "Personal Items", "bi-bag", PendingPersonalItemsCount)
+                    </nav>
+                </div>
+            }
+            else if (IsRecordsCategory)
+            {
+                <div class="staff-subtab-bar w-full overflow-x-auto">
+                    <nav class="flex items-end gap-1.5 min-w-max" aria-label="Records Sub-Tabs">
+                        @RenderSubTab(WorkspaceTab.Documents, "Documents", "bi-file-earmark-text")
+                        @RenderSubTab(WorkspaceTab.Certificates, "Certificates", "bi-award", PendingCertificatesCount)
+                    </nav>
+                </div>
+            }
 
-                    else if (ActiveTab == WorkspaceTab.LeaveType)
-                    {
-                    <LeaveAssignmentManager @key="StaffId" StaffId="StaffId" />
-                    }
-                    else if (ActiveTab == WorkspaceTab.Schedule)
-                    {
-                        <Schedule StaffId="StaffId" />
-                    }
-                    else if (ActiveTab == WorkspaceTab.WorkTypes)
-                    {
-                        <HRM.Components.Admin.Settings.WorkTypeManagement @key="StaffId" StaffId="StaffId" />
-                    }
-                    else if (ActiveTab == WorkspaceTab.Finance)
-                    {
-                        <HRM.Components.Shared.StaffFinancePanel @key="StaffId" StaffId="StaffId" AdminMode="true" />
-                    }
-                    else if (ActiveTab == WorkspaceTab.StaffTransfer)
-                    {
-                        <HRM.Components.Admin.Hr.Transfers.StaffTransferManagementPage @key="StaffId" StaffId="StaffId" />
-                    }
-                    else if (ActiveTab == WorkspaceTab.Certificates)
-                    {
-                        <HRM.Components.Admin.My.Workspace.Staff.Tabs.StaffCertificatesTab @key="StaffId" StaffId="StaffId" OnChanged="OnRequestsChanged" />
-                    }
-                   
+            @if (ActiveTab == WorkspaceTab.Overview)
+            {
+                <StaffOverview StaffId="StaffId" />
+            }
+            else if (ActiveTab == WorkspaceTab.Performance)
+            {
+                <StaffPerformance @key="StaffId" StaffId="StaffId" StaffName="@Staff.Name" />
+            }
+            else if (ActiveTab == WorkspaceTab.Leave)
+            {
+                <StaffLeave @key="StaffId" StaffId="StaffId" />
+            }
+            else if (ActiveTab == WorkspaceTab.OT)
+            {
+                <StaffOvertime StaffId="StaffId" StaffName="@Staff.Name" />
+            }
+            else if (ActiveTab == WorkspaceTab.JobRelatedItems)
+            {
+                <HRM.Components.Admin.Hr.Items.StaffItemRequestPanel @key="@($"job-{StaffId}")" IndividualId="StaffId" JobRelatedOnly="true" />
+            }
+            else if (ActiveTab == WorkspaceTab.PersonalItems)
+            {
+                <HRM.Components.Admin.Hr.Items.StaffItemRequestPanel @key="@($"personal-{StaffId}")" IndividualId="StaffId" PersonalItemsOnly="true" />
+            }
+            else if (ActiveTab == WorkspaceTab.Attendance)
+            {
+                <StaffAttendance @key="StaffId" StaffId="StaffId" StaffName="@Staff.Name" ShowOverview="false" />
+            }
+            else if (ActiveTab == WorkspaceTab.Position)
+            {
+                <StaffPositions @key="StaffId" StaffId="StaffId" />
+            }
+            else if (ActiveTab == WorkspaceTab.JobHistory)
+            {
+                <StaffJobHistory @key="StaffId" StaffId="StaffId" />
+            }
+            else if (ActiveTab == WorkspaceTab.Documents)
+            {
+                <StaffDocuments StaffId="StaffId" />
+            }
+            else if (ActiveTab == WorkspaceTab.LeaveType)
+            {
+                <LeaveAssignmentManager @key="StaffId" StaffId="StaffId" />
+            }
+            else if (ActiveTab == WorkspaceTab.Schedule)
+            {
+                <Schedule StaffId="StaffId" />
+            }
+            else if (ActiveTab == WorkspaceTab.WorkTypes)
+            {
+                <HRM.Components.Admin.Settings.WorkTypeManagement @key="StaffId" StaffId="StaffId" />
+            }
+            else if (ActiveTab == WorkspaceTab.Finance)
+            {
+                <HRM.Components.Shared.StaffFinancePanel @key="StaffId" StaffId="StaffId" AdminMode="true" />
+            }
+            else if (ActiveTab == WorkspaceTab.Bank)
+            {
+                <StaffBankAccounts @key="StaffId" IndividualId="StaffId" />
+            }
+            else if (ActiveTab == WorkspaceTab.EmergencyContact)
+            {
+                <StaffEmergencyContacts @key="StaffId" IndividualId="StaffId" />
+            }
+            else if (ActiveTab == WorkspaceTab.StaffTransfer)
+            {
+                <HRM.Components.Admin.Hr.Transfers.StaffTransferManagementPage @key="StaffId" StaffId="StaffId" />
+            }
+            else if (ActiveTab == WorkspaceTab.StaffSeparation)
+            {
+                <HRM.Components.Admin.Hr.Separations.StaffSeparationManagementPage @key="StaffId" StaffId="StaffId" />
+            }
+            else if (ActiveTab == WorkspaceTab.Certificates)
+            {
+                <HRM.Components.Admin.My.Workspace.Staff.Tabs.StaffCertificatesTab @key="StaffId" StaffId="StaffId" OnChanged="OnRequestsChanged" />
+            }
+            else if (ActiveTab == WorkspaceTab.GoodsLoans)
+            {
+                <HRM.Components.Shared.GoodsLoans.StaffGoodsLoansPanel @key="StaffId" IndividualId="StaffId" IsEmbedded="true" CanEnterLoan="true" />
+            }
 
         </div>
     }
 </div>
 
+<style>
+    .staff-subtab-bar {
+        border-bottom: 2px solid #0f766e;
+    }
+
+    .staff-subtab-btn {
+        border-top: 1px solid #99f6e4;
+        border-left: 1px solid #99f6e4;
+        border-right: 1px solid #99f6e4;
+        background: #f0fdfa;
+        color: #115e59;
+    }
+
+    .staff-subtab-btn:hover {
+        background: #ccfbf1;
+        color: #134e4a;
+    }
+
+    .staff-subtab-btn.is-active {
+        border-color: #0f766e;
+        background: #0f766e;
+        color: #ffffff;
+    }
+
+    .dark .staff-subtab-bar {
+        border-bottom-color: #0d9488;
+    }
+
+    .dark .staff-subtab-btn {
+        border-color: #115e59;
+        background: rgba(19, 78, 74, 0.35);
+        color: #99f6e4;
+    }
+
+    .dark .staff-subtab-btn:hover {
+        background: rgba(15, 118, 110, 0.45);
+        color: #ffffff;
+    }
+
+    .dark .staff-subtab-btn.is-active {
+        border-color: #0f766e;
+        background: #0f766e;
+        color: #ffffff;
+    }
+</style>
 
 @code {
     private bool Loading;
     private bool former;
 
     private StaffWorkspaceIdentity? Staff;
-     
-    [Parameter]
-    public int StaffId { get; set; }
 
-    [Parameter]
-    public WorkspaceTab ActiveTab { get; set; }
+    [Parameter] public int StaffId { get; set; }
+    [Parameter] public WorkspaceTab ActiveTab { get; set; }
+    [Parameter] public EventCallback<WorkspaceTab> OnTabChanged { get; set; }
+    [Parameter] public EventCallback OnRequestsChanged { get; set; }
+    [Parameter] public int PendingLeaveCount { get; set; }
+    [Parameter] public int PendingAttendanceCount { get; set; }
+    [Parameter] public int PendingJobItemsCount { get; set; }
+    [Parameter] public int PendingPersonalItemsCount { get; set; }
+    [Parameter] public int PendingCertificatesCount { get; set; }
 
-    [Parameter]
-    public EventCallback OnRequestsChanged { get; set; }
+    private bool IsEmploymentCategory => ActiveTab is WorkspaceTab.Position or WorkspaceTab.JobHistory or WorkspaceTab.StaffTransfer or WorkspaceTab.Performance or WorkspaceTab.StaffSeparation;
+    private bool IsTimeAttendanceCategory => ActiveTab is WorkspaceTab.Attendance or WorkspaceTab.Leave or WorkspaceTab.OT or WorkspaceTab.Schedule or WorkspaceTab.WorkTypes;
+    private bool IsFinanceCategory => ActiveTab is WorkspaceTab.Finance or WorkspaceTab.GoodsLoans or WorkspaceTab.Bank;
+    private bool IsItemsCategory => ActiveTab is WorkspaceTab.JobRelatedItems or WorkspaceTab.PersonalItems;
+    private bool IsRecordsCategory => ActiveTab is WorkspaceTab.Documents or WorkspaceTab.Certificates;
+
+    private async Task SelectSubTabAsync(WorkspaceTab tab)
+    {
+        if (OnTabChanged.HasDelegate)
+            await OnTabChanged.InvokeAsync(tab);
+        else
+            ActiveTab = tab;
+    }
+
+    private RenderFragment RenderSubTab(WorkspaceTab tab, string label, string icon, int badge = 0) => __builder =>
+    {
+        var active = ActiveTab == tab;
+        <button type="button"
+                class="staff-subtab-btn @(active ? "is-active" : "") rounded-t-lg px-3.5 py-1.5 font-semibold text-xs transition-all inline-flex items-center gap-1.5"
+                @onclick="() => SelectSubTabAsync(tab)">
+            <i class="bi @icon text-[11px]" aria-hidden="true"></i>
+            <span>@label</span>
+            @if (badge > 0)
+            {
+                <span class="rounded-full px-1.5 py-0.2 text-[10px] font-bold @(active ? "bg-white/25 text-white" : "bg-amber-500 text-white")">
+                    @badge
+                </span>
+            }
+        </button>
+    };
 
     private int? loadedStaffId;
     private int? loadedOrganisationId;
+
     protected override async Task OnParametersSetAsync()
     {
-        var org=await Access.GetCurrentOrganisationIdAsync();
-        if (loadedStaffId == StaffId && loadedOrganisationId==org) return;
-        loadedOrganisationId=org;
+        var org = await Access.GetCurrentOrganisationIdAsync();
+        if (loadedStaffId == StaffId && loadedOrganisationId == org) return;
+        loadedOrganisationId = org;
         var staffId = StaffId;
         loadedStaffId = staffId;
         Loading = true;
-        var staff = await Directory.GetStaffIdentityAsync(staffId);
-        if (loadedStaffId != staffId || loadedOrganisationId!=org) return;
-        Staff = staff;
-        former = staff?.IsFormer == true;
-        Loading = false;
+        try
+        {
+            var staff = await Directory.GetStaffIdentityAsync(staffId);
+            if (loadedStaffId != staffId || loadedOrganisationId != org) return;
+            Staff = staff;
+            former = staff?.IsFormer == true;
+        }
+        catch (Exception)
+        {
+            Staff = null;
+        }
+        finally
+        {
+            if (loadedStaffId == staffId && loadedOrganisationId == org)
+            {
+                Loading = false;
+            }
+        }
     }
-
 }

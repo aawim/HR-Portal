@@ -22,6 +22,11 @@ public partial class AttendanceDevice
 
     public int AttendanceDeviceInOutTypeId { get; set; }
 
+    public int? OrganisationId { get; set; }
+    public string? AdapterType { get; set; }
+    public int? EdgeAttendanceAgentId { get; set; }
+    public bool IsEdgeEnabled { get; set; } = true;
+
     public virtual ICollection<AttendanceLog> AttendanceLogs { get; set; } = new List<AttendanceLog>();
 
     public virtual OperationLog? OperationLog { get; set; }

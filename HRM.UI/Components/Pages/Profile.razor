@@ -6,235 +6,806 @@
 @using HRM.DTOs.UserContext
 @using Microsoft.AspNetCore.Components.Authorization
 @using HRM.Components.Shared
-@inject AuthenticationStateProvider AuthenticationStateProvider
-
+@using HRM.Components.Admin.Hr.Individual
+@using Microsoft.JSInterop
 @attribute [Authorize]
+@inject AuthenticationStateProvider AuthenticationStateProvider
 @inject HRM.Services.Interfaces.IUserService UserService
 @inject HRM.Services.Interfaces.IUserAccessService UserAccess
+@inject HRM.UI.Services.Recruitment.IRecruitmentApiClient RecruitmentApi
+@inject IJSRuntime JS
 
-<PageTitle>My Profile - HR Portal</PageTitle>
+<PageTitle>@(userProfile?.FullName ?? "My Profile") — Enterprise HRM Profile</PageTitle>
+
+<style>
+    .ep-no-scrollbar::-webkit-scrollbar { display: none; }
+    .ep-no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    .ep-fade { animation: epFadeIn 0.16s ease-out; }
+    @@keyframes epFadeIn {
+        from { opacity: 0; transform: translateY(3px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    @@media print {
+        .ep-no-print { display: none !important; }
+    }
+</style>
 
 @if (isLoading)
 {
-    <div class="flex justify-center items-center h-64">
-        <p class="text-slate-500 font-medium">Loading profile data from database...</p>
+    <div class="mx-auto max-w-7xl p-2">
+        <div class="flex flex-col items-center justify-center rounded-2xl border border-slate-200 bg-white p-12 shadow-xs space-y-3">
+            <AppIcon Name="progress_activity" Class="animate-spin h-8 w-8 text-blue-600" />
+            <p class="text-sm font-semibold text-slate-700">Loading employee profile...</p>
+            <p class="text-xs text-slate-400">Fetching identity, assignment, leave, and offer records</p>
+        </div>
     </div>
 }
 else if (userProfile == null)
 {
-    <div class="bg-rose-50 border border-rose-200 p-6 rounded-xl mt-6">
-        <p class="text-rose-600 font-medium">Error: User record not found in the database.</p>
-        <p class="text-rose-500 text-sm mt-1">Please contact the IT department to link your eFaas account.</p>
+    <div class="mx-auto max-w-7xl p-2">
+        <div class="rounded-2xl border border-rose-200 bg-rose-50 p-6 text-sm text-rose-800 space-y-1">
+            <p class="font-bold">User record not found in the database.</p>
+            <p class="text-xs text-rose-700">Please contact the IT department to link your eFaas account.</p>
+        </div>
     </div>
 }
 else
 {
+    var approvedJob = userProfile.ActiveJob?.JobStateID == SharedConfig.JobStates.APPROVED ? userProfile.ActiveJob : null;
+    var displayName = string.IsNullOrWhiteSpace(userProfile.FullName) ? "Employee" : userProfile.FullName;
+    var tenureText = approvedJob is not null ? FormatTenure(approvedJob.JoinedDate) : "—";
+    var ageText = userProfile.DateOfBirth.HasValue ? $"{CalculateAge(userProfile.DateOfBirth.Value)} yrs" : null;
+    var employeeCode = !string.IsNullOrWhiteSpace(approvedJob?.SAPNumber)
+        ? approvedJob.SAPNumber
+        : $"IND-{userProfile.IndividualID:D4}";
 
-    @if (isLoading)
-{
-    <div class="flex flex-col justify-center items-center h-64 space-y-4">
-        <!-- Tailwind SVG Spinner -->
-        <svg class="animate-spin h-10 w-10 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-        </svg>
-        <p class="text-slate-500 font-medium animate-pulse">Loading profile data...</p>
-    </div>
-}
-
-
-    <!-- Fetch ONLY the job that is currently "Approved" -->
-    var approvedJob =
-    userProfile.ActiveJob?.JobStateID == SharedConfig.JobStates.APPROVED? userProfile.ActiveJob: null;
-   
-
-
-    <div class="max-w-7xl mx-auto pb-10">
-
-        <!-- PAGE HEADER -->
-        <div class="flex justify-between items-end mb-6">
-            <div>
-                <h1 class="text-2xl font-bold text-slate-800">My Profile</h1>
-                <p class="text-slate-500 text-sm mt-1">View and manage your employee information.</p>
-            </div>
-
-            @if (canManageAccount)
-            {
-                <a href="@($"/admin/settings/user/account?userId={userProfile.UserId}")" class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">Manage account</a>
-            }
-        </div>
-
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-
-            <!-- ========================================== -->
-            <!-- LEFT COLUMN: Identity & Quick Contact      -->
-            <!-- ========================================== -->
-            <div class="col-span-1 space-y-6">
-
-                <!-- Profile Identity Card -->
-                <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-6 flex flex-col items-center relative overflow-hidden">
-                    <div class="absolute top-0 left-0 w-full h-24 bg-gradient-to-r from-blue-500 to-blue-700 opacity-10"></div>
-
-                    <!-- Avatar placeholder -->
-                    <div class="w-24 h-24 rounded-full border-4 border-white shadow-md z-10 bg-blue-100 flex items-center justify-center text-blue-500 font-bold text-3xl uppercase">
-                        @(userProfile.FullName?.FirstOrDefault().ToString() ?? "?")
-                    </div>
-
-                    <h2 class="text-xl font-bold text-slate-800 mt-4 text-center">@(userProfile.FullName ?? "Name Not Provided")</h2>
-                    <p class="text-sm text-blue-600 font-medium mb-1 text-center">@(approvedJob?.OrganisationStructureName ?? "Department Not Set")</p>
-
-                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800 mb-6">
-                        @(approvedJob?.JobStateName ?? "No Active Job")
+    <section class="w-full min-w-0 p-2 space-y-4">
+        <!-- Compact Top Header Bar -->
+        <header class="flex flex-wrap items-center justify-between gap-2 px-1 py-0.5 ep-no-print">
+            <div class="min-w-0">
+                <div class="flex items-center gap-2 flex-wrap">
+                    <h1 class="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 truncate">Employee Profile</h1>
+                    <span class="inline-flex items-center gap-1 rounded-full bg-teal-50 border border-teal-200/80 px-2 py-0.5 text-[10px] font-semibold text-teal-700">
+                        <span class="h-1.5 w-1.5 rounded-full bg-teal-500"></span>
+                        eFaas Verified
                     </span>
-
-                    <div class="w-full space-y-3 text-sm border-t border-slate-100 pt-4">
-                        <div class="flex justify-between">
-                            <span class="text-slate-500">SAP Number</span>
-                            <span class="font-medium text-slate-800">@(approvedJob?.SAPNumber ?? "N/A")</span>
-                        </div>
-                        <div class="flex justify-between">
-                            <span class="text-slate-500">NID / Passport</span>
-                            <span class="font-medium text-slate-800">@(userProfile.Username ?? "N/A")</span>
-                        </div>
-                    </div>
                 </div>
-
-                <!-- Quick Contact Card -->
-                <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-6">
-                    <h3 class="font-semibold text-slate-800 mb-4 pb-2 border-b border-slate-100">Contact Details</h3>
-
-                        <ul class="space-y-3 text-sm">
-                            <li class="flex items-center gap-3">
-                                <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
-                                <span class="text-slate-700">@(userProfile.Email ?? "N/A")</span>
-                            </li>
-                            <li class="flex items-center gap-3">
-                                <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
-                                <span class="text-slate-700">Mobile: @(userProfile.Mobile ?? "N/A")</span>
-                            </li>
-                        </ul>
-                </div>
+                <p class="text-xs text-slate-500">Personal dossier, active assignment, compensation, leave history, job offers, and digital signature.</p>
             </div>
+            <div class="flex flex-wrap items-center gap-1.5">
+                <button type="button"
+                        class="app-button app-button-neutral app-button-sm"
+                        @onclick="ToggleFullWidthAsync">
+                    <AppIcon Name="@(fullWidth ? "fullscreen_exit" : "fullscreen")" />
+                    <span>@(fullWidth ? "Shrink View" : "Full Width")</span>
+                </button>
+                <button type="button"
+                        class="app-button @(revealSensitive ? "app-button-primary" : "app-button-neutral") app-button-sm"
+                        @onclick="() => revealSensitive = !revealSensitive"
+                        title="Toggle visibility of sensitive PII and compensation data">
+                    <i class="bi @(revealSensitive ? "bi-eye-slash" : "bi-eye")" aria-hidden="true"></i>
+                    <span>@(revealSensitive ? "Mask Sensitive Data" : "Reveal Sensitive Data")</span>
+                </button>
+                <button type="button"
+                        class="app-button app-button-secondary app-button-sm"
+                        @onclick="PrintDossierAsync">
+                    <i class="bi bi-file-earmark-arrow-down" aria-hidden="true"></i>
+                    <span>Export Dossier</span>
+                </button>
+                <a href="/online/signature" class="app-button app-button-secondary app-button-sm">
+                    <i class="bi bi-pen" aria-hidden="true"></i>
+                    <span>Signing Style</span>
+                </a>
+            </div>
+        </header>
 
-            <!-- ========================================== -->
-            <!-- RIGHT COLUMN: Detailed Info & Tables       -->
-            <!-- ========================================== -->
-            <div class="col-span-1 lg:col-span-2 space-y-6">
-
-                <!-- Job Information (Approved Job Only) -->
-                <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-6">
-                    <h2 class="font-semibold text-slate-800 mb-4 pb-2 border-b border-slate-100">Active Job</h2>
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-y-4 gap-x-6 text-sm">
-                        <div>
-                            <p class="text-slate-500 mb-1">Organisation</p>
-                            <p class="font-medium text-slate-800">@(approvedJob?.OrganisationName ?? "N/A")</p>
-                        </div>
-                        <div>
-                            <p class="text-slate-500 mb-1">Department</p>
-                            <p class="font-medium text-slate-800">@(approvedJob?.OrganisationStructureName ?? "N/A")</p>
-                        </div>
-                        <div>
-                            <p class="text-slate-500 mb-1">Job State</p>
-                            <p class="font-medium text-slate-800">@(approvedJob?.JobStateName ?? "N/A")</p>
-                        </div>
-                        <div>
-                            <p class="text-slate-500 mb-1">Basic Salary</p>
-                            <p class="font-medium text-emerald-600">
-                                MVR @(approvedJob?.BasicSalary?.ToString("N2") ?? "0.00")
-                            </p>
-                        </div>
-                        <div>
-                            <p class="text-slate-500 mb-1">Job Type</p>
-                            <p class="font-medium text-slate-800">@(approvedJob?.JobTypeName ?? "N/A")</p>
-                        </div>
-                        <div>
-                            <p class="text-slate-500 mb-1">Joined Date</p>
-                            <p class="font-medium text-slate-800">@(approvedJob?.JoinedDate.ToString("dd MMM yyyy") ?? "N/A")</p>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Personal Information -->
-                <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-6">
-                    <h3 class="font-semibold text-slate-800 mb-4 pb-2 border-b border-slate-100">Personal Information</h3>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-y-4 gap-x-8 text-sm">
-                        <div>
-                            <p class="text-slate-500 mb-1">Full Name</p>
-                            <p class="font-medium text-slate-800">@(userProfile.FullName ?? "N/A")</p>
-                        </div>
-                        <div>
-                            <p class="text-slate-500 mb-1">Username / ID</p>
-                            <p class="font-medium text-slate-800">@(userProfile.Username ?? "N/A")</p>
-                        </div>
-                    </div>
-                </div>
-
-                <HRM.Components.Profile.Employment.EmploymentHistoryTable Jobs="@userProfile.JobHistory" />
-
-                <!-- Leave History Table -->
-                <div class="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
-                    <div class="p-3 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
-                        <h3 class="font-semibold text-slate-800">Leave History</h3>
-                    </div>
-                    <div class="overflow-x-auto">
-                        <table class="w-full text-left border-collapse text-sm">
-                            <thead>
-                                <tr class="bg-white border-b border-slate-200">
-                                    <th class="py-3 px-5 font-medium text-slate-500">Leave Type</th>
-                                    <th class="py-3 px-5 font-medium text-slate-500">Duration (Days)</th>
-                                    <th class="py-3 px-5 font-medium text-slate-500">From Date</th>
-                                    <th class="py-3 px-5 font-medium text-slate-500">To Date</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                          @*       @if (approvedJob != null && approvedJob.Leaves != null && approvedJob.Leaves.Any())
+        <div class="w-full min-w-0 space-y-4 transition-all duration-300 @(fullWidth ? "max-w-none" : "max-w-7xl mx-auto")">
+            <!-- ==================== HERO PROFILE HEADER CARD ==================== -->
+            <section class="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden">
+                <div class="p-4">
+                    <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+                        <!-- Left: Avatar & Core Identity -->
+                        <div class="flex flex-col sm:flex-row items-start gap-4 min-w-0">
+                            <div class="relative shrink-0">
+                                @if (!string.IsNullOrWhiteSpace(userProfile.ImageUrl))
                                 {
-                                    foreach (var leave in approvedJob.Leaves.OrderByDescending(l => l.FromDate))
-                                    {
-                                        <tr class="hover:bg-slate-50 transition-colors border-b border-slate-100">
-                                            <td class="py-3 px-5 text-slate-800 font-medium">@(leave.LeaveType?.Name ?? "N/A")</td>
-
-                                            <!-- Cleaned up Duration syntax -->
-                                            <td class="py-3 px-5 text-slate-600">@leave.Duration</td>
-
-                                            <!-- Cleaned up Date syntax -->
-                                            <td class="py-3 px-5 text-slate-600">@(leave.FromDate.ToString("dd-MMM-yyyy") ?? "N/A")</td>
-                                            <td class="py-3 px-5 text-slate-600">@(leave.ToDate.ToString("dd-MMM-yyyy") ?? "N/A")</td>
-                                        </tr>
-                                    }
+                                    <img src="@userProfile.ImageUrl"
+                                         alt="@displayName"
+                                         class="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl object-cover border border-slate-200 shadow-xs" />
                                 }
                                 else
                                 {
-                                    <tr>
-                                        <td colspan="4" class="py-6 px-5 text-center text-slate-400 italic">No leave records found for active job.</td>
-                                    </tr>
-                                } *@
-                            </tbody>
-                        </table>
+                                    <div style="background-color:#075985; color:#ffffff;"
+                                         class="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-center font-bold text-2xl sm:text-3xl uppercase">
+                                        @GetInitials(displayName)
+                                    </div>
+                                }
+                                <span class="absolute -bottom-1 -right-1 w-5 h-5 rounded-full @(approvedJob is not null ? "bg-emerald-500" : "bg-amber-400") border-2 border-white"
+                                      title="@(approvedJob is not null ? "Active Employee" : "Registered Profile")"></span>
+                                @if (userProfile.IndividualID > 0)
+                                {
+                                    <button type="button"
+                                            @onclick="() => isPhotoModalOpen = true"
+                                            class="ep-no-print absolute -top-1.5 -right-1.5 rounded-full bg-blue-600 p-1.5 text-white shadow-sm hover:bg-blue-700 transition"
+                                            title="@(string.IsNullOrEmpty(userProfile.ImageUrl) ? "Add photo" : "Change photo")"
+                                            aria-label="Update profile photo">
+                                        <i class="bi bi-camera text-[11px]" aria-hidden="true"></i>
+                                    </button>
+                                }
+                            </div>
+
+                            <div class="space-y-1.5 min-w-0">
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <h2 class="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">@displayName</h2>
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-mono font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+                                        @employeeCode
+                                    </span>
+                                    <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold @(approvedJob is not null ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-amber-50 text-amber-800 border border-amber-200")">
+                                        <span class="w-1.5 h-1.5 rounded-full @(approvedJob is not null ? "bg-emerald-500" : "bg-amber-500")"></span>
+                                        @(approvedJob is not null ? $"{approvedJob.JobStateName} • {approvedJob.JobTypeName ?? "Staff"}" : "No Active Job")
+                                    </span>
+                                </div>
+
+                                @if (!string.IsNullOrWhiteSpace(userProfile.FullNameDhivehi))
+                                {
+                                    <p class="text-sm text-slate-500" dir="rtl" style="font-family:'DhivehiFont','Faruma',sans-serif; text-align:left;">@userProfile.FullNameDhivehi</p>
+                                }
+
+                                <p class="text-sm sm:text-base font-medium text-slate-700">
+                                    @(userProfile.CurrentPositionName ?? approvedJob?.JobTypeName ?? "Position Not Assigned")
+                                </p>
+
+                                <div class="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-slate-500 pt-1">
+                                    <span class="inline-flex items-center gap-1.5">
+                                        <i class="bi bi-building text-slate-400" aria-hidden="true"></i>
+                                        <span>@(approvedJob?.OrganisationStructureName ?? "Department Not Set")@(string.IsNullOrWhiteSpace(approvedJob?.OrganisationName ?? userProfile.OrganisationName) ? "" : $" • {approvedJob?.OrganisationName ?? userProfile.OrganisationName}")</span>
+                                    </span>
+                                    @if (approvedJob is not null)
+                                    {
+                                        <span class="inline-flex items-center gap-1.5">
+                                            <i class="bi bi-calendar-check text-slate-400" aria-hidden="true"></i>
+                                            <span>Joined: <strong class="font-semibold text-slate-700">@approvedJob.JoinedDate.ToString("dd MMM yyyy")</strong> (Tenure: <strong class="font-semibold text-slate-700">@tenureText</strong>)</span>
+                                        </span>
+                                    }
+                                    @if (!string.IsNullOrWhiteSpace(userProfile.Email))
+                                    {
+                                        <span class="inline-flex items-center gap-1.5">
+                                            <i class="bi bi-envelope text-slate-400" aria-hidden="true"></i>
+                                            <span>@userProfile.Email</span>
+                                        </span>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Right: Quick Actions -->
+                        <div class="flex flex-wrap items-center gap-2 shrink-0 ep-no-print">
+                            @if (userProfile.IndividualID > 0)
+                            {
+                                <button type="button"
+                                        class="app-button app-button-primary app-button-sm"
+                                        @onclick="() => isPhotoModalOpen = true">
+                                    <i class="bi bi-camera" aria-hidden="true"></i>
+                                    <span>@(string.IsNullOrEmpty(userProfile.ImageUrl) ? "Add Photo" : "Change Photo")</span>
+                                </button>
+                            }
+                            <a href="/online/leaves" class="app-button app-button-secondary app-button-sm">
+                                <i class="bi bi-calendar2-plus" aria-hidden="true"></i>
+                                <span>Leave Portal</span>
+                            </a>
+                            <a href="/online/payslips" class="app-button app-button-secondary app-button-sm">
+                                <i class="bi bi-receipt" aria-hidden="true"></i>
+                                <span>Payslips</span>
+                            </a>
+                        </div>
                     </div>
                 </div>
 
+                <!-- 4-Column Quick KPI Strip -->
+                <div class="grid grid-cols-2 lg:grid-cols-4 divide-y lg:divide-y-0 lg:divide-x divide-slate-200 border-t border-slate-200 bg-slate-50/70">
+                    <div class="p-3.5 sm:px-4 flex items-center justify-between gap-2">
+                        <div>
+                            <p class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Basic Salary</p>
+                            <p class="mt-0.5 text-base font-bold text-slate-900 font-mono">
+                                @(revealSensitive
+                                    ? $"MVR {(approvedJob?.BasicSalary ?? 0m):N2}"
+                                    : "MVR ••••••")
+                            </p>
+                        </div>
+                        <div class="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+                            <i class="bi bi-wallet2 text-base" aria-hidden="true"></i>
+                        </div>
+                    </div>
+                    <div class="p-3.5 sm:px-4 flex items-center justify-between gap-2 border-l border-slate-200 lg:border-l-0">
+                        <div>
+                            <p class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Leave Taken (YTD)</p>
+                            <p class="mt-0.5 text-base font-bold text-slate-900">
+                                @userProfile.TotalLeavesTakenDays <span class="text-xs font-normal text-slate-500">day(s)</span>
+                            </p>
+                        </div>
+                        <div class="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                            <i class="bi bi-calendar-week text-base" aria-hidden="true"></i>
+                        </div>
+                    </div>
+                    <div class="p-3.5 sm:px-4 flex items-center justify-between gap-2">
+                        <div>
+                            <p class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Employment &amp; Roles</p>
+                            <p class="mt-0.5 text-base font-bold text-slate-900">
+                                @userProfile.JobHistory.Count <span class="text-xs font-normal text-slate-500">jobs · @userProfile.Roles.Count roles</span>
+                            </p>
+                        </div>
+                        <div class="w-9 h-9 rounded-xl bg-teal-50 text-teal-700 flex items-center justify-center shrink-0">
+                            <i class="bi bi-briefcase text-base" aria-hidden="true"></i>
+                        </div>
+                    </div>
+                    <div class="p-3.5 sm:px-4 flex items-center justify-between gap-2 border-l border-slate-200 lg:border-l-0">
+                        <div>
+                            <p class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Documents &amp; Offers</p>
+                            <p class="mt-0.5 text-base font-bold text-slate-900">
+                                @userProfile.ActiveDocumentsCount <span class="text-xs font-normal text-slate-500">docs · @myOffers.Count offers</span>
+                            </p>
+                        </div>
+                        <div class="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+                            <i class="bi bi-folder2-open text-base" aria-hidden="true"></i>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Pending Job Offers Highlight Banner (visible on any tab if pending offer exists) -->
+            @if (myOffers.Any(o => o.Status == "Offered"))
+            {
+                <div class="rounded-2xl border border-amber-300 bg-amber-50/70 p-4 flex flex-wrap items-center justify-between gap-3 text-xs ep-no-print">
+                    <div class="flex items-center gap-2.5">
+                        <i class="bi bi-envelope-paper-heart text-amber-700 text-lg" aria-hidden="true"></i>
+                        <div>
+                            <div class="font-bold text-slate-900">You have @myOffers.Count(o => o.Status == "Offered") pending Job Offer Letter(s) awaiting your decision.</div>
+                            <p class="text-[11px] text-slate-600">Review, sign, and submit your Job Offer Acceptance Form for HR to proceed with onboarding.</p>
+                        </div>
+                    </div>
+                    <button type="button" class="app-button app-button-primary app-button-sm" @onclick='() => activeTab = "offers"'>
+                        <i class="bi bi-pen" aria-hidden="true"></i>
+                        <span>View Job Offers</span>
+                    </button>
+                </div>
+            }
+
+            <!-- ==================== HORIZONTAL TAB NAVIGATION ==================== -->
+            <div class="border-b border-slate-200 bg-white rounded-xl px-2 sm:px-4 shadow-xs ep-no-print">
+                <nav class="flex space-x-1 sm:space-x-2 overflow-x-auto ep-no-scrollbar" aria-label="Profile Sections">
+                    @foreach (var tab in ProfileTabs)
+                    {
+                        var isActive = activeTab == tab.Key;
+                        <button type="button"
+                                @onclick="() => activeTab = tab.Key"
+                                class="whitespace-nowrap py-3 px-3 border-b-2 font-semibold text-xs sm:text-sm flex items-center gap-1.5 transition-colors @(isActive ? "border-blue-600 text-blue-700" : "border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300")">
+                            <i class="bi @tab.Icon" aria-hidden="true"></i>
+                            <span>@tab.Label</span>
+                            @if (tab.Key == "offers" && myOffers.Count > 0)
+                            {
+                                <span class="rounded-full bg-amber-100 text-amber-800 px-1.5 py-0.5 text-[10px] font-bold">@myOffers.Count</span>
+                            }
+                        </button>
+                    }
+                </nav>
             </div>
+
+            <!-- ==================== TAB 1: OVERVIEW & PERSONAL ==================== -->
+            @if (activeTab == "overview")
+            {
+                <div class="ep-fade space-y-4">
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                        <!-- Personal Information Card -->
+                        <div class="bg-white border border-slate-200 rounded-2xl shadow-xs p-4 space-y-3">
+                            <div class="flex items-center justify-between border-b border-slate-100 pb-2.5">
+                                <h3 class="text-sm font-bold text-slate-900 flex items-center gap-2">
+                                    <i class="bi bi-person-vcard text-blue-600" aria-hidden="true"></i>
+                                    <span>Personal Information</span>
+                                </h3>
+                                <span class="text-[11px] text-slate-400">Verified by HR / eFaas</span>
+                            </div>
+                            <dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3 text-xs">
+                                <div>
+                                    <dt class="text-[11px] font-medium text-slate-500">Full Legal Name</dt>
+                                    <dd class="mt-0.5 font-semibold text-slate-900">@displayName</dd>
+                                </div>
+                                <div>
+                                    <dt class="text-[11px] font-medium text-slate-500">Name (Dhivehi)</dt>
+                                    <dd class="mt-0.5 font-semibold text-slate-900" style="font-family:'DhivehiFont','Faruma',sans-serif;">@(userProfile.FullNameDhivehi ?? "—")</dd>
+                                </div>
+                                <div>
+                                    <dt class="text-[11px] font-medium text-slate-500">Date of Birth</dt>
+                                    <dd class="mt-0.5 font-semibold text-slate-900">
+                                        @(userProfile.DateOfBirth.HasValue ? $"{userProfile.DateOfBirth.Value:dd MMM yyyy} ({ageText})" : "—")
+                                    </dd>
+                                </div>
+                                <div>
+                                    <dt class="text-[11px] font-medium text-slate-500">Gender</dt>
+                                    <dd class="mt-0.5 font-semibold text-slate-900">@(userProfile.Gender ?? "—")</dd>
+                                </div>
+                                <div>
+                                    <dt class="text-[11px] font-medium text-slate-500">Nationality</dt>
+                                    <dd class="mt-0.5 font-semibold text-slate-900">@(userProfile.Nationality ?? "Maldivian")</dd>
+                                </div>
+                                <div>
+                                    <dt class="text-[11px] font-medium text-slate-500 flex items-center gap-1">
+                                        <span>National ID / Passport</span>
+                                        <i class="bi bi-lock-fill text-slate-400 text-[10px]" aria-hidden="true"></i>
+                                    </dt>
+                                    <dd class="mt-0.5 font-mono font-semibold text-slate-900">
+                                        @MaskSensitive(userProfile.NationalId ?? userProfile.Username)
+                                        @if (!string.IsNullOrWhiteSpace(userProfile.PassportNumber))
+                                        {
+                                            <span class="text-slate-400"> / </span>
+                                            <span>@MaskSensitive(userProfile.PassportNumber)</span>
+                                        }
+                                    </dd>
+                                </div>
+                                <div>
+                                    <dt class="text-[11px] font-medium text-slate-500">Username / eFaas ID</dt>
+                                    <dd class="mt-0.5 font-mono font-semibold text-slate-800">@(userProfile.Username ?? "—")</dd>
+                                </div>
+                                <div>
+                                    <dt class="text-[11px] font-medium text-slate-500">Individual Registry ID</dt>
+                                    <dd class="mt-0.5 font-mono font-semibold text-slate-800">#@userProfile.IndividualID</dd>
+                                </div>
+                            </dl>
+                        </div>
+
+                        <!-- Contact Information Card -->
+                        <div class="bg-white border border-slate-200 rounded-2xl shadow-xs p-4 space-y-3">
+                            <div class="flex items-center justify-between border-b border-slate-100 pb-2.5">
+                                <h3 class="text-sm font-bold text-slate-900 flex items-center gap-2">
+                                    <i class="bi bi-telephone text-blue-600" aria-hidden="true"></i>
+                                    <span>Contact Information</span>
+                                </h3>
+                            </div>
+                            <dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3 text-xs">
+                                <div>
+                                    <dt class="text-[11px] font-medium text-slate-500">Email Address</dt>
+                                    <dd class="mt-0.5 font-semibold text-blue-700 break-all">@(string.IsNullOrWhiteSpace(userProfile.Email) ? "—" : userProfile.Email)</dd>
+                                </div>
+                                <div>
+                                    <dt class="text-[11px] font-medium text-slate-500">Mobile Phone</dt>
+                                    <dd class="mt-0.5 font-mono font-semibold text-slate-900">@(string.IsNullOrWhiteSpace(userProfile.Mobile) ? "—" : userProfile.Mobile)</dd>
+                                </div>
+                                @foreach (var c in userProfile.Contacts.Take(6))
+                                {
+                                    <div>
+                                        <dt class="text-[11px] font-medium text-slate-500">@c.Type</dt>
+                                        <dd class="mt-0.5 font-semibold text-slate-800 break-all">@c.Value</dd>
+                                    </div>
+                                }
+                                @if (!string.IsNullOrWhiteSpace(userProfile.CurrentAddress))
+                                {
+                                    <div class="sm:col-span-2">
+                                        <dt class="text-[11px] font-medium text-slate-500">Current Address</dt>
+                                        <dd class="mt-0.5 font-semibold text-slate-800">@userProfile.CurrentAddress</dd>
+                                    </div>
+                                }
+                                @if (!string.IsNullOrWhiteSpace(userProfile.PermanentAddress))
+                                {
+                                    <div class="sm:col-span-2">
+                                        <dt class="text-[11px] font-medium text-slate-500">Permanent Address</dt>
+                                        <dd class="mt-0.5 font-semibold text-slate-800">@userProfile.PermanentAddress</dd>
+                                    </div>
+                                }
+                            </dl>
+                        </div>
+                    </div>
+
+                    <!-- Digital Signature & Signing Style Card -->
+                    <SignaturePadCard />
+                </div>
+            }
+
+            <!-- ==================== TAB 2: JOB & ORGANIZATION ==================== -->
+            @if (activeTab == "job")
+            {
+                <div class="ep-fade space-y-4">
+                    <div class="bg-white border border-slate-200 rounded-2xl shadow-xs p-4 space-y-3">
+                        <h3 class="text-sm font-bold text-slate-900 flex items-center gap-2 border-b border-slate-100 pb-3">
+                            <i class="bi bi-briefcase text-blue-600" aria-hidden="true"></i>
+                            <span>Active Job Assignment</span>
+                        </h3>
+                        <dl class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-4 text-xs">
+                            <div>
+                                <dt class="text-[11px] font-medium text-slate-500">Organisation</dt>
+                                <dd class="mt-0.5 font-semibold text-slate-900">@(approvedJob?.OrganisationName ?? userProfile.OrganisationName ?? "N/A")</dd>
+                            </div>
+                            <div>
+                                <dt class="text-[11px] font-medium text-slate-500">Department / Unit</dt>
+                                <dd class="mt-0.5 font-semibold text-slate-900">@(approvedJob?.OrganisationStructureName ?? "N/A")</dd>
+                            </div>
+                            <div>
+                                <dt class="text-[11px] font-medium text-slate-500">Position Title</dt>
+                                <dd class="mt-0.5 font-semibold text-slate-900">@(userProfile.CurrentPositionName ?? "N/A")</dd>
+                            </div>
+                            <div>
+                                <dt class="text-[11px] font-medium text-slate-500">Job Type</dt>
+                                <dd class="mt-0.5 font-semibold text-slate-900">@(approvedJob?.JobTypeName ?? "N/A")</dd>
+                            </div>
+                            <div>
+                                <dt class="text-[11px] font-medium text-slate-500">Job Status</dt>
+                                <dd class="mt-0.5">
+                                    <span class="rounded-full px-2.5 py-0.5 text-[11px] font-semibold @(approvedJob is not null ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-600")">
+                                        @(approvedJob?.JobStateName ?? "No Active Job")
+                                    </span>
+                                </dd>
+                            </div>
+                            <div>
+                                <dt class="text-[11px] font-medium text-slate-500">SAP / Employee Number</dt>
+                                <dd class="mt-0.5 font-mono font-semibold text-slate-900">@(approvedJob?.SAPNumber ?? "N/A")</dd>
+                            </div>
+                            <div>
+                                <dt class="text-[11px] font-medium text-slate-500">Joined Date</dt>
+                                <dd class="mt-0.5 font-semibold text-slate-900">@(approvedJob?.JoinedDate.ToString("dd MMM yyyy") ?? "N/A")</dd>
+                            </div>
+                            <div>
+                                <dt class="text-[11px] font-medium text-slate-500">Tenure</dt>
+                                <dd class="mt-0.5 font-semibold text-slate-900">@tenureText</dd>
+                            </div>
+                        </dl>
+                    </div>
+
+                    <HRM.Components.Profile.Employment.EmploymentHistoryTable Jobs="@userProfile.JobHistory" />
+                </div>
+            }
+
+            <!-- ==================== TAB 3: COMPENSATION & PAYROLL ==================== -->
+            @if (activeTab == "compensation")
+            {
+                <div class="ep-fade space-y-4">
+                    <div class="bg-white border border-slate-200 rounded-2xl shadow-xs p-4 space-y-3">
+                        <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
+                            <h3 class="text-sm font-bold text-slate-900 flex items-center gap-2">
+                                <i class="bi bi-cash-coin text-emerald-600" aria-hidden="true"></i>
+                                <span>Compensation Overview</span>
+                            </h3>
+                            <div class="flex flex-wrap items-center gap-1.5 ep-no-print">
+                                <a href="/online/payslips" class="app-button app-button-primary app-button-sm">My Payslips</a>
+                                <a href="/online/allowances-deductions" class="app-button app-button-secondary app-button-sm">Allowances &amp; Deductions</a>
+                                <a href="/online/goods-loans" class="app-button app-button-secondary app-button-sm">Goods Loans</a>
+                            </div>
+                        </div>
+                        <dl class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+                            <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
+                                <dt class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Monthly Basic Salary</dt>
+                                <dd class="mt-1.5 text-lg font-bold text-emerald-700 font-mono">
+                                    @(revealSensitive ? $"MVR {(approvedJob?.BasicSalary ?? 0m):N2}" : "MVR ••••••")
+                                </dd>
+                            </div>
+                            <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
+                                <dt class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Employment Type</dt>
+                                <dd class="mt-1.5 text-base font-bold text-slate-900">@(approvedJob?.JobTypeName ?? "N/A")</dd>
+                            </div>
+                            <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
+                                <dt class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Pay Frequency</dt>
+                                <dd class="mt-1.5 text-base font-bold text-slate-900">Monthly (MVR)</dd>
+                            </div>
+                        </dl>
+                    </div>
+                </div>
+            }
+
+            <!-- ==================== TAB 4: TIME, ATTENDANCE & LEAVE ==================== -->
+            @if (activeTab == "time")
+            {
+                <div class="ep-fade space-y-4">
+                    <div class="bg-white border border-slate-200 rounded-2xl shadow-xs p-4 space-y-3">
+                        <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
+                            <h3 class="text-sm font-bold text-slate-900 flex items-center gap-2">
+                                <i class="bi bi-calendar2-week text-blue-600" aria-hidden="true"></i>
+                                <span>Recent Leave History</span>
+                            </h3>
+                            <div class="flex flex-wrap items-center gap-1.5 ep-no-print">
+                                <a href="/online/leaves" class="app-button app-button-primary app-button-sm">Apply / Manage Leave</a>
+                                <a href="/online/attendance" class="app-button app-button-secondary app-button-sm">My Attendance</a>
+                                <a href="/online/duty-roster" class="app-button app-button-secondary app-button-sm">Duty Roster</a>
+                            </div>
+                        </div>
+
+                        @if (userProfile.RecentLeaves.Count == 0)
+                        {
+                            <div class="rounded-xl border border-dashed border-slate-300 bg-slate-50/50 p-6 text-center text-xs text-slate-500">
+                                No leave records found for your active job.
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="overflow-x-auto rounded-xl border border-slate-200">
+                                <table class="w-full text-left text-xs">
+                                    <thead class="bg-slate-50 border-b border-slate-200 text-slate-700 font-semibold">
+                                        <tr>
+                                            <th class="p-2.5">Leave Type</th>
+                                            <th class="p-2.5">From Date</th>
+                                            <th class="p-2.5">To Date</th>
+                                            <th class="p-2.5">Duration</th>
+                                            <th class="p-2.5">Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-slate-100">
+                                        @foreach (var lv in userProfile.RecentLeaves)
+                                        {
+                                            <tr class="hover:bg-slate-50/60">
+                                                <td class="p-2.5 font-semibold text-slate-800">@lv.LeaveType</td>
+                                                <td class="p-2.5 text-slate-600">@lv.FromDate.ToString("dd MMM yyyy")</td>
+                                                <td class="p-2.5 text-slate-600">@lv.ToDate.ToString("dd MMM yyyy")</td>
+                                                <td class="p-2.5 font-mono text-slate-700">@lv.Duration day(s)</td>
+                                                <td class="p-2.5">
+                                                    <span class="rounded-full px-2.5 py-0.5 text-[11px] font-semibold @(lv.Status.Contains("Approved", StringComparison.OrdinalIgnoreCase) ? "bg-emerald-100 text-emerald-800" : lv.Status.Contains("Reject", StringComparison.OrdinalIgnoreCase) || lv.Status.Contains("Cancel", StringComparison.OrdinalIgnoreCase) ? "bg-rose-100 text-rose-800" : "bg-amber-100 text-amber-800")">
+                                                        @lv.Status
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+
+            <!-- ==================== TAB 5: JOB OFFERS & RECRUITMENT ==================== -->
+            @if (activeTab == "offers")
+            {
+                <div class="ep-fade space-y-4">
+                    <div class="bg-white border border-slate-200 rounded-2xl shadow-xs p-4 space-y-3">
+                        <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
+                            <div>
+                                <h3 class="text-sm font-bold text-slate-900 flex items-center gap-2">
+                                    <i class="bi bi-envelope-paper-heart text-blue-600" aria-hidden="true"></i>
+                                    <span>My Job Offer Letters (@myOffers.Count)</span>
+                                </h3>
+                                <p class="text-xs text-slate-500 mt-0.5">Review, fill, sign, and submit your Job Offer Acceptance Form for HR to proceed with onboarding.</p>
+                            </div>
+                            <a href="/careers" class="app-button app-button-secondary app-button-sm ep-no-print">Careers Portal</a>
+                        </div>
+
+                        @if (myOffers.Count == 0)
+                        {
+                            <div class="rounded-xl border border-dashed border-slate-300 bg-slate-50/50 p-6 text-center text-xs text-slate-500">
+                                You do not have any published job offers at this time.
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="space-y-2.5">
+                                @foreach (var offer in myOffers)
+                                {
+                                    <div class="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-slate-50/70 px-4 py-3 text-xs">
+                                        <div>
+                                            <div class="font-bold text-slate-900">@(string.IsNullOrWhiteSpace(offer.PositionName) ? offer.VacancyReference : offer.PositionName)</div>
+                                            <div class="text-[11px] text-slate-500 mt-0.5">
+                                                @(string.IsNullOrWhiteSpace(offer.OrganisationName) ? "" : $"{offer.OrganisationName} · ")
+                                                <span class="font-mono">@offer.VacancyReference</span>
+                                                <span class="ml-1.5 rounded-full px-2 py-0.5 text-[10px] font-semibold @(offer.Status == "Accepted" ? "bg-emerald-100 text-emerald-800" : offer.Status == "OnboardingSubmitted" ? "bg-blue-100 text-blue-800" : offer.Status == "Declined" ? "bg-rose-100 text-rose-800" : "bg-amber-100 text-amber-800")">
+                                                    @(offer.Status == "OnboardingSubmitted" ? "Onboarding In Progress" : offer.Status)
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <div class="flex flex-wrap items-center gap-1.5 ep-no-print">
+                                            <a href="@($"/careers/offer-letter/{offer.Id}")"
+                                               target="_blank"
+                                               rel="noopener"
+                                               class="app-button app-button-secondary app-button-sm">
+                                                <i class="bi bi-file-earmark-text" aria-hidden="true"></i>
+                                                <span>View / Fill Offer Letter</span>
+                                            </a>
+                                            <button type="button"
+                                                    class="app-button @(offer.Status == "Offered" ? "app-button-primary" : "app-button-secondary") app-button-sm"
+                                                    @onclick="() => activeOffer = offer">
+                                                <i class="bi @(offer.Status == "Offered" ? "bi-pen" : "bi-file-earmark-check")" aria-hidden="true"></i>
+                                                <span>@(offer.Status == "Offered" ? "Open & Sign Offer Form" : "View Signed Offer")</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+
+            <!-- ==================== TAB 6: ASSETS & DOCUMENTS ==================== -->
+            @if (activeTab == "assets")
+            {
+                <div class="ep-fade grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                    <a href="/online/my-assets" class="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs hover:border-blue-400 transition flex flex-col gap-2">
+                        <div class="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center"><i class="bi bi-laptop text-base" aria-hidden="true"></i></div>
+                        <h3 class="text-sm font-bold text-slate-900">My Assigned Assets</h3>
+                        <p class="text-xs text-slate-500">View equipment, laptops, and devices currently in your custody.</p>
+                    </a>
+                    <a href="/online/documents" class="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs hover:border-blue-400 transition flex flex-col gap-2">
+                        <div class="w-9 h-9 rounded-xl bg-teal-50 text-teal-700 flex items-center justify-center"><i class="bi bi-folder2-open text-base" aria-hidden="true"></i></div>
+                        <h3 class="text-sm font-bold text-slate-900">My Documents (@userProfile.ActiveDocumentsCount)</h3>
+                        <p class="text-xs text-slate-500">Access appointment letters, position contracts, and personal files.</p>
+                    </a>
+                    <a href="/online/certificates" class="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs hover:border-blue-400 transition flex flex-col gap-2">
+                        <div class="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center"><i class="bi bi-patch-check text-base" aria-hidden="true"></i></div>
+                        <h3 class="text-sm font-bold text-slate-900">Certificates</h3>
+                        <p class="text-xs text-slate-500">Request employment verification and salary certificates.</p>
+                    </a>
+                    <a href="/online/item-requests" class="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs hover:border-blue-400 transition flex flex-col gap-2">
+                        <div class="w-9 h-9 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center"><i class="bi bi-box-seam text-base" aria-hidden="true"></i></div>
+                        <h3 class="text-sm font-bold text-slate-900">Item Requests</h3>
+                        <p class="text-xs text-slate-500">Submit and track office supply and asset requests.</p>
+                    </a>
+                </div>
+            }
+
+            <!-- ==================== TAB 7: COMPLIANCE & ACCESS ==================== -->
+            @if (activeTab == "compliance")
+            {
+                <div class="ep-fade space-y-4">
+                    <div class="bg-white border border-slate-200 rounded-2xl shadow-xs p-4 space-y-3">
+                        <h3 class="text-sm font-bold text-slate-900 flex items-center gap-2 border-b border-slate-100 pb-3">
+                            <i class="bi bi-shield-check text-blue-600" aria-hidden="true"></i>
+                            <span>Assigned Roles &amp; Access Groups (@userProfile.Roles.Count)</span>
+                        </h3>
+                        @if (userProfile.Roles.Count == 0)
+                        {
+                            <p class="text-xs text-slate-500">Standard employee self-service access.</p>
+                        }
+                        else
+                        {
+                            <div class="flex flex-wrap gap-2">
+                                @foreach (var role in userProfile.Roles)
+                                {
+                                    <span class="inline-flex items-center gap-1.5 rounded-full bg-blue-50 border border-blue-200 px-3 py-1 text-xs font-semibold text-blue-800">
+                                        <i class="bi bi-shield-lock text-[11px]" aria-hidden="true"></i>
+                                        <span>@role.RoleName</span>
+                                    </span>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
         </div>
-    </div>
+    </section>
+
+    @if (isPhotoModalOpen && userProfile != null && userProfile.IndividualID > 0)
+    {
+        <IndividualPhotoModal IndividualId="@userProfile.IndividualID"
+                              IndividualName="@userProfile.FullName"
+                              CurrentImageUrl="@userProfile.ImageUrl"
+                              OnPhotoUpdated="HandlePhotoUpdated"
+                              OnClose="() => isPhotoModalOpen = false" />
+    }
+
+    @if (activeOffer is not null)
+    {
+        <HRM.Components.Admin.Hr.Recruitment.OfferLetterAcceptanceModal IsOpen="true"
+                                                                        OfferId="@activeOffer.Id"
+                                                                        VacancyReference="@activeOffer.VacancyReference"
+                                                                        Status="@activeOffer.Status"
+                                                                        TermsSnapshotJson="@activeOffer.TermsSnapshotJson"
+                                                                        PositionName="@activeOffer.PositionName"
+                                                                        OrganisationName="@activeOffer.OrganisationName"
+                                                                        ApplicantName="@userProfile?.FullName"
+                                                                        OfferedAtUtc="@activeOffer.OfferedAtUtc"
+                                                                        AcceptedAtUtc="@activeOffer.AcceptedAtUtc"
+                                                                        AppointeeSignatureDataUrl="@activeOffer.AppointeeSignatureDataUrl"
+                                                                        SignatureVerificationCode="@activeOffer.SignatureVerificationCode"
+                                                                        ReadOnly="@(activeOffer.Status != "Offered")"
+                                                                        OnSubmitted="HandleOfferSubmittedAsync"
+                                                                        OnClosed="() => activeOffer = null" />
+    }
 }
 
 @code {
     [CascadingParameter]
     private Task<AuthenticationState>? AuthState { get; set; }
 
+    private const string FullWidthStorageKey = "hrm.profile.full-width";
     private UserProfileDto? userProfile;
+    private IReadOnlyList<HRM.Application.Contracts.Recruitment.MyRecruitmentOfferRow> myOffers = [];
+    private HRM.Application.Contracts.Recruitment.MyRecruitmentOfferRow? activeOffer;
     private bool isLoading = true;
-    private bool canManageAccount;
+    private bool isPhotoModalOpen;
+    private bool revealSensitive;
+    private bool fullWidth;
+    private string activeTab = "overview";
+
+    private sealed record ProfileTabItem(string Key, string Label, string Icon);
+    private static readonly ProfileTabItem[] ProfileTabs =
+    [
+        new("overview", "Overview & Personal", "bi-person"),
+        new("job", "Job & Organization", "bi-briefcase"),
+        new("compensation", "Compensation & Payroll", "bi-wallet2"),
+        new("time", "Time & Leave", "bi-calendar2-week"),
+        new("offers", "Job Offers", "bi-envelope-paper-heart"),
+        new("assets", "Assets & Documents", "bi-folder2-open"),
+        new("compliance", "Compliance & Access", "bi-shield-check")
+    ];
 
     protected override async Task OnInitializedAsync()
     {
         userProfile = await UserService.GetMyProfileAsync();
-        var context = await UserAccess.GetContextAsync();
-        canManageAccount = context?.IsSuperAdministrator == true || await UserAccess.HasPermissionAsync("Admin") ||
-            await UserAccess.HasPermissionAsync("Users.Edit") && await UserAccess.HasPermissionAsync("Users.View");
+        await LoadOffersAsync();
         isLoading = false;
     }
 
-}
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        try
+        {
+            var stored = await JS.InvokeAsync<string?>("localStorage.getItem", FullWidthStorageKey);
+            if (string.Equals(stored, "true", StringComparison.OrdinalIgnoreCase))
+            {
+                fullWidth = true;
+                StateHasChanged();
+            }
+        }
+        catch { }
+    }
 
+    private async Task ToggleFullWidthAsync()
+    {
+        fullWidth = !fullWidth;
+        try { await JS.InvokeVoidAsync("localStorage.setItem", FullWidthStorageKey, fullWidth ? "true" : "false"); } catch { }
+    }
+
+    private void HandlePhotoUpdated(string? newUrl)
+    {
+        if (userProfile != null)
+            userProfile.ImageUrl = newUrl;
+    }
+
+    private async Task LoadOffersAsync()
+    {
+        try
+        {
+            var ws = await RecruitmentApi.GetMyWorkspaceAsync();
+            myOffers = ws.Offers;
+        }
+        catch { myOffers = []; }
+    }
+
+    private async Task HandleOfferSubmittedAsync()
+    {
+        activeOffer = null;
+        await LoadOffersAsync();
+    }
+
+    private async Task PrintDossierAsync() => await JS.InvokeVoidAsync("window.print");
+
+    private string MaskSensitive(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return "—";
+        if (revealSensitive) return value;
+        var v = value.Trim();
+        if (v.Length <= 3) return "•••";
+        return $"{v[0]}{new string('•', Math.Max(3, v.Length - 3))}{v[^2..]}";
+    }
+
+    private static string GetInitials(string name)
+    {
+        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length == 0) return "?";
+        return parts.Length == 1 ? parts[0][..1].ToUpperInvariant() : $"{parts[0][0]}{parts[^1][0]}".ToUpperInvariant();
+    }
+
+    private static int CalculateAge(DateTime dob)
+    {
+        var today = DateTime.UtcNow.AddHours(5).Date;
+        var age = today.Year - dob.Year;
+        if (dob.Date > today.AddYears(-age)) age--;
+        return Math.Max(0, age);
+    }
+
+    private static string FormatTenure(DateTime joinedDate)
+    {
+        var today = DateTime.UtcNow.AddHours(5).Date;
+        if (joinedDate.Date >= today) return "< 1 mo";
+        var totalMonths = ((today.Year - joinedDate.Year) * 12) + today.Month - joinedDate.Month;
+        if (today.Day < joinedDate.Day) totalMonths--;
+        if (totalMonths < 1) return "< 1 mo";
+        var yrs = totalMonths / 12;
+        var mos = totalMonths % 12;
+        return yrs > 0 ? $"{yrs} yr{(yrs == 1 ? "" : "s")}, {mos} mo{(mos == 1 ? "" : "s")}" : $"{mos} mo{(mos == 1 ? "" : "s")}";
+    }
+}

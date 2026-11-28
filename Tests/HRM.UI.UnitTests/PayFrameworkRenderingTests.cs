@@ -21,9 +21,9 @@ public sealed class PayFrameworkRenderingTests
         await using var renderer=new HtmlRenderer(provider,provider.GetRequiredService<ILoggerFactory>());
         var html=await renderer.Dispatcher.InvokeAsync(async()=> (await renderer.RenderComponentAsync<PayFrameworks>(ParameterView.Empty)).ToHtmlString());
         Assert.Contains("New Pay Framework",html);Assert.Contains("Job Matrices",html);
-        Assert.Equal(super,html.Contains("Save framework",StringComparison.Ordinal));
+        Assert.Equal(super,html.Contains("Save Framework",StringComparison.Ordinal));
         html=await renderer.Dispatcher.InvokeAsync(async()=> (await renderer.RenderComponentAsync<PositionMatrixEditor>(ParameterView.FromDictionary(new Dictionary<string,object?>{{"FrameworkId",2}}))).ToHtmlString());
-        Assert.Contains("Approved staffing slots",html);Assert.DoesNotContain("Pay step<select",html);Assert.Contains("Effective from",html);
+        Assert.Contains("Approved Staffing Slots",html);Assert.DoesNotContain("Pay step<select",html);Assert.Contains("Effective From",html);
         Assert.Contains("Rank 7",html);Assert.Contains("Rank 10",html);Assert.Contains("Inactive",html);Assert.DoesNotContain("Other framework matrix",html);
         Assert.DoesNotContain("could not be loaded",html);
     }
@@ -35,9 +35,9 @@ public sealed class PayFrameworkRenderingTests
         await using var renderer=new HtmlRenderer(provider,provider.GetRequiredService<ILoggerFactory>());
         var html=await renderer.Dispatcher.InvokeAsync(async()=> (await renderer.RenderComponentAsync<PositionGrid>(ParameterView.Empty)).ToHtmlString());
         Assert.Contains("aria-label=\"Position framework\"",html);Assert.Contains("New Pay Framework",html);Assert.Contains("Custom",html);Assert.Contains("Legacy CSC",html);
-        Assert.Equal(code=="NEW_PAY",html.Contains("Create position matrix",StringComparison.Ordinal));
-        Assert.Equal(code!="NEW_PAY",html.Contains("Save position",StringComparison.Ordinal));
-        Assert.Equal(code=="LEGACY",html.Contains("Classification<select",StringComparison.Ordinal));
+        Assert.Equal(code=="NEW_PAY",html.Contains("Create Position From Job Matrix",StringComparison.Ordinal));
+        Assert.Equal(code!="NEW_PAY",html.Contains("Position Name",StringComparison.Ordinal));
+        Assert.Equal(code=="LEGACY",html.Contains("Select Classification",StringComparison.Ordinal));
     }
     public class Proxy:DispatchProxy
     {

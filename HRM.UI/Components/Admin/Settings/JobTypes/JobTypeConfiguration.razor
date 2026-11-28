@@ -5,63 +5,80 @@
 @inject ILogger<JobTypeConfiguration> Logger
 @inject NavigationManager Navigation
 
-<div class="w-full">
+<div class="w-full min-w-0 p-2 space-y-4">
     @if (error != null)
     {
-        <p role="alert" class="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">@error</p>
+        <div role="alert" class="flex items-center justify-between rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">@error</div>
     }
     @if (loading)
     {
-        <div class="rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-500">Loading configuration…</div>
+        <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 text-xs text-slate-500 shadow-xs">Loading configuration…</div>
     }
     else if (data != null)
     {
-        <fieldset disabled="@busy">
-            <div class="grid grid-cols-1 items-start gap-4 2xl:grid-cols-12">
-                <aside class="min-w-0 2xl:col-span-3 2xl:col-start-10 2xl:row-start-1">
-                    <div class="overflow-hidden rounded-xl border border-slate-200 bg-white">
-                        <div class="border-b p-3">
-                            <div class="flex items-center justify-between gap-3">
-                                <div>
-                                    <h2 class="text-sm font-semibold text-slate-900">@TypeTitlePlural (@data.JobTypes.Count)</h2>
-
+        <fieldset disabled="@busy" class="min-w-0">
+            <div class="grid grid-cols-1 items-start gap-4 lg:grid-cols-12">
+                <!-- Right Panel: Catalogue List -->
+                <aside class="min-w-0 lg:col-span-4 lg:col-start-9 lg:row-start-1">
+                    <div class="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs">
+                        <div class="border-b border-slate-200 dark:border-slate-800 p-3.5 space-y-2.5">
+                            <div class="flex items-center justify-between gap-2">
+                                <div class="flex items-center gap-2 min-w-0">
+                                    <h2 class="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-100 truncate">@TypeTitlePlural</h2>
+                                    <span class="rounded-full px-2 py-0.5 text-[10px] font-semibold border @(IsSuperAdminContext ? "" : "bg-slate-100 text-slate-700 border-slate-200")"
+                                          style="@(IsSuperAdminContext ? "background-color: #ADD8E6; border-color: #7cc0d8; color: #0f172a;" : null)">
+                                        @data.JobTypes.Count
+                                    </span>
                                 </div>
-                                <button type="button" class="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-600 text-white hover:bg-blue-700"
+                                <button type="button" class="app-button app-button-primary app-button-sm app-button-icon"
                                         title="Add @TypeLabel" aria-label="Add @TypeLabel" disabled="@(!data.CanManageCatalogues)" @onclick="NewJob">
-                                    <span class="material-symbols-rounded text-[19px]" aria-hidden="true">add</span>
+                                    <AppIcon Name="add" Class="text-sm" />
                                 </button>
                             </div>
-                            <label class="relative mt-2 block">
-                                <span class="material-symbols-rounded absolute left-3 top-1/2 -translate-y-1/2 text-[18px] text-slate-400" aria-hidden="true">search</span>
+                            <label class="relative block">
+                                <AppIcon Name="search" Class="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-400" />
                                 <input type="search" @bind="typeFilter" @bind:event="oninput" aria-label="Search @TypeTitlePlural"
-                                       placeholder="Search @TypeLabel…" class="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-10 pr-3 text-sm outline-none focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100" />
+                                       placeholder="Search @TypeLabel…" class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 py-1.5 pl-8 pr-3 text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400 outline-none focus:border-blue-500 focus:bg-white dark:focus:bg-slate-800 focus:ring-1 focus:ring-blue-500" />
                             </label>
                         </div>
-                        <div class="max-h-52 overflow-y-auto 2xl:max-h-[32rem]" tabindex="0" aria-label="@(RequestTypesMode ? "Request type list" : "Job type list")">
+                        <div class="max-h-72 overflow-y-auto lg:max-h-[34rem]" tabindex="0" aria-label="@(RequestTypesMode ? "Request type list" : "Job type list")">
                             @if (!FilteredTypes.Any())
                             {
-                                <div class="p-4 text-center">
-                                    <span class="material-symbols-rounded text-4xl text-slate-300" aria-hidden="true">search_off</span>
-                                    <p class="mt-2 text-sm font-semibold text-slate-700">No @TypeLabel entries found</p>
+                                <div class="p-6 text-center text-xs text-slate-500">
+                                    <AppIcon Name="search_off" Class="text-2xl text-slate-300" />
+                                    <p class="mt-2 font-semibold text-slate-700 dark:text-slate-300">No @TypeLabel entries found</p>
                                 </div>
                             }
                             else
                             {
-                                <div class="divide-y divide-slate-100">
+                                <div class="divide-y divide-slate-100 dark:divide-slate-800">
                                     @foreach (var item in FilteredTypes)
                                     {
-                                        <button type="button" class="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left transition-colors @(job.Id == item.Id ? "bg-blue-50 border-l-4 border-blue-600" : "border-l-4 border-transparent hover:bg-slate-50")"
-                                                aria-pressed="@(job.Id == item.Id)" @onclick="() => SelectJobAsync(item)">
+                                        var isSelected = job.Id == item.Id;
+                                        <button type="button"
+                                                class="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left transition-colors border-l-4 @(isSelected ? (IsSuperAdminContext ? "font-semibold" : "bg-blue-50/70 border-blue-600") : "border-transparent hover:bg-slate-50 dark:hover:bg-slate-800/60")"
+                                                style="@(isSelected && IsSuperAdminContext ? "background-color: #eef8fc; border-left-color: #0369a1;" : null)"
+                                                aria-pressed="@isSelected" @onclick="() => SelectJobAsync(item)">
                                             <div class="min-w-0">
-                                                <p class="truncate text-sm font-semibold text-slate-800">@item.Name</p>
+                                                <p class="truncate text-xs font-semibold text-slate-800 dark:text-slate-100">@item.Name</p>
                                                 @if (!RequestTypesMode && !string.IsNullOrWhiteSpace(item.DhivehiName))
-                                                { <p class="mt-1 truncate text-xs text-slate-500" dir="rtl">@item.DhivehiName</p> }
-                                                <div class="mt-1 text-[11px] text-slate-500">
-                                                    @if (RequestTypesMode) { <span>Request type #@item.Id</span> }
-                                                    else { <span class="@(item.IsActive ? "text-emerald-600" : "text-slate-400")">@(item.IsActive ? "Active" : "Inactive")</span> }
+                                                {
+                                                    <p class="mt-0.5 truncate text-[11px] text-slate-500 dark:text-slate-400" dir="rtl">@item.DhivehiName</p>
+                                                }
+                                                <div class="mt-1 flex items-center gap-1.5 text-[11px]">
+                                                    @if (RequestTypesMode)
+                                                    {
+                                                        <span class="font-mono text-[10px] text-slate-500">Request type #@item.Id</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="@(item.IsActive ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-600") rounded-full px-2 py-0.5 text-[10px] font-semibold">
+                                                            @(item.IsActive ? "Active" : "Inactive")
+                                                        </span>
+                                                    }
                                                 </div>
                                             </div>
-                                            <span class="material-symbols-rounded text-[18px] @(job.Id == item.Id ? "text-blue-600" : "text-slate-300")" aria-hidden="true">chevron_right</span>
+                                            <AppIcon Name="chevron_right" Class="text-sm text-slate-400 shrink-0" />
                                         </button>
                                     }
                                 </div>
@@ -69,84 +86,137 @@
                         </div>
                     </div>
                 </aside>
-                <section class="min-w-0 space-y-4 2xl:col-span-9 2xl:col-start-1 2xl:row-start-1">
-                    @if(!data.CanManageCatalogues){<p class="text-sm text-slate-500">Catalogue editing requires Super Admin.</p>}
-                    <fieldset disabled="@(!data.CanManageCatalogues)" class="overflow-hidden rounded-xl border border-slate-200 bg-white">
-                        <div class="border-b p-3"><h2 class="text-sm font-semibold">@(job.Id == 0 ? $"New {TypeTitle}" : TypeTitle)</h2></div>
-                        <div class="p-3">
+
+                <!-- Left Panel: Details Form & Config Tabs -->
+                <section class="min-w-0 space-y-4 lg:col-span-8 lg:col-start-1 lg:row-start-1">
+                    @if (!data.CanManageCatalogues)
+                    {
+                        <div class="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+                            Catalogue editing requires Super Admin authority.
+                        </div>
+                    }
+                    <fieldset disabled="@(!data.CanManageCatalogues)" class="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs">
+                        <div class="flex items-center justify-between gap-2 border-b border-slate-200 dark:border-slate-800 px-4 py-3">
+                            <h2 class="text-sm font-bold text-slate-900 dark:text-slate-100">@(job.Id == 0 ? $"New {TypeTitle}" : TypeTitle)</h2>
+                            @if (job.Id > 0)
+                            {
+                                <span class="font-mono text-[11px] font-semibold text-slate-700 bg-slate-100 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700 px-2 py-0.5 rounded-md">#@job.Id</span>
+                            }
+                        </div>
+                        <div class="p-4">
                             <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <label class="block text-xs font-medium text-slate-700">Name<input class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal normal-case outline-none focus:border-indigo-400 focus:ring-2 focus:ring-blue-100" maxlength="@(RequestTypesMode ? 500 : 50)" @bind="job.Name" /></label>
-                    @if (RequestTypesMode)
-                    {
-                        <label class="block text-xs font-medium text-slate-700">Request numbering sequence
-                            <select class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal normal-case outline-none focus:border-indigo-400 focus:ring-2 focus:ring-blue-100" @bind="job.SequenceNumberTypeId">
-                                <option value="">Select numbering sequence</option>
-                                @foreach (var option in data.NumberingTypes) { <option value="@option.Id">@option.Name</option> }
-                            </select>
-                        </label>
-                        <div class="sm:col-span-2 space-y-2">
-                        <label class="block text-xs font-medium text-slate-700">View URL (optional)<input class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal normal-case outline-none focus:border-indigo-400 focus:ring-2 focus:ring-blue-100" maxlength="1000" placeholder="/requests/details" @bind="job.ViewUrl" /></label>
-
-                        </div>
-                    }
-                    else
-                    {
-                    <label class="block text-xs font-medium text-slate-700">Dhivehi name<input class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal normal-case outline-none focus:border-indigo-400 focus:ring-2 focus:ring-blue-100" maxlength="50" dir="rtl" @bind="job.DhivehiName" /></label>
-                    <div class="sm:col-span-2">
-                        <label class="relative inline-flex items-center cursor-pointer">
-                            <input type="checkbox" @bind="job.IsActive" class="sr-only peer" />
-                            <span class="w-9 h-5 bg-slate-300 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600 peer-focus-visible:ring-2 peer-focus-visible:ring-blue-300"></span>
-                            <span class="ml-3 text-sm font-medium text-slate-700">Active</span>
-                        </label>
-
-                    </div>
-                    }
-
+                                <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 p-1">
+                                    Name
+                                    <input class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs font-normal text-slate-900 dark:text-slate-100 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                           maxlength="@(RequestTypesMode ? 500 : 50)" @bind="job.Name" />
+                                </label>
+                                @if (RequestTypesMode)
+                                {
+                                    <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 p-1">
+                                        Request numbering sequence
+                                        <select class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs font-normal text-slate-900 dark:text-slate-100 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                                @bind="job.SequenceNumberTypeId">
+                                            <option value="">Select numbering sequence</option>
+                                            @foreach (var option in data.NumberingTypes) { <option value="@option.Id">@option.Name</option> }
+                                        </select>
+                                    </label>
+                                    <div class="sm:col-span-2">
+                                        <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 p-1">
+                                            View URL (optional)
+                                            <input class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs font-normal text-slate-900 dark:text-slate-100 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                                   maxlength="1000" placeholder="/requests/details" @bind="job.ViewUrl" />
+                                        </label>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 p-1">
+                                        Dhivehi name
+                                        <input class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs font-normal text-slate-900 dark:text-slate-100 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                               maxlength="50" dir="rtl" @bind="job.DhivehiName" />
+                                    </label>
+                                    <div class="sm:col-span-2 px-1 pt-1">
+                                        <label class="relative inline-flex items-center cursor-pointer">
+                                            <input type="checkbox" @bind="job.IsActive" class="sr-only peer" />
+                                            <span class="w-9 h-5 bg-slate-300 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600 peer-focus-visible:ring-2 peer-focus-visible:ring-blue-300"></span>
+                                            <span class="ml-2.5 text-xs font-semibold text-slate-700 dark:text-slate-200">Active</span>
+                                        </label>
+                                    </div>
+                                }
                             </div>
                         </div>
-                        <div class="flex flex-wrap items-center gap-2 border-t p-3">
-                    <button type="button" class="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50" @onclick="NewJob">Cancel</button>
-                    <button type="button" class="bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-3 py-2 text-sm font-medium shadow-sm" @onclick="SaveJobAsync">Save @TypeLabel</button>
-                    @if (RequestTypesMode && job.Id > 0)
-                    {
-                        <button type="button" class="border border-red-200 text-red-700 hover:bg-red-50 rounded-lg px-3 py-2 text-sm font-medium" @onclick="() => confirmDelete = true">Delete request type</button>
-                        @if (confirmDelete)
-                        {
-                            <div role="alert" class="w-full border border-red-200 bg-red-50 rounded-xl p-4 space-y-3 text-sm">
-                                <p>Delete @job.Name and its unused approval workflow configuration? Types linked to requests, leave types or workflow history cannot be deleted.</p>
-                                <button type="button" class="bg-red-600 text-white rounded px-3 py-2" @onclick="DeleteAsync">Confirm delete</button>
-                                <button type="button" class="border rounded px-3 py-2" @onclick="() => confirmDelete = false">Cancel</button>
-                            </div>
-                        }
-                    }
-
+                        <div class="flex flex-wrap items-center gap-2 border-t border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 px-4 py-2.5">
+                            <button type="button" class="app-button app-button-primary app-button-sm" @onclick="SaveJobAsync">Save @TypeLabel</button>
+                            <button type="button" class="app-button app-button-secondary app-button-sm" @onclick="NewJob">Cancel</button>
+                            @if (RequestTypesMode && job.Id > 0)
+                            {
+                                <button type="button" class="app-button app-button-danger app-button-sm" @onclick="() => confirmDelete = true">Delete request type</button>
+                                @if (confirmDelete)
+                                {
+                                    <div role="alert" class="w-full rounded-xl border border-rose-200 bg-rose-50 p-3 space-y-2 text-xs text-rose-800">
+                                        <p>Delete <strong>@job.Name</strong> and its unused approval workflow configuration? Types linked to requests, leave types or workflow history cannot be deleted.</p>
+                                        <div class="flex items-center gap-2">
+                                            <button type="button" class="app-button app-button-danger app-button-sm" @onclick="DeleteAsync">Confirm delete</button>
+                                            <button type="button" class="app-button app-button-secondary app-button-sm" @onclick="() => confirmDelete = false">Cancel</button>
+                                        </div>
+                                    </div>
+                                }
+                            }
+                            @if (job.Id > 0 && IsAdminContext)
+                            {
+                                <a class="app-button app-button-neutral app-button-sm ml-auto" href="/admin/settings/config/approval-flows">Approval flows</a>
+                            }
+                            else if (job.Id > 0 && IsDeveloperContext)
+                            {
+                                <a class="app-button app-button-neutral app-button-sm ml-auto" href="/developer/workflows">Approval workflows</a>
+                            }
                         </div>
                     </fieldset>
-            @if (!RequestTypesMode)
-            {
-                <nav class="flex flex-wrap gap-2" role="tablist" aria-label="Job type configuration">
-                    @foreach(var tab in ConfigTabs)
-                    {
-                        <button type="button" role="tab" aria-selected="@(activeTab==tab.Id)" aria-controls="job-type-config-panel" class="@(activeTab==tab.Id?"inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors":"inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors")" @onclick="()=>SelectTab(tab.Id)">@tab.Name</button>
-                    }
-                </nav>
-                <section id="job-type-config-panel" role="tabpanel" aria-label="@ConfigTabs.First(t=>t.Id==activeTab).Name" @key="(activeTab,job.Id)">
-                    @if(job.Id<=0){<p class="rounded-xl border p-4 text-sm text-slate-500">Select a Job Type.</p>}
-                    else if(activeTab=="leave-sets") { <JobTypeLeaveSets JobTypeId="job.Id" /> }
-                    else if(activeTab=="leave")
-                    {
-                        <HRM.Components.Admin.Settings.LeaveAccrualSettings JobTypeId="job.Id" Embedded="true" />
-                    }
-                    else { <JobTypeOvertimeSettings JobTypeId="job.Id" JobTypeName="job.Name" /> }
-                </section>
-            }
-            @if (job.Id > 0)
-            {
-                <a class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" href="/admin/settings/config/approval-flows">Approval flows</a>
-            }
 
-                </section>
+                    @if (!RequestTypesMode)
+                    {
+                        <!-- Portal-Themed Contextual Sub-Tabs -->
+                        <div class="@TabWrapperClass w-full border-b-2 overflow-x-auto"
+                             style="@(IsSuperAdminContext ? "border-bottom-color: #ADD8E6;" : null)">
+                            <nav class="flex items-end gap-1 min-w-max pb-0" role="tablist" aria-label="Job type configuration">
+                                @foreach (var tab in ConfigTabs)
+                                {
+                                    var isActive = activeTab == tab.Id;
+                                    <button type="button"
+                                            role="tab"
+                                            aria-selected="@isActive"
+                                            aria-controls="job-type-config-panel"
+                                            class="@GetSubTabClass(isActive)"
+                                            style="@(isActive && IsSuperAdminContext ? "background-color: #ADD8E6; border-color: #7cc0d8; color: #0f172a;" : null)"
+                                            @onclick="() => SelectTab(tab.Id)">
+                                        @tab.Name
+                                    </button>
+                                }
+                            </nav>
+                        </div>
 
+                        <section id="job-type-config-panel" role="tabpanel" aria-label="@ConfigTabs.First(t => t.Id == activeTab).Name" @key="(activeTab, job.Id)">
+                            @if (job.Id <= 0)
+                            {
+                                <div class="rounded-xl border border-dashed border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-6 text-center text-xs text-slate-500">
+                                    Select a Job Type from the list to configure its OT, Leave, or Leave Set rules.
+                                </div>
+                            }
+                            else if (activeTab == "leave-sets")
+                            {
+                                <JobTypeLeaveSets JobTypeId="job.Id" />
+                            }
+                            else if (activeTab == "leave")
+                            {
+                                <HRM.Components.Admin.Settings.LeaveAccrualSettings JobTypeId="job.Id" Embedded="true" />
+                            }
+                            else
+                            {
+                                <JobTypeOvertimeSettings JobTypeId="job.Id" JobTypeName="job.Name" />
+                            }
+                        </section>
+                    }
+                </section>
             </div>
         </fieldset>
     }
@@ -154,9 +224,37 @@
 
 @code {
     [Parameter] public bool RequestTypesMode { get; set; }
-    [SupplyParameterFromQuery(Name="tab")] public string? Tab {get;set;}
+    private string? Tab => HRM.Helpers.QueryStringReader.GetString(Navigation.Uri, "tab");
     private static readonly (string Id,string Name)[] ConfigTabs=[("ot","OT Config"),("leave","Leave Config"),("leave-sets","Leave Set Config")];
     private string activeTab="ot";
+    private string CurrentPath => new Uri(Navigation.Uri).AbsolutePath;
+    private bool IsSuperAdminContext => CurrentPath.StartsWith("/superadmin", StringComparison.OrdinalIgnoreCase);
+    private bool IsDeveloperContext => CurrentPath.StartsWith("/developer", StringComparison.OrdinalIgnoreCase);
+    private bool IsAdminContext => CurrentPath.StartsWith("/admin", StringComparison.OrdinalIgnoreCase);
+    private string TabWrapperClass => IsSuperAdminContext
+        ? "superadmin-workspace-tabs"
+        : IsDeveloperContext
+            ? "developer-workspace-tabs border-amber-600 dark:border-amber-500"
+            : "my-workspace-tabs border-teal-600 dark:border-teal-500";
+    private string GetSubTabClass(bool isActive)
+    {
+        const string baseCls = "rounded-t-xl px-3.5 py-2 font-semibold text-xs transition-all border-t border-l border-r disabled:opacity-50 disabled:cursor-not-allowed";
+        if (IsSuperAdminContext)
+        {
+            return isActive
+                ? $"{baseCls} text-slate-900 shadow-xs"
+                : $"{baseCls} bg-white text-slate-800 hover:bg-sky-50 dark:bg-slate-800/90 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-700 border-slate-200 dark:border-slate-700";
+        }
+        if (IsDeveloperContext)
+        {
+            return isActive
+                ? $"{baseCls} bg-amber-600 text-white border-amber-600 shadow-xs"
+                : $"{baseCls} bg-white text-amber-800 hover:bg-amber-50 dark:bg-slate-800/90 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-700 border-slate-200 dark:border-slate-700";
+        }
+        return isActive
+            ? $"{baseCls} bg-teal-700 text-white border-teal-700 shadow-xs"
+            : $"{baseCls} bg-white text-teal-800 hover:bg-teal-50 dark:bg-slate-800/90 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-700 border-slate-200 dark:border-slate-700";
+    }
     protected override void OnParametersSet()=>activeTab=ConfigTabs.Any(t=>t.Id==Tab)?Tab!:"ot";
     private void SelectTab(string tab){activeTab=tab;Navigation.NavigateTo(Navigation.GetUriWithQueryParameter("tab",tab));}
     private string TypeLabel => RequestTypesMode ? "request type" : "job type";

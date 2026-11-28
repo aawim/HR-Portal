@@ -1,0 +1,399 @@
+@using HRM.Application.Contracts.Recruitment
+@inject HRM.UI.Services.Recruitment.IRecruitmentApiClient Api
+@inject NavigationManager Navigation
+@inject HRM.Services.PortalContext PortalContext
+@inject HRM.Services.ToastService Toasts
+@inject Microsoft.JSInterop.IJSRuntime JS
+
+<style>
+    .rva-grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 1rem;
+        align-items: start;
+    }
+
+    @@media (min-width: 1024px) {
+        .rva-grid {
+            grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+        }
+    }
+</style>
+
+<div class="rva-grid">
+    <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs space-y-3">
+        <div>
+            <h2 class="text-sm font-bold text-slate-900">Create Draft Vacancy</h2>
+            <p class="mt-0.5 text-xs text-slate-500">Draft a job advertisement from an approved recruitment requisition using its Job Matrix titles and criteria.</p>
+        </div>
+
+        <div class="space-y-3">
+            <label class="block text-xs font-medium text-slate-700">
+                Approved Requisition
+                <select class="@InputClass" @bind="requisition" @bind:after="OnRequisitionChangedAsync" disabled="@(busy || loadingContext)">
+                    <option value="0">-- Select requisition --</option>
+                    @foreach (var row in Rows.Where(x => x.Status == "Approved"))
+                    {
+                        <option value="@row.Id">@(string.IsNullOrWhiteSpace(row.PositionName) ? row.Reference : $"{row.PositionName} — {row.Reference}") (@row.RequestedSlots slots)</option>
+                    }
+                </select>
+            </label>
+
+            @if (loadingContext)
+            {
+                <div class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                    Loading available titles and Job Matrix criteria...
+                </div>
+            }
+            else if (draftContext is not null)
+            {
+                <div class="rounded-xl border border-blue-100 bg-blue-50/50 p-3 space-y-1.5 text-xs">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <span class="font-semibold text-slate-900">@draftContext.MatrixCode — @draftContext.MatrixName</span>
+                        @if (!string.IsNullOrWhiteSpace(draftContext.GradeCode) || !string.IsNullOrWhiteSpace(draftContext.PublicServiceRank))
+                        {
+                            <span class="rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-semibold text-blue-800">
+                                @string.Join(" · ", new[] { draftContext.GradeCode, draftContext.PublicServiceRank }.Where(x => !string.IsNullOrWhiteSpace(x)))
+                            </span>
+                        }
+                    </div>
+                    <div class="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-slate-600">
+                        <span>Basic: <strong class="text-slate-800">MVR @draftContext.BasicSalary.ToString("N2")</strong></span>
+                        @if (draftContext.JobAllowance.HasValue && draftContext.JobAllowance.Value > 0)
+                        {
+                            <span>Allowance: <strong class="text-slate-800">MVR @draftContext.JobAllowance.Value.ToString("N2")</strong></span>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(draftContext.OrganisationUnit))
+                        {
+                            <span>Unit: <strong class="text-slate-800">@draftContext.OrganisationUnit</strong></span>
+                        }
+                    </div>
+                </div>
+            }
+
+            <label class="block text-xs font-medium text-slate-700">
+                Advertisement Title
+                @if (draftContext is not null && draftContext.AvailableTitles.Count > 0)
+                {
+                    <select class="@InputClass" @bind="selectedTitleId" @bind:after="OnTitleSelected" disabled="@(busy || loadingContext)">
+                        @foreach (var option in draftContext.AvailableTitles)
+                        {
+                            <option value="@option.JobTitleId">@option.Name@(option.IsPositionDefault ? " (Position Default)" : "")</option>
+                        }
+                    </select>
+                }
+                else
+                {
+                    <input maxlength="250"
+                           class="@InputClass"
+                           @bind="title"
+                           disabled="@(requisition <= 0 || loadingContext)"
+                           placeholder="@(requisition <= 0 ? "Select an approved requisition first" : "No titles linked to this Job Matrix — enter title")" />
+                }
+            </label>
+
+            @if (draftContext is not null && (draftContext.QualificationCriteria.Count > 0 || draftContext.CredentialCriteria.Count > 0))
+            {
+                <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-3 space-y-2 text-xs">
+                    <div class="flex items-center justify-between gap-2">
+                        <span class="font-semibold text-slate-800">Job Matrix Criteria</span>
+                        <button type="button"
+                                class="text-[11px] font-semibold text-blue-700 hover:text-blue-800 underline"
+                                @onclick="ResetCriteriaFromMatrix">
+                            Reset details from matrix
+                        </button>
+                    </div>
+                    @if (draftContext.QualificationCriteria.Count > 0)
+                    {
+                        <div class="space-y-1">
+                            <div class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Qualifications &amp; Experience</div>
+                            <ul class="list-disc pl-4 space-y-0.5 text-[11px] text-slate-700">
+                                @foreach (var item in draftContext.QualificationCriteria)
+                                {
+                                    <li>@item</li>
+                                }
+                            </ul>
+                        </div>
+                    }
+                    @if (draftContext.CredentialCriteria.Count > 0)
+                    {
+                        <div class="space-y-1">
+                            <div class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Licences &amp; Credentials</div>
+                            <ul class="list-disc pl-4 space-y-0.5 text-[11px] text-slate-700">
+                                @foreach (var item in draftContext.CredentialCriteria)
+                                {
+                                    <li>@item</li>
+                                }
+                            </ul>
+                        </div>
+                    }
+                </div>
+            }
+
+            <label class="block text-xs font-medium text-slate-700">
+                Advertisement Details &amp; Criteria (from Job Matrix)
+                <textarea rows="6" maxlength="8000" class="@InputClass" @bind="details" disabled="@loadingContext" placeholder="Select a requisition to load criteria from the Job Matrix..."></textarea>
+            </label>
+
+            <label class="block text-xs font-medium text-slate-700">
+                Closing Date &amp; Time (Maldives)
+                <input type="datetime-local" class="@InputClass" @bind="closing" />
+            </label>
+        </div>
+
+        <div class="flex justify-end">
+            <button type="button"
+                    class="inline-flex items-center justify-center rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                    disabled="@(busy || loadingContext || requisition <= 0 || string.IsNullOrWhiteSpace(title) || string.IsNullOrWhiteSpace(details))"
+                    @onclick="Create">
+                Create Draft Vacancy
+            </button>
+        </div>
+
+        @if (!string.IsNullOrEmpty(message))
+        {
+            <div role="status" class="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-800">
+                <span>@message</span>
+                <button type="button" class="font-bold text-slate-500 hover:text-slate-800" @onclick="() => message = null">✕</button>
+            </div>
+        }
+    </section>
+
+    <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs space-y-3">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+            <div>
+                <h2 class="text-sm font-bold text-slate-900">Vacancies Register</h2>
+                <p class="text-xs text-slate-500">Draft and published vacancies for your organisation.</p>
+            </div>
+            <div class="flex items-center gap-2">
+                @if (!string.IsNullOrWhiteSpace(OfficeSlug))
+                {
+                    <button type="button"
+                            class="app-button app-button-secondary app-button-sm"
+                            title="Copy public office careers URL"
+                            @onclick="() => CopyPublicLinkAsync(null)">
+                        <i class="bi bi-link-45deg text-xs" aria-hidden="true"></i>
+                        <span>Copy Careers URL</span>
+                    </button>
+                }
+                <span class="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-700">@vacancies.Count records</span>
+            </div>
+        </div>
+
+        <div class="overflow-x-auto rounded-xl border border-slate-200">
+            <table class="w-full text-left text-xs">
+                <thead class="border-b border-slate-200 bg-slate-50 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+                    <tr>
+                        <th class="p-2.5">Position</th>
+                        <th class="p-2.5">Reference</th>
+                        <th class="p-2.5">Slots</th>
+                        <th class="p-2.5">Closing (MVT)</th>
+                        <th class="p-2.5">Status</th>
+                        <th class="p-2.5 text-right">Action</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    @if (vacancies.Count == 0)
+                    {
+                        <tr>
+                            <td colspan="6" class="p-6 text-center text-slate-500">No vacancies created yet.</td>
+                        </tr>
+                    }
+                    else
+                    {
+                        @foreach (var vacancy in vacancies)
+                        {
+                            <tr class="hover:bg-slate-50/70 transition-colors">
+                                <td class="p-2.5 font-semibold text-slate-900">@(string.IsNullOrWhiteSpace(vacancy.PositionName) ? "—" : vacancy.PositionName)</td>
+                                <td class="p-2.5 font-mono text-[11px] font-semibold text-blue-700">@vacancy.Reference</td>
+                                <td class="p-2.5 font-semibold text-slate-800">@vacancy.Slots</td>
+                                <td class="p-2.5 text-slate-600">@(vacancy.ClosingAtUtc?.AddHours(5).ToString("dd MMM yyyy HH:mm") ?? "—")</td>
+                                <td class="p-2.5">
+                                    <span class="rounded-full px-2.5 py-0.5 text-[11px] font-semibold @(vacancy.Status == "Published" ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800")">@vacancy.Status</span>
+                                </td>
+                                <td class="p-2.5 text-right">
+                                    @if (vacancy.Status == "Draft")
+                                    {
+                                        <button type="button"
+                                                class="inline-flex items-center justify-center rounded-lg border border-blue-300 bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-800 hover:bg-blue-100 disabled:opacity-50 transition-colors"
+                                                disabled="@busy"
+                                                @onclick="() => Publish(vacancy.Id)">
+                                            Publish
+                                        </button>
+                                    }
+                                    else if (vacancy.Status == "Published")
+                                    {
+                                        <button type="button"
+                                                class="inline-flex items-center justify-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+                                                title="Copy public vacancy link"
+                                                @onclick="() => CopyPublicLinkAsync(vacancy.Reference)">
+                                            <i class="bi bi-link-45deg text-xs" aria-hidden="true"></i>
+                                            <span>Copy Link</span>
+                                        </button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </section>
+</div>
+
+@code {
+    [Parameter] public IReadOnlyList<RecruitmentRequisitionRow> Rows { get; set; } = [];
+    private IReadOnlyList<RecruitmentVacancyRow> vacancies = [];
+    private VacancyDraftContextDto? draftContext;
+    private int requisition;
+    private int selectedTitleId;
+    private string title = "", details = "";
+    private string? message;
+    private bool busy;
+    private bool loadingContext;
+    private DateTime closing = DateTime.UtcNow.AddHours(5).AddDays(14);
+    private string OfficeSlug
+    {
+        get
+        {
+            var raw = PortalContext.OrganisationName;
+            if (string.IsNullOrWhiteSpace(raw)) return PortalContext.CurrentOrganisationId?.ToString() ?? "";
+            var sb = new System.Text.StringBuilder(raw.Length);
+            var prevDash = false;
+            foreach (var ch in raw.Trim().ToLowerInvariant())
+            {
+                if (char.IsLetterOrDigit(ch)) { sb.Append(ch); prevDash = false; }
+                else if (!prevDash && sb.Length > 0) { sb.Append('-'); prevDash = true; }
+            }
+            return sb.ToString().TrimEnd('-');
+        }
+    }
+
+    private async Task CopyPublicLinkAsync(string? vacancyReference)
+    {
+        var baseUri = Navigation.BaseUri.TrimEnd('/');
+        var slug = OfficeSlug;
+        var url = string.IsNullOrWhiteSpace(slug)
+            ? $"{baseUri}/careers"
+            : string.IsNullOrWhiteSpace(vacancyReference)
+                ? $"{baseUri}/careers/{slug}"
+                : $"{baseUri}/careers/{slug}/{Uri.EscapeDataString(vacancyReference)}";
+        try
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", url);
+            Toasts.Success($"Copied public link: {url}");
+        }
+        catch
+        {
+            message = $"Public link: {url}";
+        }
+    }
+
+    private const string InputClass = "mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try { vacancies = await Api.GetVacanciesAsync(); }
+        catch (HttpRequestException) { message = "Vacancies could not be loaded. Refresh the page."; }
+    }
+
+    private async Task OnRequisitionChangedAsync()
+    {
+        message = null;
+        draftContext = null;
+        selectedTitleId = 0;
+        title = "";
+        details = "";
+
+        if (requisition <= 0)
+            return;
+
+        loadingContext = true;
+        try
+        {
+            draftContext = await Api.GetVacancyDraftContextAsync(requisition);
+            if (draftContext.AvailableTitles.Count > 0)
+            {
+                var def = draftContext.AvailableTitles.FirstOrDefault(x => x.IsPositionDefault) ?? draftContext.AvailableTitles[0];
+                selectedTitleId = def.JobTitleId;
+                title = def.Name;
+            }
+            else
+            {
+                title = draftContext.DefaultTitle;
+            }
+            details = draftContext.FormattedCriteriaText;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
+        {
+            message = "Could not load Job Matrix titles and criteria for the selected requisition.";
+        }
+        finally
+        {
+            loadingContext = false;
+        }
+    }
+
+    private void OnTitleSelected()
+    {
+        var match = draftContext?.AvailableTitles.FirstOrDefault(x => x.JobTitleId == selectedTitleId);
+        title = match?.Name ?? draftContext?.DefaultTitle ?? "";
+    }
+
+    private void ResetCriteriaFromMatrix()
+    {
+        if (draftContext is not null)
+            details = draftContext.FormattedCriteriaText;
+    }
+
+    private Task Create()
+    {
+        var snapshot = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            Title = title.Trim(),
+            JobTitleId = selectedTitleId > 0 ? (int?)selectedTitleId : null,
+            JobMatrixId = draftContext?.JobMatrixId,
+            MatrixCode = draftContext?.MatrixCode,
+            Details = details.Trim(),
+            QualificationCriteria = draftContext?.QualificationCriteria ?? [],
+            CredentialCriteria = draftContext?.CredentialCriteria ?? [],
+            Duties = draftContext?.Duties ?? []
+        });
+
+        if (snapshot.Length > 15800)
+        {
+            snapshot = System.Text.Json.JsonSerializer.Serialize(new
+            {
+                Title = title.Trim(),
+                JobTitleId = selectedTitleId > 0 ? (int?)selectedTitleId : null,
+                JobMatrixId = draftContext?.JobMatrixId,
+                MatrixCode = draftContext?.MatrixCode,
+                Details = details.Trim()
+            });
+        }
+
+        return Run(() => Api.CreateVacancyAsync(new(requisition, DateTime.SpecifyKind(closing.AddHours(-5), DateTimeKind.Utc), snapshot)));
+    }
+
+    private Task Publish(int id) => Run(() => Api.PublishVacancyAsync(id));
+
+    private async Task Run(Func<Task<HRM.DTOs.ServiceResult>> action)
+    {
+        if (busy) return;
+        busy = true;
+        try
+        {
+            var result = await action();
+            message = result.Message;
+            if (result.Success) vacancies = await Api.GetVacanciesAsync();
+        }
+        catch (HttpRequestException)
+        {
+            message = "The action could not be completed. Check vacancy state and recruitment permissions.";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+}

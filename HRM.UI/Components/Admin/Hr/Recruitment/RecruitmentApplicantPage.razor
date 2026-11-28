@@ -1,0 +1,1975 @@
+@page "/online/recruitment"
+@page "/careers"
+@page "/careers/{OfficeName}"
+@page "/careers/{OfficeName}/{VacancyRef}"
+@page "/vacancies"
+@page "/{OfficeName}/vacancies"
+@rendermode RenderMode.InteractiveServer
+@using HRM.Application.Contracts.Recruitment
+@inject HRM.UI.Services.Recruitment.IRecruitmentApiClient Api
+@inject Microsoft.AspNetCore.Components.Authorization.AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager Navigation
+@inject Microsoft.JSInterop.IJSRuntime JS
+
+<PageTitle>@(officeResponse is not null ? $"{officeResponse.OrganisationName} — Careers" : "Government Careers Portal")</PageTitle>
+
+<div class="je-portal w-full min-w-0">
+    <!-- JobEntry-style Clean Top Navigation Bar (No Post A Job, No Carousel) -->
+    <header class="je-navbar">
+        <div class="je-navbar-inner">
+            <a href="@(officeResponse is not null ? $"/careers/{officeResponse.OfficeSlug}" : "/careers")" class="je-brand">
+                <span class="je-brand-icon" aria-hidden="true">
+                    <i class="bi bi-briefcase-fill"></i>
+                </span>
+                <span class="min-w-0">
+                    <span class="je-brand-title">@(officeResponse is not null ? officeResponse.OrganisationName : "Careers Portal")</span>
+                    <span class="je-brand-sub">@(isAuthenticated ? "eFaas Verified Applicant" : "Maldives Public Service Vacancies")</span>
+                </span>
+            </a>
+
+            <nav class="je-nav-links" aria-label="Careers navigation">
+                <button type="button"
+                        class="je-nav-item @(activeTab == "vacancies" ? "is-active" : "")"
+                        @onclick='() => OpenTab("vacancies")'>
+                    <i class="bi bi-briefcase" aria-hidden="true"></i>
+                    <span>Vacancies</span>
+                    @if (publicVacancies.Count > 0)
+                    {
+                        <span class="je-pill">@publicVacancies.Count</span>
+                    }
+                </button>
+
+                @if (isAuthenticated)
+                {
+                    <button type="button"
+                            class="je-nav-item @(activeTab == "applications" ? "is-active" : "")"
+                            @onclick='() => OpenTab("applications")'>
+                        <i class="bi bi-file-earmark-text" aria-hidden="true"></i>
+                        <span>My Applications</span>
+                        <span class="je-pill">@(workspace?.Applications.Count ?? 0)</span>
+                    </button>
+
+                    <button type="button"
+                            class="je-nav-item @(activeTab == "results" ? "is-active" : "")"
+                            @onclick='() => OpenTab("results")'>
+                        <i class="bi bi-trophy" aria-hidden="true"></i>
+                        <span>Results &amp; Objections</span>
+                        <span class="je-pill">@(workspace?.Results?.Count ?? 0)</span>
+                    </button>
+
+                    <button type="button"
+                            class="je-nav-item @(activeTab == "offers" ? "is-active" : "")"
+                            @onclick='() => OpenTab("offers")'>
+                        <i class="bi bi-envelope-check" aria-hidden="true"></i>
+                        <span>Offers</span>
+                        <span class="je-pill">@(workspace?.Offers.Count ?? 0)</span>
+                    </button>
+
+                    <button type="button"
+                            class="je-nav-item @(activeTab == "profile" ? "is-active" : "")"
+                            @onclick='() => OpenTab("profile")'>
+                        <i class="bi bi-person-circle" aria-hidden="true"></i>
+                        <span>Profile</span>
+                        @if (workspace is not null && !workspace.ApplicantId.HasValue)
+                        {
+                            <span class="je-pill-warn">Setup</span>
+                        }
+                    </button>
+                }
+            </nav>
+
+            <div class="je-nav-actions">
+                @if (officeResponse is not null)
+                {
+                    <a href="/careers" class="je-btn-outline" title="Browse vacancies across all offices">All Offices</a>
+                }
+                @if (!isAuthenticated)
+                {
+                    <a href="@LoginUrl" class="je-btn-primary">
+                        <i class="bi bi-box-arrow-in-right" aria-hidden="true"></i>
+                        <span>Sign in with eFaas</span>
+                    </a>
+                }
+                else
+                {
+                    <button type="button" class="je-user-chip" @onclick='() => OpenTab("profile")' title="View Applicant Profile">
+                        <span class="je-avatar">@GetInitials(workspace?.ProfileFullName)</span>
+                        <span class="je-user-name">@(string.IsNullOrWhiteSpace(workspace?.ProfileFullName) ? "Applicant" : workspace.ProfileFullName)</span>
+                    </button>
+                    <a href="/Online/Auth/NoAccessLogout" class="je-btn-outline" title="Sign out">
+                        <i class="bi bi-box-arrow-right" aria-hidden="true"></i>
+                        <span>Sign Out</span>
+                    </a>
+                }
+            </div>
+        </div>
+    </header>
+
+    <!-- JobEntry-style Emerald Search Band (shown on Vacancies listing) -->
+    @if (!officeNotFound && activeTab == "vacancies" && string.IsNullOrWhiteSpace(applyingVacancyRef))
+    {
+        <div class="je-search-band">
+            <div class="je-container">
+                <div class="je-search-grid">
+                    <div class="je-search-input-wrap">
+                        <i class="bi bi-search je-search-icon" aria-hidden="true"></i>
+                        <input type="text"
+                               class="je-search-input"
+                               placeholder="Search job title or vacancy reference..."
+                               @bind="searchKeyword"
+                               @bind:event="oninput" />
+                    </div>
+
+                    @if (DistinctEmploymentTypes.Count > 0)
+                    {
+                        <select class="je-search-select" @bind="selectedEmploymentType">
+                            <option value="">All Employment Types</option>
+                            @foreach (var empType in DistinctEmploymentTypes)
+                            {
+                                <option value="@empType">@empType</option>
+                            }
+                        </select>
+                    }
+
+                    @if (officeResponse is null && DistinctOffices.Count > 1)
+                    {
+                        <select class="je-search-select" @bind="selectedOfficeFilter">
+                            <option value="">All Organisations (@publicVacancies.Count)</option>
+                            @foreach (var office in DistinctOffices)
+                            {
+                                <option value="@office">@office</option>
+                            }
+                        </select>
+                    }
+
+                    <select class="je-search-select" @bind="sortOrder">
+                        <option value="closing">Closing Soonest</option>
+                        <option value="title">Position Title (A–Z)</option>
+                    </select>
+
+                    <button type="button" class="je-search-btn" disabled="@busy" @onclick="Load">
+                        <i class="bi bi-arrow-clockwise @(busy ? "animate-spin" : "")" aria-hidden="true"></i>
+                        <span>Refresh</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- Main Centered Portal Container -->
+    <div class="je-container je-main">
+        @if (officeNotFound)
+        {
+            <div role="alert" class="je-card je-empty">
+                <i class="bi bi-building-x text-3xl text-amber-500" aria-hidden="true"></i>
+                <h2 class="text-base font-bold text-slate-900 mt-2">Organisation not found for "@OfficeName"</h2>
+                <p class="text-xs text-slate-500 mt-1">No active organisation matched this careers URL. Browse all open government vacancies instead.</p>
+                <a href="/careers" class="je-btn-primary mt-3">View All Open Vacancies</a>
+            </div>
+        }
+        else
+        {
+            @if (message is not null)
+            {
+                <div role="status" class="je-alert">
+                    <span>@message</span>
+                    <button type="button" class="font-bold text-slate-500 hover:text-slate-800" @onclick="() => message = null">✕</button>
+                </div>
+            }
+
+            @if (isAuthenticated && workspace is not null && !workspace.ApplicantId.HasValue && activeTab != "profile")
+            {
+                <div class="je-setup-banner">
+                    <div class="flex items-center gap-2.5 min-w-0">
+                        <i class="bi bi-person-exclamation text-lg text-amber-600 shrink-0" aria-hidden="true"></i>
+                        <div class="text-xs">
+                            <strong class="text-slate-900">Complete your eFaas Applicant Profile</strong>
+                            <span class="text-slate-600"> — confirm your email and mobile number once so you can submit applications.</span>
+                        </div>
+                    </div>
+                    <button type="button" class="je-btn-primary shrink-0" @onclick='() => OpenTab("profile")'>
+                        Complete Profile
+                    </button>
+                </div>
+            }
+
+            <!-- TAB 1: OPEN VACANCIES / APPLY WORKSPACE -->
+            @if (activeTab == "vacancies")
+            {
+                @if (isAuthenticated && workspace is not null && !string.IsNullOrWhiteSpace(applyingVacancyRef))
+                {
+                    <div class="space-y-3">
+                        <div class="flex items-center justify-between gap-2 flex-wrap">
+                            <button type="button" class="je-btn-outline" @onclick="BackToListings">
+                                <i class="bi bi-arrow-left" aria-hidden="true"></i>
+                                <span>Back to Job Listings</span>
+                            </button>
+                            <span class="text-xs font-mono text-slate-500">Applying for: <strong>@applyingVacancyRef</strong></span>
+                        </div>
+
+                        <RecruitmentApplyPanel @key="applyingVacancyRef"
+                                               Registered="workspace.ApplicantId.HasValue"
+                                               ShowProfileCard="true"
+                                               InitialFullName="@workspace.ProfileFullName"
+                                               InitialEmail="@workspace.ProfileEmail"
+                                               InitialMobile="@workspace.ProfileMobile"
+                                               OrganisationIdFilter="@officeResponse?.OrganisationId"
+                                               OrganisationNameFilter="@officeResponse?.OrganisationName"
+                                               InitialVacancyRef="@applyingVacancyRef"
+                                               Changed="Load" />
+                    </div>
+                }
+                else
+                {
+                    <div class="je-section-head">
+                        <div>
+                            <h2 class="je-section-title">
+                                @(officeResponse is not null ? $"Job Listings at {officeResponse.OrganisationName}" : "Open Job Listings")
+                            </h2>
+                            <p class="je-section-sub">
+                                Showing @FilteredVacancies.Count open @(FilteredVacancies.Count == 1 ? "vacancy" : "vacancies")
+                            </p>
+                        </div>
+                    </div>
+
+                    @if (FilteredVacancies.Count == 0)
+                    {
+                        <div class="je-card je-empty">
+                            <i class="bi bi-briefcase text-3xl text-slate-300" aria-hidden="true"></i>
+                            <p class="text-sm font-semibold text-slate-700 mt-2">No matching open vacancies found</p>
+                            <p class="text-xs text-slate-500 mt-0.5">
+                                @(string.IsNullOrWhiteSpace(searchKeyword) && string.IsNullOrWhiteSpace(selectedOfficeFilter)
+                                    ? "There are currently no published vacancies accepting applications."
+                                    : "Try clearing your search keyword or organisation filter.")
+                            </p>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="je-job-list">
+                            @foreach (var v in FilteredVacancies)
+                            {
+                                var isExpired = v.ClosingAtUtc <= DateTime.UtcNow;
+                                var myApp = isAuthenticated
+                                    ? workspace?.Applications.FirstOrDefault(a => string.Equals(a.VacancyReference, v.Reference, StringComparison.OrdinalIgnoreCase))
+                                    : null;
+                                var canCorrectReturned = myApp is not null
+                                    && myApp.Status == "ReturnedForCorrection"
+                                    && myApp.CorrectionDeadlineUtc.HasValue
+                                    && myApp.CorrectionDeadlineUtc.Value > DateTime.UtcNow;
+                                <article class="je-job-item @(isExpired ? "je-job-expired" : "")">
+                                    <div class="je-job-left">
+                                        <div class="je-job-logo @(isExpired ? "is-expired" : "")" aria-hidden="true">
+                                            <i class="bi bi-briefcase-fill"></i>
+                                        </div>
+                                        <div class="min-w-0">
+                                            <div class="flex flex-wrap items-center gap-2">
+                                                <h3 class="je-job-title">@(string.IsNullOrWhiteSpace(v.PositionName) ? v.Reference : v.PositionName)</h3>
+                                                @if (!string.IsNullOrWhiteSpace(v.EmploymentType))
+                                                {
+                                                    <span class="rounded-full bg-blue-50 border border-blue-200 px-2 py-0.5 text-[10px] font-semibold text-blue-700">@v.EmploymentType</span>
+                                                }
+                                                @if (isExpired)
+                                                {
+                                                    <span class="rounded-full bg-rose-50 border border-rose-200 px-2 py-0.5 text-[10px] font-semibold text-rose-700">Expired</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="rounded-full bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">Open</span>
+                                                }
+                                                @if (v.HasPublishedResults)
+                                                {
+                                                    <span class="rounded-full bg-amber-50 border border-amber-200 px-2 py-0.5 text-[10px] font-semibold text-amber-800">
+                                                        @(v.IsResultFinal ? "Results Finalised" : "Results Published")
+                                                    </span>
+                                                }
+                                            </div>
+                                            <div class="je-job-meta">
+                                                @if (!string.IsNullOrWhiteSpace(v.OrganisationName))
+                                                {
+                                                    <span><i class="bi bi-building" aria-hidden="true"></i> @v.OrganisationName</span>
+                                                }
+                                                <span class="font-mono"><i class="bi bi-hash" aria-hidden="true"></i> @v.Reference</span>
+                                                <span class="@(isExpired ? "text-rose-600 font-semibold" : "")">
+                                                    <i class="bi bi-calendar-event" aria-hidden="true"></i>
+                                                    @(isExpired ? "Expired:" : "Expires:") @v.ClosingAtUtc.AddHours(5).ToString("dd MMM yyyy, HH:mm") MVT
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="je-job-right">
+                                        @if (v.HasScreeningResults)
+                                        {
+                                            <a href="@($"/careers/screening-sheet/{v.Id}")"
+                                               target="_blank"
+                                               rel="noopener"
+                                               class="je-btn-outline">
+                                                <i class="bi bi-file-earmark-check" aria-hidden="true"></i>
+                                                <span>Screening Sheet</span>
+                                            </a>
+                                        }
+                                        @if (v.HasPublishedResults && v.PublicationId.HasValue)
+                                        {
+                                            <button type="button"
+                                                    class="je-btn-outline"
+                                                    disabled="@loadingResultDetail"
+                                                    @onclick="() => ViewVacancyResultAsync(v)">
+                                                <i class="bi bi-trophy" aria-hidden="true"></i>
+                                                <span>View Result</span>
+                                            </button>
+                                            <a href="@($"/careers/a2-sheet/{v.Id}")"
+                                               target="_blank"
+                                               rel="noopener"
+                                               class="je-btn-outline">
+                                                <i class="bi bi-file-earmark-spreadsheet" aria-hidden="true"></i>
+                                                <span>A2 Sheet</span>
+                                            </a>
+                                        }
+
+                                        @if (myApp is not null)
+                                        {
+                                            @if (canCorrectReturned)
+                                            {
+                                                <button type="button" class="je-btn-primary" @onclick="() => BeginApply(v.Reference)">
+                                                    <i class="bi bi-arrow-repeat" aria-hidden="true"></i>
+                                                    <span>Re-Apply / Correct</span>
+                                                </button>
+                                            }
+                                            else if (myApp.Status == "Draft" && !isExpired)
+                                            {
+                                                <button type="button" class="je-btn-outline" @onclick="() => BeginApply(v.Reference)">
+                                                    <i class="bi bi-pencil-square" aria-hidden="true"></i>
+                                                    <span>Continue Draft</span>
+                                                </button>
+                                            }
+                                            else
+                                            {
+                                                <span class="je-btn-disabled" title="You have already applied for this vacancy">
+                                                    <i class="bi bi-check-circle-fill" aria-hidden="true"></i>
+                                                    <span>Applied</span>
+                                                </span>
+                                            }
+                                        }
+                                        else if (isExpired)
+                                        {
+                                            <button type="button" class="je-btn-disabled" disabled>
+                                                <i class="bi bi-lock" aria-hidden="true"></i>
+                                                <span>Closed</span>
+                                            </button>
+                                        }
+                                        else if (isAuthenticated)
+                                        {
+                                            <button type="button" class="je-btn-primary" @onclick="() => BeginApply(v.Reference)">
+                                                <span>Apply Now</span>
+                                                <i class="bi bi-arrow-right" aria-hidden="true"></i>
+                                            </button>
+                                        }
+                                        else
+                                        {
+                                            <a href="@LoginUrlForVacancy(v)" class="je-btn-primary">
+                                                <span>Apply Now</span>
+                                                <i class="bi bi-arrow-right" aria-hidden="true"></i>
+                                            </a>
+                                        }
+                                    </div>
+                                </article>
+                            }
+                        </div>
+                    }
+                }
+            }
+
+            <!-- TAB 2: MY APPLICATIONS -->
+            @if (activeTab == "applications" && workspace is not null)
+            {
+                <div class="je-section-head">
+                    <div>
+                        <h2 class="je-section-title">My Applications</h2>
+                        <p class="je-section-sub">Track all draft and submitted applications linked to your eFaas identity.</p>
+                    </div>
+                </div>
+
+                @if (workspace.Applications.Count == 0)
+                {
+                    <div class="je-card je-empty">
+                        <i class="bi bi-file-earmark-text text-3xl text-slate-300" aria-hidden="true"></i>
+                        <p class="text-sm font-semibold text-slate-700 mt-2">No applications yet</p>
+                        <button type="button" class="je-btn-primary mt-3" @onclick='() => OpenTab("vacancies")'>Browse Open Vacancies</button>
+                    </div>
+                }
+                else
+                {
+                    <div class="je-card overflow-hidden">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left text-xs">
+                                <thead class="bg-slate-50 border-b border-slate-200 text-[11px] font-bold uppercase tracking-wider text-slate-600">
+                                    <tr>
+                                        <th class="px-4 py-3">Application Ref</th>
+                                        <th class="px-4 py-3">Vacancy Ref</th>
+                                        <th class="px-4 py-3">Submitted (MVT)</th>
+                                        <th class="px-4 py-3">Status</th>
+                                        <th class="px-4 py-3 text-right">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-100">
+                                    @foreach (var a in workspace.Applications)
+                                    {
+                                        var isReturned = a.Status == "ReturnedForCorrection";
+                                        var correctionOpen = isReturned && a.CorrectionDeadlineUtc.HasValue && a.CorrectionDeadlineUtc.Value > DateTime.UtcNow;
+                                        <tr class="hover:bg-slate-50/70 @(isReturned ? "bg-amber-50/40" : "")">
+                                            <td class="px-4 py-3 font-mono font-semibold text-blue-700">@a.Reference</td>
+                                            <td class="px-4 py-3 font-mono text-slate-700">@a.VacancyReference</td>
+                                            <td class="px-4 py-3 text-slate-500">@(a.SubmittedAtUtc.HasValue ? a.SubmittedAtUtc.Value.AddHours(5).ToString("dd MMM yyyy HH:mm") : "Draft")</td>
+                                            <td class="px-4 py-3 space-y-1">
+                                                <span class="inline-block rounded-full border px-2.5 py-0.5 text-[11px] font-semibold @(isReturned ? "bg-amber-100 border-amber-300 text-amber-900" : "bg-blue-50 border-blue-200 text-blue-800")">
+                                                    @(isReturned ? "Returned for Correction" : a.Status)
+                                                </span>
+                                                @if (isReturned)
+                                                {
+                                                    @if (!string.IsNullOrWhiteSpace(a.ReturnComment))
+                                                    {
+                                                        <p class="text-[11px] text-amber-900 max-w-md whitespace-pre-wrap">@a.ReturnComment</p>
+                                                    }
+                                                    @if (a.CorrectionDeadlineUtc.HasValue)
+                                                    {
+                                                        <p class="text-[10px] font-semibold @(correctionOpen ? "text-amber-700" : "text-rose-700")">
+                                                            @(correctionOpen ? "Resubmit before: " : "Correction deadline passed: ")@a.CorrectionDeadlineUtc.Value.AddHours(5).ToString("dd MMM yyyy HH:mm") MVT
+                                                        </p>
+                                                    }
+                                                }
+                                            </td>
+                                            <td class="px-4 py-3 text-right">
+                                                <div class="inline-flex flex-wrap items-center justify-end gap-1.5">
+                                                    @if (a.HasScreeningResults && a.VacancyId > 0)
+                                                    {
+                                                        <a href="@($"/careers/screening-sheet/{a.VacancyId}")"
+                                                           target="_blank"
+                                                           rel="noopener"
+                                                           class="je-btn-outline">
+                                                            <i class="bi bi-file-earmark-check" aria-hidden="true"></i>
+                                                            <span>Screening Sheet</span>
+                                                        </a>
+                                                    }
+                                                    @if (correctionOpen)
+                                                    {
+                                                        <button type="button" class="je-btn-primary" @onclick="() => BeginApply(a.VacancyReference)">
+                                                            <i class="bi bi-pencil-square" aria-hidden="true"></i>
+                                                            <span>Correct &amp; Resubmit</span>
+                                                        </button>
+                                                    }
+                                                    else if (a.Status == "Draft")
+                                                    {
+                                                        <button type="button" class="je-btn-outline" @onclick="() => BeginApply(a.VacancyReference)">
+                                                            <span>Continue Draft</span>
+                                                        </button>
+                                                    }
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                }
+            }
+
+            <!-- TAB 3: PUBLISHED MERIT RESULTS & OBJECTIONS -->
+            @if (activeTab == "results" && workspace is not null)
+            {
+                var myResults = workspace.Results ?? [];
+                <div class="je-section-head">
+                    <div>
+                        <h2 class="je-section-title">Published Merit Results &amp; Objections</h2>
+                        <p class="je-section-sub">Inspect published A2 merit sheets, review your score breakdown, and submit objections during the open window.</p>
+                    </div>
+                </div>
+
+                @if (myResults.Count == 0)
+                {
+                    <div class="je-card je-empty">
+                        <i class="bi bi-trophy text-3xl text-slate-300" aria-hidden="true"></i>
+                        <p class="text-sm font-semibold text-slate-700 mt-2">No published merit results yet</p>
+                        <p class="text-xs text-slate-500 mt-0.5">Published A2 merit sheets for vacancies you applied to will appear here automatically.</p>
+                    </div>
+                }
+                else
+                {
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                        @foreach (var r in myResults)
+                        {
+                            var objectionOpen = !r.IsFinal && r.ObjectionClosesAtUtc > DateTime.UtcNow;
+                            <div class="je-card p-4 text-xs space-y-3">
+                                <div class="flex items-start justify-between gap-2 flex-wrap">
+                                    <div class="min-w-0">
+                                        <h3 class="text-sm font-bold text-slate-900">@(string.IsNullOrWhiteSpace(r.PositionName) ? r.VacancyReference : r.PositionName)</h3>
+                                        <p class="font-mono text-[11px] text-slate-500">@r.VacancyReference · App @r.ApplicationReference</p>
+                                    </div>
+                                    <span class="rounded-full px-2.5 py-0.5 text-[11px] font-semibold @(r.IsFinal ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800")">
+                                        @(r.IsFinal ? "Finalised" : objectionOpen ? "Objection Period Open" : "Objection Period Closed")
+                                    </span>
+                                </div>
+
+                                <div class="flex flex-wrap items-center gap-4 rounded-xl border border-slate-200 bg-slate-50/70 px-3.5 py-2.5">
+                                    <div>
+                                        <span class="block text-[10px] uppercase tracking-wider text-slate-500">Merit Rank</span>
+                                        <strong class="text-sm @(r.Rank.HasValue ? "text-blue-700" : "text-slate-600")">@(r.Rank.HasValue ? $"#{r.Rank}" : "Not Ranked")</strong>
+                                    </div>
+                                    <div class="h-6 w-px bg-slate-200"></div>
+                                    <div>
+                                        <span class="block text-[10px] uppercase tracking-wider text-slate-500">Total Score</span>
+                                        <strong class="text-sm text-slate-900 tabular-nums">@(r.Score.HasValue ? r.Score.Value.ToString("0.##") : r.ApplicationStatus)</strong>
+                                    </div>
+                                    <div class="h-6 w-px bg-slate-200"></div>
+                                    <div>
+                                        <span class="block text-[10px] uppercase tracking-wider text-slate-500">Objections Close</span>
+                                        <span class="font-semibold text-slate-700">@r.ObjectionClosesAtUtc.AddHours(5).ToString("dd MMM yyyy HH:mm") MVT</span>
+                                    </div>
+                                </div>
+
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <button type="button"
+                                            class="je-btn-primary"
+                                            disabled="@(busy || loadingResultDetail)"
+                                            @onclick="() => ViewResultSheetAsync(r.PublicationId, r.ApplicationId)">
+                                        <i class="bi bi-file-earmark-bar-graph" aria-hidden="true"></i>
+                                        <span>View Result Sheet</span>
+                                    </button>
+                                    @if (!r.ObjectionId.HasValue && objectionOpen && !(objectingPublicationId == r.PublicationId && objectingApplicationId == r.ApplicationId))
+                                    {
+                                        <button type="button"
+                                                class="je-btn-outline"
+                                                disabled="@busy"
+                                                @onclick="() => StartObjection(r.PublicationId, r.ApplicationId)">
+                                            Submit Objection
+                                        </button>
+                                    }
+                                </div>
+
+                                @if (r.ObjectionId.HasValue)
+                                {
+                                    <div class="rounded-xl border border-amber-200 bg-amber-50/60 p-3 space-y-1.5">
+                                        <div class="flex items-center justify-between gap-2">
+                                            <span class="font-semibold text-slate-800">Your Objection</span>
+                                            <span class="rounded-full px-2 py-0.5 text-[10px] font-semibold @(r.ObjectionStatus == "Upheld" ? "bg-emerald-100 text-emerald-800" : r.ObjectionStatus == "Rejected" ? "bg-rose-100 text-rose-800" : "bg-amber-100 text-amber-800")">
+                                                @r.ObjectionStatus
+                                            </span>
+                                        </div>
+                                        <p class="whitespace-pre-wrap text-slate-700">@r.ObjectionGrounds</p>
+                                        @if (!string.IsNullOrWhiteSpace(r.ObjectionResolution))
+                                        {
+                                            <div class="rounded-lg border border-slate-200 bg-white p-2.5 text-slate-700">
+                                                <span class="block text-[10px] font-bold uppercase tracking-wider text-slate-500">Committee Resolution</span>
+                                                <p class="whitespace-pre-wrap mt-0.5">@r.ObjectionResolution</p>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                                else if (objectionOpen && objectingPublicationId == r.PublicationId && objectingApplicationId == r.ApplicationId)
+                                {
+                                    <div class="rounded-xl border border-teal-200 bg-teal-50/40 p-3 space-y-2">
+                                        <label class="block text-xs font-semibold text-slate-700">
+                                            Grounds for Objection *
+                                            <textarea rows="3"
+                                                      maxlength="4000"
+                                                      class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 focus:border-teal-600 focus:outline-none"
+                                                      placeholder="Explain the specific scoring or screening issue you are objecting to…"
+                                                      @bind="objectionGrounds"
+                                                      @bind:event="oninput"></textarea>
+                                        </label>
+                                        <div class="flex items-center justify-end gap-2">
+                                            <button type="button" class="je-btn-outline" disabled="@busy" @onclick="CancelObjection">Cancel</button>
+                                            <button type="button" class="je-btn-primary" disabled="@(busy || string.IsNullOrWhiteSpace(objectionGrounds))" @onclick="SubmitObjectionAsync">Submit Objection</button>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+            }
+
+            <!-- TAB 4: MY OFFERS -->
+            @if (activeTab == "offers" && workspace is not null)
+            {
+                <div class="je-section-head">
+                    <div>
+                        <h2 class="je-section-title">My Job Offers</h2>
+                        <p class="je-section-sub">Review official offer terms and confirm acceptance.</p>
+                    </div>
+                </div>
+
+                @if (workspace.Offers.Count == 0)
+                {
+                    <div class="je-card je-empty">
+                        <i class="bi bi-envelope-check text-3xl text-slate-300" aria-hidden="true"></i>
+                        <p class="text-sm font-semibold text-slate-700 mt-2">No job offers at this time</p>
+                    </div>
+                }
+                else
+                {
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                        @foreach (var o in workspace.Offers)
+                        {
+                            <div class="je-card p-4 text-xs space-y-3">
+                                <div class="flex items-center justify-between">
+                                    <div>
+                                        <span class="font-bold text-slate-900">@(string.IsNullOrWhiteSpace(o.PositionName) ? o.VacancyReference : o.PositionName)</span>
+                                        <span class="ml-1.5 font-mono text-[11px] text-slate-500">@o.VacancyReference</span>
+                                    </div>
+                                    <span class="rounded-full px-2.5 py-0.5 text-[11px] font-semibold @(o.Status == "Accepted" ? "bg-emerald-100 text-emerald-800" : o.Status == "OnboardingSubmitted" ? "bg-blue-100 text-blue-800" : o.Status == "Declined" ? "bg-rose-100 text-rose-800" : "bg-amber-100 text-amber-800")">@(o.Status == "OnboardingSubmitted" ? "Onboarding In Progress" : o.Status)</span>
+                                </div>
+                                <p class="whitespace-pre-wrap rounded-xl border border-slate-200 bg-slate-50 p-3 text-slate-700">@Terms(o.TermsSnapshotJson)</p>
+                                @if (o.Status == "Offered")
+                                {
+                                    @if (decliningOfferId == o.Id)
+                                    {
+                                        <div class="rounded-xl border border-rose-200 bg-rose-50/50 p-3 space-y-2">
+                                            <label class="block text-xs font-semibold text-rose-900">
+                                                Reason for Declining (Optional)
+                                                <textarea rows="2" maxlength="1000" class="mt-1 w-full rounded-lg border border-rose-200 bg-white p-2 text-xs text-slate-800" @bind="declineOfferReason" @bind:event="oninput" placeholder="Optional note to HR..."></textarea>
+                                            </label>
+                                            <div class="flex gap-2">
+                                                <button type="button" class="rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-rose-700 disabled:opacity-50" disabled="@busy" @onclick="() => DeclineOfferAsync(o.Id)">Confirm Decline</button>
+                                                <button type="button" class="je-btn-outline" disabled="@busy" @onclick="() => { decliningOfferId = 0; declineOfferReason = string.Empty; }">Cancel</button>
+                                            </div>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <div class="flex flex-wrap gap-2">
+                                            <a href="@($"/careers/offer-letter/{o.Id}")"
+                                               target="_blank"
+                                               rel="noopener"
+                                               class="je-btn-outline">
+                                                <i class="bi bi-file-earmark-text" aria-hidden="true"></i>
+                                                <span>View Offer Letter</span>
+                                            </a>
+                                            <button type="button" class="je-btn-primary" disabled="@busy" @onclick="() => { decliningOfferId = 0; activeOfferModal = o; }">
+                                                <i class="bi bi-pen" aria-hidden="true"></i>
+                                                <span>Open, Sign &amp; Submit Offer Form</span>
+                                            </button>
+                                            <button type="button" class="rounded-lg border border-rose-300 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-50" disabled="@busy" @onclick="() => decliningOfferId = o.Id">Decline Offer</button>
+                                        </div>
+                                    }
+                                }
+                                else if (o.Status is "Accepted" or "OnboardingSubmitted")
+                                {
+                                    <div class="flex flex-wrap items-center justify-between gap-2">
+                                        <span class="text-[11px] font-medium text-emerald-800">
+                                            <i class="bi bi-check-circle-fill mr-1 text-emerald-600" aria-hidden="true"></i>
+                                            Offer form signed &amp; submitted. HR will follow up with onboarding.
+                                        </span>
+                                        <div class="flex flex-wrap items-center gap-2">
+                                            <a href="@($"/careers/offer-letter/{o.Id}")"
+                                               target="_blank"
+                                               rel="noopener"
+                                               class="je-btn-outline">
+                                                <i class="bi bi-file-earmark-text" aria-hidden="true"></i>
+                                                <span>View Offer Letter</span>
+                                            </a>
+                                            <button type="button" class="je-btn-outline" @onclick="() => activeOfferModal = o">
+                                                <i class="bi bi-file-earmark-check" aria-hidden="true"></i>
+                                                <span>View Signed Offer Form</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+            }
+
+            <!-- TAB 5: MY APPLICANT PROFILE -->
+            @if (activeTab == "profile" && workspace is not null)
+            {
+                <div class="je-section-head">
+                    <div>
+                        <h2 class="je-section-title">My Applicant Profile</h2>
+                        <p class="je-section-sub">Your eFaas-verified identity and contact information for job applications.</p>
+                    </div>
+                </div>
+
+                <div class="je-card p-5 max-w-3xl space-y-4 text-xs">
+                    <div class="flex items-center gap-3 pb-3 border-b border-slate-100">
+                        <div class="je-avatar-lg">@GetInitials(workspace.ProfileFullName)</div>
+                        <div>
+                            <h3 class="text-base font-bold text-slate-900">@(string.IsNullOrWhiteSpace(workspace.ProfileFullName) ? "eFaas Applicant" : workspace.ProfileFullName)</h3>
+                            <span class="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-semibold mt-1 @(workspace.ApplicantId.HasValue ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800")">
+                                @(workspace.ApplicantId.HasValue ? $"Registered Applicant #{workspace.ApplicantId}" : "Profile Setup Required")
+                            </span>
+                        </div>
+                    </div>
+
+                    @if (workspace.ApplicantId.HasValue)
+                    {
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+                                <span class="block text-[10px] font-bold uppercase tracking-wider text-slate-500">Full Name (eFaas Verified)</span>
+                                <strong class="text-sm text-slate-900">@(workspace.ProfileFullName ?? "—")</strong>
+                            </div>
+                            <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+                                <span class="block text-[10px] font-bold uppercase tracking-wider text-slate-500">Email</span>
+                                <span class="font-semibold text-slate-800">@(string.IsNullOrWhiteSpace(workspace.ProfileEmail) ? "—" : workspace.ProfileEmail)</span>
+                            </div>
+                            <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+                                <span class="block text-[10px] font-bold uppercase tracking-wider text-slate-500">Mobile</span>
+                                <span class="font-semibold text-slate-800">@(string.IsNullOrWhiteSpace(workspace.ProfileMobile) ? "—" : workspace.ProfileMobile)</span>
+                            </div>
+                            <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+                                <span class="block text-[10px] font-bold uppercase tracking-wider text-slate-500">Applications Submitted</span>
+                                <strong class="text-sm text-[#075985]">@workspace.Applications.Count</strong>
+                            </div>
+                        </div>
+
+                        @if (workspace.Offers.Count > 0)
+                        {
+                            <div class="rounded-xl border border-amber-200 bg-amber-50/40 p-4 space-y-2.5">
+                                <div class="flex items-center justify-between gap-2">
+                                    <h4 class="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                                        <i class="bi bi-envelope-paper-heart text-[#075985]" aria-hidden="true"></i>
+                                        <span>Job Offer Letters (@workspace.Offers.Count)</span>
+                                    </h4>
+                                </div>
+                                <div class="space-y-2">
+                                    @foreach (var offer in workspace.Offers)
+                                    {
+                                        <div class="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2">
+                                            <div>
+                                                <div class="font-bold text-slate-900">@(string.IsNullOrWhiteSpace(offer.PositionName) ? offer.VacancyReference : offer.PositionName)</div>
+                                                <div class="text-[11px] text-slate-500">
+                                                    @(string.IsNullOrWhiteSpace(offer.OrganisationName) ? "" : $"{offer.OrganisationName} · ")
+                                                    <span class="font-mono">@offer.VacancyReference</span>
+                                                    <span class="ml-1.5 rounded-full px-2 py-0.5 text-[10px] font-semibold @(offer.Status == "Accepted" ? "bg-emerald-100 text-emerald-800" : offer.Status == "OnboardingSubmitted" ? "bg-blue-100 text-blue-800" : offer.Status == "Declined" ? "bg-rose-100 text-rose-800" : "bg-amber-100 text-amber-800")">@offer.Status</span>
+                                                </div>
+                                            </div>
+                                            <div class="flex flex-wrap items-center gap-1.5">
+                                                <a href="@($"/careers/offer-letter/{offer.Id}")"
+                                                   target="_blank"
+                                                   rel="noopener"
+                                                   class="je-btn-outline">
+                                                    <i class="bi bi-file-earmark-text" aria-hidden="true"></i>
+                                                    <span>View Offer Letter</span>
+                                                </a>
+                                                <button type="button"
+                                                        class="@(offer.Status == "Offered" ? "je-btn-primary" : "je-btn-outline")"
+                                                        @onclick="() => activeOfferModal = offer">
+                                                    <i class="bi @(offer.Status == "Offered" ? "bi-pen" : "bi-file-earmark-check")" aria-hidden="true"></i>
+                                                    <span>@(offer.Status == "Offered" ? "Open, Sign & Submit Offer" : "View Signed Offer")</span>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        }
+
+                        <div class="flex justify-end pt-2">
+                            <button type="button" class="je-btn-primary" @onclick='() => OpenTab("vacancies")'>Browse Open Vacancies</button>
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="text-slate-600">
+                            Your full name is fetched directly from your verified eFaas record. Confirm your email and mobile number once to activate your applicant profile.
+                        </p>
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <label class="block text-xs font-medium text-slate-700">
+                                Full Name <span class="text-[10px] text-slate-400">(eFaas verified)</span>
+                                <input class="mt-1 w-full rounded-lg border border-slate-200 bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-600 cursor-not-allowed"
+                                       value="@regName"
+                                       disabled="@(!string.IsNullOrWhiteSpace(workspace.ProfileFullName))"
+                                       readonly="@(!string.IsNullOrWhiteSpace(workspace.ProfileFullName))" />
+                            </label>
+                            <label class="block text-xs font-medium text-slate-700">
+                                Email *
+                                <input type="email"
+                                       maxlength="320"
+                                       class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 focus:border-teal-600 focus:outline-none"
+                                       @bind="regEmail"
+                                       @bind:event="oninput" />
+                            </label>
+                            <label class="block text-xs font-medium text-slate-700">
+                                Mobile
+                                <input type="tel"
+                                       maxlength="40"
+                                       class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 focus:border-teal-600 focus:outline-none"
+                                       @bind="regMobile"
+                                       @bind:event="oninput" />
+                            </label>
+                        </div>
+                        <div class="flex justify-end pt-2">
+                            <button type="button"
+                                    class="je-btn-primary"
+                                    disabled="@(busy || string.IsNullOrWhiteSpace(regName) || string.IsNullOrWhiteSpace(regEmail))"
+                                    @onclick="RegisterProfileAsync">
+                                <span>Register Applicant Profile</span>
+                            </button>
+                        </div>
+                    }
+                </div>
+            }
+        }
+    </div>
+
+    <!-- Offer Letter & Appointee Agreement Modal -->
+    @if (activeOfferModal is not null)
+    {
+        <OfferLetterAcceptanceModal IsOpen="true"
+                                    OfferId="@activeOfferModal.Id"
+                                    VacancyReference="@activeOfferModal.VacancyReference"
+                                    Status="@activeOfferModal.Status"
+                                    TermsSnapshotJson="@activeOfferModal.TermsSnapshotJson"
+                                    PositionName="@activeOfferModal.PositionName"
+                                    OrganisationName="@activeOfferModal.OrganisationName"
+                                    ApplicantName="@workspace?.ProfileFullName"
+                                    OfferedAtUtc="@activeOfferModal.OfferedAtUtc"
+                                    AcceptedAtUtc="@activeOfferModal.AcceptedAtUtc"
+                                    AppointeeSignatureDataUrl="@activeOfferModal.AppointeeSignatureDataUrl"
+                                    SignatureVerificationCode="@activeOfferModal.SignatureVerificationCode"
+                                    ReadOnly="@(activeOfferModal.Status != "Offered")"
+                                    OnSubmitted="HandleOfferModalSubmittedAsync"
+                                    OnClosed="() => activeOfferModal = null" />
+    }
+
+    <!-- Published Merit Result Sheet Modal -->
+    @if (viewingResult is not null)
+    {
+        var modalObjectionOpen = !viewingResult.IsFinal && viewingResult.ObjectionClosesAtUtc > DateTime.UtcNow;
+        <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-3"
+             role="dialog"
+             aria-modal="true"
+             aria-label="Published Merit Result Sheet"
+             @onclick="CloseResultSheet">
+            <div class="w-full max-w-4xl max-h-screen rounded-2xl border border-slate-200 bg-white shadow-2xl overflow-hidden flex flex-col"
+                 style="max-height: calc(100vh - 2rem);"
+                 @onclick:stopPropagation="true">
+                <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-slate-50/90 px-4 py-3 shrink-0">
+                    <div class="min-w-0">
+                        <h3 class="text-sm font-bold text-slate-900 truncate">
+                            Published Merit Result Sheet — @(string.IsNullOrWhiteSpace(viewingResult.PositionName) ? viewingResult.VacancyReference : viewingResult.PositionName)
+                        </h3>
+                        <p class="text-[11px] text-slate-500 font-mono">
+                            @viewingResult.VacancyReference · Published @viewingResult.PublishedAtUtc.AddHours(5).ToString("dd MMM yyyy HH:mm") MVT · Objections close @viewingResult.ObjectionClosesAtUtc.AddHours(5).ToString("dd MMM yyyy HH:mm") MVT
+                        </p>
+                    </div>
+                    <button type="button" class="je-btn-outline" @onclick="CloseResultSheet">Close</button>
+                </div>
+
+                <div class="p-4 overflow-y-auto space-y-4 text-xs">
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                        <div class="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                            <span class="block text-[10px] font-bold uppercase tracking-wider text-slate-500">Your Application</span>
+                            <strong class="font-mono text-slate-900">@viewingResult.ApplicationReference</strong>
+                            <span class="block text-[11px] text-slate-500 mt-0.5">Status: @viewingResult.ApplicationStatus</span>
+                        </div>
+                        <div class="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                            <span class="block text-[10px] font-bold uppercase tracking-wider text-slate-500">Your Merit Rank &amp; Score</span>
+                            <strong class="text-sm text-teal-700">@(viewingResult.MyRank.HasValue ? $"Rank #{viewingResult.MyRank} · {viewingResult.MyScore:0.##}" : "Not Ranked")</strong>
+                        </div>
+                        <div class="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                            <span class="block text-[10px] font-bold uppercase tracking-wider text-slate-500">Publication Status</span>
+                            <strong class="@(viewingResult.IsFinal ? "text-emerald-700" : "text-amber-700")">
+                                @(viewingResult.IsFinal ? "Finalised" : modalObjectionOpen ? "Objection Period Open" : "Objection Period Closed")
+                            </strong>
+                        </div>
+                    </div>
+
+                    <div class="space-y-1.5">
+                        <h4 class="text-xs font-bold uppercase tracking-wider text-slate-700">Published A2 Merit Ranking (@viewingResult.MeritSheet.Count)</h4>
+                        <div class="overflow-x-auto rounded-xl border border-slate-200">
+                            <table class="w-full text-left text-xs">
+                                <thead class="bg-slate-50 border-b border-slate-200 text-[10px] font-bold uppercase tracking-wider text-slate-600">
+                                    <tr>
+                                        <th class="px-3 py-2">Rank</th>
+                                        <th class="px-3 py-2">Application Reference</th>
+                                        <th class="px-3 py-2 text-right">Total Score</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-100">
+                                    @foreach (var entry in viewingResult.MeritSheet)
+                                    {
+                                        <tr class="@(entry.IsMine ? "bg-blue-50/80 font-semibold" : "hover:bg-slate-50/70")">
+                                            <td class="px-3 py-2 font-bold text-slate-900">#@entry.Rank</td>
+                                            <td class="px-3 py-2 font-mono text-slate-800">
+                                                @entry.ApplicationReference
+                                                @if (entry.IsMine)
+                                                {
+                                                    <span class="ml-1.5 rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-sans font-semibold text-white">You</span>
+                                                }
+                                            </td>
+                                            <td class="px-3 py-2 text-right font-mono tabular-nums text-slate-900">@entry.Score.ToString("0.##")</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    @if (viewingResult.MyScorecards.Count > 0)
+                    {
+                        <div class="space-y-2">
+                            <h4 class="text-xs font-bold uppercase tracking-wider text-slate-700">Your Assessment Score Breakdown</h4>
+                            @foreach (var sc in viewingResult.MyScorecards)
+                            {
+                                var criteria = ParseCriteria(sc.CriterionScoresJson);
+                                <div class="rounded-xl border border-slate-200 bg-slate-50/60 p-3 space-y-2">
+                                    <div class="flex items-center justify-between gap-2">
+                                        <span class="font-bold text-slate-800">@sc.AssessmentKind</span>
+                                        <span class="font-mono font-bold text-teal-700 tabular-nums">Total: @sc.TotalScore.ToString("0.##")</span>
+                                    </div>
+                                    @if (criteria.Count > 0)
+                                    {
+                                        <div class="flex flex-wrap gap-1.5">
+                                            @foreach (var kv in criteria)
+                                            {
+                                                <span class="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-700">
+                                                    <span class="font-medium">@kv.Key:</span>
+                                                    <strong class="font-mono text-slate-900">@kv.Value</strong>
+                                                </span>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+
+                    <div class="rounded-xl border border-slate-200 bg-slate-50/60 p-3.5 space-y-2.5">
+                        <h4 class="text-xs font-bold uppercase tracking-wider text-slate-700">Objection</h4>
+                        @if (viewingResult.ObjectionId.HasValue)
+                        {
+                            <div class="space-y-1.5">
+                                <div class="flex items-center justify-between">
+                                    <span class="font-semibold text-slate-800">Submitted Objection</span>
+                                    <span class="rounded-full px-2 py-0.5 text-[10px] font-semibold @(viewingResult.ObjectionStatus == "Upheld" ? "bg-emerald-100 text-emerald-800" : viewingResult.ObjectionStatus == "Rejected" ? "bg-rose-100 text-rose-800" : "bg-amber-100 text-amber-800")">
+                                        @viewingResult.ObjectionStatus
+                                    </span>
+                                </div>
+                                <p class="whitespace-pre-wrap rounded-lg border border-slate-200 bg-white p-2.5 text-slate-700">@viewingResult.ObjectionGrounds</p>
+                                @if (!string.IsNullOrWhiteSpace(viewingResult.ObjectionResolution))
+                                {
+                                    <div class="rounded-lg border border-teal-200 bg-teal-50/60 p-2.5 text-slate-800">
+                                        <span class="block text-[10px] font-bold uppercase tracking-wider text-teal-800">Committee Resolution</span>
+                                        <p class="whitespace-pre-wrap mt-0.5">@viewingResult.ObjectionResolution</p>
+                                    </div>
+                                }
+                            </div>
+                        }
+                        else if (modalObjectionOpen)
+                        {
+                            <label class="block text-xs font-semibold text-slate-700">
+                                Grounds for Objection *
+                                <textarea rows="3"
+                                          maxlength="4000"
+                                          class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 focus:border-teal-600 focus:outline-none"
+                                          placeholder="After reviewing the result sheet above, explain the specific scoring or screening issue…"
+                                          @bind="objectionGrounds"
+                                          @bind:event="oninput"></textarea>
+                            </label>
+                            <div class="flex justify-end">
+                                <button type="button"
+                                        class="je-btn-primary"
+                                        disabled="@(busy || string.IsNullOrWhiteSpace(objectionGrounds))"
+                                        @onclick="() => SubmitModalObjectionAsync(viewingResult.PublicationId, viewingResult.ApplicationId)">
+                                    <span>Submit Objection</span>
+                                </button>
+                            </div>
+                        }
+                        else
+                        {
+                            <p class="text-slate-500">The objection period for this publication is closed.</p>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+    <!-- Public Published Merit Result Sheet Modal (for unauthenticated visitors or non-applicants) -->
+    @if (viewingPublicResult is not null)
+    {
+        var pubObjectionOpen = !viewingPublicResult.IsFinal && viewingPublicResult.ObjectionClosesAtUtc > DateTime.UtcNow;
+        <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-3"
+             role="dialog"
+             aria-modal="true"
+             aria-label="Published Merit Result Sheet"
+             @onclick="() => viewingPublicResult = null">
+            <div class="w-full max-w-3xl max-h-screen rounded-2xl border border-slate-200 bg-white shadow-2xl overflow-hidden flex flex-col"
+                 style="max-height: calc(100vh - 2rem);"
+                 @onclick:stopPropagation="true">
+                <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-slate-50/90 px-4 py-3 shrink-0">
+                    <div class="min-w-0">
+                        <h3 class="text-sm font-bold text-slate-900 truncate">
+                            Published A2 Merit Sheet — @(string.IsNullOrWhiteSpace(viewingPublicResult.PositionName) ? viewingPublicResult.VacancyReference : viewingPublicResult.PositionName)
+                        </h3>
+                        <p class="text-[11px] text-slate-500 font-mono">
+                            @viewingPublicResult.VacancyReference · Published @viewingPublicResult.PublishedAtUtc.AddHours(5).ToString("dd MMM yyyy HH:mm") MVT · Objections close @viewingPublicResult.ObjectionClosesAtUtc.AddHours(5).ToString("dd MMM yyyy HH:mm") MVT
+                        </p>
+                    </div>
+                    <button type="button" class="je-btn-outline" @onclick="() => viewingPublicResult = null">Close</button>
+                </div>
+
+                <div class="p-4 overflow-y-auto space-y-4 text-xs">
+                    <div class="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5">
+                        <div class="flex items-center gap-2">
+                            <span class="rounded-full px-2.5 py-0.5 text-[11px] font-semibold @(viewingPublicResult.IsFinal ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800")">
+                                @(viewingPublicResult.IsFinal ? "Finalised" : pubObjectionOpen ? "Objection Period Open" : "Objection Period Closed")
+                            </span>
+                            <span class="text-slate-600">@viewingPublicResult.MeritSheet.Count ranked candidate(s)</span>
+                        </div>
+                        @if (!isAuthenticated && pubObjectionOpen)
+                        {
+                            <a href="@LoginUrl" class="je-btn-primary">
+                                <i class="bi bi-box-arrow-in-right" aria-hidden="true"></i>
+                                <span>Sign in with eFaas to Submit Objection</span>
+                            </a>
+                        }
+                    </div>
+
+                    <div class="overflow-x-auto rounded-xl border border-slate-200">
+                        <table class="w-full text-left text-xs">
+                            <thead class="bg-slate-50 border-b border-slate-200 text-[10px] font-bold uppercase tracking-wider text-slate-600">
+                                <tr>
+                                    <th class="px-3 py-2">Rank</th>
+                                    <th class="px-3 py-2">Application Reference</th>
+                                    <th class="px-3 py-2 text-right">Total Score</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100">
+                                @foreach (var entry in viewingPublicResult.MeritSheet)
+                                {
+                                    <tr class="hover:bg-slate-50/70">
+                                        <td class="px-3 py-2 font-bold text-slate-900">#@entry.Rank</td>
+                                        <td class="px-3 py-2 font-mono text-slate-800">@entry.ApplicationReference</td>
+                                        <td class="px-3 py-2 text-right font-mono tabular-nums text-slate-900">@entry.Score.ToString("0.##")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<style>
+    .je-portal {
+        background: #f4f6fb;
+        min-height: calc(100vh - 4rem);
+        padding: 1rem 0.75rem 2.5rem;
+    }
+
+    .je-navbar {
+        max-width: 72rem;
+        margin-inline: auto;
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-bottom: 3px solid #075985;
+        border-radius: 0.9rem;
+        box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04);
+        position: sticky;
+        top: 0.5rem;
+        z-index: 30;
+    }
+
+    .je-navbar-inner {
+        padding: 0.65rem 1rem;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.65rem;
+    }
+
+    .je-brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.65rem;
+        text-decoration: none;
+        min-width: 0;
+    }
+
+    .je-brand-icon {
+        width: 2.3rem;
+        height: 2.3rem;
+        border-radius: 0.65rem;
+        background: #075985;
+        color: #ffffff;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1rem;
+        flex-shrink: 0;
+    }
+
+    .je-brand-title {
+        display: block;
+        font-size: 0.92rem;
+        font-weight: 800;
+        color: #0f172a;
+        line-height: 1.2;
+    }
+
+    .je-brand-sub {
+        display: block;
+        font-size: 0.68rem;
+        color: #64748b;
+    }
+
+    .je-nav-links {
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+        overflow-x: auto;
+        max-width: 100%;
+        padding-bottom: 0.1rem;
+    }
+
+    .je-nav-item {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        padding: 0.45rem 0.75rem;
+        border-radius: 0.5rem;
+        font-size: 0.76rem;
+        font-weight: 600;
+        color: #334155;
+        background: transparent;
+        white-space: nowrap;
+        flex-shrink: 0;
+        transition: background 150ms ease, color 150ms ease;
+    }
+
+    .je-nav-item:hover {
+        background: #f0f9ff;
+        color: #075985;
+    }
+
+    .je-nav-item.is-active {
+        background: #f0f9ff;
+        color: #075985;
+        box-shadow: inset 0 -2px 0 #075985;
+    }
+
+    .je-pill {
+        border-radius: 9999px;
+        background: #e2e8f0;
+        color: #334155;
+        padding: 0.05rem 0.45rem;
+        font-size: 0.65rem;
+        font-weight: 700;
+    }
+
+    .je-nav-item.is-active .je-pill {
+        background: #075985;
+        color: #ffffff;
+    }
+
+    .je-pill-warn {
+        border-radius: 9999px;
+        background: #f59e0b;
+        color: #ffffff;
+        padding: 0.05rem 0.45rem;
+        font-size: 0.65rem;
+        font-weight: 700;
+    }
+
+    .je-nav-actions {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.45rem;
+    }
+
+    .je-user-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.45rem;
+        padding: 0.25rem 0.65rem 0.25rem 0.3rem;
+        border-radius: 9999px;
+        border: 1px solid #cbd5e1;
+        background: #f8fafc;
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: #0f172a;
+    }
+
+    .je-user-chip:hover {
+        border-color: #075985;
+        background: #f0f9ff;
+    }
+
+    .je-avatar {
+        width: 1.65rem;
+        height: 1.65rem;
+        border-radius: 9999px;
+        background: #075985;
+        color: #ffffff;
+        font-size: 0.65rem;
+        font-weight: 700;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .je-avatar-lg {
+        width: 3rem;
+        height: 3rem;
+        border-radius: 9999px;
+        background: #075985;
+        color: #ffffff;
+        font-size: 1rem;
+        font-weight: 700;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+
+    .je-user-name {
+        max-width: 9rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .je-search-band {
+        max-width: 72rem;
+        margin: 0.9rem auto 0;
+        background: linear-gradient(135deg, #075985 0%, #0c4a6e 100%);
+        border-radius: 0.9rem;
+        padding: 1rem;
+        box-shadow: 0 4px 14px rgba(7, 89, 133, 0.2);
+    }
+
+    .je-container {
+        max-width: 72rem;
+        margin-inline: auto;
+        padding-inline: 0;
+    }
+
+    .je-search-band .je-container {
+        max-width: none;
+        padding-inline: 0;
+    }
+
+    .je-search-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 0.6rem;
+    }
+
+    @@media (min-width: 640px) {
+        .je-search-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+
+    @@media (min-width: 900px) {
+        .je-search-grid {
+            grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) auto;
+        }
+    }
+
+    .je-search-input-wrap {
+        position: relative;
+        display: flex;
+        align-items: center;
+    }
+
+    .je-search-icon {
+        position: absolute;
+        left: 0.85rem;
+        color: #64748b;
+        font-size: 0.85rem;
+    }
+
+    .je-search-input,
+    .je-search-select {
+        width: 100%;
+        height: 2.55rem;
+        border-radius: 0.5rem;
+        border: 0;
+        background: #ffffff;
+        color: #0f172a;
+        font-size: 0.8rem;
+        padding: 0 0.85rem;
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+    }
+
+    .je-search-input {
+        padding-left: 2.3rem;
+    }
+
+    .je-search-btn {
+        height: 2.55rem;
+        padding: 0 1.2rem;
+        border-radius: 0.5rem;
+        background: #0f172a;
+        color: #ffffff;
+        font-size: 0.8rem;
+        font-weight: 700;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.4rem;
+        transition: background 150ms ease;
+    }
+
+    .je-search-btn:hover {
+        background: #1e293b;
+    }
+
+    .je-main {
+        padding-top: 1.25rem;
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+    }
+
+    .je-section-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 0.5rem;
+    }
+
+    .je-section-title {
+        font-size: 1.15rem;
+        font-weight: 800;
+        color: #0f172a;
+    }
+
+    .je-section-sub {
+        font-size: 0.78rem;
+        color: #64748b;
+        margin-top: 0.15rem;
+    }
+
+    .je-card {
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 0.85rem;
+        box-shadow: 0 1px 4px rgba(15, 23, 42, 0.04);
+    }
+
+    .je-empty {
+        padding: 3rem 1.5rem;
+        text-align: center;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .je-alert {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+        padding: 0.75rem 1rem;
+        border-radius: 0.65rem;
+        border: 1px solid #cbd5e1;
+        background: #ffffff;
+        font-size: 0.78rem;
+        color: #1e293b;
+    }
+
+    .je-setup-banner {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+        padding: 0.85rem 1.1rem;
+        border-radius: 0.75rem;
+        border: 1px solid #fde68a;
+        background: #fffbeb;
+    }
+
+    .je-job-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+
+    .je-job-item {
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 0.85rem;
+        padding: 1rem 1.15rem;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.9rem;
+        transition: border-color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
+    }
+
+    .je-job-item:hover {
+        border-color: #075985;
+        box-shadow: 0 6px 18px rgba(7, 89, 133, 0.12);
+        transform: translateY(-1px);
+    }
+
+    .je-job-left {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.9rem;
+        min-width: 0;
+        flex: 1 1 18rem;
+    }
+
+    .je-job-logo {
+        width: 2.9rem;
+        height: 2.9rem;
+        border-radius: 0.65rem;
+        border: 1px solid #bae6fd;
+        background: #f0f9ff;
+        color: #075985;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.15rem;
+        flex-shrink: 0;
+    }
+
+    .je-job-title {
+        font-size: 0.95rem;
+        font-weight: 700;
+        color: #0f172a;
+        line-height: 1.3;
+    }
+
+    .je-job-meta {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.35rem 1rem;
+        margin-top: 0.35rem;
+        font-size: 0.75rem;
+        color: #64748b;
+    }
+
+    .je-job-meta i {
+        color: #075985;
+        margin-right: 0.25rem;
+    }
+
+    .je-job-right {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        flex-shrink: 0;
+    }
+
+    @@media (max-width: 639px) {
+        .je-job-right {
+            width: 100%;
+        }
+
+        .je-job-right .je-btn-primary,
+        .je-job-right .je-btn-outline {
+            width: 100%;
+        }
+    }
+
+    .je-btn-primary {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.4rem;
+        padding: 0.5rem 1rem;
+        border-radius: 0.5rem;
+        background: #075985;
+        color: #ffffff;
+        font-size: 0.78rem;
+        font-weight: 700;
+        text-decoration: none;
+        transition: background 150ms ease;
+    }
+
+    .je-btn-primary:hover {
+        background: #0c4a6e;
+        color: #ffffff;
+    }
+
+    .je-btn-primary:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    .je-btn-outline {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.35rem;
+        padding: 0.45rem 0.85rem;
+        border-radius: 0.5rem;
+        border: 1px solid #cbd5e1;
+        background: #ffffff;
+        color: #334155;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-decoration: none;
+        transition: background 150ms ease, border-color 150ms ease;
+    }
+
+    .je-job-expired {
+        background: #f8fafc;
+        opacity: 0.85;
+    }
+
+    .je-job-expired:hover {
+        border-color: #cbd5e1;
+        box-shadow: none;
+        transform: none;
+    }
+
+    .je-job-logo.is-expired {
+        border-color: #e2e8f0;
+        background: #f1f5f9;
+        color: #64748b;
+    }
+
+    .je-btn-disabled {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.35rem;
+        padding: 0.45rem 0.9rem;
+        border-radius: 0.5rem;
+        border: 1px solid #e2e8f0;
+        background: #f1f5f9;
+        color: #94a3b8;
+        font-size: 0.75rem;
+        font-weight: 600;
+        cursor: not-allowed;
+    }
+
+    .je-btn-outline:hover {
+        background: #f0f9ff;
+        border-color: #7dd3fc;
+        color: #075985;
+    }
+</style>
+
+@code {
+    [Parameter] public string? OfficeName { get; set; }
+    [Parameter] public string? VacancyRef { get; set; }
+    [SupplyParameterFromQuery(Name = "tab")] public string? TabQuery { get; set; }
+
+    private MyRecruitmentWorkspace? workspace;
+    private MyPublishedResultDetail? viewingResult;
+    private PublicMeritSheetResponse? viewingPublicResult;
+    private OfficeVacanciesResponse? officeResponse;
+    private IReadOnlyList<PublishedRecruitmentVacancyRow> publicVacancies = [];
+    private bool busy, loadingResultDetail, isAuthenticated, officeNotFound;
+    private string activeTab = "vacancies";
+    private string? applyingVacancyRef;
+    private string searchKeyword = "";
+    private string selectedOfficeFilter = "";
+    private string selectedEmploymentType = "";
+    private string sortOrder = "closing";
+    private string? message;
+    private string? loadedOfficeName;
+    private string? appliedTabQuery;
+    private int objectingPublicationId;
+    private int objectingApplicationId;
+    private string objectionGrounds = "";
+    private string regName = "", regEmail = "", regMobile = "";
+
+    private IReadOnlyList<string> DistinctOffices =>
+        publicVacancies
+            .Select(v => v.OrganisationName)
+            .Where(n => !string.IsNullOrWhiteSpace(n))
+            .Select(n => n!)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(n => n)
+            .ToList();
+
+    private IReadOnlyList<string> DistinctEmploymentTypes =>
+        publicVacancies
+            .Select(v => v.EmploymentType)
+            .Where(t => !string.IsNullOrWhiteSpace(t))
+            .Select(t => t!)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(t => t)
+            .ToList();
+
+    private IReadOnlyList<PublishedRecruitmentVacancyRow> FilteredVacancies
+    {
+        get
+        {
+            var q = publicVacancies.AsEnumerable();
+            if (!string.IsNullOrWhiteSpace(selectedOfficeFilter))
+                q = q.Where(v => string.Equals(v.OrganisationName, selectedOfficeFilter, StringComparison.OrdinalIgnoreCase));
+            if (!string.IsNullOrWhiteSpace(selectedEmploymentType))
+                q = q.Where(v => string.Equals(v.EmploymentType, selectedEmploymentType, StringComparison.OrdinalIgnoreCase));
+            if (!string.IsNullOrWhiteSpace(searchKeyword))
+            {
+                var term = searchKeyword.Trim();
+                q = q.Where(v =>
+                    (v.PositionName?.Contains(term, StringComparison.OrdinalIgnoreCase) == true)
+                    || v.Reference.Contains(term, StringComparison.OrdinalIgnoreCase)
+                    || (v.EmploymentType?.Contains(term, StringComparison.OrdinalIgnoreCase) == true)
+                    || (v.OrganisationName?.Contains(term, StringComparison.OrdinalIgnoreCase) == true));
+            }
+            var now = DateTime.UtcNow;
+            return sortOrder == "title"
+                ? q.OrderBy(v => v.ClosingAtUtc <= now).ThenBy(v => string.IsNullOrWhiteSpace(v.PositionName) ? v.Reference : v.PositionName).ToList()
+                : q.OrderBy(v => v.ClosingAtUtc <= now).ThenBy(v => v.ClosingAtUtc).ToList();
+        }
+    }
+
+    private async Task ViewVacancyResultAsync(PublishedRecruitmentVacancyRow v)
+    {
+        if (!v.PublicationId.HasValue) return;
+        if (isAuthenticated && workspace?.Results is { Count: > 0 })
+        {
+            var myResult = workspace.Results.FirstOrDefault(r => r.PublicationId == v.PublicationId.Value);
+            if (myResult is not null)
+            {
+                await ViewResultSheetAsync(myResult.PublicationId, myResult.ApplicationId);
+                return;
+            }
+        }
+        loadingResultDetail = true;
+        try
+        {
+            viewingPublicResult = await Api.GetPublicMeritSheetAsync(v.PublicationId.Value);
+            if (viewingPublicResult is null)
+                message = "Published merit sheet could not be found.";
+        }
+        catch (HttpRequestException)
+        {
+            message = "Published merit sheet could not be loaded.";
+        }
+        finally
+        {
+            loadingResultDetail = false;
+        }
+    }
+
+    private string LoginUrl
+    {
+        get
+        {
+            var rel = "/" + Navigation.ToBaseRelativePath(Navigation.Uri).TrimStart('/');
+            return $"/Online/Auth/login?returnUrl={Uri.EscapeDataString(rel)}";
+        }
+    }
+
+    private string LoginUrlForVacancy(PublishedRecruitmentVacancyRow v)
+    {
+        var slug = officeResponse?.OfficeSlug;
+        var target = !string.IsNullOrWhiteSpace(slug)
+            ? $"/careers/{slug}/{Uri.EscapeDataString(v.Reference)}"
+            : "/" + Navigation.ToBaseRelativePath(Navigation.Uri).TrimStart('/');
+        return $"/Online/Auth/login?returnUrl={Uri.EscapeDataString(target)}";
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var auth = await AuthStateProvider.GetAuthenticationStateAsync();
+        isAuthenticated = auth.User.Identity?.IsAuthenticated == true;
+        if (!string.IsNullOrWhiteSpace(TabQuery) && isAuthenticated && !string.Equals(appliedTabQuery, TabQuery, StringComparison.OrdinalIgnoreCase))
+        {
+            appliedTabQuery = TabQuery;
+            var normalizedTab = TabQuery.Trim().ToLowerInvariant();
+            if (normalizedTab is "vacancies" or "applications" or "results" or "offers" or "profile")
+                activeTab = normalizedTab;
+        }
+        if (!string.IsNullOrWhiteSpace(VacancyRef) && isAuthenticated && string.IsNullOrWhiteSpace(applyingVacancyRef))
+        {
+            applyingVacancyRef = VacancyRef;
+            activeTab = "vacancies";
+        }
+        if (loadedOfficeName != OfficeName || (workspace is null && publicVacancies.Count == 0 && !officeNotFound))
+        {
+            loadedOfficeName = OfficeName;
+            await Load();
+        }
+    }
+
+    private void OpenTab(string tab)
+    {
+        activeTab = tab;
+        if (tab != "vacancies") applyingVacancyRef = null;
+    }
+
+    private void BeginApply(string reference)
+    {
+        activeTab = "vacancies";
+        applyingVacancyRef = reference;
+    }
+
+    private void BackToListings()
+    {
+        applyingVacancyRef = null;
+    }
+
+    private async Task Load()
+    {
+        busy = true;
+        officeNotFound = false;
+        try
+        {
+            var auth = await AuthStateProvider.GetAuthenticationStateAsync();
+            isAuthenticated = auth.User.Identity?.IsAuthenticated == true;
+
+            if (!string.IsNullOrWhiteSpace(OfficeName))
+            {
+                officeResponse = await Api.GetOfficeVacanciesAsync(OfficeName);
+                if (officeResponse is null)
+                {
+                    officeNotFound = true;
+                    publicVacancies = [];
+                    workspace = null;
+                    return;
+                }
+                publicVacancies = officeResponse.Vacancies;
+            }
+            else
+            {
+                officeResponse = null;
+                publicVacancies = await Api.BrowsePublicVacanciesAsync();
+            }
+
+            if (isAuthenticated)
+            {
+                workspace = await Api.GetMyWorkspaceAsync();
+                if (!string.IsNullOrWhiteSpace(workspace.ProfileFullName)) regName = workspace.ProfileFullName.Trim();
+                if (string.IsNullOrWhiteSpace(regEmail) && !string.IsNullOrWhiteSpace(workspace.ProfileEmail)) regEmail = workspace.ProfileEmail.Trim();
+                if (string.IsNullOrWhiteSpace(regMobile) && !string.IsNullOrWhiteSpace(workspace.ProfileMobile)) regMobile = workspace.ProfileMobile.Trim();
+            }
+            else
+            {
+                workspace = null;
+                activeTab = "vacancies";
+                applyingVacancyRef = null;
+            }
+        }
+        catch (HttpRequestException ex)
+        {
+            workspace = null;
+            message = ex.StatusCode is System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.Forbidden
+                ? "Sign in through eFaas to view your applications and offers."
+                : "Vacancies could not be loaded. Try again shortly.";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task RegisterProfileAsync()
+    {
+        if (busy || string.IsNullOrWhiteSpace(regName) || string.IsNullOrWhiteSpace(regEmail)) return;
+        busy = true;
+        try
+        {
+            var result = await Api.RegisterApplicantAsync(new(regName.Trim(), regEmail.Trim(), string.IsNullOrWhiteSpace(regMobile) ? null : regMobile.Trim()));
+            message = result.Message;
+            if (result.Success)
+            {
+                await Load();
+                activeTab = "vacancies";
+            }
+        }
+        catch (HttpRequestException)
+        {
+            message = "Applicant registration failed. Please try again.";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private void StartObjection(int publicationId, int applicationId)
+    {
+        objectingPublicationId = publicationId;
+        objectingApplicationId = applicationId;
+        objectionGrounds = "";
+    }
+
+    private void CancelObjection()
+    {
+        objectingPublicationId = 0;
+        objectingApplicationId = 0;
+        objectionGrounds = "";
+    }
+
+    private async Task ViewResultSheetAsync(int publicationId, int applicationId)
+    {
+        loadingResultDetail = true;
+        objectionGrounds = "";
+        try
+        {
+            viewingResult = await Api.GetMyPublishedResultAsync(publicationId, applicationId);
+            if (viewingResult is null)
+            {
+                message = "Published result sheet could not be found for this application.";
+            }
+        }
+        catch (HttpRequestException)
+        {
+            message = "Published result sheet could not be loaded. Try again shortly.";
+        }
+        finally
+        {
+            loadingResultDetail = false;
+        }
+    }
+
+    private void CloseResultSheet()
+    {
+        viewingResult = null;
+        objectionGrounds = "";
+    }
+
+    private async Task SubmitModalObjectionAsync(int publicationId, int applicationId)
+    {
+        objectingPublicationId = publicationId;
+        objectingApplicationId = applicationId;
+        await SubmitObjectionAsync();
+        if (viewingResult is not null)
+        {
+            viewingResult = await Api.GetMyPublishedResultAsync(publicationId, applicationId);
+        }
+    }
+
+    private async Task SubmitObjectionAsync()
+    {
+        if (busy || objectingPublicationId <= 0 || objectingApplicationId <= 0 || string.IsNullOrWhiteSpace(objectionGrounds)) return;
+        busy = true;
+        try
+        {
+            var result = await Api.SubmitMyObjectionAsync(new(objectingPublicationId, objectingApplicationId, objectionGrounds.Trim()));
+            message = result.Message;
+            if (result.Success)
+            {
+                CancelObjection();
+                await Load();
+            }
+        }
+        catch (HttpRequestException)
+        {
+            message = "Objection could not be submitted. Verify that the objection period is still open.";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private int decliningOfferId;
+    private string declineOfferReason = "";
+    private MyRecruitmentOfferRow? activeOfferModal;
+
+    private async Task HandleOfferModalSubmittedAsync()
+    {
+        activeOfferModal = null;
+        message = "Job Offer Acceptance Form signed and submitted. HR has been notified to proceed with onboarding.";
+        await Load();
+    }
+
+    private async Task Accept(int id)
+    {
+        if (busy) return;
+        busy = true;
+        try
+        {
+            var result = await Api.AcceptMyOfferAsync(id);
+            message = result.Message;
+            if (result.Success)
+            {
+                await Load();
+            }
+        }
+        catch (HttpRequestException)
+        {
+            message = "Offer acceptance failed. Refresh and check the offer status.";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task DeclineOfferAsync(int id)
+    {
+        if (busy) return;
+        busy = true;
+        try
+        {
+            var result = await Api.DeclineMyOfferAsync(id, declineOfferReason);
+            message = result.Message;
+            if (result.Success)
+            {
+                decliningOfferId = 0;
+                declineOfferReason = "";
+                await Load();
+            }
+        }
+        catch (HttpRequestException)
+        {
+            message = "Could not decline the offer. Refresh and check the offer status.";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private static string GetInitials(string? fullName)
+    {
+        if (string.IsNullOrWhiteSpace(fullName)) return "EF";
+        var parts = fullName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return string.Concat(parts.Take(2).Select(p => char.ToUpperInvariant(p[0])));
+    }
+
+    private static List<KeyValuePair<string, string>> ParseCriteria(string json)
+    {
+        var list = new List<KeyValuePair<string, string>>();
+        if (string.IsNullOrWhiteSpace(json)) return list;
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(json);
+            if (doc.RootElement.ValueKind == System.Text.Json.JsonValueKind.Object)
+            {
+                foreach (var prop in doc.RootElement.EnumerateObject())
+                {
+                    list.Add(new KeyValuePair<string, string>(prop.Name, prop.Value.ToString()));
+                }
+            }
+        }
+        catch { }
+        return list;
+    }
+
+    private static string Terms(string json)
+    {
+        try
+        {
+            using var d = System.Text.Json.JsonDocument.Parse(json);
+            var root = d.RootElement;
+            var lines = new List<string>();
+            if (root.TryGetProperty("ProbationPeriod", out var prob) && !string.IsNullOrWhiteSpace(prob.GetString()))
+                lines.Add($"Probation Period: {prob.GetString()}");
+            if (root.TryGetProperty("ProposedStartDate", out var start) && !string.IsNullOrWhiteSpace(start.GetString()))
+                lines.Add($"Proposed Start Date: {start.GetString()}");
+            if (root.TryGetProperty("Terms", out var t) && !string.IsNullOrWhiteSpace(t.GetString()))
+                lines.Add(t.GetString()!);
+            return lines.Count > 0 ? string.Join("\n", lines) : "Contact the recruitment office for your offer terms.";
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return "Contact the recruitment office for your offer terms.";
+        }
+    }
+}

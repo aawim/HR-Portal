@@ -64,7 +64,7 @@ namespace HRM.Services
                 }
             }
 
-            return await query
+            var results = await query
                 .Take(50)
                 .Select(q => new IndividualResultDto
                 {
@@ -77,6 +77,27 @@ namespace HRM.Services
                     Nationality = q.ind.CountryId.HasValue ? q.ind.CountryId.Value.ToString() : string.Empty
                 })
                 .ToListAsync();
+
+            var actor = await _access.RequireContextAsync();
+            if (!actor.IsSuperAdministrator && organisationId.HasValue)
+            {
+                var visible = await HRM.Helpers.StaffAttributeAccess.FilterViewableAsync(
+                    _dbContext, _access, organisationId.Value, results.Select(r => r.BusinessEntityId));
+                results = results.Where(r => visible.Contains(r.BusinessEntityId)).ToList();
+
+                var orgScope = await HRM.Helpers.OrganisationalAccessScopeResolver.ResolveCurrentUserAsync(
+                    _dbContext, _access, organisationId.Value);
+                if (!orgScope.FieldPermissions.CanViewIdentification)
+                {
+                    foreach (var r in results.Where(x => x.BusinessEntityId != actor.IndividualId))
+                    {
+                        r.IDNumber = string.Empty;
+                        r.PassportNumber = string.Empty;
+                    }
+                }
+            }
+
+            return results;
             }
 
     }

@@ -5,114 +5,247 @@
 @inject HRM.Services.Leave.Contracts.LeaveFlowConfigurationServiceContracts.IOperations Configuration
 @inject ILogger<LeaveFlowSettings> Logger
 @inject HRM.Services.Interfaces.IUserAccessService UserAccess
+@inject NavigationManager Navigation
+@inject HRM.Services.ToastService Toast
 
-<PageTitle>Request approval flows</PageTitle>
-<div class="mx-auto max-w-5xl space-y-5 p-4">
-    <a href="/admin/settings/config" class="text-sm text-blue-700 underline">Back to Configurations</a>
-    <h1 class="text-2xl font-semibold">Request approval flows</h1>
-    @if (message != null) { <p role="status" class="whitespace-pre-line rounded border bg-slate-50 p-3">@message</p> }
-    @if (loading) { <p role="status">Loading configuration…</p> }
-    else if (data == null) { <button type="button" class="rounded border px-4 py-2" @onclick="ReloadAsync">Try again</button> }
+<PageTitle>Request Approval Flows</PageTitle>
+<div class="@(Embedded ? "w-full min-w-0 space-y-4" : "mx-auto max-w-7xl p-2 space-y-4")">
+    @if (!Embedded)
+    {
+        <header class="flex flex-wrap items-center justify-between gap-2 px-1 py-0.5">
+            <div class="min-w-0">
+                <div class="flex items-center gap-2 flex-wrap">
+                    <h1 class="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 truncate">Request Approval Flows</h1>
+                    <span class="inline-flex items-center gap-1 rounded-full bg-teal-50 border border-teal-200/80 px-2 py-0.5 text-[10px] font-semibold text-teal-700">
+                        <span class="h-1.5 w-1.5 rounded-full bg-teal-500"></span>
+                        Workflow Engine
+                    </span>
+                </div>
+                <p class="text-xs text-slate-500">Assign multi-stage approval levels and user groups by Job Type and Request Type.</p>
+            </div>
+        </header>
+    }
+    @if (message != null && model == null)
+    {
+        <div role="status" class="flex items-center justify-between whitespace-pre-line rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-800">
+            <span>@message</span>
+            <button type="button" class="font-bold text-slate-500 hover:text-slate-800" @onclick="() => message = null">✕</button>
+        </div>
+    }
+    @if (loading)
+    {
+        <div class="rounded-xl border border-slate-200 bg-white p-6 text-center text-xs text-slate-500">Loading workflow configuration…</div>
+    }
+    else if (data == null)
+    {
+        <button type="button" class="app-button app-button-secondary app-button-sm" @onclick="ReloadAsync">
+            <AppIcon Name="arrow-clockwise" />
+            <span>Try Again</span>
+        </button>
+    }
     else if (data != null)
     {
-        <p class="text-slate-600">Organisation: <strong>@data.Organisation</strong>. Select a Job Type and Request Type. This flow applies automatically to all staff whose job has that Job Type.</p>
-        <h2 class="font-semibold">1. Select the staff group and request</h2>
-        <fieldset disabled="@busy" class="space-y-4 rounded-xl border bg-white p-5">
-            <div class="grid gap-4 sm:grid-cols-3">
-                <label>Job Type<select id="flow-job-type" class="mt-1 w-full rounded border p-2" @bind="jobType" @bind:after="LoadFlowAsync"><option value="0">Select Job Type</option>@foreach (var x in data.JobTypes) { <option value="@x.Id">@x.Name</option> }</select></label>
-                <label>Request Type<select id="flow-request-type" class="mt-1 w-full rounded border p-2" @bind="requestType" @bind:after="RequestTypeChangedAsync"><option value="0">Select Request Type</option>@foreach (var x in data.RequestTypes) { <option value="@x.Id">@x.Name</option> }</select></label>
+        <div class="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-blue-100 bg-blue-50/50 px-3.5 py-2.5 text-xs text-slate-700">
+            <span>Organisation: <strong class="text-slate-900">@data.Organisation</strong> · Select a Job Type and Request Type to configure its automated approval flow.</span>
+            <div class="flex flex-wrap items-center gap-2">
+                <a class="app-button app-button-secondary app-button-sm" href="/admin/settings/org/teams">Teams &amp; Supervisors</a>
+                <a class="app-button app-button-secondary app-button-sm" href="/developer/transitions">State Transitions</a>
+            </div>
+        </div>
+
+        <fieldset disabled="@busy" class="space-y-4 rounded-xl border border-slate-200 bg-white p-4">
+            <h2 class="text-xs font-bold uppercase tracking-wide text-slate-700">1. Select Staff Group &amp; Request Type</h2>
+            <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <label class="block text-xs font-medium text-slate-700 p-1">
+                    Job Type
+                    <select id="flow-job-type" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1.5 text-xs text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" @bind="jobType" @bind:after="LoadFlowAsync">
+                        <option value="0">Select Job Type</option>
+                        @foreach (var x in data.JobTypes) { <option value="@x.Id">@x.Name</option> }
+                    </select>
+                </label>
+                <label class="block text-xs font-medium text-slate-700 p-1">
+                    Request Type
+                    <select id="flow-request-type" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1.5 text-xs text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" @bind="requestType" @bind:after="RequestTypeChangedAsync">
+                        <option value="0">Select Request Type</option>
+                        @foreach (var x in data.RequestTypes) { <option value="@x.Id">@x.Name</option> }
+                    </select>
+                </label>
             </div>
             @if (model != null)
             {
-                <h2 class="text-lg font-semibold">2. Add approval stages and assign User Groups</h2>
-                <p class="text-sm text-slate-500">@(model.Version == 0 ? "Not configured — new submissions are blocked until a flow is saved." : $"Configured version {model.Version}")</p>
-                @if (model.ImportedFromLegacy)
-                {
-                    <p class="rounded bg-blue-50 p-3 text-sm text-blue-900">Loaded your previous approval flow as a draft. Early Return drafts use Pending HR Approval where available. Review each processing status and save to apply this flow to new requests for the selected Job Type.</p>
-                }
-                @if (model.Version > 0 && model.Stages!.Any(x => x.UserGroupId == 0))
-                {
-                    <p class="rounded bg-amber-50 p-3 text-sm text-amber-900">This saved flow uses older approver rules. Select a User Group for each stage and save a new version.</p>
-                }
-                <label class="block">Approval level<select id="flow-level" class="mt-1 w-full rounded border p-2" @bind="level" @bind:after="ResizeStages">
-                    <option value="0">Level 0 — reserved for future automatic approval</option>
-                    @for (var i = 1; i <= 20; i++) { <option value="@i">Level @i — @i approval @(i == 1 ? "stage" : "stages")</option> }
-                </select></label>
-                <div class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-blue-200 bg-blue-50 p-3">
-                    <p class="text-sm text-blue-900">Level @level = @level approval @(level == 1 ? "stage" : "stages"). Select a User Group in each stage below.</p>
-                    <button id="flow-add-stage" type="button" @onclick="AddStage" disabled="@(level >= 20)" class="rounded bg-blue-600 px-4 py-2 font-medium text-white disabled:opacity-50">+ Add approval stage</button>
-                </div>
-                @if (level == 0)
-                {
-                    <p role="status" class="rounded bg-amber-50 p-3 text-amber-900">Level 0 is reserved for future AI or condition-based automatic approval. It cannot be enabled yet. Your saved flow stays unchanged.</p>
-                }
-                else
-                {
-                    <div class="rounded-lg bg-blue-50 p-4 font-medium text-blue-900">Staff → @string.Join(" → ", model.Stages!.Select(x => $"{x.Name} ({data.States.FirstOrDefault(s => s.Id == x.StateId)?.Name.Trim() ?? x.StateId.ToString()})")) → Approved</div>
-                    @for (var i = 0; i < model.Stages!.Count; i++)
+                <div class="border-t border-slate-100 pt-3 space-y-3">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                            <h2 class="text-xs font-bold uppercase tracking-wide text-slate-700">2. Approval Stages &amp; User Groups</h2>
+                            <p class="text-[11px] text-slate-500 mt-0.5">@(model.Version == 0 ? "Not configured — new submissions are blocked until a flow is saved." : $"Configured version v{model.Version}")</p>
+                        </div>
+                        <button id="flow-add-stage" type="button" @onclick="AddStage" disabled="@(level >= 20)" class="app-button app-button-primary app-button-sm">
+                            <AppIcon Name="bi-plus-lg" />
+                            <span>Add Approval Stage</span>
+                        </button>
+                    </div>
+                    @if (model.ImportedFromLegacy)
                     {
-                        var index = i;
-                        var stage = model.Stages[index];
-                        <section @key="stage" class="space-y-3 rounded-lg border p-4">
-                            <div class="flex flex-wrap items-center justify-between gap-2"><h2 class="font-semibold">Stage @(index + 1)</h2><div class="flex gap-2">
-                                <button type="button" disabled="@(index == 0)" @onclick="() => MoveStage(index, -1)" class="rounded border px-2 py-1 disabled:opacity-50">Move up</button>
-                                <button type="button" disabled="@(index == model.Stages.Count - 1)" @onclick="() => MoveStage(index, 1)" class="rounded border px-2 py-1 disabled:opacity-50">Move down</button>
-                                <button type="button" @onclick="() => RemoveStage(index)" class="rounded border border-red-200 px-2 py-1 text-red-700">Remove stage</button>
-                            </div></div>
-                            <div class="grid gap-3 sm:grid-cols-2">
-                                <label>Stage name<input id="@($"flow-stage-name-{index}")" class="mt-1 w-full rounded border p-2" maxlength="150" @bind="stage.Name" /></label>
-                                <label>User Group<select id="@($"flow-stage-group-{index}")" class="mt-1 w-full rounded border p-2" @bind="stage.UserGroupId"><option value="0">Select User Group</option>@foreach (var group in data.UserGroups) { <option value="@group.Id">@group.Name</option> }</select></label>
-                                <label>Processing status<select id="@($"flow-stage-state-{index}")" class="mt-1 w-full rounded border p-2" @bind="stage.StateId"><option value="0">Select processing status</option>@foreach (var state in data.States) { <option value="@state.Id">@state.Name</option> }</select></label>
-                                <label>Eligible reviewers<select id="@($"flow-stage-scope-{index}")" class="mt-1 w-full rounded border p-2" @bind="stage.ApplicantSupervisorOnly"><option value="false">Staff in this User Group within the organisation</option><option value="true">Applicant's team / department supervisors in this User Group</option></select></label>
-                            </div>
-                        </section>
+                        <div class="rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs text-blue-900">Loaded your previous approval flow as a draft. Review each processing status and save to apply this flow to new requests.</div>
                     }
-                }
-                <p class="text-sm text-slate-600">Stages run in the displayed order. Any one eligible assigned reviewer completes a stage. A supervisor stage requires both the selected User Group and a supervisor relationship to the applicant. Staff cannot verify or approve their own requests.</p>
-                <button type="button" @onclick="SaveAsync" disabled="@(level == 0 || model.Stages!.Any(x => x.UserGroupId == 0 || x.StateId == 0))" class="rounded bg-blue-600 px-4 py-2 text-white disabled:opacity-50">@(busy ? "Saving…" : "Save approval flow")</button>
+                    @if (model.Version > 0 && model.Stages!.Any(x => x.UserGroupId == 0))
+                    {
+                        <div class="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">This saved flow uses older approver rules. Select a User Group for each stage and save a new version.</div>
+                    }
+                    <label class="block text-xs font-medium text-slate-700 p-1 max-w-md">
+                        Approval Level
+                        <select id="flow-level" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1.5 text-xs text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" @bind="level" @bind:after="ResizeStages">
+                            <option value="0">Level 0 — reserved for future automatic approval</option>
+                            @for (var i = 1; i <= 20; i++) { <option value="@i">Level @i — @i approval @(i == 1 ? "stage" : "stages")</option> }
+                        </select>
+                    </label>
+                    @if (level == 0)
+                    {
+                        <div role="status" class="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">Level 0 is reserved for future automatic approval. Select Level 1 or higher to configure stages.</div>
+                    }
+                    else
+                    {
+                        <div class="rounded-xl border border-blue-200 bg-blue-50/50 px-3.5 py-2.5 text-xs font-semibold text-blue-900">
+                            Staff → @string.Join(" → ", model.Stages!.Select(x => $"{x.Name} ({data.States.FirstOrDefault(s => s.Id == x.StateId)?.Name.Trim() ?? x.StateId.ToString()})")) → Approved
+                        </div>
+                        <div class="space-y-3">
+                            @for (var i = 0; i < model.Stages!.Count; i++)
+                            {
+                                var index = i;
+                                var stage = model.Stages[index];
+                                <section @key="stage" class="space-y-3 rounded-xl border border-slate-200 bg-slate-50/70 p-3.5">
+                                    <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200/80 pb-2">
+                                        <h3 class="text-xs font-bold text-slate-900">Stage @(index + 1)</h3>
+                                        <div class="flex flex-wrap items-center gap-1.5">
+                                            <button type="button" disabled="@(index == 0)" @onclick="() => MoveStage(index, -1)" class="app-button app-button-secondary app-button-sm">Move Up</button>
+                                            <button type="button" disabled="@(index == model.Stages.Count - 1)" @onclick="() => MoveStage(index, 1)" class="app-button app-button-secondary app-button-sm">Move Down</button>
+                                            <button type="button" @onclick="() => RemoveStage(index)" class="app-button app-button-danger app-button-sm">Remove</button>
+                                        </div>
+                                    </div>
+                                    <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                                        <label class="block text-xs font-medium text-slate-700 p-1">
+                                            Stage Name
+                                            <input id="@($"flow-stage-name-{index}")" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1.5 text-xs text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" maxlength="150" @bind="stage.Name" />
+                                        </label>
+                                        <label class="block text-xs font-medium text-slate-700 p-1">
+                                            Approver Source
+                                            <select class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1.5 text-xs text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" @bind="stage.ApproverType">
+                                                <option value="UserGroup">User Group</option>
+                                                <option value="LeadershipPermission">Leadership Permission</option>
+                                            </select>
+                                        </label>
+                                        @if (stage.ApproverType == "LeadershipPermission")
+                                        {
+                                            <label class="block text-xs font-medium text-slate-700 p-1">
+                                                Required Authority Permission
+                                                <select class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1.5 text-xs text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" @bind="stage.PermissionRoleId">
+                                                    <option value="0">Select permission role</option>
+                                                    @foreach (var role in data.PermissionRoles) { <option value="@role.Id">@role.Name</option> }
+                                                </select>
+                                            </label>
+                                        }
+                                        else
+                                        {
+                                            <label class="block text-xs font-medium text-slate-700 p-1">
+                                                User Group
+                                                <select id="@($"flow-stage-group-{index}")" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1.5 text-xs text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" @bind="stage.UserGroupId">
+                                                    <option value="0">Select User Group</option>
+                                                    @foreach (var group in data.UserGroups) { <option value="@group.Id">@group.Name</option> }
+                                                </select>
+                                            </label>
+                                        }
+                                        <label class="block text-xs font-medium text-slate-700 p-1">
+                                            Processing Status
+                                            <select id="@($"flow-stage-state-{index}")" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1.5 text-xs text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" @bind="stage.StateId">
+                                                <option value="0">Select processing status</option>
+                                                @foreach (var state in data.States) { <option value="@state.Id">@state.Name</option> }
+                                            </select>
+                                        </label>
+                                        @if (stage.ApproverType != "LeadershipPermission")
+                                        {
+                                            <label class="block text-xs font-medium text-slate-700 p-1 sm:col-span-2">
+                                                Eligible Reviewers
+                                                <select id="@($"flow-stage-scope-{index}")" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1.5 text-xs text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" @bind="stage.ApplicantSupervisorOnly">
+                                                    <option value="false">Staff in this User Group within the organisation</option>
+                                                    <option value="true">Applicant's team / department supervisors in this User Group</option>
+                                                </select>
+                                            </label>
+                                        }
+                                    </div>
+                                </section>
+                            }
+                        </div>
+                    }
+                    <p class="text-[11px] text-slate-500">Stages run in the displayed order. Any one eligible assigned reviewer completes a stage. Staff cannot verify or approve their own requests.</p>
+                    @if (message != null)
+                    {
+                        <div role="status" class="flex items-start justify-between gap-2 whitespace-pre-line rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-800 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100">
+                            <span>@message</span>
+                            <button type="button" aria-label="Dismiss save message" class="font-bold text-slate-500 hover:text-slate-800 dark:text-slate-300 dark:hover:text-white" @onclick="() => message = null">✕</button>
+                        </div>
+                    }
+                    <div class="flex justify-end">
+                        <button type="button" @onclick="SaveAsync" disabled="@(level == 0 || model.Stages!.Any(x => x.StateId == 0 || (x.ApproverType == "LeadershipPermission" ? x.PermissionRoleId == 0 : x.UserGroupId == 0)))" class="app-button app-button-primary app-button-sm">
+                            <AppIcon Name="bi-check2-circle" />
+                            <span>@(busy ? "Saving…" : "Save Approval Flow")</span>
+                        </button>
+                    </div>
+                </div>
             }
             else
             {
-                <p role="status" class="rounded-lg border border-blue-200 bg-blue-50 p-4 text-blue-900">Select both a Job Type and a Request Type above to display the approval level, Add approval stage button, and User Group selector for each stage.</p>
+                <div role="status" class="rounded-xl border border-dashed border-slate-300 bg-slate-50/70 p-6 text-center text-xs text-slate-600">
+                    Select both a <strong>Job Type</strong> and a <strong>Request Type</strong> above to configure approval stages and user groups.
+                </div>
             }
         </fieldset>
-        <p class="text-sm text-slate-500">Extensions begin with the applicant's supervisor and continue to HR. Early returns use one HR stage. Each stage needs a distinct processing status. Each save creates a new version; existing requests retain their original flow. Submission checks every stage has an eligible approver.</p>
-        <a class="text-sm text-blue-700 underline" href="/admin/settings/org/teams">Configure teams and supervisors</a>
-        <a class="ml-4 text-sm text-blue-700 underline" href="/admin/settings/config/state-transitions">Configure allowed state transitions</a>
+        <p class="text-[11px] text-slate-500">Each stage requires a distinct processing status. Saving creates a new version while existing requests retain their original flow.</p>
     }
 </div>
 
 @code {
-    [SupplyParameterFromQuery(Name = "issueOrganisationId")] public int? IssueOrganisationId { get; set; }
-    [SupplyParameterFromQuery(Name = "jobTypeId")] public int? RequestedJobTypeId { get; set; }
-    [SupplyParameterFromQuery(Name = "requestTypeId")] public int? RequestedRequestTypeId { get; set; }
+    [Parameter] public bool Embedded { get; set; }
+    [Parameter] public int? InitialOrganisationId { get; set; }
+    [Parameter] public int? InitialJobTypeId { get; set; }
+    [Parameter] public int? InitialRequestTypeId { get; set; }
     private string? loadedAlert;
     private LeaveFlowSettingsData? data;
     private LeaveFlowConfigurationDto? model;
     private int jobType, requestType, level;
     private bool loading = true, busy;
     private string? message;
-    protected override Task OnInitializedAsync() => ReloadAsync();
-    protected override async Task OnParametersSetAsync()
+    protected override async Task OnInitializedAsync()
     {
-        if (data == null || !IssueOrganisationId.HasValue) return;
-        var key = $"{IssueOrganisationId}:{RequestedJobTypeId}:{RequestedRequestTypeId}";
+        await ReloadAsync();
+        await ApplyAlertPresetAsync();
+    }
+    protected override Task OnParametersSetAsync() => ApplyAlertPresetAsync();
+    private static int? ParseQueryInt(Dictionary<string, Microsoft.Extensions.Primitives.StringValues> query, string key) =>
+        query.TryGetValue(key, out var raw) && int.TryParse(raw.FirstOrDefault(), out var parsed) ? parsed : null;
+    private async Task ApplyAlertPresetAsync()
+    {
+        var query = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(new Uri(Navigation.Uri).Query);
+        var effectiveOrgId = InitialOrganisationId ?? ParseQueryInt(query, "issueOrganisationId");
+        var effectiveJobTypeId = InitialJobTypeId ?? ParseQueryInt(query, "jobTypeId");
+        var effectiveRequestTypeId = InitialRequestTypeId ?? ParseQueryInt(query, "requestTypeId");
+        if (data == null || (!effectiveJobTypeId.HasValue && !effectiveRequestTypeId.HasValue)) return;
+        var key = $"{effectiveOrgId}:{effectiveJobTypeId}:{effectiveRequestTypeId}";
         if (loadedAlert == key) return;
         loadedAlert = key;
         try
         {
-            if (await UserAccess.GetCurrentOrganisationIdAsync() != IssueOrganisationId)
+            if (effectiveOrgId.HasValue && await UserAccess.GetCurrentOrganisationIdAsync() != effectiveOrgId.Value)
             {
                 model = null;
                 message = "This alert concerns another organisation. Open that organisation's approved admin context before reviewing its approval flow.";
                 return;
             }
-            if (data.JobTypes.Any(x => x.Id == RequestedJobTypeId) && data.RequestTypes.Any(x => x.Id == RequestedRequestTypeId))
-            {
-                jobType = RequestedJobTypeId!.Value;
-                requestType = RequestedRequestTypeId!.Value;
+            if (effectiveJobTypeId.HasValue && data.JobTypes.Any(x => x.Id == effectiveJobTypeId.Value))
+                jobType = effectiveJobTypeId.Value;
+            if (effectiveRequestTypeId.HasValue && data.RequestTypes.Any(x => x.Id == effectiveRequestTypeId.Value))
+                requestType = effectiveRequestTypeId.Value;
+            if (jobType > 0 && requestType > 0)
                 await LoadFlowAsync();
-            }
         }
         catch (Exception ex) { Handle(ex); }
     }
@@ -142,8 +275,15 @@
     {
         if (model == null || busy) return;
         busy = true;
-        try { var result = await Configuration.SaveAsync(model); message = result.Message; }
-        catch (Exception ex) { Handle(ex); }
+        message = null;
+        try
+        {
+            var result = await Configuration.SaveAsync(model);
+            message = result.Message;
+            if (result.Success) Toast.Success("Approval flow saved. Review the save details for any transitions requiring configuration.");
+            else Toast.Error(result.Message);
+        }
+        catch (Exception ex) { Handle(ex); Toast.Error(message!); }
         finally { busy = false; }
     }
     private void ResizeStages()

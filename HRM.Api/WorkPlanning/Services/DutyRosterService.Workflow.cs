@@ -99,11 +99,12 @@ public sealed partial class DutyRosterService
     public async Task<List<DutyRequestRow>> GetRequestsAsync()
     {
         var actor = await access.RequireContextAsync(); var org = await WorkPlanningAccess.RequireOrganisationAsync(access);
+        var isHrOrAdmin = actor.IsSuperAdministrator || actor.IsHRStaff || actor.IsHRHead || actor.IsHRManager || actor.IsOrganisationAdmin || await access.HasPermissionAsync("Admin");
         await using var db = await factory.CreateDbContextAsync();
         var ids = await db.WfRequestApprovals.Where(x => x.ApproverUserId == actor.UserId)
             .Select(x => x.RequestStageInstance.WorkflowRequestInstance.RequestId).ToListAsync();
         var changes = await db.DutyChangeRequests.Include(x => x.Request).ThenInclude(x => x.RequestState)
-            .Where(x => x.OrganisationId == org && (x.SourceIndividualId == actor.IndividualId || x.TargetIndividualId == actor.IndividualId ||
+            .Where(x => x.OrganisationId == org && (isHrOrAdmin || x.SourceIndividualId == actor.IndividualId || x.TargetIndividualId == actor.IndividualId ||
                 x.CreatedByUserId == actor.UserId || ids.Contains(x.RequestId))).OrderByDescending(x => x.CreatedAtUtc).Take(100).ToListAsync();
         var result = new List<DutyRequestRow>();
         foreach (var c in changes)

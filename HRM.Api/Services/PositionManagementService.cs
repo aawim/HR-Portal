@@ -19,15 +19,23 @@ public sealed partial class PositionManagementService(IDbContextFactory<HrmTeCon
     {
         var actor=await ScopeAsync();await using var db=await factory.CreateDbContextAsync();var today=DateTime.UtcNow.AddHours(5).Date;
         var frameworks=await db.PositionFrameworks.OrderBy(x=>x.FrameworkId).Select(x=>new PositionFrameworkOption(x.FrameworkId,x.Code,x.Name,x.IsActive)).ToListAsync();
-        var matrices=await(from m in db.PositionMatrices join j in db.FrameworkJobMatrices on m.JobMatrixId equals j.JobMatrixId join t in db.FrameworkJobTitles on m.JobTitleId equals t.JobTitleId
+        var rawMatrices=await(from m in db.PositionMatrices join j in db.FrameworkJobMatrices on m.JobMatrixId equals j.JobMatrixId join t in db.FrameworkJobTitles on m.JobTitleId equals t.JobTitleId
             where m.OrganisationId==actor.Org&&m.IsActive&&m.EffectiveFrom<=today&&(!m.EffectiveTo.HasValue||m.EffectiveTo>=today)&&j.IsActive&&t.IsActive
-            orderby t.Name select new PositionMatrixOption(m.PositionMatrixId,t.Name+" · "+j.MatrixCode,j.BasicSalary,m.ApprovedSlots){FrameworkId=j.FrameworkId??0}).ToListAsync();
+            orderby t.Name select new{m.PositionMatrixId,Name=t.Name+" · "+j.MatrixCode,j.BasicSalary,m.ApprovedSlots,FrameworkId=j.FrameworkId??0,m.JobMatrixId,j.MatrixCode,JobTitle=t.Name,m.EffectiveFrom,m.EffectiveTo}).ToListAsync();
+        var matrixJobMap=rawMatrices.ToDictionary(x=>x.PositionMatrixId,x=>x.JobMatrixId);
         var rows=await db.Positions.Include(x=>x.PositionBasicSalaries).Where(x=>x.OrganisationId==actor.Org||x.IsGlobal||x.OrganisationId==null&&db.JobPositions.Any(a=>a.PositionId==x.PositionId&&a.Job.OrganisationID==actor.Org)).OrderBy(x=>x.Name).ToListAsync();var positions=new List<ManagedPosition>();
         foreach(var p in rows)
         {
             var count=await db.JobPositions.Where(x=>x.PositionId==p.PositionId&&x.Job.OrganisationID==actor.Org&&x.JobPositionStateId==4&&x.FromDate<=today&&(!x.ToDate.HasValue||x.ToDate>today)&&x.Job.JobStateId==4&&x.Job.JoinedDate<=today&&(!x.Job.TerminatedDate.HasValue||x.Job.TerminatedDate>today)).Select(x=>x.Job.IndividualID).Distinct().CountAsync();
-            positions.Add(new(p.PositionId,p.Name,p.DhivehiName,p.Descriptions,p.IsActive!=false,p.IsGlobal,p.PositionFrameworkId,p.PositionMatrixId,frameworks.FirstOrDefault(x=>x.Id==p.PositionFrameworkId)?.Name??"Unclassified existing position",count,actor.Manage&&(p.OrganisationId==actor.Org&&!p.IsGlobal||actor.Super&&p.IsGlobal)){TypeId=p.PositionTypeId,RankId=p.PositionRankId,ClassificationId=p.PositionClassificationId,Salaries=p.PositionBasicSalaries.Where(x=>x.IsValid).OrderByDescending(x=>x.EffectiveDate).Select(x=>new PositionSalaryRow((decimal)x.Amount,x.EffectiveDate)).ToList()});
+            int? jmId=p.PositionMatrixId.HasValue&&matrixJobMap.TryGetValue(p.PositionMatrixId.Value,out var resolvedJm)?resolvedJm:null;
+            positions.Add(new(p.PositionId,p.Name,p.DhivehiName,p.Descriptions,p.IsActive!=false,p.IsGlobal,p.PositionFrameworkId,p.PositionMatrixId,frameworks.FirstOrDefault(x=>x.Id==p.PositionFrameworkId)?.Name??"Unclassified existing position",count,count==0&&actor.Manage&&(p.OrganisationId==actor.Org&&!p.IsGlobal||actor.Super&&p.IsGlobal)){JobMatrixId=jmId,TypeId=p.PositionTypeId,RankId=p.PositionRankId,ClassificationId=p.PositionClassificationId,Salaries=p.PositionBasicSalaries.Where(x=>x.IsValid).OrderByDescending(x=>x.EffectiveDate).Select(x=>new PositionSalaryRow((decimal)x.Amount,x.EffectiveDate)).ToList()});
         }
+        var matrices=rawMatrices.Select(m=>{
+            var linked=positions.Where(p=>p.MatrixId==m.PositionMatrixId&&p.Active).ToList();
+            var usedSlots=linked.Count(p=>p.CurrentStaff>0);
+            var availableSlots=Math.Max(0,linked.Count-usedSlots);
+            return new PositionMatrixOption(m.PositionMatrixId,m.Name,m.BasicSalary,m.ApprovedSlots){FrameworkId=m.FrameworkId,JobMatrixId=m.JobMatrixId,JobMatrixCode=m.MatrixCode,JobTitle=m.JobTitle,UsedSlots=usedSlots,AvailableSlots=availableSlots,EffectiveFrom=m.EffectiveFrom,EffectiveTo=m.EffectiveTo};
+        }).ToList();
         return new(frameworks,matrices,positions,actor.Manage,actor.Super){
             Types=await db.PositionTypes.Where(x=>x.IsActive!=false).OrderBy(x=>x.Name).Select(x=>new PositionLookup(x.PositionTypeId,x.Name)).ToListAsync(),
             Ranks=await db.PositionRanks.Where(x=>x.IsActive!=false&&x.OrganisationBusinessEntityID==actor.Org).OrderBy(x=>x.Name).Select(x=>new PositionLookup(x.PositionRankId,x.Name)).ToListAsync(),
@@ -53,6 +61,12 @@ public sealed partial class PositionManagementService(IDbContextFactory<HrmTeCon
         else if(input.MatrixId.HasValue)return ServiceResult.Fail("CSC legacy and custom positions do not use a government matrix link.");
         var p=input.Id==0?new Position{OrganisationId=actor.Org}:await db.Positions.SingleOrDefaultAsync(x=>x.PositionId==input.Id)??throw new UnauthorizedAccessException();
         if(input.Id!=0&&!(p.OrganisationId==actor.Org&&!p.IsGlobal||actor.Super&&p.IsGlobal))throw new UnauthorizedAccessException("Position unavailable for editing in this organisation.");
+        if(input.Id!=0)
+        {
+            var todayDate=DateTime.UtcNow.AddHours(5).Date;
+            var isAssignedToStaff=await db.JobPositions.AnyAsync(x=>x.PositionId==p.PositionId&&x.JobPositionStateId==4&&x.FromDate<=todayDate&&(!x.ToDate.HasValue||x.ToDate>todayDate)&&x.Job.JobStateId==4&&x.Job.JoinedDate<=todayDate&&(!x.Job.TerminatedDate.HasValue||x.Job.TerminatedDate>todayDate));
+            if(isAssignedToStaff)return ServiceResult.Fail("This position is currently assigned to an active staff member and cannot be modified. Change or end the staff assignment through the approval flow first.");
+        }
         if(input.Id!=0&&p.PositionMatrixId.HasValue&&p.PositionMatrixId!=input.MatrixId)return ServiceResult.Fail("A staffing slot cannot be detached from its position matrix.");
         if(input.Id!=0&&(p.IsGlobal!=input.Global||p.PositionFrameworkId!=input.FrameworkId||p.PositionMatrixId!=input.MatrixId||p.PositionTypeId!=input.TypeId||p.PositionRankId!=input.RankId||p.PositionClassificationId!=input.ClassificationId)&&await db.JobPositions.AnyAsync(x=>x.PositionId==p.PositionId))return ServiceResult.Fail("This position has employment history. Create a new position to change its framework, classification, rank, type, matrix or global scope.");
         if(input.MatrixId.HasValue&&(input.Id==0||p.PositionMatrixId!=input.MatrixId))return ServiceResult.Fail("Create matrix positions through Create position matrix. Existing positions cannot be moved into another matrix.");

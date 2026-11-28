@@ -217,4 +217,32 @@ public sealed class EnterprisePayrollController(global::HRM.Application.Contract
         return Ok(await service.GetPayslipDetailAsync(payrollEmployeeId));
     }
 
+
+    [HttpGet("export-statutory-report")]
+    public async Task<ActionResult<global::System.String>> ExportStatutoryReport([FromQuery] global::System.Int32 runId, [FromQuery] global::System.String reportType)
+    {
+        return Ok(await service.ExportStatutoryReportAsync(runId, reportType));
+    }
+
+    [HttpPost("generate-ramadan-allowance")]
+    public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> GenerateRamadanAllowance([FromBody] EnterprisePayrollGenerateRamadanAllowanceRequest request)
+    {
+        return Ok(await service.GenerateRamadanAllowanceAsync(request.runId));
+    }
+
+    public sealed class EnterprisePayrollGenerateRamadanAllowanceRequest
+    {
+        public global::System.Int32 runId { get; set; }
+    }
+
+    [HttpPost("add-adjustment")]
+    public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> AddAdjustment([FromBody] EnterprisePayrollAddAdjustmentRequest request)
+    {
+        return Ok(await service.AddAdjustmentAsync(request.input));
+    }
+
+    public sealed class EnterprisePayrollAddAdjustmentRequest
+    {
+        public global::HRM.Application.Contracts.Pages.PayrollAdjustmentInput input { get; set; } = default!;
+    }
 }

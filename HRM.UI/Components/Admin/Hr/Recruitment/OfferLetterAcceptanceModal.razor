@@ -1,0 +1,676 @@
+@using System.Text.Json
+@using HRM.Application.Contracts.Recruitment
+@using HRM.UI.Services.Signatures
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.JSInterop
+@inject HRM.UI.Services.Recruitment.IRecruitmentApiClient RecruitmentApi
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+@if (IsOpen)
+{
+    <style>
+        @@font-face {
+            font-family: 'DhivehiFont';
+            src: url('/fonts/Faruma.ttf') format('truetype');
+            font-weight: normal;
+            font-style: normal;
+            font-display: swap;
+        }
+        .ola-rtl,
+        .ola-rtl input,
+        .ola-rtl textarea,
+        .ola-rtl select,
+        .ola-rtl label,
+        .ola-rtl p,
+        .ola-rtl h3,
+        .ola-rtl h4,
+        .ola-rtl span {
+            font-family: 'DhivehiFont', 'Faruma', 'Noto Sans Thaana', sans-serif;
+            text-align: right;
+        }
+        .ola-scroll-body {
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+    </style>
+    <div style="position:fixed; inset:0; z-index:80; background:rgba(15,23,42,0.68); display:flex; align-items:center; justify-content:center; padding:1rem;" @onclick="CloseAsync">
+        <div style="width:100%; max-width:50rem; height:90vh; max-height:90vh; background:#ffffff; border-radius:1rem; box-shadow:0 25px 50px -12px rgba(15,23,42,0.45); display:flex; flex-direction:column; overflow:hidden;" @onclick:stopPropagation="true">
+            <!-- Header -->
+            <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-slate-50 px-5 py-3.5 shrink-0">
+                <div class="min-w-0 @(isDv ? "ola-rtl" : "")" dir="@(isDv ? "rtl" : "ltr")">
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <h3 class="text-sm font-bold text-slate-900">@(isDv ? "ވަޒީފާ ހުށަހަޅާ ލިޔުމާއި އެއްބަސްވުން ފޯމު" : "Job Offer Letter & Appointee Agreement Form")</h3>
+                        <span class="rounded-full px-2.5 py-0.5 text-[10px] font-semibold @StatusBadge(Status)">@(Status == "OnboardingSubmitted" ? "Onboarding In Progress" : Status)</span>
+                    </div>
+                    <p class="text-[11px] text-slate-500 mt-0.5">
+                        @(string.IsNullOrWhiteSpace(OrganisationName) ? "" : $"{OrganisationName} · ")
+                        <span class="font-mono" dir="ltr">@VacancyReference</span>
+                        @if (OfferedAtUtc.HasValue)
+                        {
+                            <span> · @(isDv ? "ހުށަހެޅުނު ތާރީޚު:" : "Offered") @OfferedAtUtc.Value.AddHours(5).ToString("dd MMM yyyy")</span>
+                        }
+                    </p>
+                </div>
+                <div class="flex flex-wrap items-center gap-1.5">
+                    <div class="inline-flex rounded-lg border border-slate-300 bg-white p-0.5 text-[11px]">
+                        <button type="button"
+                                class="rounded-md px-2 py-0.5 font-semibold @(!isDv ? "bg-blue-600 text-white" : "text-slate-600 hover:text-slate-900")"
+                                @onclick="() => isDv = false">
+                            EN
+                        </button>
+                        <button type="button"
+                                style="font-family:'DhivehiFont','Faruma',sans-serif;"
+                                class="rounded-md px-2 py-0.5 font-semibold @(isDv ? "bg-teal-700 text-white" : "text-slate-600 hover:text-slate-900")"
+                                @onclick="() => isDv = true">
+                            ދިވެހި
+                        </button>
+                    </div>
+                    <a href="@($"/careers/offer-letter/{OfferId}?lang=en")" target="_blank" rel="noopener" class="rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-800 hover:bg-blue-100">
+                        <i class="bi bi-printer mr-1" aria-hidden="true"></i>PDF (EN)
+                    </a>
+                    <a href="@($"/careers/offer-letter/{OfferId}?lang=dv")" target="_blank" rel="noopener" style="font-family:'DhivehiFont','Faruma',sans-serif;" class="rounded-lg border border-teal-200 bg-teal-50 px-2.5 py-1 text-[11px] font-semibold text-teal-800 hover:bg-teal-100">
+                        <i class="bi bi-printer mr-1" aria-hidden="true"></i>ފޯމު (ދިވެހި)
+                    </a>
+                    <button type="button" class="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100" @onclick="CloseAsync">@(isDv ? "ބަންދުކުރޭ" : "Close")</button>
+                </div>
+            </div>
+
+            <!-- Scrollable Body -->
+            <div class="ola-scroll-body p-5 space-y-4 text-xs @(isDv ? "ola-rtl" : "")" dir="@(isDv ? "rtl" : "ltr")">
+                @if (!string.IsNullOrWhiteSpace(hrDecisionComment))
+                {
+                    <div class="rounded-xl border @(hrDecisionType == "RejectOffer" ? "border-rose-300 bg-rose-50 text-rose-950" : "border-amber-300 bg-amber-50 text-amber-950") p-3.5 space-y-1">
+                        <div class="font-bold">
+                            <i class="bi bi-info-circle-fill mr-1" aria-hidden="true"></i>
+                            @(hrDecisionType == "RejectOffer" ? "HR Decision: Offer Withdrawn" : "Returned by HR for Correction")
+                        </div>
+                        <p class="whitespace-pre-wrap">@hrDecisionComment</p>
+                    </div>
+                }
+
+                <!-- Formal Offer Summary -->
+                <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-4 space-y-3">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                        <div>
+                            <span class="block text-[10px] font-bold uppercase tracking-wider text-slate-500">Position Offered</span>
+                            <strong class="text-sm text-slate-900">@(parsedPosition ?? PositionName ?? VacancyReference)</strong>
+                        </div>
+                        @if (!string.IsNullOrWhiteSpace(ApplicantName))
+                        {
+                            <div>
+                                <span class="block text-[10px] font-bold uppercase tracking-wider text-slate-500">Appointee</span>
+                                <strong class="text-sm text-slate-900">@ApplicantName</strong>
+                            </div>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(parsedSalary))
+                        {
+                            <div>
+                                <span class="block text-[10px] font-bold uppercase tracking-wider text-slate-500">Basic Salary</span>
+                                <span class="font-semibold text-slate-800">@parsedSalary</span>
+                            </div>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(parsedEmploymentType))
+                        {
+                            <div>
+                                <span class="block text-[10px] font-bold uppercase tracking-wider text-slate-500">Employment Type</span>
+                                <span class="font-semibold text-slate-800">@parsedEmploymentType</span>
+                            </div>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(parsedProbation))
+                        {
+                            <div>
+                                <span class="block text-[10px] font-bold uppercase tracking-wider text-slate-500">Probation Period</span>
+                                <span class="font-semibold text-slate-800">@parsedProbation</span>
+                            </div>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(parsedProposedStart))
+                        {
+                            <div>
+                                <span class="block text-[10px] font-bold uppercase tracking-wider text-slate-500">Proposed Start Date</span>
+                                <span class="font-semibold text-slate-800">@parsedProposedStart</span>
+                            </div>
+                        }
+                    </div>
+
+                    <div class="border-t border-slate-200 pt-2.5">
+                        <span class="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">Offer Terms &amp; Conditions</span>
+                        <p class="whitespace-pre-wrap text-slate-700 leading-relaxed">@(string.IsNullOrWhiteSpace(parsedTerms) ? "Contact HR for detailed offer terms." : parsedTerms)</p>
+                    </div>
+                </div>
+
+                @if (IsInteractiveForm)
+                {
+                    <!-- Interactive Appointee Agreement & Acceptance Form -->
+                    <div class="rounded-xl border border-blue-200 bg-blue-50/30 p-4 space-y-3">
+                        <h4 class="text-xs font-bold uppercase tracking-wide text-slate-900">@(isDv ? "1. ވަޒީފާއަށް އެއްބަސްވުމުގެ އިޤްރާރު (ކޮންމެހެން ފުރިހަމަކުރަންޖެހޭ)" : "1. Appointee Agreements (Required)")</h4>
+                        <div class="space-y-2">
+                            <label class="flex items-start gap-2 text-slate-800 cursor-pointer">
+                                <input type="checkbox" class="mt-0.5 shrink-0" @bind="agreedTerms" />
+                                <span>@(isDv ? "މި ވަޒީފާ ހުށަހަޅާ ލިޔުމުގައި ބަޔާންކޮށްފައިވާ ވަޒީފާގެ ޝަރުޠުތަކާއި، މުސާރައާއި ޢިނާޔަތްތަކާއި، އަޖުމަބެލުމުގެ މުއްދަތު ކިޔައި، ދެނެގަނެ، ޤަބޫލުކުރަމެވެ." : "I have read, understood, and accept the terms of appointment, remuneration, and probation conditions stated in this Job Offer Letter.")</span>
+                            </label>
+                            <label class="flex items-start gap-2 text-slate-800 cursor-pointer">
+                                <input type="checkbox" class="mt-0.5 shrink-0" @bind="agreedConduct" />
+                                <span>@(isDv ? "ވަޒީފާގައި ޚިދުމަތްކުރާ މުއްދަތުގައި ސިވިލް ސަރވިސް / އިދާރާގެ ސުލޫކީ މިންގަނޑާއި، ސިއްރު ހިފެހެއްޓުމުގެ އުޞޫލުތަކާއި، ޤަވާޢިދުތަކަށް ޙުރުމަތްތެރިކޮށް ހިތުމަށް އެއްބަސްވަމެވެ." : "I agree to abide by the Civil Service / Organisation Code of Conduct, confidentiality obligations, and workplace policies upon appointment.")</span>
+                            </label>
+                            <label class="flex items-start gap-2 text-slate-800 cursor-pointer">
+                                <input type="checkbox" class="mt-0.5 shrink-0" @bind="confirmedAccuracy" />
+                                <span>@(isDv ? "ވަޒީފާއަށް އެދި ހުށަހެޅި ހުރިހާ މަޢުލޫމާތަކާއި ސެޓްފިކެޓްތަކަކީ ޞައްޙަ ތަކެތިކަން ކަށަވަރުކޮށްދެމެވެ. އަދި މި ފޯމު ހުށަހެޅުމުން HR ގެ އޮންބޯޑިންގ މަރުޙަލާ ފެށޭނެކަން ދެނެގަންނަމެވެ." : "I confirm that all qualifications, certificates, and information submitted in my application are true and accurate, and I understand that submitting this form initiates HR's onboarding verification process.")</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
+                        <h4 class="text-xs font-bold uppercase tracking-wide text-slate-900">2. Candidate Employment &amp; Joining Details (Section 2)</h4>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <label class="block font-medium text-slate-700">
+                                Confirmed Joining / Reporting Date <span class="text-rose-600">*</span>
+                                <input type="date" class="@InputClass" @bind="confirmedJoiningDate" />
+                            </label>
+                            <div class="flex flex-col justify-center gap-1.5">
+                                <span class="font-medium text-slate-700">Are you currently employed?</span>
+                                <div class="flex items-center gap-4">
+                                    <label class="inline-flex items-center gap-1.5 cursor-pointer">
+                                        <input type="radio" name="currEmp" checked="@isCurrentlyEmployed" @onchange="() => isCurrentlyEmployed = true" />
+                                        <span>Yes / އާން</span>
+                                    </label>
+                                    <label class="inline-flex items-center gap-1.5 cursor-pointer">
+                                        <input type="radio" name="currEmp" checked="@(!isCurrentlyEmployed)" @onchange="() => { isCurrentlyEmployed = false; currentEmployer = string.Empty; requiresNotice = false; noticePeriod = string.Empty; }" />
+                                        <span>No / ނޫން</span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            @if (isCurrentlyEmployed)
+                            {
+                                <label class="block font-medium text-slate-700">
+                                    Current Workplace / Employer <span class="text-rose-600">*</span>
+                                    <input class="@InputClass" maxlength="200" @bind="currentEmployer" @bind:event="oninput" placeholder="Agency or company name" />
+                                </label>
+                                <div class="flex flex-col justify-center gap-1.5">
+                                    <span class="font-medium text-slate-700">Written notice required?</span>
+                                    <div class="flex items-center gap-4">
+                                        <label class="inline-flex items-center gap-1.5 cursor-pointer">
+                                            <input type="radio" name="reqNotice" checked="@requiresNotice" @onchange="() => requiresNotice = true" />
+                                            <span>Yes / އާން</span>
+                                        </label>
+                                        <label class="inline-flex items-center gap-1.5 cursor-pointer">
+                                            <input type="radio" name="reqNotice" checked="@(!requiresNotice)" @onchange="() => { requiresNotice = false; noticePeriod = string.Empty; }" />
+                                            <span>No / ނޫން</span>
+                                        </label>
+                                    </div>
+                                </div>
+                                @if (requiresNotice)
+                                {
+                                    <label class="block font-medium text-slate-700 sm:col-span-2">
+                                        Required Notice Period (max 30 days)
+                                        <input class="@InputClass" maxlength="100" @bind="noticePeriod" @bind:event="oninput" placeholder="e.g. 30 days" />
+                                    </label>
+                                }
+                            }
+
+                            <label class="block font-medium text-slate-700">
+                                Emergency Contact Name (Optional)
+                                <input class="@InputClass" maxlength="150" @bind="emergencyName" @bind:event="oninput" placeholder="Full name of next of kin" />
+                            </label>
+                            <label class="block font-medium text-slate-700">
+                                Emergency Contact Phone (Optional)
+                                <input type="tel" class="@InputClass" maxlength="40" @bind="emergencyPhone" @bind:event="oninput" placeholder="7xxxxxx / 9xxxxxx" />
+                            </label>
+                            <label class="block font-medium text-slate-700 sm:col-span-2">
+                                Additional Notes to HR (Optional)
+                                <input class="@InputClass" maxlength="500" @bind="notes" @bind:event="oninput" placeholder="Any remarks or notice period details..." />
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
+                        <div class="flex flex-wrap items-center justify-between gap-2">
+                            <h4 class="text-xs font-bold uppercase tracking-wide text-slate-900">3. Appointee Signature <span class="text-rose-600">*</span></h4>
+                            <div class="inline-flex rounded-lg border border-slate-200 bg-slate-100 p-0.5 text-[11px]">
+                                <button type="button"
+                                        class="rounded-md px-2.5 py-1 font-semibold @(sigMode == "draw" ? "bg-white text-[#075985] shadow-xs" : "text-slate-600")"
+                                        @onclick='() => SwitchSigMode("draw")'>
+                                    Draw Signature
+                                </button>
+                                <button type="button"
+                                        class="rounded-md px-2.5 py-1 font-semibold @(sigMode == "upload" ? "bg-white text-[#075985] shadow-xs" : "text-slate-600")"
+                                        @onclick='() => SwitchSigMode("upload")'>
+                                    Upload PNG
+                                </button>
+                            </div>
+                        </div>
+
+                        @if (sigMode == "draw")
+                        {
+                            <div class="rounded-xl border-2 border-dashed border-slate-300 bg-slate-50/40 overflow-hidden">
+                                <canvas id="@canvasId" class="w-full h-36 block cursor-crosshair touch-none bg-white"></canvas>
+                            </div>
+                            <div class="flex items-center justify-between text-[11px] text-slate-500">
+                                <span>Sign inside the box above using mouse, trackpad, or touch.</span>
+                                <button type="button" class="font-semibold text-slate-700 hover:underline" @onclick="ClearPadAsync">Clear Pad</button>
+                            </div>
+                        }
+                        else
+                        {
+                            <InputFile OnChange="OnUploadSigSelected" accept=".png,.webp,.jpg,.jpeg" class="block w-full text-xs text-slate-600" />
+                            @if (!string.IsNullOrWhiteSpace(uploadedSigUrl))
+                            {
+                                <div class="rounded-lg border border-slate-200 bg-slate-50 p-2 flex justify-center">
+                                    <img src="@uploadedSigUrl" alt="Uploaded signature" class="max-h-16 object-contain" />
+                                </div>
+                            }
+                        }
+                    </div>
+                }
+                else
+                {
+                    <!-- Read-Only Signed Offer Acceptance Form View (for both Appointee & HR) -->
+                    <div class="rounded-xl border border-emerald-200 bg-emerald-50/40 p-4 space-y-3">
+                        <div class="flex flex-wrap items-center justify-between gap-2">
+                            <h4 class="text-xs font-bold uppercase tracking-wide text-emerald-950">
+                                <i class="bi bi-patch-check-fill text-emerald-600 mr-1" aria-hidden="true"></i>
+                                Signed Appointee Acceptance Form
+                            </h4>
+                            @if (AcceptedAtUtc.HasValue)
+                            {
+                                <span class="text-[11px] font-semibold text-emerald-800">Submitted @AcceptedAtUtc.Value.AddHours(5).ToString("dd MMM yyyy HH:mm") MVT</span>
+                            }
+                        </div>
+
+                        @if (hasAcceptanceForm)
+                        {
+                            <div class="space-y-1 text-[11px] text-emerald-900">
+                                <div><i class="bi bi-check2-square mr-1" aria-hidden="true"></i>Agreed to terms of appointment, remuneration, and probation conditions.</div>
+                                <div><i class="bi bi-check2-square mr-1" aria-hidden="true"></i>Agreed to Civil Service / Organisation Code of Conduct &amp; confidentiality.</div>
+                                <div><i class="bi bi-check2-square mr-1" aria-hidden="true"></i>Confirmed accuracy of submitted application details &amp; certificates.</div>
+                            </div>
+
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-2 border-t border-emerald-200">
+                                <div>
+                                    <span class="block text-[10px] font-bold uppercase tracking-wider text-slate-500">Confirmed Joining Date</span>
+                                    <strong class="text-slate-900">@(submittedJoiningDate ?? "—")</strong>
+                                </div>
+                                <div>
+                                    <span class="block text-[10px] font-bold uppercase tracking-wider text-slate-500">Currently Employed</span>
+                                    <strong class="text-slate-900">@(submittedCurrentlyEmployed == true ? "Yes" : submittedCurrentlyEmployed == false ? "No" : "—")</strong>
+                                    @if (submittedCurrentlyEmployed == true && !string.IsNullOrWhiteSpace(submittedCurrentEmployer))
+                                    {
+                                        <span class="text-slate-600"> · @submittedCurrentEmployer</span>
+                                    }
+                                </div>
+                                @if (submittedCurrentlyEmployed == true)
+                                {
+                                    <div>
+                                        <span class="block text-[10px] font-bold uppercase tracking-wider text-slate-500">Written Notice Required</span>
+                                        <strong class="text-slate-900">@(submittedRequiresNotice == true ? $"Yes ({submittedNoticePeriod ?? "Not specified"})" : "No")</strong>
+                                    </div>
+                                }
+                                @if (!string.IsNullOrWhiteSpace(submittedEmergencyName) || !string.IsNullOrWhiteSpace(submittedEmergencyPhone))
+                                {
+                                    <div>
+                                        <span class="block text-[10px] font-bold uppercase tracking-wider text-slate-500">Emergency Contact</span>
+                                        <strong class="text-slate-900">@(submittedEmergencyName ?? "—")</strong>
+                                        @if (!string.IsNullOrWhiteSpace(submittedEmergencyPhone))
+                                        {
+                                            <span class="text-slate-600"> · @submittedEmergencyPhone</span>
+                                        }
+                                    </div>
+                                }
+                                @if (!string.IsNullOrWhiteSpace(submittedNotes))
+                                {
+                                    <div class="sm:col-span-2">
+                                        <span class="block text-[10px] font-bold uppercase tracking-wider text-slate-500">Appointee Notes</span>
+                                        <span class="text-slate-800">@submittedNotes</span>
+                                    </div>
+                                }
+                            </div>
+                        }
+
+                        @if (!string.IsNullOrWhiteSpace(AppointeeSignatureDataUrl) || !string.IsNullOrWhiteSpace(EffectiveVerificationCode))
+                        {
+                            var verCode = EffectiveVerificationCode;
+                            var verifyUrl = string.IsNullOrWhiteSpace(verCode) ? null : $"{Navigation.BaseUri.TrimEnd('/')}/verify/{verCode}";
+                            var qrUri = string.IsNullOrWhiteSpace(verifyUrl) ? null : QrCodeSvgHelper.GenerateSvgDataUri(verifyUrl, 3);
+
+                            <div class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white p-3">
+                                <div class="space-y-1">
+                                    <span class="block text-[10px] font-bold uppercase tracking-wider text-slate-500">Appointee Signature</span>
+                                    @if (!string.IsNullOrWhiteSpace(AppointeeSignatureDataUrl))
+                                    {
+                                        <img src="@AppointeeSignatureDataUrl" alt="Appointee Signature" class="max-h-14 object-contain" />
+                                    }
+                                    @if (!string.IsNullOrWhiteSpace(verCode))
+                                    {
+                                        <a href="@($"/verify/{verCode}")" target="_blank" rel="noopener" class="inline-block font-mono text-[11px] font-bold text-[#075985] hover:underline">
+                                            Verification Code: @verCode
+                                        </a>
+                                    }
+                                </div>
+                                @if (!string.IsNullOrWhiteSpace(qrUri))
+                                {
+                                    <a href="@($"/verify/{verCode}")" target="_blank" rel="noopener" class="shrink-0">
+                                        <img src="@qrUri" alt="Verification QR" class="w-14 h-14 block" />
+                                    </a>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+
+                @if (!string.IsNullOrWhiteSpace(error))
+                {
+                    <div role="alert" class="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800">@error</div>
+                }
+            </div>
+
+            <!-- Footer -->
+            @if (IsInteractiveForm)
+            {
+                <div class="flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 bg-slate-50 px-5 py-3 shrink-0">
+                    <span class="text-[11px] text-slate-500">Submitting notifies HR to proceed with your onboarding process.</span>
+                    <div class="flex items-center gap-2">
+                        <button type="button" class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100" disabled="@busy" @onclick="CloseAsync">Cancel</button>
+                        <button type="button"
+                                style="background-color:#075985; color:#ffffff;"
+                                class="inline-flex items-center gap-1.5 rounded-lg px-4 py-1.5 text-xs font-semibold shadow-xs hover:opacity-90 disabled:opacity-50"
+                                disabled="@(busy || !agreedTerms || !agreedConduct || !confirmedAccuracy || (isCurrentlyEmployed && string.IsNullOrWhiteSpace(currentEmployer)))"
+                                @onclick="SubmitAcceptanceAsync">
+                            <i class="bi bi-pen" aria-hidden="true"></i>
+                            <span>@(busy ? "Submitting..." : "Sign & Submit Offer Form")</span>
+                        </button>
+                    </div>
+                </div>
+            }
+            else if (ShowHrDecisionActions)
+            {
+                <div class="border-t border-slate-200 bg-slate-50 px-5 py-3.5 shrink-0 space-y-2.5 text-xs">
+                    @if (!string.IsNullOrWhiteSpace(pendingHrAction))
+                    {
+                        <div class="space-y-2">
+                            <label class="block font-semibold text-slate-800">
+                                @(pendingHrAction == "ReturnForCorrection" ? "HR Comment (What needs correction on the Offer Form?) *" : "HR Reason for Rejecting / Withdrawing Offer *")
+                                <textarea rows="2" maxlength="1000" class="@InputClass" @bind="hrActionComment" @bind:event="oninput" placeholder="Provide clear reason for audit trail and applicant notification..."></textarea>
+                            </label>
+                            <div class="flex justify-end gap-2">
+                                <button type="button" class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 font-semibold text-slate-700 hover:bg-slate-100" disabled="@busy" @onclick="() => { pendingHrAction = null; hrActionComment = string.Empty; }">Cancel</button>
+                                <button type="button"
+                                        class="rounded-lg @(pendingHrAction == "RejectOffer" ? "bg-rose-600 hover:bg-rose-700" : "bg-amber-600 hover:bg-amber-700") px-3.5 py-1.5 font-semibold text-white disabled:opacity-50"
+                                        disabled="@(busy || string.IsNullOrWhiteSpace(hrActionComment))"
+                                        @onclick="SubmitHrDecisionAsync">
+                                    @(pendingHrAction == "ReturnForCorrection" ? "Confirm Return to Appointee" : "Confirm Reject & Free Slot")
+                                </button>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="flex flex-wrap items-center justify-between gap-2">
+                            <span class="text-[11px] font-semibold text-slate-600">HR Decision on Submitted Agreement:</span>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <button type="button"
+                                        class="inline-flex items-center gap-1 rounded-lg border border-rose-300 bg-rose-50 px-3 py-1.5 font-semibold text-rose-700 hover:bg-rose-100"
+                                        disabled="@busy"
+                                        @onclick='() => { pendingHrAction = "RejectOffer"; hrActionComment = string.Empty; }'>
+                                    <i class="bi bi-x-circle" aria-hidden="true"></i>
+                                    <span>Reject Offer</span>
+                                </button>
+                                <button type="button"
+                                        class="inline-flex items-center gap-1 rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 font-semibold text-amber-900 hover:bg-amber-100"
+                                        disabled="@busy"
+                                        @onclick='() => { pendingHrAction = "ReturnForCorrection"; hrActionComment = string.Empty; }'>
+                                    <i class="bi bi-arrow-return-left" aria-hidden="true"></i>
+                                    <span>Return for Correction</span>
+                                </button>
+                                <button type="button"
+                                        class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 px-3.5 py-1.5 font-semibold text-white shadow-xs"
+                                        disabled="@busy"
+                                        @onclick="() => OnApproveForOnboarding.InvokeAsync()">
+                                    <i class="bi bi-check2-circle" aria-hidden="true"></i>
+                                    <span>Approve &amp; Proceed to Onboarding</span>
+                                </button>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public int OfferId { get; set; }
+    [Parameter] public string VacancyReference { get; set; } = "";
+    [Parameter] public string Status { get; set; } = "";
+    [Parameter] public string TermsSnapshotJson { get; set; } = "{}";
+    [Parameter] public string? PositionName { get; set; }
+    [Parameter] public string? OrganisationName { get; set; }
+    [Parameter] public string? ApplicantName { get; set; }
+    [Parameter] public DateTime? OfferedAtUtc { get; set; }
+    [Parameter] public DateTime? AcceptedAtUtc { get; set; }
+    [Parameter] public string? AppointeeSignatureDataUrl { get; set; }
+    [Parameter] public string? SignatureVerificationCode { get; set; }
+    [Parameter] public bool ReadOnly { get; set; }
+    [Parameter] public bool ShowHrDecisionActions { get; set; }
+    [Parameter] public EventCallback OnApproveForOnboarding { get; set; }
+    [Parameter] public EventCallback<string> OnHrDecisionSubmitted { get; set; }
+    [Parameter] public EventCallback OnSubmitted { get; set; }
+    [Parameter] public EventCallback OnClosed { get; set; }
+
+    private const string InputClass = "mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-800 focus:border-[#075985] focus:outline-none";
+    private readonly string canvasId = $"offer-sig-{Guid.NewGuid():N}";
+    private bool isDv = true;
+
+    private bool IsInteractiveForm => !ReadOnly && Status == "Offered";
+    private bool wasOpen, canvasNeedsInit, busy;
+    private string sigMode = "draw";
+    private string? uploadedSigUrl, error, pendingHrAction, hrDecisionType, hrDecisionComment;
+    private string hrActionComment = "";
+
+    // Parsed offer fields
+    private string? parsedPosition, parsedSalary, parsedEmploymentType, parsedProbation, parsedProposedStart, parsedTerms;
+    private bool hasAcceptanceForm;
+    private bool? submittedCurrentlyEmployed, submittedRequiresNotice;
+    private string? submittedJoiningDate, submittedCurrentEmployer, submittedNoticePeriod, submittedEmergencyName, submittedEmergencyPhone, submittedNotes, submittedCode;
+
+    // Interactive form fields
+    private bool agreedTerms, agreedConduct, confirmedAccuracy, isCurrentlyEmployed, requiresNotice;
+    private DateTime confirmedJoiningDate = DateTime.UtcNow.AddHours(5).Date.AddDays(14);
+    private string emergencyName = "", emergencyPhone = "", bankName = "", bankAccount = "", notes = "", currentEmployer = "", noticePeriod = "";
+
+    private string? EffectiveVerificationCode => !string.IsNullOrWhiteSpace(SignatureVerificationCode) ? SignatureVerificationCode : submittedCode;
+
+    protected override void OnParametersSet()
+    {
+        if (IsOpen && !wasOpen)
+        {
+            error = null;
+            agreedTerms = agreedConduct = confirmedAccuracy = false;
+            emergencyName = emergencyPhone = bankName = bankAccount = notes = "";
+            uploadedSigUrl = null;
+            sigMode = "draw";
+            ParseSnapshot();
+            if (IsInteractiveForm) canvasNeedsInit = true;
+        }
+        wasOpen = IsOpen;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (IsOpen && IsInteractiveForm && canvasNeedsInit && sigMode == "draw")
+        {
+            canvasNeedsInit = false;
+            try { await JS.InvokeVoidAsync("hrmSignaturePad.init", canvasId); } catch { }
+        }
+    }
+
+    private void ParseSnapshot()
+    {
+        parsedPosition = parsedSalary = parsedEmploymentType = parsedProbation = parsedProposedStart = parsedTerms = null;
+        hasAcceptanceForm = false;
+        submittedCurrentlyEmployed = submittedRequiresNotice = null;
+        submittedJoiningDate = submittedCurrentEmployer = submittedNoticePeriod = submittedEmergencyName = submittedEmergencyPhone = submittedNotes = submittedCode = null;
+        hrDecisionType = hrDecisionComment = null;
+        pendingHrAction = null;
+        hrActionComment = "";
+
+        if (string.IsNullOrWhiteSpace(TermsSnapshotJson)) return;
+        try
+        {
+            using var doc = JsonDocument.Parse(TermsSnapshotJson);
+            var root = doc.RootElement;
+            if (root.ValueKind != JsonValueKind.Object) return;
+            if (root.TryGetProperty("Position", out var pos)) parsedPosition = pos.GetString();
+            if (root.TryGetProperty("BasicSalary", out var sal) && sal.TryGetDecimal(out var salVal)) parsedSalary = $"MVR {salVal:N2}";
+            if (root.TryGetProperty("EmploymentType", out var et)) parsedEmploymentType = et.GetString();
+            if (root.TryGetProperty("ProbationPeriod", out var prob)) parsedProbation = prob.GetString();
+            if (root.TryGetProperty("ProposedStartDate", out var sd))
+            {
+                parsedProposedStart = sd.GetString();
+                if (DateTime.TryParse(parsedProposedStart, out var parsedDt))
+                    confirmedJoiningDate = parsedDt;
+            }
+            if (root.TryGetProperty("Terms", out var t)) parsedTerms = t.GetString();
+
+            if (root.TryGetProperty("AcceptanceForm", out var af) && af.ValueKind == JsonValueKind.Object)
+            {
+                hasAcceptanceForm = true;
+                if (af.TryGetProperty("ConfirmedJoiningDate", out var cj)) submittedJoiningDate = cj.GetString();
+                if (af.TryGetProperty("IsCurrentlyEmployed", out var ce) && ce.ValueKind is JsonValueKind.True or JsonValueKind.False) submittedCurrentlyEmployed = ce.GetBoolean();
+                if (af.TryGetProperty("CurrentEmployer", out var emp)) submittedCurrentEmployer = emp.GetString();
+                if (af.TryGetProperty("RequiresWrittenNotice", out var rn) && rn.ValueKind is JsonValueKind.True or JsonValueKind.False) submittedRequiresNotice = rn.GetBoolean();
+                if (af.TryGetProperty("NoticePeriod", out var np)) submittedNoticePeriod = np.GetString();
+                if (af.TryGetProperty("EmergencyContactName", out var en)) submittedEmergencyName = en.GetString();
+                if (af.TryGetProperty("EmergencyContactPhone", out var ep)) submittedEmergencyPhone = ep.GetString();
+                if (af.TryGetProperty("AppointeeNotes", out var an)) submittedNotes = an.GetString();
+                if (af.TryGetProperty("VerificationCode", out var vc)) submittedCode = vc.GetString();
+            }
+
+            if (root.TryGetProperty("HrDecision", out var hd) && hd.ValueKind == JsonValueKind.Object)
+            {
+                if (hd.TryGetProperty("Decision", out var dProp)) hrDecisionType = dProp.GetString();
+                if (hd.TryGetProperty("Comment", out var cProp)) hrDecisionComment = cProp.GetString();
+            }
+        }
+        catch { parsedTerms = TermsSnapshotJson; }
+    }
+
+    private void SwitchSigMode(string next)
+    {
+        sigMode = next;
+        if (next == "draw") canvasNeedsInit = true;
+    }
+
+    private async Task ClearPadAsync()
+    {
+        try { await JS.InvokeVoidAsync("hrmSignaturePad.clear", canvasId); } catch { }
+    }
+
+    private async Task OnUploadSigSelected(InputFileChangeEventArgs e)
+    {
+        error = null;
+        try
+        {
+            using var stream = e.File.OpenReadStream(300 * 1024);
+            using var ms = new MemoryStream();
+            await stream.CopyToAsync(ms);
+            var ct = string.IsNullOrWhiteSpace(e.File.ContentType) ? "image/png" : e.File.ContentType;
+            uploadedSigUrl = $"data:{ct};base64,{Convert.ToBase64String(ms.ToArray())}";
+        }
+        catch (IOException)
+        {
+            error = "Signature image must be 300 KB or smaller.";
+            uploadedSigUrl = null;
+        }
+    }
+
+    private async Task SubmitAcceptanceAsync()
+    {
+        if (busy) return;
+        error = null;
+        string? sigUrl = sigMode == "draw"
+            ? await JS.InvokeAsync<string>("hrmSignaturePad.toDataUrl", canvasId)
+            : uploadedSigUrl;
+
+        if (string.IsNullOrWhiteSpace(sigUrl))
+        {
+            error = "Please draw or upload your signature before submitting the Job Offer Acceptance Form.";
+            return;
+        }
+
+        busy = true;
+        try
+        {
+            var res = await RecruitmentApi.AcceptMyOfferAsync(OfferId, new AcceptRecruitmentOfferInput(
+                agreedTerms,
+                agreedConduct,
+                confirmedAccuracy,
+                confirmedJoiningDate,
+                string.IsNullOrWhiteSpace(emergencyName) ? null : emergencyName.Trim(),
+                string.IsNullOrWhiteSpace(emergencyPhone) ? null : emergencyPhone.Trim(),
+                string.IsNullOrWhiteSpace(bankName) ? null : bankName.Trim(),
+                string.IsNullOrWhiteSpace(bankAccount) ? null : bankAccount.Trim(),
+                string.IsNullOrWhiteSpace(notes) ? null : notes.Trim(),
+                sigUrl,
+                isCurrentlyEmployed,
+                string.IsNullOrWhiteSpace(currentEmployer) ? null : currentEmployer.Trim(),
+                requiresNotice,
+                string.IsNullOrWhiteSpace(noticePeriod) ? null : noticePeriod.Trim()));
+
+            if (!res.Success)
+            {
+                error = res.Message;
+                return;
+            }
+            await OnSubmitted.InvokeAsync();
+        }
+        catch
+        {
+            error = "Could not submit Job Offer Acceptance Form. Please check your session and try again.";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task SubmitHrDecisionAsync()
+    {
+        if (busy || string.IsNullOrWhiteSpace(pendingHrAction) || string.IsNullOrWhiteSpace(hrActionComment)) return;
+        busy = true;
+        error = null;
+        try
+        {
+            var res = await RecruitmentApi.RecordHrOfferDecisionAsync(OfferId, new HrOfferDecisionInput(pendingHrAction, hrActionComment.Trim()));
+            if (!res.Success)
+            {
+                error = res.Message;
+                return;
+            }
+            pendingHrAction = null;
+            hrActionComment = "";
+            await OnHrDecisionSubmitted.InvokeAsync(res.Message);
+        }
+        catch
+        {
+            error = "Could not record HR decision. Please try again.";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private Task CloseAsync() => OnClosed.InvokeAsync();
+
+    private static string StatusBadge(string status) => status switch
+    {
+        "Accepted" => "bg-emerald-100 text-emerald-800",
+        "OnboardingSubmitted" => "bg-blue-100 text-blue-800",
+        "Declined" => "bg-rose-100 text-rose-800",
+        _ => "bg-amber-100 text-amber-800"
+    };
+}

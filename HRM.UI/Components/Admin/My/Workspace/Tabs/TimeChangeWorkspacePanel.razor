@@ -32,16 +32,12 @@
                     @onclick="ToggleFullWidth">
                 @if (isFullWidth)
                 {
-                    <svg class="h-4 w-4 text-slate-600 dark:text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 9L4 4m0 0l5 0m-5 0l0 5m11 11l5 5m0 0l-5 0m5 0l0-5M9 15l-5 5m0 0l5 0m-5 0l0-5m11-11l5-5m0 0l-5 0m5 0l0 5" />
-                    </svg>
+                    <AppIcon Name="fullscreen_exit" Class="h-4 w-4 text-slate-600 dark:text-slate-300 text-base" />
                     <span>Shrink View</span>
                 }
                 else
                 {
-                    <svg class="h-4 w-4 text-slate-600 dark:text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
-                    </svg>
+                    <AppIcon Name="fullscreen" Class="h-4 w-4 text-slate-600 dark:text-slate-300 text-base" />
                     <span>Full Width</span>
                 }
             </button>
@@ -51,11 +47,19 @@
                     class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs font-semibold text-teal-700 dark:text-teal-400 shadow-2xs hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 transition-colors"
                     disabled="@busy"
                     @onclick="LoadAsync">
-                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
+                <AppIcon Name="refresh" Class="w-3.5 h-3.5 text-sm" />
                 <span>@(busy ? "Loading…" : "Refresh")</span>
             </button>
+
+            <!-- Quick New Request button if in edit/detail mode -->
+            @if (editingRow != null)
+            {
+                <button type="button"
+                        class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-teal-700 hover:bg-teal-800 text-white px-3.5 py-1.5 text-xs font-semibold shadow-2xs transition"
+                        @onclick="ClearForm">
+                    <span>+ New Request</span>
+                </button>
+            }
         </div>
     </header>
 
@@ -70,257 +74,507 @@
         </div>
     }
 
-    <!-- 2-Panel Layout: Form on the Left, History on the Right -->
+    <!-- 2-Panel Layout: Add/Edit & Detail Panel on the Left, History on the Right -->
     <div class="page-panels @(isFullWidth ? "page-panels-full" : "page-panels-standard")">
 
         <!-- ======================================================== -->
-        <!-- LEFT PANEL: Time Change Form                             -->
+        <!-- LEFT PANEL: Add / Edit & Detail Operations Panel         -->
         <!-- ======================================================== -->
         <div class="page-panel-left min-w-0 rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-4 shadow-xs flex flex-col gap-4">
             
-            <!-- Panel Header -->
-            <div class="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800 flex-wrap gap-2">
-                <div>
-                    <h2 class="text-sm font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
-                        <span>📝</span>
-                        @if (isViewingPastRecord)
-                        {
-                            <span>Past Record (Read-Only)</span>
-                        }
-                        else if (isEditingFutureRecord)
-                        {
-                            <span>Edit Future Time Change</span>
-                        }
-                        else
-                        {
-                            <span>New Time Change Request</span>
-                        }
-                    </h2>
-                    <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                        @if (isViewingPastRecord)
-                        {
-                            <span class="text-amber-600 dark:text-amber-400 font-medium">Historical records cannot be edited or modified.</span>
-                        }
-                        else if (isEditingFutureRecord)
-                        {
-                            <span>Modifying upcoming record @editingRow?.Reference</span>
-                        }
-                        else
-                        {
-                            <span>Adjust your scheduled check-in or check-out hours for a working day.</span>
-                        }
-                    </p>
-                </div>
-
-                @if (isEditingFutureRecord || isViewingPastRecord)
-                {
-                    <button type="button"
-                            class="inline-flex items-center gap-1 text-xs font-semibold text-teal-700 dark:text-teal-400 hover:underline"
-                            @onclick="ClearForm">
-                        <span>+ New Request</span>
-                    </button>
-                }
-            </div>
-
-            <!-- Active Editing / Viewing Banner -->
-            @if (isViewingPastRecord)
+            @if (editingRow != null)
             {
-                <div class="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/80 p-3 text-xs text-slate-700 dark:text-slate-300 flex items-start gap-2.5">
-                    <span class="text-base">🔒</span>
-                    <div>
-                        <p class="font-bold">Past Date Record — Locked</p>
-                        <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                            This time-change request was for @editingRow?.ScheduledStart.ToString("dd MMM yyyy"). Past date records cannot be edited, changed, or canceled.
-                        </p>
-                    </div>
-                </div>
-            }
-            else if (isEditingFutureRecord)
-            {
-                <div class="rounded-xl border border-teal-200 dark:border-teal-800 bg-teal-50/60 dark:bg-teal-950/40 p-3 text-xs text-teal-900 dark:text-teal-200 flex items-start justify-between gap-2">
-                    <div class="flex items-start gap-2">
-                        <span class="text-base">✏️</span>
-                        <div>
-                            <p class="font-bold">Editing Future Request @editingRow?.Reference</p>
-                            <p class="text-[11px] text-teal-700 dark:text-teal-300 mt-0.5">
-                                Scheduled for @editingRow?.ScheduledStart.ToString("dd MMM yyyy"). You can change the requested time or reason, or cancel the request.
-                            </p>
+                <!-- ==================================================== -->
+                <!-- SELECTED ROW DETAIL & EDIT / OPERATIONS VIEW         -->
+                <!-- ==================================================== -->
+                <div class="flex flex-col gap-4">
+                    
+                    <!-- Top Navigation & Badges Bar -->
+                    <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 dark:border-slate-800 pb-3">
+                        <div class="flex items-center gap-2">
+                            <button type="button"
+                                    class="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-2.5 py-1 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition"
+                                    @onclick="ClearForm">
+                                <span>← Back to New Request</span>
+                            </button>
+                            <span class="text-slate-400">|</span>
+                            <span class="font-mono text-xs font-bold text-teal-800 dark:text-teal-300 bg-teal-50 dark:bg-teal-950/60 border border-teal-200 dark:border-teal-800 px-2.5 py-1 rounded-md">
+                                @editingRow.Reference
+                            </span>
                         </div>
-                    </div>
-                    <button type="button" class="text-teal-700 dark:text-teal-400 text-xs font-bold hover:underline shrink-0" @onclick="ClearForm">Cancel</button>
-                </div>
-            }
 
-            <!-- Form Body -->
-            <div class="flex flex-col gap-3">
-                <!-- Request Type Selector -->
-                <div>
-                    <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 p-1">Request Type</label>
-                    <div class="flex rounded-lg border border-slate-300 dark:border-slate-700 p-1 bg-slate-50 dark:bg-slate-800 gap-1">
-                        <button type="button"
-                                class="flex-1 py-1.5 text-xs font-bold rounded-md transition text-center @(kind == "LateCheckIn" ? "bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-400 shadow-2xs" : "text-slate-600 dark:text-slate-400 hover:text-slate-900") @(isViewingPastRecord ? "opacity-60 cursor-not-allowed" : "")"
-                                disabled="@(busy || isViewingPastRecord)"
-                                @onclick='() => SetKind("LateCheckIn")'>
-                            Late Check-In
-                        </button>
-                        <button type="button"
-                                class="flex-1 py-1.5 text-xs font-bold rounded-md transition text-center @(kind == "EarlyCheckOut" ? "bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-400 shadow-2xs" : "text-slate-600 dark:text-slate-400 hover:text-slate-900") @(isViewingPastRecord ? "opacity-60 cursor-not-allowed" : "")"
-                                disabled="@(busy || isViewingPastRecord)"
-                                @onclick='() => SetKind("EarlyCheckOut")'>
-                            Early Check-Out
-                        </button>
-                    </div>
-                    <p class="text-[11px] text-slate-500 dark:text-slate-400 px-1 mt-1">
-                        @(kind == "LateCheckIn" 
-                            ? "Request approval to arrive after the scheduled start time. Approved check-out time will be adjusted accordingly." 
-                            : "Request approval to depart before the scheduled finish time. Missed hours must be reconciled.")
-                    </p>
-                </div>
+                        <div class="flex flex-wrap items-center gap-1.5">
+                            <span class="rounded px-2 py-0.5 text-[11px] font-bold @(editingRow.Kind == "EarlyCheckOut" ? "bg-amber-50 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300 border border-amber-200" : "bg-teal-50 text-teal-800 dark:bg-teal-950/50 dark:text-teal-300 border border-teal-200")">
+                                @(editingRow.Kind == "EarlyCheckOut" ? "Early Check-Out" : "Late Check-In")
+                            </span>
 
-                <!-- Date & Requested Time in 2 Columns -->
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 p-1">
-                            Target Date
-                            @if (requestDate < Today)
+                            <span class="rounded-full px-2.5 py-0.5 text-[11px] font-bold @GetStatusBadgeClass(editingRow.Status)">
+                                @editingRow.Status
+                            </span>
+
+                            @if (isViewingPastRecord)
                             {
-                                <span class="text-amber-600 dark:text-amber-400 text-[10px] ml-1 font-bold">(Past Date)</span>
+                                <span class="rounded-full bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 px-2.5 py-0.5 text-[11px] font-semibold border border-slate-200 dark:border-slate-700">
+                                    🔒 Past Date (Locked)
+                                </span>
                             }
                             else
                             {
-                                <span class="text-emerald-600 dark:text-emerald-400 text-[10px] ml-1 font-bold">(Upcoming)</span>
+                                <span class="rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 px-2.5 py-0.5 text-[11px] font-semibold border border-emerald-200 dark:border-emerald-800">
+                                    ✏️ Upcoming (Editable)
+                                </span>
                             }
-                        </label>
-                        <InputDate @bind-Value="requestDate"
-                                   @bind-Value:after="DateChangedAsync"
-                                   disabled="@(busy || isViewingPastRecord)"
-                                   class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2 text-xs text-slate-900 dark:text-slate-100 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500 disabled:bg-slate-100 dark:disabled:bg-slate-800/60 disabled:cursor-not-allowed" />
-                    </div>
-
-                    <div>
-                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 p-1">
-                            @(kind == "EarlyCheckOut" ? "Requested Check-Out Time" : "Requested Check-In Time")
-                        </label>
-                        <input type="time"
-                               step="60"
-                               @bind="requestedTime"
-                               disabled="@(busy || isViewingPastRecord)"
-                               class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2 text-xs text-slate-900 dark:text-slate-100 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500 disabled:bg-slate-100 dark:disabled:bg-slate-800/60 disabled:cursor-not-allowed" />
-                    </div>
-                </div>
-
-                <!-- Candidate Schedules & Working Hours Preview -->
-                @if (scheduleLoading)
-                {
-                    <div class="py-3 text-center text-xs text-slate-400 animate-pulse">
-                        Checking working schedule for @requestDate.ToString("dd MMM yyyy")…
-                    </div>
-                }
-                else if (candidates.Count == 0 && !isViewingPastRecord)
-                {
-                    <div class="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-950/30 p-3 text-xs text-amber-800 dark:text-amber-200">
-                        <p class="font-bold">No eligible schedule found</p>
-                        <p class="text-[11px] mt-0.5">
-                            No active scheduled working hours requiring attendance were found for @requestDate.ToString("dd MMM yyyy"). Ensure your duty roster or work plan is configured.
-                        </p>
-                    </div>
-                }
-                else if (selectedSchedule != null || isViewingPastRecord)
-                {
-                    var schedStart = isViewingPastRecord && editingRow != null ? editingRow.ScheduledStart : selectedSchedule!.ScheduledStart;
-                    var schedEnd = isViewingPastRecord && editingRow != null && editingRow.RequestedEnd.HasValue ? editingRow.RequestedEnd.Value : selectedSchedule?.ScheduledEnd ?? schedStart.AddHours(8);
-
-                    <div class="rounded-xl border border-teal-200 dark:border-teal-800 bg-teal-50/40 dark:bg-teal-950/20 p-3 flex flex-col gap-2">
-                        <div class="flex items-center justify-between text-xs font-bold text-teal-900 dark:text-teal-200">
-                            <span>📅 Scheduled Working Hours</span>
-                            <span>@schedStart.ToString("HH:mm") – @schedEnd.ToString("HH:mm")</span>
                         </div>
-
-                        @if (!isViewingPastRecord && previewError != null && requestedTime.HasValue)
-                        {
-                            <p class="text-[11px] text-rose-600 dark:text-rose-400 font-medium">
-                                ⚠️ @previewError
-                            </p>
-                        }
-                        else if (!isViewingPastRecord && calculatedPreview.HasValue)
-                        {
-                            <div class="rounded-lg bg-white dark:bg-slate-900 p-2.5 border border-teal-100 dark:border-teal-800/60 text-xs flex flex-col gap-1">
-                                <div class="flex items-center justify-between font-bold text-slate-800 dark:text-slate-200">
-                                    <span>After Approval Hours:</span>
-                                    <span class="text-teal-700 dark:text-teal-400 font-mono">
-                                        @calculatedPreview.Value.Start.ToString("HH:mm") – @calculatedPreview.Value.End.ToString("HH:mm")
-                                    </span>
-                                </div>
-                                <p class="text-[10px] text-slate-500 dark:text-slate-400">
-                                    Check-out at or after @calculatedPreview.Value.End.ToString("HH:mm") is compulsory once approved.
-                                </p>
-                            </div>
-                        }
                     </div>
-                }
 
-                <!-- Reason Field -->
-                <div>
-                    <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 p-1">
-                        Reason for Time Change
-                        <span class="text-rose-500">*</span>
-                    </label>
-                    <textarea rows="3"
-                              maxlength="1000"
-                              @bind="reason"
-                              disabled="@(busy || isViewingPastRecord)"
-                              placeholder="Provide detailed justification for the requested check-in or check-out schedule adjustment..."
-                              class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2 text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500 disabled:bg-slate-100 dark:disabled:bg-slate-800/60 disabled:cursor-not-allowed"></textarea>
-                    <div class="flex justify-between items-center text-[10px] text-slate-400 px-1 mt-0.5">
-                        <span>Min 5 characters</span>
-                        <span>@(reason?.Length ?? 0) / 1000</span>
-                    </div>
-                </div>
-
-                @if (!string.IsNullOrWhiteSpace(formError))
-                {
-                    <div class="rounded-lg border border-rose-300 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/40 p-2.5 text-xs text-rose-700 dark:text-rose-300">
-                        @formError
-                    </div>
-                }
-
-                <!-- Action Buttons -->
-                <div class="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                    <!-- Context Notice Banner -->
                     @if (isViewingPastRecord)
                     {
-                        <div class="flex items-center gap-2 w-full">
-                            <button type="button"
-                                    class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-teal-700 hover:bg-teal-800 text-white px-3.5 py-1.5 text-xs font-semibold shadow-2xs transition"
-                                    @onclick="ClearForm">
-                                <span>+ New Time Change Request</span>
-                            </button>
-                            <span class="text-[11px] text-slate-400 italic">Editing is disabled for past records</span>
+                        <div class="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/80 p-3 text-xs text-slate-700 dark:text-slate-300 flex items-start gap-2.5">
+                            <span class="text-base shrink-0">🔒</span>
+                            <div class="flex-1">
+                                <p class="font-bold text-slate-800 dark:text-slate-200">Historical Record — Read-Only Inspection</p>
+                                <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                                    This time-change request was for @editingRow.ScheduledStart.ToString("dd MMM yyyy"). Past date records cannot be edited, modified, or canceled.
+                                </p>
+                            </div>
                         </div>
-                    }
-                    else if (isEditingFutureRecord)
-                    {
-                        <button type="button"
-                                class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-teal-700 hover:bg-teal-800 text-white px-3.5 py-1.5 text-xs font-semibold shadow-2xs disabled:opacity-50 transition"
-                                disabled="@(busy || !requestedTime.HasValue || string.IsNullOrWhiteSpace(reason) || previewError != null)"
-                                @onclick="UpdateFutureRequestAsync">
-                            <span>💾 Save Changes</span>
-                        </button>
-
-                        <button type="button"
-                                class="inline-flex items-center gap-1.5 rounded-lg border border-rose-300 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-900/60 px-3 py-1.5 text-xs font-semibold shadow-2xs disabled:opacity-50 transition"
-                                disabled="@busy"
-                                @onclick="() => CancelFutureRequestAsync(editingRow!)">
-                            <span>✕ Cancel Request</span>
-                        </button>
-
-                        <button type="button"
-                                class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200 shadow-2xs hover:bg-slate-50 dark:hover:bg-slate-700 transition"
-                                @onclick="ClearForm">
-                            <span>Discard</span>
-                        </button>
                     }
                     else
                     {
+                        <div class="rounded-xl border border-teal-200 dark:border-teal-800 bg-teal-50/70 dark:bg-teal-950/40 p-3 text-xs text-teal-900 dark:text-teal-200 flex items-start justify-between gap-2">
+                            <div class="flex items-start gap-2.5">
+                                <span class="text-base shrink-0">✏️</span>
+                                <div>
+                                    <p class="font-bold">Editing Upcoming Request @editingRow.Reference</p>
+                                    <p class="text-[11px] text-teal-700 dark:text-teal-300 mt-0.5">
+                                        Scheduled for @editingRow.ScheduledStart.ToString("dd MMM yyyy"). You can adjust the timing, update justification, or cancel this request.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    }
+
+                    <!-- Detail & Metrics Grid Card -->
+                    <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/50 p-3 flex flex-col gap-2.5">
+                        <h3 class="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">
+                            Schedule &amp; Attendance Details
+                        </h3>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 text-xs">
+                            <div class="rounded-lg bg-white dark:bg-slate-900 p-2.5 border border-slate-200 dark:border-slate-800 flex flex-col">
+                                <span class="text-[10px] font-semibold text-slate-400 uppercase">Original Schedule</span>
+                                <span class="font-bold text-slate-800 dark:text-slate-200 mt-0.5">
+                                    @editingRow.ScheduledStart.ToString("dd MMM yyyy")
+                                </span>
+                                <span class="font-mono text-[11px] text-slate-600 dark:text-slate-400">
+                                    @editingRow.ScheduledStart.ToString("HH:mm") Start
+                                </span>
+                            </div>
+
+                            <div class="rounded-lg bg-white dark:bg-slate-900 p-2.5 border border-slate-200 dark:border-slate-800 flex flex-col">
+                                <span class="text-[10px] font-semibold text-slate-400 uppercase">Requested Shift Hours</span>
+                                @if (editingRow.RequestedStart.HasValue && editingRow.RequestedEnd.HasValue)
+                                {
+                                    <span class="font-bold text-teal-700 dark:text-teal-400 font-mono mt-0.5">
+                                        @editingRow.RequestedStart.Value.ToString("HH:mm") – @editingRow.RequestedEnd.Value.ToString("HH:mm")
+                                    </span>
+                                    <span class="text-[10px] text-slate-500">Check-out compulsory</span>
+                                }
+                                else
+                                {
+                                    <span class="text-slate-400 mt-0.5">—</span>
+                                }
+                            </div>
+
+                            <div class="rounded-lg bg-white dark:bg-slate-900 p-2.5 border border-slate-200 dark:border-slate-800 flex flex-col">
+                                <span class="text-[10px] font-semibold text-slate-400 uppercase">Time Difference</span>
+                                <span class="font-bold text-slate-800 dark:text-slate-200 mt-0.5">
+                                    @editingRow.LateMinutes minutes
+                                </span>
+                                <span class="text-[10px] text-slate-500">
+                                    @(editingRow.Kind == "EarlyCheckOut" ? "Early Departure" : "Late Arrival")
+                                </span>
+                            </div>
+
+                            <div class="rounded-lg bg-white dark:bg-slate-900 p-2.5 border border-slate-200 dark:border-slate-800 flex flex-col">
+                                <span class="text-[10px] font-semibold text-slate-400 uppercase">Roster Plan</span>
+                                <span class="font-medium text-slate-800 dark:text-slate-200 mt-0.5 truncate">
+                                    @(string.IsNullOrWhiteSpace(editingRow.Schedule) ? "Standard Roster" : editingRow.Schedule)
+                                </span>
+                            </div>
+
+                            <div class="rounded-lg bg-white dark:bg-slate-900 p-2.5 border border-slate-200 dark:border-slate-800 flex flex-col">
+                                <span class="text-[10px] font-semibold text-slate-400 uppercase">Applicant Staff</span>
+                                <span class="font-medium text-slate-800 dark:text-slate-200 mt-0.5 truncate">
+                                    @(string.IsNullOrWhiteSpace(editingRow.Staff) ? "Self" : editingRow.Staff)
+                                </span>
+                            </div>
+
+                            <div class="rounded-lg bg-white dark:bg-slate-900 p-2.5 border border-slate-200 dark:border-slate-800 flex flex-col">
+                                <span class="text-[10px] font-semibold text-slate-400 uppercase">Workflow Stage</span>
+                                <span class="font-medium text-slate-800 dark:text-slate-200 mt-0.5 truncate">
+                                    @(string.IsNullOrWhiteSpace(editingRow.Stage) ? "Submitted" : editingRow.Stage)
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Mode Specific Section: Form Inputs for Future Records OR Read-only Reason for Past Records -->
+                    @if (isViewingPastRecord)
+                    {
+                        <!-- Read-Only Reason Card -->
+                        <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 p-3 flex flex-col gap-1.5">
+                            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 p-1">
+                                Business Justification / Reason
+                            </label>
+                            <div class="rounded-lg bg-white dark:bg-slate-900 p-3 border border-slate-200 dark:border-slate-800 text-xs text-slate-800 dark:text-slate-200 italic whitespace-pre-wrap">
+                                “@editingRow.Reason”
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <!-- Editable Form Inputs for Future Records -->
+                        <div class="flex flex-col gap-3 rounded-xl border border-teal-200 dark:border-teal-800 bg-teal-50/30 dark:bg-teal-950/20 p-3.5">
+                            <h4 class="text-xs font-bold text-teal-900 dark:text-teal-200 uppercase tracking-wider">
+                                Modify Requested Timing
+                            </h4>
+
+                            <!-- Type Selector -->
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 p-1">Request Type</label>
+                                <div class="flex rounded-lg border border-slate-300 dark:border-slate-700 p-1 bg-white dark:bg-slate-800 gap-1">
+                                    <button type="button"
+                                            class="flex-1 py-1.5 text-xs font-bold rounded-md transition text-center @(kind == "LateCheckIn" ? "bg-teal-700 text-white shadow-2xs" : "text-slate-600 dark:text-slate-400 hover:text-slate-900")"
+                                            disabled="@busy"
+                                            @onclick='() => SetKind("LateCheckIn")'>
+                                        Late Check-In
+                                    </button>
+                                    <button type="button"
+                                            class="flex-1 py-1.5 text-xs font-bold rounded-md transition text-center @(kind == "EarlyCheckOut" ? "bg-teal-700 text-white shadow-2xs" : "text-slate-600 dark:text-slate-400 hover:text-slate-900")"
+                                            disabled="@busy"
+                                            @onclick='() => SetKind("EarlyCheckOut")'>
+                                        Early Check-Out
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Date & Requested Time -->
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 p-1">Target Date</label>
+                                    <InputDate @bind-Value="requestDate"
+                                               @bind-Value:after="DateChangedAsync"
+                                               disabled="@busy"
+                                               class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2 text-xs text-slate-900 dark:text-slate-100 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500" />
+                                </div>
+
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 p-1">
+                                        @(kind == "EarlyCheckOut" ? "Requested Check-Out Time" : "Requested Check-In Time")
+                                    </label>
+                                    <input type="time"
+                                           step="60"
+                                           @bind="requestedTime"
+                                           disabled="@busy"
+                                           class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2 text-xs text-slate-900 dark:text-slate-100 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500" />
+                                </div>
+                            </div>
+
+                            <!-- Candidate Schedules & Working Hours Preview -->
+                            @if (scheduleLoading)
+                            {
+                                <div class="py-2 text-center text-xs text-slate-400 animate-pulse">
+                                    Checking working schedule for @requestDate.ToString("dd MMM yyyy")…
+                                </div>
+                            }
+                            else if (selectedSchedule != null && calculatedPreview.HasValue)
+                            {
+                                <div class="rounded-lg bg-white dark:bg-slate-900 p-2.5 border border-teal-200 dark:border-teal-800 text-xs flex flex-col gap-1">
+                                    <div class="flex items-center justify-between font-bold text-slate-800 dark:text-slate-200">
+                                        <span>After Approval Working Hours:</span>
+                                        <span class="text-teal-700 dark:text-teal-400 font-mono">
+                                            @calculatedPreview.Value.Start.ToString("HH:mm") – @calculatedPreview.Value.End.ToString("HH:mm")
+                                        </span>
+                                    </div>
+                                    <p class="text-[10px] text-slate-500 dark:text-slate-400">
+                                        Check-out at or after @calculatedPreview.Value.End.ToString("HH:mm") is compulsory once approved.
+                                    </p>
+                                </div>
+                            }
+                            else if (previewError != null && requestedTime.HasValue)
+                            {
+                                <p class="text-[11px] text-rose-600 dark:text-rose-400 font-medium">
+                                    ⚠️ @previewError
+                                </p>
+                            }
+
+                            <!-- Editable Reason -->
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 p-1">
+                                    Reason for Time Change <span class="text-rose-500">*</span>
+                                </label>
+                                <textarea rows="3"
+                                          maxlength="1000"
+                                          @bind="reason"
+                                          disabled="@busy"
+                                          placeholder="Provide justification for modifying this schedule adjustment..."
+                                          class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2 text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"></textarea>
+                                <div class="flex justify-between items-center text-[10px] text-slate-400 px-1 mt-0.5">
+                                    <span>Min 5 characters</span>
+                                    <span>@(reason?.Length ?? 0) / 1000</span>
+                                </div>
+                            </div>
+                        </div>
+                    }
+
+                    <!-- Workflow History Log if present -->
+                    @if (editingRow.History != null && editingRow.History.Count > 0)
+                    {
+                        <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 p-3">
+                            <h4 class="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider mb-2">
+                                Request History &amp; Workflow Log
+                            </h4>
+                            <ul class="space-y-1.5 text-xs text-slate-600 dark:text-slate-400">
+                                @foreach (var action in editingRow.History)
+                                {
+                                    <li class="flex items-start gap-2 bg-white dark:bg-slate-900 p-2 rounded-lg border border-slate-200 dark:border-slate-800 text-[11px]">
+                                        <span class="text-teal-600">✓</span>
+                                        <span class="whitespace-pre-wrap break-words">@action</span>
+                                    </li>
+                                }
+                            </ul>
+                        </div>
+                    }
+
+                    <!-- Supervisor Action Comment (if CanApprove) -->
+                    @if (editingRow.CanApprove)
+                    {
+                        <div class="rounded-xl border border-indigo-200 dark:border-indigo-800 bg-indigo-50/40 dark:bg-indigo-950/20 p-3 flex flex-col gap-1.5">
+                            <label class="block text-xs font-semibold text-indigo-950 dark:text-indigo-200 p-1">
+                                Approver Decision Comment (Optional)
+                            </label>
+                            <input type="text"
+                                   placeholder="Enter comments or remarks for this approval decision..."
+                                   @bind="actionComment"
+                                   disabled="@busy"
+                                   class="w-full rounded-lg border border-indigo-200 dark:border-indigo-800 bg-white dark:bg-slate-900 p-2 text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500" />
+                        </div>
+                    }
+
+                    @if (!string.IsNullOrWhiteSpace(formError))
+                    {
+                        <div class="rounded-lg border border-rose-300 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/40 p-2.5 text-xs text-rose-700 dark:text-rose-300">
+                            @formError
+                        </div>
+                    }
+
+                    <!-- Footer Action Strip -->
+                    <div class="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-slate-200 dark:border-slate-800">
+                        <div class="flex items-center gap-2">
+                            <button type="button"
+                                    class="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200 shadow-2xs hover:bg-slate-50 dark:hover:bg-slate-700 transition"
+                                    @onclick="ClearForm">
+                                <span>← Back to New Request</span>
+                            </button>
+                        </div>
+
+                        <div class="flex flex-wrap items-center gap-2">
+                            @if (!isViewingPastRecord)
+                            {
+                                <button type="button"
+                                        class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-teal-700 hover:bg-teal-800 text-white px-3.5 py-1.5 text-xs font-semibold shadow-2xs disabled:opacity-50 transition"
+                                        disabled="@(busy || !requestedTime.HasValue || string.IsNullOrWhiteSpace(reason) || previewError != null)"
+                                        @onclick="UpdateFutureRequestAsync">
+                                    <span>💾 Save Changes</span>
+                                </button>
+
+                                <button type="button"
+                                        class="inline-flex items-center gap-1.5 rounded-lg border border-rose-300 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-900/60 px-3 py-1.5 text-xs font-semibold shadow-2xs disabled:opacity-50 transition"
+                                        disabled="@busy"
+                                        @onclick="() => CancelFutureRequestAsync(editingRow)">
+                                    <span>✕ Cancel Request</span>
+                                </button>
+                            }
+
+                            @if (editingRow.CanApprove)
+                            {
+                                <button type="button"
+                                        class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 text-xs font-semibold shadow-2xs disabled:opacity-50 transition"
+                                        disabled="@busy"
+                                        @onclick='() => ActAsync(editingRow, "Approve")'>
+                                    <span>✓ Approve Stage</span>
+                                </button>
+                                <button type="button"
+                                        class="inline-flex items-center gap-1.5 rounded-lg border border-rose-300 dark:border-rose-800 bg-white dark:bg-slate-800 text-rose-700 dark:text-rose-400 hover:bg-rose-50 px-3 py-1.5 text-xs font-semibold shadow-2xs disabled:opacity-50 transition"
+                                        disabled="@busy"
+                                        @onclick='() => ActAsync(editingRow, "Reject")'>
+                                    <span>✕ Reject</span>
+                                </button>
+                            }
+                        </div>
+                    </div>
+
+                </div>
+            }
+            else
+            {
+                <!-- ==================================================== -->
+                <!-- NEW TIME CHANGE REQUEST FORM                         -->
+                <!-- ==================================================== -->
+                <div class="flex flex-col gap-4">
+                    
+                    <!-- Form Header -->
+                    <div class="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800 flex-wrap gap-2">
+                        <div>
+                            <h2 class="text-sm font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                                <span>📝</span>
+                                <span>New Time Change Request</span>
+                            </h2>
+                            <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                                Adjust your scheduled check-in or check-out hours for a working day.
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Request Type Selector -->
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 p-1">Request Type</label>
+                        <div class="flex rounded-lg border border-slate-300 dark:border-slate-700 p-1 bg-slate-50 dark:bg-slate-800 gap-1">
+                            <button type="button"
+                                    class="flex-1 py-1.5 text-xs font-bold rounded-md transition text-center @(kind == "LateCheckIn" ? "bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-400 shadow-2xs" : "text-slate-600 dark:text-slate-400 hover:text-slate-900")"
+                                    disabled="@busy"
+                                    @onclick='() => SetKind("LateCheckIn")'>
+                                Late Check-In
+                            </button>
+                            <button type="button"
+                                    class="flex-1 py-1.5 text-xs font-bold rounded-md transition text-center @(kind == "EarlyCheckOut" ? "bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-400 shadow-2xs" : "text-slate-600 dark:text-slate-400 hover:text-slate-900")"
+                                    disabled="@busy"
+                                    @onclick='() => SetKind("EarlyCheckOut")'>
+                                Early Check-Out
+                            </button>
+                        </div>
+                        <p class="text-[11px] text-slate-500 dark:text-slate-400 px-1 mt-1">
+                            @(kind == "LateCheckIn" 
+                                ? "Request approval to arrive after the scheduled start time. Approved check-out time will be adjusted accordingly." 
+                                : "Request approval to depart before the scheduled finish time. Missed hours must be reconciled.")
+                        </p>
+                    </div>
+
+                    <!-- Date & Requested Time in 2 Columns -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 p-1">
+                                Target Date
+                                @if (requestDate < Today)
+                                {
+                                    <span class="text-amber-600 dark:text-amber-400 text-[10px] ml-1 font-bold">(Past Date)</span>
+                                }
+                                else if (requestDate == Today)
+                                {
+                                    <span class="text-teal-600 dark:text-teal-400 text-[10px] ml-1 font-bold">(Today)</span>
+                                }
+                                else
+                                {
+                                    <span class="text-emerald-600 dark:text-emerald-400 text-[10px] ml-1 font-bold">(Upcoming)</span>
+                                }
+                            </label>
+                            <InputDate @bind-Value="requestDate"
+                                       @bind-Value:after="DateChangedAsync"
+                                       disabled="@busy"
+                                       class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2 text-xs text-slate-900 dark:text-slate-100 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500 disabled:bg-slate-100 dark:disabled:bg-slate-800/60 disabled:cursor-not-allowed" />
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 p-1">
+                                @(kind == "EarlyCheckOut" ? "Requested Check-Out Time" : "Requested Check-In Time")
+                            </label>
+                            <input type="time"
+                                   step="60"
+                                   @bind="requestedTime"
+                                   disabled="@busy"
+                                   class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2 text-xs text-slate-900 dark:text-slate-100 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500 disabled:bg-slate-100 dark:disabled:bg-slate-800/60 disabled:cursor-not-allowed" />
+                        </div>
+                    </div>
+
+                    <!-- Candidate Schedules & Working Hours Preview -->
+                    @if (scheduleLoading)
+                    {
+                        <div class="py-3 text-center text-xs text-slate-400 animate-pulse">
+                            Checking working schedule for @requestDate.ToString("dd MMM yyyy")…
+                        </div>
+                    }
+                    else if (candidates.Count == 0)
+                    {
+                        <div class="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-950/30 p-3 text-xs text-amber-800 dark:text-amber-200">
+                            <p class="font-bold">No eligible schedule found</p>
+                            <p class="text-[11px] mt-0.5">
+                                No active scheduled working hours requiring attendance were found for @requestDate.ToString("dd MMM yyyy"). Ensure your duty roster or work plan is configured.
+                            </p>
+                        </div>
+                    }
+                    else if (selectedSchedule != null)
+                    {
+                        var schedStart = selectedSchedule.ScheduledStart;
+                        var schedEnd = selectedSchedule.ScheduledEnd;
+
+                        <div class="rounded-xl border border-teal-200 dark:border-teal-800 bg-teal-50/40 dark:bg-teal-950/20 p-3 flex flex-col gap-2">
+                            <div class="flex items-center justify-between text-xs font-bold text-teal-900 dark:text-teal-200">
+                                <span>📅 Scheduled Working Hours</span>
+                                <span>@schedStart.ToString("HH:mm") – @schedEnd.ToString("HH:mm")</span>
+                            </div>
+
+                            @if (previewError != null && requestedTime.HasValue)
+                            {
+                                <p class="text-[11px] text-rose-600 dark:text-rose-400 font-medium">
+                                    ⚠️ @previewError
+                                </p>
+                            }
+                            else if (calculatedPreview.HasValue)
+                            {
+                                <div class="rounded-lg bg-white dark:bg-slate-900 p-2.5 border border-teal-100 dark:border-teal-800/60 text-xs flex flex-col gap-1">
+                                    <div class="flex items-center justify-between font-bold text-slate-800 dark:text-slate-200">
+                                        <span>After Approval Working Hours:</span>
+                                        <span class="text-teal-700 dark:text-teal-400 font-mono">
+                                            @calculatedPreview.Value.Start.ToString("HH:mm") – @calculatedPreview.Value.End.ToString("HH:mm")
+                                        </span>
+                                    </div>
+                                    <p class="text-[10px] text-slate-500 dark:text-slate-400">
+                                        Check-out at or after @calculatedPreview.Value.End.ToString("HH:mm") is compulsory once approved.
+                                    </p>
+                                </div>
+                            }
+                        </div>
+                    }
+
+                    <!-- Reason Field -->
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 p-1">
+                            Reason for Time Change
+                            <span class="text-rose-500">*</span>
+                        </label>
+                        <textarea rows="3"
+                                  maxlength="1000"
+                                  @bind="reason"
+                                  disabled="@busy"
+                                  placeholder="Provide detailed justification for the requested check-in or check-out schedule adjustment..."
+                                  class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2 text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500 disabled:bg-slate-100 dark:disabled:bg-slate-800/60 disabled:cursor-not-allowed"></textarea>
+                        <div class="flex justify-between items-center text-[10px] text-slate-400 px-1 mt-0.5">
+                            <span>Min 5 characters</span>
+                            <span>@(reason?.Length ?? 0) / 1000</span>
+                        </div>
+                    </div>
+
+                    @if (!string.IsNullOrWhiteSpace(formError))
+                    {
+                        <div class="rounded-lg border border-rose-300 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/40 p-2.5 text-xs text-rose-700 dark:text-rose-300">
+                            @formError
+                        </div>
+                    }
+
+                    <!-- Action Buttons -->
+                    <div class="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
                         <button type="button"
                                 class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-teal-700 hover:bg-teal-800 text-white px-4 py-2 text-xs font-semibold shadow-2xs disabled:opacity-50 transition"
                                 disabled="@(busy || !requestedTime.HasValue || string.IsNullOrWhiteSpace(reason) || previewError != null)"
@@ -334,9 +588,10 @@
                                 @onclick="ClearForm">
                             <span>Clear</span>
                         </button>
-                    }
+                    </div>
+
                 </div>
-            </div>
+            }
 
         </div>
 
@@ -353,7 +608,7 @@
                         <span>Time Change History &amp; Records</span>
                     </h2>
                     <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                        Past date records are read-only. Future/upcoming records can be edited or cancelled.
+                        Select a record to inspect details or modify upcoming requests.
                     </p>
                 </div>
 
@@ -380,40 +635,38 @@
                            @bind="searchQuery"
                            @bind:event="oninput"
                            class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 pl-8 text-xs text-slate-800 dark:text-slate-200 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-teal-500" />
-                    <svg class="w-4 h-4 text-slate-400 absolute left-2.5 top-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                    </svg>
+                    <AppIcon Name="search" Class="w-4 h-4 text-slate-400 absolute left-2.5 top-2 text-base" />
                 </div>
 
                 <!-- Filter Pills -->
                 <div class="flex flex-wrap items-center gap-1.5 text-xs">
                     <button type="button"
-                            class="rounded-lg px-2.5 py-1 font-bold transition @(historyFilter == "all" ? "bg-teal-700 text-white shadow-2xs" : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200")"
+                            class="rounded-lg px-2.5 py-1 font-bold transition @(historyFilter == "all" ? "bg-teal-700 text-white shadow-2xs" : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700")"
                             @onclick='() => historyFilter = "all"'>
                         All (@FilteredRowsCount("all"))
                     </button>
                     <button type="button"
-                            class="rounded-lg px-2.5 py-1 font-bold transition @(historyFilter == "future" ? "bg-teal-700 text-white shadow-2xs" : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200")"
+                            class="rounded-lg px-2.5 py-1 font-bold transition @(historyFilter == "future" ? "bg-teal-700 text-white shadow-2xs" : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700")"
                             @onclick='() => historyFilter = "future"'>
-                        Upcoming / Future (@FilteredRowsCount("future"))
+                        Upcoming (@FilteredRowsCount("future"))
                     </button>
                     <button type="button"
-                            class="rounded-lg px-2.5 py-1 font-bold transition @(historyFilter == "past" ? "bg-teal-700 text-white shadow-2xs" : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200")"
+                            class="rounded-lg px-2.5 py-1 font-bold transition @(historyFilter == "past" ? "bg-teal-700 text-white shadow-2xs" : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700")"
                             @onclick='() => historyFilter = "past"'>
                         Past (Read-Only) (@FilteredRowsCount("past"))
                     </button>
                     <button type="button"
-                            class="rounded-lg px-2.5 py-1 font-bold transition @(historyFilter == "pending" ? "bg-teal-700 text-white shadow-2xs" : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200")"
+                            class="rounded-lg px-2.5 py-1 font-bold transition @(historyFilter == "pending" ? "bg-teal-700 text-white shadow-2xs" : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700")"
                             @onclick='() => historyFilter = "pending"'>
                         Pending (@FilteredRowsCount("pending"))
                     </button>
                     <button type="button"
-                            class="rounded-lg px-2.5 py-1 font-bold transition @(historyFilter == "late" ? "bg-teal-700 text-white shadow-2xs" : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200")"
+                            class="rounded-lg px-2.5 py-1 font-bold transition @(historyFilter == "late" ? "bg-teal-700 text-white shadow-2xs" : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700")"
                             @onclick='() => historyFilter = "late"'>
                         Late Check-In
                     </button>
                     <button type="button"
-                            class="rounded-lg px-2.5 py-1 font-bold transition @(historyFilter == "early" ? "bg-teal-700 text-white shadow-2xs" : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200")"
+                            class="rounded-lg px-2.5 py-1 font-bold transition @(historyFilter == "early" ? "bg-teal-700 text-white shadow-2xs" : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700")"
                             @onclick='() => historyFilter = "early"'>
                         Early Check-Out
                     </button>
@@ -436,19 +689,22 @@
             }
             else
             {
-                <div class="flex flex-col gap-2.5 max-h-[700px] overflow-y-auto pr-1">
+                <div class="flex flex-col gap-2.5 max-h-[720px] overflow-y-auto pr-1">
                     @foreach (var row in FilteredRows)
                     {
                         var isPast = row.ScheduledStart.Date < Today;
                         var isSelected = editingRow?.Id == row.Id;
 
-                        <div @key="row.Id"
-                             class="rounded-xl border p-3 text-xs transition flex flex-col gap-2 @(isSelected ? "border-teal-500 dark:border-teal-400 bg-teal-50/50 dark:bg-teal-950/40 shadow-xs ring-1 ring-teal-500" : "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-700 shadow-2xs")">
+                        <article @key="row.Id"
+                                 class="rounded-xl border p-3 text-xs transition cursor-pointer hover:shadow-xs flex flex-col gap-2 @(isSelected ? "border-teal-500 dark:border-teal-400 bg-teal-50/70 dark:bg-teal-950/40 shadow-xs ring-1 ring-teal-500" : "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-700 shadow-2xs")"
+                                 @onclick="() => SelectRow(row)">
                             
                             <!-- Top row: Reference, Type, Status -->
                             <div class="flex items-center justify-between flex-wrap gap-2">
                                 <div class="flex items-center gap-1.5">
-                                    <span class="font-bold text-slate-900 dark:text-slate-100">@row.Reference</span>
+                                    <span class="font-mono text-[11px] font-semibold text-teal-700 dark:text-teal-300 bg-teal-50 dark:bg-teal-950/60 border border-teal-200 dark:border-teal-800 px-2 py-0.5 rounded-md">
+                                        #@row.Reference
+                                    </span>
                                     @if (!string.IsNullOrWhiteSpace(row.Staff))
                                     {
                                         <span class="text-slate-400">·</span>
@@ -495,7 +751,7 @@
                                     }
                                 </div>
                                 <div class="flex items-center justify-between text-slate-500 dark:text-slate-400">
-                                    <span>Plan: @row.Schedule</span>
+                                    <span>Plan: @(string.IsNullOrWhiteSpace(row.Schedule) ? "Standard Roster" : row.Schedule)</span>
                                     <span>Diff: @row.LateMinutes mins</span>
                                 </div>
                             </div>
@@ -509,7 +765,7 @@
                             }
 
                             <!-- Action Bar -->
-                            <div class="flex items-center justify-between pt-1 border-t border-slate-100 dark:border-slate-800 flex-wrap gap-2">
+                            <div class="flex items-center justify-between pt-1 border-t border-slate-100 dark:border-slate-800 flex-wrap gap-2 text-[11px]">
                                 <div class="text-[10px] text-slate-400">
                                     @if (!string.IsNullOrWhiteSpace(row.Stage))
                                     {
@@ -518,51 +774,22 @@
                                 </div>
 
                                 <div class="flex items-center gap-1.5">
-                                    @if (isPast)
+                                    @if (isSelected)
                                     {
-                                        <button type="button"
-                                                class="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-[11px] font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-50"
-                                                @onclick="() => LoadIntoForm(row, isPast: true)">
-                                            Inspect (Read-Only)
-                                        </button>
+                                        <span class="text-teal-700 dark:text-teal-400 font-bold flex items-center gap-1">
+                                            <span>●</span>
+                                            <span>Active in Detail Panel</span>
+                                        </span>
                                     }
                                     else
                                     {
-                                        @if (row.CanCancel || row.Status.Contains("Pending") || row.Status.Contains("Processing") || row.Status.Contains("Submitted"))
-                                        {
-                                            <button type="button"
-                                                    class="rounded-lg bg-teal-700 hover:bg-teal-800 text-white px-2.5 py-1 text-[11px] font-semibold shadow-2xs transition"
-                                                    @onclick="() => LoadIntoForm(row, isPast: false)">
-                                                ✏️ Edit / Change
-                                            </button>
-
-                                            <button type="button"
-                                                    class="rounded-lg border border-rose-300 dark:border-rose-800 bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300 hover:bg-rose-100 px-2 py-1 text-[11px] font-semibold transition"
-                                                    disabled="@busy"
-                                                    @onclick="() => CancelFutureRequestAsync(row)">
-                                                ✕ Cancel
-                                            </button>
-                                        }
-
-                                        @if (row.CanApprove)
-                                        {
-                                            <button type="button"
-                                                    class="rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white px-2 py-1 text-[11px] font-semibold shadow-2xs"
-                                                    disabled="@busy"
-                                                    @onclick='() => ActAsync(row, "Approve")'>
-                                                Approve
-                                            </button>
-                                            <button type="button"
-                                                    class="rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-2 py-1 text-[11px] font-semibold hover:bg-slate-50"
-                                                    disabled="@busy"
-                                                    @onclick='() => ActAsync(row, "Reject")'>
-                                                Reject
-                                            </button>
-                                        }
+                                        <span class="text-teal-600 dark:text-teal-400 font-semibold group-hover:underline">
+                                            @(isPast ? "Inspect Details →" : "View & Edit →")
+                                        </span>
                                     }
                                 </div>
                             </div>
-                        </div>
+                        </article>
                     }
                 </div>
             }
@@ -571,6 +798,42 @@
 
     </div>
 </section>
+
+<style>
+    /* Explicit layout rules matching HRM.UI Design Standard */
+    .page-panels {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        align-items: start;
+        gap: 1rem;
+        width: 100%;
+        min-width: 0;
+        padding: 0;
+        margin-inline: auto;
+        transition: max-width .3s ease;
+        box-sizing: border-box;
+    }
+
+    .page-panels-standard {
+        max-width: 80rem;
+    }
+
+    .page-panels-full {
+        max-width: none;
+    }
+
+    .page-panel-left, .page-panel-right {
+        min-width: 0;
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    @@media (min-width: 1024px) {
+        .page-panels {
+            grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+        }
+    }
+</style>
 
 @code {
     private static DateTime Today => DateTime.UtcNow.AddHours(5).Date;
@@ -581,8 +844,9 @@
     private bool scheduleLoading = false;
     private string? globalError;
     private string? formError;
+    private string actionComment = "";
 
-    // Left Form State
+    // Left Form / Detail State
     private string kind = "LateCheckIn";
     private DateTime requestDate = Today;
     private TimeOnly? requestedTime;
@@ -729,6 +993,14 @@
             var from = Today.AddDays(-180);
             var to = Today.AddDays(180);
             allRows = await Requests.LoadAsync(from, to, kind: null, pendingOnly: false) ?? new();
+            if (editingRow != null)
+            {
+                var updated = allRows.FirstOrDefault(r => r.Id == editingRow.Id);
+                if (updated != null)
+                {
+                    editingRow = updated;
+                }
+            }
         }
         catch (Exception ex)
         {
@@ -777,6 +1049,12 @@
         }
     }
 
+    private void SelectRow(LateCheckInRow row)
+    {
+        var isPast = row.ScheduledStart.Date < Today;
+        LoadIntoForm(row, isPast);
+    }
+
     private void LoadIntoForm(LateCheckInRow row, bool isPast)
     {
         editingRow = row;
@@ -785,6 +1063,7 @@
         requestDate = row.ScheduledStart.Date;
         reason = row.Reason ?? "";
         formError = null;
+        actionComment = "";
 
         if (row.Kind == "EarlyCheckOut" && row.RequestedEnd.HasValue)
         {
@@ -806,10 +1085,12 @@
     {
         editingRow = null;
         isViewingPastRecord = false;
+        kind = "LateCheckIn";
         requestDate = Today;
         requestedTime = null;
         reason = "";
         formError = null;
+        actionComment = "";
         _ = LoadCandidatesForDateAsync();
     }
 
@@ -907,7 +1188,10 @@
         busy = true;
         try
         {
-            var result = await Requests.ActAsync(row.Id, row.StateId, "Cancel", "Cancelled by applicant.");
+            var comment = !string.IsNullOrWhiteSpace(actionComment)
+                ? actionComment.Trim()
+                : "Cancelled by applicant.";
+            var result = await Requests.ActAsync(row.Id, row.StateId, "Cancel", comment);
             if (result.Success)
             {
                 Toasts.Success($"Request {row.Reference} cancelled successfully.");
@@ -936,11 +1220,19 @@
         busy = true;
         try
         {
-            var result = await Requests.ActAsync(row.Id, row.StateId, action, $"{action} approved by workspace command.");
+            var comment = !string.IsNullOrWhiteSpace(actionComment) 
+                ? actionComment.Trim() 
+                : $"{action} executed from workspace command.";
+            var result = await Requests.ActAsync(row.Id, row.StateId, action, comment);
             if (result.Success)
             {
                 Toasts.Success(result.Message);
+                actionComment = "";
                 await LoadAsync();
+                if (editingRow?.Id == row.Id)
+                {
+                    editingRow = allRows.FirstOrDefault(r => r.Id == row.Id);
+                }
             }
             else
             {

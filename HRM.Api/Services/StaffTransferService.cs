@@ -21,7 +21,8 @@ public sealed class StaffTransferService(
     IOperationLogService logs,
     IRequestService requests,
     IStaffTransferActivationService activation,
-    IWorkflowEngine? workflow = null)
+    IWorkflowEngine? workflow = null,
+    HRM.ActivityLogs.Abstractions.IActivityLogService? activityLogs = null)
     : global::HRM.Services.Contracts.StaffTransferServiceContracts,
       global::HRM.Services.Contracts.StaffTransferServiceContracts.IOperations
 {
@@ -149,13 +150,31 @@ public sealed class StaffTransferService(
         {
             baseQuery = baseQuery.Where(t => t.FromOrganisationId == org || t.ToOrganisationId == org || t.IndividualId == actor.IndividualId);
 
+            var orgScope = await HRM.Helpers.OrganisationalAccessScopeResolver.ResolveCurrentUserAsync(
+                db, access, org, Permissions.StaffTransferView);
+
             if (!isHrOrAdmin && !canInitiate && !canApproveReceiving)
             {
+                var scopedUnits = orgScope.AuthorisedStructureIds.ToArray();
                 baseQuery = baseQuery.Where(t =>
                     t.IndividualId == actor.IndividualId ||
                     t.CurrentSupervisorIndividualId == actor.IndividualId ||
                     t.CurrentHodIndividualId == actor.IndividualId ||
-                    t.RequestedByUserId == actor.UserId);
+                    t.RequestedByUserId == actor.UserId ||
+                    (scopedUnits.Length > 0 &&
+                     ((t.FromOrganisationId == org && scopedUnits.Contains(t.FromOrganisationStructureId)) ||
+                      (t.ToOrganisationId == org && scopedUnits.Contains(t.ToOrganisationStructureId)))));
+            }
+            else if (!orgScope.HasFullOrganisationScope)
+            {
+                var scopedUnits = orgScope.AuthorisedStructureIds.ToArray();
+                baseQuery = baseQuery.Where(t =>
+                    t.IndividualId == actor.IndividualId ||
+                    t.CurrentSupervisorIndividualId == actor.IndividualId ||
+                    t.CurrentHodIndividualId == actor.IndividualId ||
+                    t.RequestedByUserId == actor.UserId ||
+                    (t.FromOrganisationId == org && scopedUnits.Contains(t.FromOrganisationStructureId)) ||
+                    (t.ToOrganisationId == org && scopedUnits.Contains(t.ToOrganisationStructureId)));
             }
         }
 
@@ -2034,6 +2053,14 @@ public sealed class StaffTransferService(
             transfer.UpdatedDate = DateTime.UtcNow;
             await db.SaveChangesAsync();
             await tx.CommitAsync();
+
+            if (activityLogs is not null)
+            {
+                await activityLogs.RecordTransferSubmittedAsync(
+                    transfer.StaffTransferId.ToString(),
+                    $"Transfer #{transfer.StaffTransferId} ({input.ResponseKind})",
+                    transfer.FromOrganisationId);
+            }
 
             return ServiceResult.Ok(input.ResponseKind == StaffTransferConfirmationResponses.Confirmed
                 ? "Transfer information confirmed and routed to the receiving department for final approval."

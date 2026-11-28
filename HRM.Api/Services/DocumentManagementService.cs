@@ -29,7 +29,8 @@ public sealed class DocumentManagementService(
     IDocumentStorageProvider storage,
     IOperationLogService logs,
     IRequestService requests,
-    ILogger<DocumentManagementService> logger)
+    ILogger<DocumentManagementService> logger,
+    HRM.ActivityLogs.Abstractions.IActivityLogService? activityLogs = null)
     : DocumentManagementServiceContracts.IOperations
 {
     private static int _schemaInitialized;
@@ -1698,6 +1699,14 @@ public sealed class DocumentManagementService(
             OccurredAtUtc = DateTime.UtcNow
         });
         await db.SaveChangesAsync();
+
+        if (!isPreview && activityLogs is not null)
+        {
+            await activityLogs.RecordDocumentDownloadAsync(
+                doc.DocumentId.ToString(),
+                doc.Title ?? targetVersion.OriginalFileName,
+                doc.OrganisationId);
+        }
 
         return new DmsDocumentDownloadDto
         {

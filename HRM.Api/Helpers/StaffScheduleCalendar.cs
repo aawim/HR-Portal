@@ -9,7 +9,9 @@ public static class StaffScheduleCalendar
 {
     public static bool IsWeekend(DateTime date)=>SchedulePattern.IsWeekend(date);
     public static int TemplateOn(JobWorkTemplateAssignment assignment,DateTime date)=>SchedulePattern.TemplateOn(assignment,date);
+    public static RotationSlot? SlotOn(JobWorkTemplateAssignment assignment,DateTime date)=>SchedulePattern.SlotOn(assignment,date);
     public static List<int> Parse(string? json)=>SchedulePattern.Parse(json);
+    public static List<RotationSlot> ParseSlots(string? json)=>SchedulePattern.ParseSlots(json);
     public static async Task<HashSet<DateTime>> RestDaysAsync(HrmTeContext db, int individualId, DateTime from, DateTime to, CancellationToken ct = default, int? organisationId = null)
     {
         var jobs=await db.Jobs.AsNoTracking().Where(j=>j.IndividualID==individualId && (!organisationId.HasValue || j.OrganisationID==organisationId)).ToListAsync(ct);

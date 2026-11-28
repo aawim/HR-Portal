@@ -22,6 +22,7 @@
 
         InProgress = 9,
         NoActiveSchedule = 10,
-        BeforePositionApproval = 11
+        BeforePositionApproval = 11,
+        Exempt = 12
     }
 }

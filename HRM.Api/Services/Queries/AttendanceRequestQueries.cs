@@ -14,7 +14,7 @@ public sealed class AttendanceRequestQueries(IDbContextFactory<HrmTeContext> fac
         var organisation = await scope.OrganisationAsync(filter.OrganisationId);
         var (start, until) = ApiReadScope.Dates(filter.From, filter.To);
         if (mine && filter.StaffId.HasValue && filter.StaffId != actor.IndividualId) throw new UnauthorizedAccessException("Use your own requests.");
-        var canViewAll = !mine && (actor.IsSuperAdministrator || await access.HasPermissionAsync("Attendance.View") || await access.HasPermissionAsync("Admin"));
+        var canViewAll = !mine && (actor.IsSuperAdministrator || actor.IsHRStaff || actor.IsHRHead || actor.IsHRManager || actor.IsOrganisationAdmin || await access.HasPermissionAsync("Attendance.View") || await access.HasPermissionAsync("Admin"));
         await using var db = await factory.CreateDbContextAsync(ct);
         var links = db.AttendanceLogRequests.Select(r => new { r.RequestId, r.AttendanceLogId, r.Comments, Kind = "Attendance" })
             .Concat(db.AttendanceLogChangeRequests.Select(r => new { r.RequestId, r.AttendanceLogId, r.Comments, Kind = "Uneven-log correction" }));

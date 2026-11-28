@@ -9,6 +9,7 @@ namespace HRM.DTOs.Job.JobWorkTemplateAssignment
         public int WorkingDaysMask { get; set; } = 31;
         public DateTime? RotationAnchorDate { get; set; }
         public List<int> RotationTemplateIds { get; set; } = [];
+        public string? RotationPatternJson { get; set; }
         [Range(1, int.MaxValue)]
         public int JobId { get; set; }
 

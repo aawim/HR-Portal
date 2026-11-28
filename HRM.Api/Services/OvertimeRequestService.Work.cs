@@ -21,8 +21,8 @@ public sealed partial class OvertimeRequestService
             j.JoinedDate <= from && (!j.TerminatedDate.HasValue || j.TerminatedDate > to))
             .OrderByDescending(j => j.JoinedDate).FirstOrDefaultAsync()
             ?? throw new InvalidOperationException("Approved employment is required for these dates.");
-        if (!await db.JobTypeOvertimeRules.AnyAsync(p => p.OrganisationId == org && p.JobTypeId == job.JobTypeId && p.IsAllowed))
-            throw new InvalidOperationException("Overtime is not enabled for your Job Type. Contact HR.");
+        if (await TeamOvertimePolicy.ResolveAsync(db, job, from) == null)
+            throw new InvalidOperationException("Overtime is not enabled for your Job Type or sub-team. Contact HR.");
         return job;
     }
     // All timestamps are local schedule time, as stored by the existing attendance system.

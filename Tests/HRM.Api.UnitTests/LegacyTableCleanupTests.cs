@@ -7,7 +7,7 @@ namespace HRM.Api.UnitTests;
 public sealed class LegacyTableCleanupTests
 {
     [Fact]
-    public void Active_registry_and_legacy_shift_models_use_prefixed_tables_and_preserve_keys()
+    public void Active_registry_models_use_prefixed_tables_and_preserve_keys()
     {
         using var db=new QueryFactory().CreateDbContext();
         (Type Type,string Table)[] expected=
@@ -26,7 +26,7 @@ public sealed class LegacyTableCleanupTests
     public void Retired_tables_have_no_remaining_orm_entities_or_navigations()
     {
         using var db=new QueryFactory().CreateDbContext();
-        string[] retired=["AdditionDeductionTypeDependencyTimePeriodAmounts","BudgetTransactions","BudgetTransactionTypes","BusinessEntityRelatedLocationTypes","BusinessEntityRelationAssignedRoles","BusinessEntityRequests","BusinessEntityRelations","BusinessEntityRelationStates"];
+        string[] retired=["AdditionDeductionTypeDependencyTimePeriodAmounts","BudgetTransactions","BudgetTransactionTypes","BusinessEntityRelatedLocationTypes","BusinessEntityRelationAssignedRoles","BusinessEntityRequests","BusinessEntityRelations","BusinessEntityRelationStates","ShiftSchedules","ShiftScheduleDays"];
         foreach(var entity in db.Model.GetEntityTypes())
         {
             Assert.DoesNotContain(entity.GetTableName(),retired);

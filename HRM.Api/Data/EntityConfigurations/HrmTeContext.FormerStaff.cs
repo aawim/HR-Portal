@@ -41,13 +41,14 @@ public partial class HrmTeContext
         static bool Ownership(IForeignKey fk)=>fk.Properties.All(p=>!p.Name.Contains("CreatedBy",StringComparison.OrdinalIgnoreCase)&&!p.Name.Contains("UpdatedBy",StringComparison.OrdinalIgnoreCase)&&!p.Name.Contains("PerformedBy",StringComparison.OrdinalIgnoreCase)&&!p.Name.Contains("ApprovedBy",StringComparison.OrdinalIgnoreCase)&&!p.Name.Contains("LastStateChangedBy",StringComparison.OrdinalIgnoreCase)&&!p.Name.Contains("Approver",StringComparison.OrdinalIgnoreCase)&&!p.Name.Contains("OperationLog",StringComparison.OrdinalIgnoreCase)&&!p.Name.Contains("Actor",StringComparison.OrdinalIgnoreCase)&&!p.Name.Contains("VerifiedBy",StringComparison.OrdinalIgnoreCase)&&!p.Name.Contains("LinkedBy",StringComparison.OrdinalIgnoreCase));
         async Task Visit(EntityEntry entry,int depth,bool appointmentPath=false)
         {
-            if(depth>12||Runtime(entry.Metadata))return;
+            if(depth>12||Runtime(entry.Metadata)||(entry.Metadata.ClrType.Name is "UserAssignedUserGroup" && entry.State == EntityState.Deleted)||(entry.Metadata.ClrType.Name is "UserRole" or "UserAccessScope" or "StaffAccessGrant" or "StaffAccessScope" && entry.State == EntityState.Modified && entry.Metadata.FindProperty("IsActive") != null && entry.CurrentValues["IsActive"] is false)||(entry.Metadata.ClrType.Name is "AdminAccessGrantRequest" && entry.State == EntityState.Modified && entry.Metadata.FindProperty("IsOpen") != null && entry.CurrentValues["IsOpen"] is false)||(entry.Metadata.ClrType.Name is "User" && entry.State == EntityState.Modified && entry.CurrentValues["AdminPortalAccessEnabled"] is false && entry.Properties.Where(p => p.IsModified).All(p => p.Metadata.Name is "AdminPortalAccessEnabled" or "AdminPortalAccessOrganisationId" or "OperationLogId")))return;
             if(entry.State!=EntityState.Unchanged)
                 appointmentPath=staffAppointmentRequest!=null && (
                     ReferenceEquals(entry.Entity,staffAppointmentRequest) ||
                     entry.Metadata.ClrType.Name is "StaffOnboardingRequest" ||
                     entry.Metadata.ClrType.Name.StartsWith("WfRequest",StringComparison.Ordinal) ||
-                    entry.State==EntityState.Added && entry.Metadata.ClrType.Name is "Job" or "JobPosition" or "JobPositionsRequest" or "JobRequest" or "RequestJob" or "FrameworkJobStepHistory" or "Staff" or "User");
+                    (entry.State==EntityState.Added && entry.Metadata.ClrType.Name is "Job" or "JobPosition" or "JobPositionsRequest" or "JobRequest" or "RequestJob" or "FrameworkJobStepHistory" or "JobLeaveType" or "Staff" or "User") ||
+                    (entry.State==EntityState.Modified && entry.Metadata.ClrType.Name is "Job" or "JobPosition" or "User"));
             var key=entry.Metadata.FindPrimaryKey();
             var identity=entry.Metadata.Name+":"+string.Join(":",key?.Properties.Select(p=>entry.Property(p.Name).CurrentValue)??[]);
             if(!visited.Add(identity))return;

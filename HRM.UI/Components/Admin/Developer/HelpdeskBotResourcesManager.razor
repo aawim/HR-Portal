@@ -1,0 +1,438 @@
+@using HRM.DTOs.Helpdesk
+@inject HRM.Services.Contracts.HelpdeskServiceContracts.IOperations Helpdesk
+@inject HRM.Services.ToastService Toast
+@inject ILogger<HelpdeskBotResourcesManager> Logger
+
+<section class="w-full min-w-0 flex flex-col gap-3 text-slate-900 dark:text-slate-100">
+    @if (error != null)
+    {
+        <div role="alert" class="flex items-center justify-between gap-2 rounded-xl border border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/40 px-3 py-2 text-xs text-rose-800 dark:text-rose-200">
+            <span>@error</span>
+            <button type="button" class="app-button app-button-ghost app-button-sm app-button-icon" @onclick="() => error = null"><AppIcon Name="close" Class="text-xs" /></button>
+        </div>
+    }
+
+    <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-xs">
+        <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 dark:border-slate-800 bg-amber-50/50 dark:bg-amber-950/20 px-4 py-3">
+            <div class="min-w-0">
+                <div class="flex items-center gap-2 flex-wrap">
+                    <h2 class="text-sm font-bold text-slate-900 dark:text-slate-100">Helpdesk Bot Resources (Knowledge Base)</h2>
+                    <span class="rounded-full bg-amber-100 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800 px-2 py-0.5 text-[10px] font-bold text-amber-800 dark:text-amber-200">
+                        @articles.Count(a => a.IsActive) active / @articles.Count total
+                    </span>
+                </div>
+                <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                    Add, edit, or import guides and policies used by the Helpdesk Bot across all organisations.
+                </p>
+            </div>
+            <div class="flex flex-wrap items-center gap-1.5">
+                <button type="button" class="app-button app-button-secondary app-button-sm" disabled="@busy" @onclick="LoadArticlesAsync">
+                    <AppIcon Name="refresh" Class="text-xs" />
+                    <span>Refresh</span>
+                </button>
+                <button type="button" class="app-button app-button-secondary app-button-sm" disabled="@busy" @onclick="OpenImportModal">
+                    <AppIcon Name="bi-upload" Class="text-xs" />
+                    <span>Import Policy (.md/.txt)</span>
+                </button>
+                <button type="button" class="app-button app-button-primary app-button-sm" disabled="@busy" @onclick="OpenNewArticleModal">
+                    <AppIcon Name="add" Class="text-xs" />
+                    <span>Add Bot Resource</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Search & Category Filter -->
+        <div class="flex flex-wrap items-center gap-2 border-b border-slate-100 dark:border-slate-800 px-4 py-2.5 bg-slate-50/60 dark:bg-slate-800/30">
+            <select aria-label="Filter by category"
+                    @bind="categoryFilter"
+                    class="rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 py-1.5 text-xs text-slate-800 dark:text-slate-100">
+                <option value="">All Categories</option>
+                @foreach (var cat in Categories)
+                {
+                    <option value="@cat">@cat</option>
+                }
+            </select>
+            <input type="search"
+                   @bind="kbSearch"
+                   @bind:event="oninput"
+                   placeholder="Search by title, keyword, or answer..."
+                   class="flex-1 min-w-[200px] rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-1.5 text-xs text-slate-800 dark:text-slate-100" />
+            <button type="button" class="app-button app-button-secondary app-button-sm" disabled="@busy" @onclick="LoadArticlesAsync">Search</button>
+        </div>
+
+        <!-- Resources List -->
+        <div class="divide-y divide-slate-100 dark:divide-slate-800">
+            @if (loading)
+            {
+                <p class="p-6 text-center text-xs text-slate-400">Loading Helpdesk Bot resources…</p>
+            }
+            else if (FilteredArticles.Count == 0)
+            {
+                <p class="p-6 text-center text-xs text-slate-400">No Bot resources found matching your filter.</p>
+            }
+            else
+            {
+                @foreach (var art in FilteredArticles)
+                {
+                    <div @key="art.Id" class="p-3.5 flex flex-wrap items-start justify-between gap-3 hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition">
+                        <div class="min-w-0 flex-1 space-y-1">
+                            <div class="flex items-center gap-1.5 flex-wrap">
+                                <span class="rounded-full bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-200 border border-amber-200 dark:border-amber-800 px-2 py-0.5 text-[10px] font-semibold">@art.Category</span>
+                                <h3 class="text-xs font-bold text-slate-900 dark:text-slate-100">@art.Title</h3>
+                                @if (!art.IsActive)
+                                {
+                                    <span class="rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 px-2 py-0.5 text-[10px] font-semibold">Inactive</span>
+                                }
+                            </div>
+                            <p class="text-[11px] text-slate-600 dark:text-slate-300 line-clamp-2 whitespace-pre-line">@art.Answer</p>
+                            <p class="text-[10px] text-slate-400">Keywords: @art.Keywords</p>
+                        </div>
+                        <div class="flex items-center gap-1.5 shrink-0">
+                            <button type="button" class="app-button app-button-secondary app-button-sm" disabled="@busy" @onclick="() => OpenEditArticleModal(art)">Edit</button>
+                            <button type="button" class="app-button app-button-danger app-button-sm" disabled="@busy" @onclick="() => DeleteArticleAsync(art.Id)">Delete</button>
+                        </div>
+                    </div>
+                }
+            }
+        </div>
+    </div>
+
+    <!-- Add / Edit Resource Modal -->
+    @if (showArticleModal)
+    {
+        <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4" role="dialog" aria-modal="true" aria-label="Bot Resource Editor">
+            <div class="w-full max-w-xl rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-2xl overflow-hidden">
+                <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-amber-50/70 dark:bg-amber-950/30 px-4 py-3">
+                    <h3 class="text-sm font-bold text-slate-900 dark:text-slate-100">@(articleDraft.Id == 0 ? "Add Helpdesk Bot Resource" : "Edit Helpdesk Bot Resource")</h3>
+                    <button type="button" class="text-slate-500 hover:text-slate-800 font-bold" @onclick="() => showArticleModal = false">✕</button>
+                </div>
+                <div class="p-4 flex flex-col gap-2.5 text-xs">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <label class="block font-medium text-slate-700 dark:text-slate-300">
+                            Category
+                            <select @bind="articleDraft.Category" class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs">
+                                @foreach (var cat in Categories)
+                                {
+                                    <option value="@cat">@cat</option>
+                                }
+                            </select>
+                        </label>
+                        <label class="block font-medium text-slate-700 dark:text-slate-300">
+                            Sort Order
+                            <input type="number" @bind="articleDraft.SortOrder" class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs" />
+                        </label>
+                    </div>
+                    <label class="block font-medium text-slate-700 dark:text-slate-300">
+                        Title
+                        <input @bind="articleDraft.Title" maxlength="200" placeholder="e.g. How to set up WhatsApp in the Communication Hub" class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs" />
+                    </label>
+                    <label class="block font-medium text-slate-700 dark:text-slate-300">
+                        Trigger Keywords (comma-separated)
+                        <input @bind="articleDraft.Keywords" maxlength="500" placeholder="whatsapp, meta, phone number id, setup whatsapp" class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs" />
+                    </label>
+                    <label class="block font-medium text-slate-700 dark:text-slate-300">
+                        Bot Answer (supports **bold**, numbered steps, bullets, and clickable `/routes`)
+                        <textarea @bind="articleDraft.Answer" rows="6" maxlength="4000" placeholder="Step-by-step response shown by the Helpdesk Bot..." class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-xs"></textarea>
+                    </label>
+                    <label class="inline-flex items-center gap-2 font-medium text-slate-700 dark:text-slate-300">
+                        <input type="checkbox" @bind="articleDraft.IsActive" />
+                        <span>Active (bot can use this resource immediately)</span>
+                    </label>
+                </div>
+                <div class="flex justify-end gap-2 border-t border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 px-4 py-3">
+                    <button type="button" class="app-button app-button-secondary app-button-sm" @onclick="() => showArticleModal = false">Cancel</button>
+                    <button type="button" class="app-button app-button-primary app-button-sm" disabled="@busy" @onclick="SaveArticleAsync">Save Resource</button>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- Import Policy / Guide Modal -->
+    @if (showImportModal)
+    {
+        <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4" role="dialog" aria-modal="true" aria-label="Import Policy into Bot Resources">
+            <div class="w-full max-w-2xl rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+                <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-amber-50/70 dark:bg-amber-950/30 px-4 py-3">
+                    <div>
+                        <h3 class="text-sm font-bold text-slate-900 dark:text-slate-100">Import Policy / Guide into Helpdesk Bot</h3>
+                        <p class="text-[11px] text-slate-600 dark:text-slate-400">Upload a Markdown (.md) or Text (.txt) document. Headings split automatically into searchable bot resources.</p>
+                    </div>
+                    <button type="button" class="text-slate-500 hover:text-slate-800 font-bold" @onclick="() => showImportModal = false">✕</button>
+                </div>
+                <div class="p-4 flex flex-col gap-3 text-xs overflow-y-auto flex-1">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <label class="block font-medium text-slate-700 dark:text-slate-300">
+                            Default Category
+                            <select @bind="importCategory" class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs">
+                                @foreach (var cat in Categories)
+                                {
+                                    <option value="@cat">@cat</option>
+                                }
+                            </select>
+                        </label>
+                        <label class="block font-medium text-slate-700 dark:text-slate-300">
+                            Select File (.md or .txt, max 512 KB)
+                            <InputFile OnChange="OnPolicyFileSelectedAsync" accept=".md,.txt,text/markdown,text/plain" class="mt-1 block w-full text-xs text-slate-600" />
+                        </label>
+                    </div>
+
+                    @if (importedDrafts.Count > 0)
+                    {
+                        <div class="rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+                            <div class="bg-slate-50 dark:bg-slate-800 px-3 py-1.5 text-[11px] font-bold text-slate-700 dark:text-slate-200 flex items-center justify-between">
+                                <span>Detected Sections (@importedDrafts.Count(x => x.Selected) selected)</span>
+                                <span class="text-[10px] font-normal text-slate-500">Uncheck any section to skip</span>
+                            </div>
+                            <div class="divide-y divide-slate-100 dark:divide-slate-800 max-h-64 overflow-y-auto">
+                                @foreach (var item in importedDrafts)
+                                {
+                                    <label class="flex items-start gap-2.5 p-2.5 cursor-pointer hover:bg-slate-50/70 dark:hover:bg-slate-800/50">
+                                        <input type="checkbox" class="mt-0.5" @bind="item.Selected" />
+                                        <div class="min-w-0 flex-1">
+                                            <p class="font-bold text-slate-900 dark:text-slate-100 truncate">@item.Title</p>
+                                            <p class="text-[11px] text-slate-500 line-clamp-2">@item.Answer</p>
+                                        </div>
+                                    </label>
+                                }
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="rounded-xl border border-dashed border-slate-300 dark:border-slate-700 p-5 text-center text-slate-500">
+                            Upload a `.md` or `.txt` policy manual or guide. Headings (`#`, `##`, `###`) become individual Helpdesk Bot resources.
+                        </div>
+                    }
+                </div>
+                <div class="flex justify-end gap-2 border-t border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 px-4 py-3">
+                    <button type="button" class="app-button app-button-secondary app-button-sm" @onclick="() => showImportModal = false">Cancel</button>
+                    <button type="button" class="app-button app-button-primary app-button-sm"
+                            disabled="@(busy || !importedDrafts.Any(x => x.Selected))"
+                            @onclick="ImportSelectedArticlesAsync">
+                        Import @importedDrafts.Count(x => x.Selected) Resource@(importedDrafts.Count(x => x.Selected) == 1 ? "" : "s")
+                    </button>
+                </div>
+            </div>
+        </div>
+    }
+</section>
+
+@code {
+    private static readonly string[] Categories =
+    [
+        "General",
+        "Leave & Attendance",
+        "Payroll & Payslips",
+        "Requests & Approvals",
+        "Account & Access",
+        "Technical Issue"
+    ];
+
+    private List<HelpdeskArticleDto> articles = [];
+    private string kbSearch = "", categoryFilter = "";
+    private string? error;
+    private bool loading = true, busy, showArticleModal, showImportModal;
+    private HelpdeskArticleDto articleDraft = new();
+    private string importCategory = "General";
+    private List<ImportDraftItem> importedDrafts = [];
+
+    private sealed class ImportDraftItem
+    {
+        public bool Selected { get; set; } = true;
+        public string Title { get; set; } = "";
+        public string Keywords { get; set; } = "";
+        public string Answer { get; set; } = "";
+    }
+
+    private List<HelpdeskArticleDto> FilteredArticles => articles
+        .Where(a => string.IsNullOrWhiteSpace(categoryFilter) || a.Category.Equals(categoryFilter, StringComparison.OrdinalIgnoreCase))
+        .ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadArticlesAsync();
+    }
+
+    private async Task LoadArticlesAsync()
+    {
+        if (busy) return;
+        busy = true;
+        loading = articles.Count == 0;
+        error = null;
+        try { articles = await Helpdesk.GetArticlesAsync(kbSearch); }
+        catch (Exception ex) { Fail(ex); }
+        finally { busy = false; loading = false; }
+    }
+
+    private void OpenNewArticleModal()
+    {
+        articleDraft = new HelpdeskArticleDto { Category = string.IsNullOrWhiteSpace(categoryFilter) ? "General" : categoryFilter, IsActive = true, SortOrder = (articles.Count + 1) * 10 };
+        showArticleModal = true;
+    }
+
+    private void OpenEditArticleModal(HelpdeskArticleDto art)
+    {
+        articleDraft = new HelpdeskArticleDto
+        {
+            Id = art.Id,
+            Category = art.Category,
+            Title = art.Title,
+            Keywords = art.Keywords,
+            Answer = art.Answer,
+            IsActive = art.IsActive,
+            SortOrder = art.SortOrder
+        };
+        showArticleModal = true;
+    }
+
+    private async Task SaveArticleAsync()
+    {
+        if (busy) return;
+        busy = true;
+        error = null;
+        try
+        {
+            var result = await Helpdesk.SaveArticleAsync(articleDraft);
+            if (!result.Success) { error = result.Message; Toast.Error(result.Message); return; }
+            Toast.Success(result.Message);
+            showArticleModal = false;
+            articles = await Helpdesk.GetArticlesAsync(kbSearch);
+        }
+        catch (Exception ex) { Fail(ex); }
+        finally { busy = false; }
+    }
+
+    private async Task DeleteArticleAsync(int id)
+    {
+        if (busy) return;
+        busy = true;
+        error = null;
+        try
+        {
+            var result = await Helpdesk.DeleteArticleAsync(id);
+            if (!result.Success) { error = result.Message; Toast.Error(result.Message); return; }
+            Toast.Success(result.Message);
+            articles = await Helpdesk.GetArticlesAsync(kbSearch);
+        }
+        catch (Exception ex) { Fail(ex); }
+        finally { busy = false; }
+    }
+
+    private void OpenImportModal()
+    {
+        importCategory = "General";
+        importedDrafts = [];
+        showImportModal = true;
+    }
+
+    private async Task OnPolicyFileSelectedAsync(InputFileChangeEventArgs e)
+    {
+        error = null;
+        importedDrafts = [];
+        var file = e.File;
+        if (file == null) return;
+        if (file.Size > 512 * 1024)
+        {
+            error = "Policy file must be 512 KB or smaller.";
+            return;
+        }
+        try
+        {
+            using var reader = new StreamReader(file.OpenReadStream(512 * 1024));
+            var raw = await reader.ReadToEndAsync();
+            importedDrafts = ParsePolicySections(file.Name, raw);
+            if (importedDrafts.Count == 0)
+                error = "No readable text sections were found in the uploaded file.";
+        }
+        catch (Exception ex) { Fail(ex); }
+    }
+
+    private static List<ImportDraftItem> ParsePolicySections(string fileName, string content)
+    {
+        var results = new List<ImportDraftItem>();
+        var lines = content.Replace("\r\n", "\n").Split('\n');
+        var currentTitle = Path.GetFileNameWithoutExtension(fileName);
+        var buffer = new List<string>();
+
+        void Flush()
+        {
+            var body = string.Join("\n", buffer).Trim();
+            buffer.Clear();
+            if (body.Length < 15) return;
+            if (body.Length > 3900) body = body[..3900].TrimEnd() + "...";
+            var cleanTitle = currentTitle.Trim('#', ' ', '\t');
+            if (string.IsNullOrWhiteSpace(cleanTitle)) cleanTitle = "Policy Guide";
+            if (cleanTitle.Length > 190) cleanTitle = cleanTitle[..190];
+            var words = System.Text.RegularExpressions.Regex.Matches(cleanTitle.ToLowerInvariant(), "[a-z0-9]{3,}")
+                .Select(m => m.Value)
+                .Distinct()
+                .Take(12);
+            results.Add(new ImportDraftItem
+            {
+                Selected = true,
+                Title = cleanTitle,
+                Keywords = string.Join(", ", words),
+                Answer = body
+            });
+        }
+
+        foreach (var line in lines)
+        {
+            var trimmed = line.Trim();
+            if (trimmed.StartsWith("#", StringComparison.Ordinal))
+            {
+                Flush();
+                currentTitle = trimmed.TrimStart('#').Trim();
+            }
+            else
+            {
+                buffer.Add(line);
+            }
+        }
+        Flush();
+        return results;
+    }
+
+    private async Task ImportSelectedArticlesAsync()
+    {
+        if (busy) return;
+        var selected = importedDrafts.Where(x => x.Selected).ToList();
+        if (selected.Count == 0) return;
+        busy = true;
+        error = null;
+        var imported = 0;
+        try
+        {
+            var order = (articles.Count + 1) * 10;
+            foreach (var item in selected)
+            {
+                var res = await Helpdesk.SaveArticleAsync(new HelpdeskArticleDto
+                {
+                    Category = importCategory,
+                    Title = item.Title,
+                    Keywords = item.Keywords,
+                    Answer = item.Answer,
+                    IsActive = true,
+                    SortOrder = order
+                });
+                if (res.Success)
+                {
+                    imported++;
+                    order += 10;
+                }
+            }
+            Toast.Success($"Imported {imported} Bot resource{(imported == 1 ? "" : "s")}.");
+            showImportModal = false;
+            importedDrafts = [];
+            articles = await Helpdesk.GetArticlesAsync(kbSearch);
+        }
+        catch (Exception ex) { Fail(ex); }
+        finally { busy = false; }
+    }
+
+    private void Fail(Exception ex)
+    {
+        Logger.LogWarning(ex, "Developer Helpdesk Bot resources operation failed");
+        error = ex is UnauthorizedAccessException or InvalidOperationException ? ex.Message : "Could not load or save Helpdesk Bot resources.";
+    }
+}

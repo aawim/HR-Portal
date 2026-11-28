@@ -38,6 +38,9 @@ namespace HRM.Services
 
         public async Task<(AttendanceLogDto? checkIn, AttendanceLogDto? checkOut)> GetTodayStatusAsync(int individualId)
         {
+            await using var db = await _dbFactory.CreateDbContextAsync();
+            await HRM.Helpers.StaffDataAccess.RequireIndividualAsync(db, _userAccessService, individualId);
+
             var today = DateTime.UtcNow.AddHours(5).Date;
 
             var checkIn = await _loader.GetEarliestCheckInAsync(individualId, today);
@@ -63,6 +66,8 @@ namespace HRM.Services
  
             await using var db =
                 await _dbFactory.CreateDbContextAsync();
+
+            await HRM.Helpers.StaffDataAccess.RequireIndividualAsync(db, _userAccessService, individualId);
 
             var today = DateTime.UtcNow.AddHours(5).Date;
 
@@ -454,13 +459,18 @@ namespace HRM.Services
                 await _dbFactory.CreateDbContextAsync(
                     cancellationToken);
 
+            var scopedOrg = await HRM.Helpers.StaffDataAccess.RequireIndividualAsync(db, _userAccessService, individualId);
+
             var date =
                 checkTime.Date;
 
             var nextDate =
                 date.AddDays(1);
 
-            var organisation = await db.Jobs.Where(j => j.JobId == jobId && j.IndividualID == individualId).Select(j => (int?)j.OrganisationID).SingleOrDefaultAsync(cancellationToken);
+            var organisation = await db.Jobs
+                .Where(j => j.JobId == jobId && j.IndividualID == individualId && (!scopedOrg.HasValue || j.OrganisationID == scopedOrg.Value))
+                .Select(j => (int?)j.OrganisationID)
+                .SingleOrDefaultAsync(cancellationToken);
             if (!organisation.HasValue) return [];
             var rawLogEntities = await db.AttendanceLogs.AsNoTracking()
                 .Where(log =>
@@ -589,6 +599,15 @@ namespace HRM.Services
             DateTime workDate,
             CancellationToken cancellationToken = default)
         {
+            await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
+            var scopedOrg = await HRM.Helpers.StaffDataAccess.RequireIndividualAsync(db, _userAccessService, individualId);
+            if (scopedOrg.HasValue && scopedOrg.Value != organisationBusinessEntityId)
+                throw new UnauthorizedAccessException("Attendance evaluation is outside the current organisation.");
+            if (!await db.Jobs.AsNoTracking().AnyAsync(
+                j => j.JobId == jobId && j.IndividualID == individualId && j.OrganisationID == organisationBusinessEntityId,
+                cancellationToken))
+                throw new UnauthorizedAccessException("Employment record is unavailable.");
+
             return await _attendanceEvaluationService.EvaluateAsync(
                 individualId,
                 jobId,
@@ -622,6 +641,7 @@ namespace HRM.Services
             await using var db = await _dbFactory.CreateDbContextAsync(ct);
             var jobs = await db.Jobs.Where(x => x.IndividualID == staffId && x.OrganisationID == org).Select(x => x.JobId).ToListAsync(ct);
             if (jobs.Count == 0) throw new UnauthorizedAccessException("The selected employee is not in the current organisation.");
+            await HRM.Helpers.StaffAttributeAccess.RequireViewAsync(db, _userAccessService, staffId, org, ct);
             if (actor.IndividualId == staffId || await CanViewAllStaffAttendanceAsync(actor)) return org;
             foreach (var job in jobs)
                 if ((await HRM.Services.Leave.LeaveHandoverService.SupervisorsAsync(db, job)).Contains(actor.IndividualId)) return org;
@@ -805,6 +825,19 @@ namespace HRM.Services
 
             var eligibility = await HRM.Helpers.AttendanceEligibilityCalendar.LoadAsync(db, individualId,
                 yearStart, yearEndExclusive.AddDays(-1), organisationId, ct: cancellationToken);
+
+            var holidayExceptions = await db.OrganisationCalendarExceptions.AsNoTracking()
+                .Where(x => x.CalendarImpactType == "MarkAsNonWorkingDay" && x.IsActive &&
+                            (!organisationId.HasValue || x.OrganisationBusinessEntityId == organisationId.Value) &&
+                            x.EffectiveDate < yearEndExclusive && x.EffectiveEndDate >= yearStart)
+                .ToListAsync(cancellationToken);
+            var holidayEvents = await db.OrganisationEvents.AsNoTracking()
+                .Where(x => (x.CalendarImpactType == "MarkAsNonWorkingDay" || x.Category == "Holiday") &&
+                            x.Status == "Published" && x.IsValid &&
+                            (!organisationId.HasValue || x.OrganisationBusinessEntityId == organisationId.Value) &&
+                            x.StartDateTime < yearEndExclusive && x.EndDateTime >= yearStart)
+                .ToListAsync(cancellationToken);
+
             var scheduleFacts = await HRM.Helpers.AttendanceScheduleFacts.LoadAsync(db, individualId,
                 yearStart, queryEnd.Date, organisationId, cancellationToken, logs);
             var schedulesByDay = scheduleFacts.GroupBy(s => s.Date).ToDictionary(g => g.Key, g => g.ToList());
@@ -1096,9 +1129,13 @@ namespace HRM.Services
 
                 // Only official working days can be absent. Official shift patterns
                 // override the normal Sunday–Thursday working week; supplemental duty does not.
+                var isHoliday = holidayExceptions.Any(x => x.EffectiveDate.Date <= date && x.EffectiveEndDate.Date >= date &&
+                    (x.TargetScope == "Organisation" || (x.TargetScope == "Individual" && x.TargetEntityId == individualId)))
+                    || holidayEvents.Any(x => x.StartDateTime.Date <= date && x.EndDateTime.Date >= date);
+
                 var isRestDay = eligibility[date].HasActiveSchedule && !eligibility[date].IsScheduledDay;
                 var isAbsent =
-                    eligibility[date].CanBeAbsent && !isRestDay && !isOnLeave &&
+                    eligibility[date].CanBeAbsent && !isRestDay && !isOnLeave && !isHoliday &&
                     !isPresent &&
                     !isUnresolved;
 
@@ -1145,6 +1182,12 @@ namespace HRM.Services
                 // -----------------------------------------------------
                 // Add day
                 // -----------------------------------------------------
+                var scheduledEndMax = requiredSchedules.Select(s => (DateTime?)s.ScheduledEnd).Max();
+                var nowTime = DateTime.UtcNow.AddHours(5);
+                var isMissingClock = !isAbsent && !isHoliday && !isRestDay && !isOnLeave &&
+                    ((firstCheckIn != null && lastCheckOut == null && (date < nowTime.Date || nowTime >= (scheduledEndMax ?? date.AddHours(14))))
+                     || (firstCheckIn == null && lastCheckOut != null));
+
                 result.Add(
                     new YearlyAttendanceDayDto
                     {
@@ -1152,7 +1195,7 @@ namespace HRM.Services
                         IsLate = isLate,
                         LateMinutes = lateMinutes,
                         ScheduledStart = scheduled?.ScheduledStart,
-                        ScheduledEnd = requiredSchedules.Select(s => (DateTime?)s.ScheduledEnd).Max(),
+                        ScheduledEnd = scheduledEndMax,
                         IsPerfectlyAttended = isPresent && !isLate && completed,
                         HasApprovedPosition = eligibility[date].HasApprovedPosition,
                         RequiresAttendance = eligibility[date].CanBeAbsent,
@@ -1210,7 +1253,10 @@ namespace HRM.Services
                             isOnLeave,
 
                         IsHoliday =
-                            false
+                            isHoliday,
+
+                        IsMissingClock =
+                            isMissingClock
                     });
             }
 

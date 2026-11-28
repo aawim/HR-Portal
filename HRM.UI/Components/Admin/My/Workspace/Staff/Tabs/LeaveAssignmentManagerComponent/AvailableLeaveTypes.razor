@@ -1,41 +1,22 @@
 @using HRM.DTOs.LeaveTypes
 
-<div class="overflow-hidden rounded-xl border
-            border-blue-200 bg-white shadow-sm">
+<div class="bg-white rounded-xl border border-slate-200 shadow-sm h-full flex flex-col">
 
     <!-- Header -->
-    <div class="border-b border-blue-100 bg-blue-50 p-4">
+    <div class="px-4 py-3 border-b border-slate-100 min-h-[4.5rem] flex flex-col justify-center">
+        <h3 class="font-semibold text-slate-800">
+            Available Leave Types
+        </h3>
 
-        <div class="flex items-center justify-between">
-
-            <div>
-                <h3 class="font-semibold text-slate-800">
-                    Available Leave Types
-                </h3>
-
-                <p class="mt-1 text-xs text-slate-500">
-                    @FilteredTypes.Count available
-                </p>
-            </div>
-
-            <span class="rounded-full bg-blue-100
-                         px-2.5 py-1 text-xs
-                         font-medium text-blue-700">
-                New
-            </span>
-        </div>
+        <p class="text-xs text-slate-500 mt-1">
+            @FilteredTypes.Count available
+        </p>
     </div>
 
     <!-- Search -->
-    <div class="border-b border-slate-100 p-3">
-
+    <div class="p-2 border-b border-slate-100">
         <div class="relative">
-
-            <input class="w-full rounded-lg border border-slate-300
-                          px-3 py-2 pr-9 text-sm
-                          focus:border-blue-500
-                          focus:outline-none
-                          focus:ring-2 focus:ring-blue-200"
+            <input class="w-full rounded-lg border border-slate-300 px-2.5 py-1.5 pr-8 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
                    placeholder="Search leave types..."
                    disabled="@IsProcessing"
                    @bind="_search"
@@ -44,31 +25,26 @@
             @if (!string.IsNullOrWhiteSpace(_search))
             {
                 <button type="button"
-                        class="absolute inset-y-0 right-0
-                               flex items-center px-3
-                               text-lg text-slate-400
-                               hover:text-slate-700"
+                        class="absolute inset-y-0 right-0 flex items-center px-2 text-xs text-slate-400 hover:text-slate-700"
                         title="Clear search"
                         @onclick="ClearSearch">
-                    ×
+                    ✕
                 </button>
             }
         </div>
     </div>
 
     <!-- List -->
-    <div class="max-h-[560px] min-h-[100px]
-                overflow-y-auto p-3">
-
+    <div class="max-h-[550px] overflow-y-auto divide-y divide-slate-100 flex-1">
         @if (Types.Count == 0)
         {
-            <div class="py-8 text-center text-sm text-slate-500">
+            <div class="py-8 text-center text-xs text-slate-500">
                 No leave types are available.
             </div>
         }
         else if (FilteredTypes.Count == 0)
         {
-            <div class="py-8 text-center text-sm text-slate-500">
+            <div class="py-8 text-center text-xs text-slate-500">
                 No leave types match your search.
             </div>
         }
@@ -76,94 +52,69 @@
         {
             @foreach (var type in FilteredTypes)
             {
-                <button type="button"
-                        @key="type.LeaveTypeId"
-                        class="mb-2 block w-full rounded-lg
-                               border p-3 text-left
-                               transition-colors
-                               @GetButtonClass(type)"
-                        disabled="@IsProcessing"
-                        @onclick="() => SelectType(type)">
+                <div @key="type.LeaveTypeId"
+                     class="p-2.5 cursor-pointer transition text-left w-full @(IsSelected(type) ? "bg-blue-50 border-l-4 border-blue-600" : "hover:bg-slate-50")"
+                     @onclick="() => SelectType(type)">
 
-                    <div class="flex items-start
-                                justify-between gap-3">
-
+                    <div class="flex items-center justify-between gap-2">
                         <div class="min-w-0 flex-1">
-
-                            <div class="font-semibold text-slate-800">
-                                @(string.IsNullOrWhiteSpace(type.Name)
+                            <div class="font-medium text-xs text-slate-800 truncate">
+                                🌴 @(string.IsNullOrWhiteSpace(type.Name)
                                     ? "Unnamed leave type"
                                     : type.Name)
                             </div>
 
-                            @if (!string.IsNullOrWhiteSpace(
-                           type.NameDhivehi))
+                            @if (!string.IsNullOrWhiteSpace(type.NameDhivehi))
                             {
-                                <div class="mt-0.5 text-xs
-                                            text-slate-500">
+                                <div class="text-[11px] text-slate-500 mt-0.5 truncate" lang="dv" dir="rtl">
                                     @type.NameDhivehi
                                 </div>
                             }
 
                             @if (!string.IsNullOrWhiteSpace(type.Code))
                             {
-                                <div class="mt-1 text-xs text-slate-500">
-                                    Code:
-                                    <span class="font-medium">
-                                        @type.Code
-                                    </span>
+                                <div class="text-[10px] text-slate-400 mt-0.5 font-mono">
+                                    Code: @type.Code
                                 </div>
                             }
                         </div>
 
                         @if (IsSelected(type))
                         {
-                            <span class="shrink-0 rounded-full
-                                         bg-blue-600 px-2 py-0.5
-                                         text-xs font-medium
-                                         text-white">
+                            <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-100 text-blue-700 shrink-0">
                                 Selected
                             </span>
                         }
                     </div>
-                </button>
+                </div>
             }
         }
     </div>
 
     <!-- Footer -->
-    <div class="border-t border-slate-100 p-4">
-
+    <div class="border-t border-slate-100 p-2 mt-auto">
         @if (_selectedType is not null)
         {
-            <div class="mb-3 rounded-lg bg-blue-50
-                        p-2 text-xs text-blue-700">
-
-                Selected:
-
-                <span class="font-semibold">
-                    @_selectedType.Name
-                </span>
+            <div class="mb-2 rounded-lg bg-blue-50 p-1.5 text-xs text-blue-700 flex items-center justify-between">
+                <span class="truncate">Selected: <strong>@_selectedType.Name</strong></span>
+                @if (!string.IsNullOrWhiteSpace(_selectedType.Code))
+                {
+                    <span class="font-mono text-[10px] text-blue-500 shrink-0 ml-1">@_selectedType.Code</span>
+                }
             </div>
         }
 
         <button type="button"
-                class="w-full rounded-lg bg-blue-600
-                       px-4 py-2 text-sm font-medium
-                       text-white transition-colors
-                       hover:bg-blue-700
-                       disabled:cursor-not-allowed
-                       disabled:bg-slate-300"
+                class="w-full rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
                 disabled="@CannotAssign"
                 @onclick="AssignTypeAsync">
-
             @if (IsProcessing)
             {
                 <span>Assigning...</span>
             }
             else
             {
-                <span>Assign New Leave Definition</span>
+                <span>+ Assign Selected Leave Type</span>
             }
         </button>
     </div>

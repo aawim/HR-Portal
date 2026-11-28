@@ -46,7 +46,7 @@ public sealed class OutOfOfficeRequests(IDbContextFactory<HrmTeContext> factory,
         var actor = await access.RequireContextAsync(); var org = await scope.OrganisationAsync(filter.OrganisationId);
         var (from, until) = ApiReadScope.Dates(filter.From, filter.To);
         if (mine && filter.StaffId.HasValue && filter.StaffId != actor.IndividualId) throw new UnauthorizedAccessException("Use your own requests.");
-        var readAll = !mine && (actor.IsSuperAdministrator || await access.HasPermissionAsync("Attendance.View") || await access.HasPermissionAsync("Admin"));
+        var readAll = !mine && (actor.IsSuperAdministrator || actor.IsHRStaff || actor.IsHRHead || actor.IsHRManager || actor.IsOrganisationAdmin || await access.HasPermissionAsync("Attendance.View") || await access.HasPermissionAsync("Admin"));
         await using var db = await factory.CreateDbContextAsync(ct);
         if (filter.TeamId.HasValue && !await db.Teams.AnyAsync(t => t.TeamId == filter.TeamId && t.OrganisationId == org, ct)) throw new UnauthorizedAccessException("Select a team in your organisation.");
         var rows = await db.OutOfOfficeRequests.AsNoTracking().Where(r => r.OrganisationBusinessEntityID == org && r.Date >= from && r.Date < until &&

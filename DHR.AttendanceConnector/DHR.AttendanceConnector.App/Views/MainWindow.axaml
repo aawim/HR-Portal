@@ -1,0 +1,296 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="DHR.AttendanceConnector.App.Views.MainWindow"
+        Title="DHR Attendance Connector"
+        Width="1120"
+        Height="720"
+        MinWidth="860"
+        MinHeight="560"
+        Background="#F8FAFC">
+
+  <Grid ColumnDefinitions="220,*">
+    <!-- Left Navigation Sidebar -->
+    <Border Grid.Column="0" Background="#0F172A" Padding="14">
+      <DockPanel>
+        <StackPanel DockPanel.Dock="Top" Spacing="4" Margin="4,4,4,18">
+          <TextBlock Text="DHR Connector" FontSize="18" FontWeight="Bold" Foreground="White" />
+          <TextBlock Text="Biometric Attendance" FontSize="11" Foreground="#94A3B8" />
+        </StackPanel>
+
+        <StackPanel DockPanel.Dock="Bottom" Spacing="4" Margin="4,12,4,4">
+          <TextBlock Text="Background Service Mode" FontSize="10" Foreground="#94A3B8" />
+          <TextBlock Text="{Binding ConnectorVersion, StringFormat='Version {0}'}" FontSize="11" Foreground="#CBD5E1" />
+        </StackPanel>
+
+        <StackPanel Spacing="6">
+          <Button Content="Dashboard" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Padding="12,9"
+                  Background="#1E293B" Foreground="White" Click="OnNavClick" Tag="Dashboard" />
+          <Button Content="Device Connections" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Padding="12,9"
+                  Background="#1E293B" Foreground="White" Click="OnNavClick" Tag="Devices" />
+          <Button Content="Attendance Sync" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Padding="12,9"
+                  Background="#1E293B" Foreground="White" Click="OnNavClick" Tag="Sync" />
+          <Button Content="Activity Logs" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Padding="12,9"
+                  Background="#1E293B" Foreground="White" Click="OnNavClick" Tag="Logs" />
+          <Button Content="Diagnostics" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Padding="12,9"
+                  Background="#1E293B" Foreground="White" Click="OnNavClick" Tag="Diagnostics" />
+          <Button Content="Settings" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Padding="12,9"
+                  Background="#1E293B" Foreground="White" Click="OnNavClick" Tag="Settings" />
+          <Button Content="About" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Padding="12,9"
+                  Background="#1E293B" Foreground="White" Click="OnNavClick" Tag="About" />
+        </StackPanel>
+      </DockPanel>
+    </Border>
+
+    <!-- Main Content Area -->
+    <DockPanel Grid.Column="1">
+      <!-- Top Header Bar -->
+      <Border DockPanel.Dock="Top" Background="White" BorderBrush="#E2E8F0" BorderThickness="0,0,0,1" Padding="20,14">
+        <Grid ColumnDefinitions="*,Auto">
+          <StackPanel Spacing="2">
+            <StackPanel Orientation="Horizontal" Spacing="10">
+              <TextBlock Text="{Binding ConnectorSummaryHeader}" FontSize="16" FontWeight="Bold" Foreground="#0F172A" />
+              <Border CornerRadius="10" Padding="8,2" Background="{Binding StatusBadgeColor}">
+                <TextBlock Text="{Binding StatusBadgeText}" FontSize="11" FontWeight="SemiBold" Foreground="White" />
+              </Border>
+            </StackPanel>
+            <TextBlock Text="{Binding StatusMessage}" FontSize="12" Foreground="#64748B" />
+          </StackPanel>
+
+          <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+            <Button Content="Refresh" Padding="12,6" Click="OnRefreshClick" IsEnabled="{Binding !IsBusy}" />
+            <Button Content="Synchronise Now" Padding="12,6" Background="#0D9488" Foreground="White"
+                    Click="OnSyncNowClick" IsVisible="{Binding IsActivated}" IsEnabled="{Binding !IsBusy}" />
+          </StackPanel>
+        </Grid>
+      </Border>
+
+      <!-- Notification Banner -->
+      <Border DockPanel.Dock="Top" IsVisible="{Binding HasBanner}" Margin="20,12,20,0" Padding="12,8" CornerRadius="8"
+              Background="#EFF6FF" BorderBrush="#BFDBFE" BorderThickness="1">
+        <TextBlock Text="{Binding BannerMessage}" FontSize="12" Foreground="#1E3A8A" TextWrapping="Wrap" />
+      </Border>
+
+      <!-- Page Content Scroll Area -->
+      <ScrollViewer Padding="20">
+        <StackPanel Spacing="16">
+
+          <!-- First-Time Activation Card (Shown when not yet activated) -->
+          <Border IsVisible="{Binding RequiresActivation}" Background="White" BorderBrush="#CBD5E1" BorderThickness="1" CornerRadius="12" Padding="20">
+            <StackPanel Spacing="12">
+              <TextBlock Text="Connect this computer to DHR" FontSize="18" FontWeight="Bold" Foreground="#0F172A" />
+              <TextBlock Text="Obtain a single-use activation code (e.g. DHR-ACT-XXXX-XXXX) from DHR → Attendance → Connectors. Private cryptographic keys are generated locally and never leave this computer."
+                         FontSize="12" Foreground="#475569" TextWrapping="Wrap" />
+
+              <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto">
+                <StackPanel Grid.Row="0" Grid.Column="0" Spacing="4" Margin="0,0,8,8">
+                  <TextBlock Text="Central DHR API URL (HTTPS)" FontSize="11" FontWeight="SemiBold" Foreground="#334155" />
+                  <TextBox Text="{Binding ActivationApiUrl}" Watermark="https://dhr.gov.mv/" />
+                </StackPanel>
+                <StackPanel Grid.Row="0" Grid.Column="1" Spacing="4" Margin="8,0,0,8">
+                  <TextBlock Text="One-Time Activation Code" FontSize="11" FontWeight="SemiBold" Foreground="#334155" />
+                  <TextBox Text="{Binding ActivationCode}" Watermark="DHR-ACT-XXXX-XXXX" />
+                </StackPanel>
+                <StackPanel Grid.Row="1" Grid.Column="0" Spacing="4" Margin="0,0,8,0">
+                  <TextBlock Text="Connector Display Name (Optional)" FontSize="11" FontWeight="SemiBold" Foreground="#334155" />
+                  <TextBox Text="{Binding ConnectorNameInput}" />
+                </StackPanel>
+                <StackPanel Grid.Row="1" Grid.Column="1" VerticalAlignment="Bottom" Margin="8,0,0,0">
+                  <Button Content="Activate Connector" Background="#0F766E" Foreground="White" FontWeight="SemiBold"
+                          Padding="18,9" Click="OnActivateClick" IsEnabled="{Binding !IsBusy}" />
+                </StackPanel>
+              </Grid>
+            </StackPanel>
+          </Border>
+
+          <!-- 1. DASHBOARD PAGE -->
+          <StackPanel IsVisible="{Binding IsDashboardPage}" Spacing="16">
+            <Grid ColumnDefinitions="*,*,*,*">
+              <Border Grid.Column="0" Margin="0,0,8,0" Background="White" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="10" Padding="14">
+                <StackPanel Spacing="4">
+                  <TextBlock Text="PENDING EVENTS" FontSize="10" FontWeight="Bold" Foreground="#64748B" />
+                  <TextBlock Text="{Binding PendingEvents}" FontSize="24" FontWeight="Bold" Foreground="#D97706" />
+                  <TextBlock Text="Buffered locally in SQLite" FontSize="11" Foreground="#94A3B8" />
+                </StackPanel>
+              </Border>
+              <Border Grid.Column="1" Margin="4,0,4,0" Background="White" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="10" Padding="14">
+                <StackPanel Spacing="4">
+                  <TextBlock Text="UPLOADED EVENTS" FontSize="10" FontWeight="Bold" Foreground="#64748B" />
+                  <TextBlock Text="{Binding UploadedEvents}" FontSize="24" FontWeight="Bold" Foreground="#047857" />
+                  <TextBlock Text="{Binding LastSyncText, StringFormat='Last sync: {0}'}" FontSize="11" Foreground="#94A3B8" />
+                </StackPanel>
+              </Border>
+              <Border Grid.Column="2" Margin="4,0,4,0" Background="White" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="10" Padding="14">
+                <StackPanel Spacing="4">
+                  <TextBlock Text="FAILED / QUARANTINED" FontSize="10" FontWeight="Bold" Foreground="#64748B" />
+                  <TextBlock Text="{Binding FailedEvents}" FontSize="24" FontWeight="Bold" Foreground="#B91C1C" />
+                  <TextBlock Text="Protected from data loss" FontSize="11" Foreground="#94A3B8" />
+                </StackPanel>
+              </Border>
+              <Border Grid.Column="3" Margin="8,0,0,0" Background="White" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="10" Padding="14">
+                <StackPanel Spacing="4">
+                  <TextBlock Text="SYSTEM HEALTH" FontSize="10" FontWeight="Bold" Foreground="#64748B" />
+                  <TextBlock Text="{Binding StorageHealthText}" FontSize="13" FontWeight="SemiBold" Foreground="#0F172A" />
+                  <TextBlock Text="{Binding DhrConnectivityText, StringFormat='DHR: {0}'}" FontSize="11" Foreground="#64748B" />
+                </StackPanel>
+              </Border>
+            </Grid>
+
+            <Border Background="White" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="10" Padding="16">
+              <StackPanel Spacing="10">
+                <TextBlock Text="Assigned Biometric Devices (Read-Only from DHR)" FontSize="14" FontWeight="Bold" Foreground="#0F172A" />
+                <ItemsControl ItemsSource="{Binding Devices}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                      <Border BorderBrush="#F1F5F9" BorderThickness="0,0,0,1" Padding="0,8">
+                        <Grid ColumnDefinitions="2*,1.5*,1*,1.5*,Auto">
+                          <StackPanel Grid.Column="0">
+                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold" Foreground="#0F172A" />
+                            <TextBlock Text="{Binding DeviceId, StringFormat='Device #{0}'}" FontSize="11" Foreground="#64748B" />
+                          </StackPanel>
+                          <TextBlock Grid.Column="1" VerticalAlignment="Center" Text="{Binding IpAddress}" FontSize="12" Foreground="#334155" />
+                          <TextBlock Grid.Column="2" VerticalAlignment="Center" Text="{Binding ProtocolCode}" FontSize="12" Foreground="#475569" />
+                          <TextBlock Grid.Column="3" VerticalAlignment="Center" Text="{Binding LastConnectionStatus, FallbackValue='Pending Poll'}" FontSize="12" Foreground="#0F766E" />
+                          <Button Grid.Column="4" Content="Test" Padding="10,4" Click="OnTestDeviceClick" Tag="{Binding DeviceId}" />
+                        </Grid>
+                      </Border>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </StackPanel>
+            </Border>
+          </StackPanel>
+
+          <!-- 2. DEVICE CONNECTIONS PAGE -->
+          <StackPanel IsVisible="{Binding IsDevicesPage}" Spacing="12">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <Button Content="Refresh Config from DHR" Click="OnRefreshConfigClick" IsEnabled="{Binding !IsBusy}" />
+              <Button Content="Test All Devices" Click="OnTestAllDevicesClick" IsEnabled="{Binding !IsBusy}" />
+            </StackPanel>
+            <Border Background="White" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="10" Padding="16">
+              <StackPanel Spacing="8">
+                <TextBlock Text="Biometric Device Assignments" FontSize="15" FontWeight="Bold" Foreground="#0F172A" />
+                <TextBlock Text="Device assignments are centrally controlled in DHR. Local operators cannot alter tenant or device bindings."
+                           FontSize="12" Foreground="#64748B" />
+                <ItemsControl ItemsSource="{Binding Devices}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                      <Border BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="8" Padding="12" Margin="0,4">
+                        <Grid ColumnDefinitions="*,Auto">
+                          <StackPanel Spacing="2">
+                            <TextBlock Text="{Binding Name}" FontWeight="Bold" Foreground="#0F172A" />
+                            <TextBlock FontSize="12" Foreground="#475569"
+                                       Text="{Binding IpAddress, StringFormat='Endpoint: {0}'}" />
+                            <TextBlock FontSize="11" Foreground="#64748B"
+                                       Text="{Binding PollingIntervalSeconds, StringFormat='Polling Interval: {0}s'}" />
+                            <TextBlock FontSize="11" Foreground="#B91C1C" Text="{Binding LastError}" />
+                          </StackPanel>
+                          <Button Grid.Column="1" Content="Test Connectivity" VerticalAlignment="Center"
+                                  Click="OnTestDeviceClick" Tag="{Binding DeviceId}" />
+                        </Grid>
+                      </Border>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </StackPanel>
+            </Border>
+          </StackPanel>
+
+          <!-- 3. ATTENDANCE SYNC PAGE -->
+          <StackPanel IsVisible="{Binding IsSyncPage}" Spacing="12">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <Button Content="Synchronise Now" Background="#0D9488" Foreground="White" Click="OnSyncNowClick" IsEnabled="{Binding !IsBusy}" />
+              <Button Content="Retry Pending Records" Click="OnRetryPendingClick" IsEnabled="{Binding !IsBusy}" />
+            </StackPanel>
+            <Border Background="White" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="10" Padding="16">
+              <StackPanel Spacing="8">
+                <TextBlock Text="Recent Local Outbox Events" FontSize="15" FontWeight="Bold" Foreground="#0F172A" />
+                <ItemsControl ItemsSource="{Binding RecentEvents}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                      <Border BorderBrush="#F1F5F9" BorderThickness="0,0,0,1" Padding="0,6">
+                        <Grid ColumnDefinitions="1*,1.5*,2*,1.2*">
+                          <TextBlock Grid.Column="0" Text="{Binding DeviceId, StringFormat='Dev #{0}'}" FontSize="12" Foreground="#475569" />
+                          <TextBlock Grid.Column="1" Text="{Binding DeviceUserId}" FontWeight="SemiBold" FontSize="12" />
+                          <TextBlock Grid.Column="2" Text="{Binding DeviceTimestampLocal, StringFormat='{}{0:yyyy-MM-dd HH:mm:ss}'}" FontSize="12" Foreground="#334155" />
+                          <TextBlock Grid.Column="3" Text="{Binding State}" FontSize="12" FontWeight="SemiBold" Foreground="#0F766E" />
+                        </Grid>
+                      </Border>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </StackPanel>
+            </Border>
+          </StackPanel>
+
+          <!-- 4. ACTIVITY LOGS PAGE -->
+          <Border IsVisible="{Binding IsLogsPage}" Background="White" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="10" Padding="16">
+            <StackPanel Spacing="8">
+              <TextBlock Text="Connector Activity &amp; Health Logs" FontSize="15" FontWeight="Bold" Foreground="#0F172A" />
+              <ItemsControl ItemsSource="{Binding HealthLogs}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <Border BorderBrush="#F1F5F9" BorderThickness="0,0,0,1" Padding="0,5">
+                      <Grid ColumnDefinitions="150,70,110,*">
+                        <TextBlock Grid.Column="0" Text="{Binding TimestampLocal, StringFormat='{}{0:yyyy-MM-dd HH:mm:ss}'}" FontSize="11" Foreground="#64748B" />
+                        <TextBlock Grid.Column="1" Text="{Binding Level}" FontSize="11" FontWeight="Bold" Foreground="#334155" />
+                        <TextBlock Grid.Column="2" Text="{Binding Component}" FontSize="11" Foreground="#0F766E" />
+                        <TextBlock Grid.Column="3" Text="{Binding Message}" FontSize="12" TextWrapping="Wrap" />
+                      </Grid>
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </StackPanel>
+          </Border>
+
+          <!-- 5. DIAGNOSTICS PAGE -->
+          <Border IsVisible="{Binding IsDiagnosticsPage}" Background="White" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="10" Padding="16">
+            <StackPanel Spacing="12">
+              <TextBlock Text="Diagnostics &amp; Support Tools" FontSize="15" FontWeight="Bold" Foreground="#0F172A" />
+              <WrapPanel Orientation="Horizontal">
+                <Button Content="Test DHR Connection" Margin="0,0,8,8" Click="OnTestDhrClick" IsEnabled="{Binding !IsBusy}" />
+                <Button Content="Test All Devices" Margin="0,0,8,8" Click="OnTestAllDevicesClick" IsEnabled="{Binding !IsBusy}" />
+                <Button Content="Export Sanitised Diagnostic Package" Margin="0,0,8,8" Click="OnExportDiagnosticsClick" IsEnabled="{Binding !IsBusy}" />
+                <Button Content="Check for Authorised Updates" Margin="0,0,8,8" Click="OnCheckUpdatesClick" IsEnabled="{Binding !IsBusy}" />
+              </WrapPanel>
+              <TextBox Text="{Binding DiagnosticOutput}" IsReadOnly="True" AcceptsReturn="True" Height="260"
+                       FontFamily="Consolas, Monospace" FontSize="11" Background="#F8FAFC" />
+            </StackPanel>
+          </Border>
+
+          <!-- 6. SETTINGS PAGE -->
+          <Border IsVisible="{Binding IsSettingsPage}" Background="White" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="10" Padding="16">
+            <StackPanel Spacing="10">
+              <TextBlock Text="Connector Configuration (Centrally Managed)" FontSize="15" FontWeight="Bold" Foreground="#0F172A" />
+              <TextBlock Text="{Binding Profile.AgentIdentifier, StringFormat='Connector Identity: {0}', FallbackValue='Not Activated'}" FontSize="12" />
+              <TextBlock Text="{Binding Profile.OrganisationName, StringFormat='Organisation: {0}', FallbackValue='-'}" FontSize="12" />
+              <TextBlock Text="{Binding Profile.SiteName, StringFormat='Site: {0}', FallbackValue='-'}" FontSize="12" />
+              <TextBlock Text="{Binding Profile.ApiBaseUrl, StringFormat='DHR Gateway: {0}', FallbackValue='-'}" FontSize="12" />
+              <TextBlock Text="{Binding Profile.ConfigurationVersion, StringFormat='Configuration Version: v{0}', FallbackValue='-'}" FontSize="12" />
+              <TextBlock Text="{Binding Profile.CertificateNotAfterUtc, StringFormat='Client Certificate Expires: {0:yyyy-MM-dd HH:mm} UTC', FallbackValue='-'}" FontSize="12" />
+              <TextBlock Text="{Binding DataDirectoryPath, StringFormat='Local Data Directory: {0}'}" FontSize="12" Foreground="#475569" />
+              <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,8,0,0">
+                <Button Content="Refresh Policy from DHR" Click="OnRefreshConfigClick" IsVisible="{Binding IsActivated}" IsEnabled="{Binding !IsBusy}" />
+                <Button Content="Rotate mTLS Certificate" Click="OnRotateCertClick" IsVisible="{Binding IsActivated}" IsEnabled="{Binding !IsBusy}" />
+              </StackPanel>
+            </StackPanel>
+          </Border>
+
+          <!-- 7. ABOUT PAGE -->
+          <Border IsVisible="{Binding IsAboutPage}" Background="White" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="10" Padding="16">
+            <StackPanel Spacing="8">
+              <TextBlock Text="About DHR Attendance Connector" FontSize="16" FontWeight="Bold" Foreground="#0F172A" />
+              <TextBlock Text="Enterprise cross-platform biometric device connector for the Digital HR (DHR) Maldives platform." FontSize="12" Foreground="#475569" />
+              <TextBlock Text="{Binding ConnectorVersion, StringFormat='Connector Version: {0}'}" FontSize="12" />
+              <TextBlock Text="{Binding OperatingSystemInfo, StringFormat='Operating System: {0}'}" FontSize="12" />
+              <TextBlock Text="{Binding DotNetRuntimeInfo, StringFormat='Runtime: {0}'}" FontSize="12" />
+              <TextBlock Text="Security: Outbound-only HTTPS (TLS 1.2+), mTLS device-bound certificates, OS-protected private key storage, SQLite WAL transactional outbox, zero inbound ports."
+                         FontSize="12" Foreground="#0F766E" TextWrapping="Wrap" Margin="0,6,0,0" />
+            </StackPanel>
+          </Border>
+
+        </StackPanel>
+      </ScrollViewer>
+    </DockPanel>
+  </Grid>
+</Window>

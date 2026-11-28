@@ -11,6 +11,7 @@ public partial class TeamStaff
     public int StaffId { get; set; }
 
     public bool IsSuperVisor { get; set; }
+    public string MemberRole { get; set; } = "Member";
 
     public DateTime StartDate { get; set; }
 

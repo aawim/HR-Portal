@@ -202,6 +202,7 @@ public sealed class EndpointSecurityTests
         public Task<StaffWorkspaceIdentity?> GetStaffIdentityAsync(int staffId, CancellationToken ct = default)
         { Reads++; return Task.FromResult<StaffWorkspaceIdentity?>(new("Staff", false)); }
         public Task<WorkspaceSearchPage> SearchAsync(WorkspaceSearchFilter filter, CancellationToken ct = default) => Task.FromResult(new WorkspaceSearchPage([], []));
+        public Task<List<StaffJobHistorySummaryDto>> GetStaffJobHistoryAsync(int staffId, CancellationToken ct = default) => Task.FromResult(new List<StaffJobHistorySummaryDto>());
     }
     public sealed class AttendanceStub : IAttendanceRequestService
     {

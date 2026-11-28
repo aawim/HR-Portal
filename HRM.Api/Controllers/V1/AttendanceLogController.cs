@@ -7,9 +7,9 @@ namespace HRM.Api.Controllers.V1;
 public sealed class AttendanceLogController(global::HRM.Services.Contracts.AttendanceLogServiceContracts.IOperations service) : HrmApiController
 {
     [HttpGet("get-my-team-attendance-today")]
-    public async Task<ActionResult<global::System.Collections.Generic.List<global::HRM.DTOs.TeamAttendanceDto>>> GetMyTeamAttendanceToday()
+    public async Task<ActionResult<global::System.Collections.Generic.List<global::HRM.DTOs.TeamAttendanceDto>>> GetMyTeamAttendanceToday([FromQuery] bool includeAllStaff = false)
     {
-        return Ok(await service.GetMyTeamAttendanceTodayAsync());
+        return Ok(await service.GetMyTeamAttendanceTodayAsync(includeAllStaff));
     }
 
     [HttpGet("can-use-test-clock")]
@@ -28,6 +28,21 @@ public sealed class AttendanceLogController(global::HRM.Services.Contracts.Atten
     public sealed class AttendanceLogAddClockEventRequest
     {
         public global::System.Int32 individualId { get; set; }
+        public global::System.DateTime? checkTime { get; set; } = null;
+    }
+
+    [HttpPost("add-clock-event-with-location")]
+    public async Task<IActionResult> AddClockEventWithLocation([FromBody] AttendanceLogAddClockEventWithLocationRequest request)
+    {
+        await service.AddClockEventWithLocationAsync(request.individualId, request.latitude, request.longitude, request.checkTime);
+        return NoContent();
+    }
+
+    public sealed class AttendanceLogAddClockEventWithLocationRequest
+    {
+        public global::System.Int32 individualId { get; set; }
+        public global::System.Double? latitude { get; set; } = null;
+        public global::System.Double? longitude { get; set; } = null;
         public global::System.DateTime? checkTime { get; set; } = null;
     }
 

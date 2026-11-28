@@ -1,0 +1,362 @@
+@namespace HRM.Components.Admin.My.Workspace.Staff.Tabs
+@using HRM.DTOs
+@inject HRM.Services.Interfaces.IWorkspaceDirectoryService Directory
+@inject ILogger<StaffJobHistory> Logger
+
+<section class="w-full min-w-0 flex flex-col gap-3 text-slate-900 dark:text-slate-100" aria-label="Staff job history">
+    <!-- Compact Header (no background/border) -->
+    <header class="flex flex-wrap items-center justify-between gap-2 px-1 py-0.5">
+        <div class="min-w-0">
+            <div class="flex items-center gap-2 flex-wrap">
+                <h2 class="text-base font-bold text-slate-900 dark:text-slate-100 truncate">Job History</h2>
+                <span class="inline-flex items-center gap-1 rounded-full bg-teal-50 dark:bg-teal-950/60 border border-teal-200/80 dark:border-teal-800 px-2 py-0.5 text-[10px] font-semibold text-teal-700 dark:text-teal-300">
+                    <span class="h-1.5 w-1.5 rounded-full bg-teal-500"></span>
+                    @jobs.Count @(jobs.Count == 1 ? "Job" : "Jobs")
+                </span>
+            </div>
+            <p class="text-xs text-slate-500 dark:text-slate-400">
+                Summary of employment appointments, attendance, leaves taken, projects worked, and assigned tasks per job.
+            </p>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-1.5">
+            <button type="button"
+                    class="app-button app-button-secondary app-button-sm"
+                    disabled="@loading"
+                    @onclick="LoadAsync">
+                <AppIcon Name="refresh" Class="@(loading ? "animate-spin text-xs" : "text-xs")" />
+                <span>Refresh</span>
+            </button>
+        </div>
+    </header>
+
+    @if (!string.IsNullOrWhiteSpace(error))
+    {
+        <div role="alert" class="rounded-xl border border-rose-200 dark:border-rose-800 bg-rose-50/80 dark:bg-rose-950/40 px-3.5 py-2.5 text-xs text-rose-800 dark:text-rose-200 flex items-center justify-between gap-2">
+            <span>@error</span>
+            <button type="button" class="font-bold text-rose-700 dark:text-rose-300 hover:underline" @onclick="LoadAsync">Retry</button>
+        </div>
+    }
+
+    @if (loading && jobs.Count == 0)
+    {
+        <div role="status" class="flex items-center justify-center gap-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-8 text-xs text-slate-500">
+            <span class="h-4 w-4 rounded-full border-2 border-blue-600 border-t-transparent animate-spin"></span>
+            <span>Loading job history…</span>
+        </div>
+    }
+    else if (jobs.Count == 0)
+    {
+        <div class="rounded-xl border border-dashed border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-8 text-center text-xs text-slate-500 dark:text-slate-400">
+            No employment job history records found for this staff member.
+        </div>
+    }
+    else
+    {
+        <!-- Narrow Inline KPI Summary Bar -->
+        <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3.5 py-2.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5 text-[11px] text-slate-500 dark:text-slate-400">
+            <span class="inline-flex items-center gap-1.5">
+                <span class="h-1.5 w-1.5 rounded-full bg-slate-500"></span>
+                Jobs: <strong class="text-slate-900 dark:text-slate-100 tabular-nums">@jobs.Count</strong>
+            </span>
+            <span class="inline-flex items-center gap-1.5">
+                <span class="h-1.5 w-1.5 rounded-full bg-teal-500"></span>
+                Total Days: <strong class="text-slate-900 dark:text-slate-100 tabular-nums">@jobs.Sum(j => j.TotalDays)</strong>
+            </span>
+            <span class="inline-flex items-center gap-1.5">
+                <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
+                Present: <strong class="text-emerald-700 dark:text-emerald-400 tabular-nums">@jobs.Sum(j => j.PresentDays)</strong>
+            </span>
+            <span class="inline-flex items-center gap-1.5">
+                <span class="h-1.5 w-1.5 rounded-full bg-rose-500"></span>
+                Absent: <strong class="text-rose-700 dark:text-rose-400 tabular-nums">@jobs.Sum(j => j.AbsentDays)</strong>
+            </span>
+            <span class="inline-flex items-center gap-1.5">
+                <span class="h-1.5 w-1.5 rounded-full bg-amber-500"></span>
+                Leaves Taken: <strong class="text-amber-700 dark:text-amber-400 tabular-nums">@jobs.Sum(j => j.LeaveDaysTaken).ToString("0.##") d</strong>
+            </span>
+            <span class="inline-flex items-center gap-1.5">
+                <span class="h-1.5 w-1.5 rounded-full bg-blue-500"></span>
+                Projects: <strong class="text-slate-900 dark:text-slate-100 tabular-nums">@jobs.SelectMany(j => j.Projects).Select(p => p.ProjectId).Distinct().Count()</strong>
+            </span>
+            <span class="inline-flex items-center gap-1.5">
+                <span class="h-1.5 w-1.5 rounded-full bg-indigo-500"></span>
+                Tasks: <strong class="text-slate-900 dark:text-slate-100 tabular-nums">@jobs.SelectMany(j => j.Tasks).Select(t => t.TaskId).Distinct().Count()</strong>
+            </span>
+        </div>
+
+        <!-- Job Summary Cards -->
+        <div class="flex flex-col gap-3">
+            @for (var i = 0; i < jobs.Count; i++)
+            {
+                var job = jobs[i];
+                var isAltJob = i % 2 == 1;
+                <article @key="job.JobId"
+                         class="rounded-xl border overflow-hidden @(isAltJob ? "jh-card-alt" : "bg-white dark:bg-slate-900") @(job.IsCurrent ? "border-teal-500/80 dark:border-teal-600" : "border-slate-200 dark:border-slate-800")">
+                    <!-- Job Header -->
+                    <div class="@(isAltJob ? "jh-card-header-alt" : "bg-slate-50/80 dark:bg-slate-800/60") border-b border-slate-200 dark:border-slate-800 px-3.5 py-2.5 flex flex-wrap items-center justify-between gap-2">
+                        <div class="min-w-0">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <span class="rounded bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-1.5 py-0.5 font-mono text-[10px] font-bold text-slate-600 dark:text-slate-300">
+                                    JOB #@job.JobId
+                                </span>
+                                <h3 class="text-xs sm:text-sm font-bold text-slate-900 dark:text-slate-100 truncate">
+                                    @job.PositionName
+                                </h3>
+                                <span class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold @(job.IsCurrent ? "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800" : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700")">
+                                    @(job.IsCurrent ? "Current" : job.Status)
+                                </span>
+                                <span class="inline-flex items-center rounded-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-2 py-0.5 text-[10px] font-medium text-slate-600 dark:text-slate-300">
+                                    @job.JobTypeName
+                                </span>
+                            </div>
+                            <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                                @job.DepartmentName <span class="mx-1 text-slate-300 dark:text-slate-600">·</span> @job.OrganisationName
+                            </p>
+                        </div>
+
+                        <div class="text-right shrink-0">
+                            <div class="font-mono text-xs font-semibold text-slate-800 dark:text-slate-200">
+                                @job.JoinedDate.ToString("dd MMM yyyy") – @(job.TerminatedDate?.ToString("dd MMM yyyy") ?? "Present")
+                            </div>
+                            <div class="text-[11px] text-slate-500 dark:text-slate-400">
+                                @FormatDuration(job.TotalDays)
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Summary Metrics Grid -->
+                    <div class="p-3.5 space-y-3">
+                        <div class="jh-metrics-grid">
+                            <div class="rounded-lg border border-slate-200/80 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40 px-3 py-2">
+                                <div class="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Total Days</div>
+                                <div class="mt-0.5 text-sm font-bold text-slate-900 dark:text-slate-100 tabular-nums">@job.TotalDays</div>
+                            </div>
+                            <div class="rounded-lg border border-slate-200/80 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40 px-3 py-2">
+                                <div class="text-[10px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">Present</div>
+                                <div class="mt-0.5 text-sm font-bold text-emerald-700 dark:text-emerald-400 tabular-nums">@job.PresentDays</div>
+                            </div>
+                            <div class="rounded-lg border border-slate-200/80 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40 px-3 py-2">
+                                <div class="text-[10px] font-bold uppercase tracking-wider text-rose-700 dark:text-rose-400">Absent</div>
+                                <div class="mt-0.5 text-sm font-bold text-rose-700 dark:text-rose-400 tabular-nums">@job.AbsentDays</div>
+                            </div>
+                            <div class="rounded-lg border border-slate-200/80 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40 px-3 py-2">
+                                <div class="text-[10px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-400">Leaves Taken</div>
+                                <div class="mt-0.5 text-sm font-bold text-amber-700 dark:text-amber-400 tabular-nums">
+                                    @job.LeaveDaysTaken.ToString("0.##") <span class="text-[10px] font-normal text-slate-500">(@job.LeaveRequestsCount req)</span>
+                                </div>
+                            </div>
+                            <div class="rounded-lg border border-slate-200/80 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40 px-3 py-2">
+                                <div class="text-[10px] font-bold uppercase tracking-wider text-blue-700 dark:text-blue-400">Projects</div>
+                                <div class="mt-0.5 text-sm font-bold text-blue-700 dark:text-blue-400 tabular-nums">@job.ProjectsCount</div>
+                            </div>
+                            <div class="rounded-lg border border-slate-200/80 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40 px-3 py-2">
+                                <div class="text-[10px] font-bold uppercase tracking-wider text-indigo-700 dark:text-indigo-400">Tasks</div>
+                                <div class="mt-0.5 text-sm font-bold text-indigo-700 dark:text-indigo-400 tabular-nums">
+                                    @job.CompletedTasksCount / @job.TasksCount <span class="text-[10px] font-normal text-slate-500">done</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Compact Projects & Tasks Summary -->
+                        <div class="jh-work-grid">
+                            <!-- Projects Worked -->
+                            <div class="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950/40 overflow-hidden">
+                                <div class="bg-slate-50/80 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 px-3 py-1.5 flex items-center justify-between">
+                                    <h4 class="text-[10px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">Projects Worked</h4>
+                                    <span class="text-[10px] font-semibold text-slate-500">@job.Projects.Count</span>
+                                </div>
+                                @if (job.Projects.Count == 0)
+                                {
+                                    <p class="p-3 text-xs text-slate-400">No projects recorded during this job period.</p>
+                                }
+                                else
+                                {
+                                    <div class="divide-y divide-slate-100 dark:divide-slate-800/70 max-h-48 overflow-y-auto">
+                                        @for (var pIdx = 0; pIdx < job.Projects.Count; pIdx++)
+                                        {
+                                            var p = job.Projects[pIdx];
+                                            <div class="px-3 py-2 flex items-center justify-between gap-2 text-xs @(pIdx % 2 == 1 ? "jh-row-alt" : "")">
+                                                <div class="min-w-0">
+                                                    <div class="font-semibold text-slate-800 dark:text-slate-100 truncate">
+                                                        @if (!string.IsNullOrWhiteSpace(p.Reference))
+                                                        {
+                                                            <span class="font-mono text-[10px] text-slate-400 mr-1">@p.Reference</span>
+                                                        }
+                                                        @p.Name
+                                                    </div>
+                                                    <div class="text-[11px] text-slate-500 dark:text-slate-400">@p.Role</div>
+                                                </div>
+                                                <div class="flex items-center gap-1.5 shrink-0">
+                                                    <span class="font-mono text-[10px] font-semibold text-slate-600 dark:text-slate-300">@p.ProgressPercentage%</span>
+                                                    <span class="rounded-full px-2 py-0.5 text-[10px] font-semibold @WorkStatusClass(p.Status)">@p.Status</span>
+                                                </div>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            </div>
+
+                            <!-- Tasks Assigned -->
+                            <div class="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950/40 overflow-hidden">
+                                <div class="bg-slate-50/80 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 px-3 py-1.5 flex items-center justify-between">
+                                    <h4 class="text-[10px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">Tasks</h4>
+                                    <span class="text-[10px] font-semibold text-slate-500">@job.Tasks.Count</span>
+                                </div>
+                                @if (job.Tasks.Count == 0)
+                                {
+                                    <p class="p-3 text-xs text-slate-400">No tasks recorded during this job period.</p>
+                                }
+                                else
+                                {
+                                    <div class="divide-y divide-slate-100 dark:divide-slate-800/70 max-h-48 overflow-y-auto">
+                                        @for (var tIdx = 0; tIdx < job.Tasks.Count; tIdx++)
+                                        {
+                                            var t = job.Tasks[tIdx];
+                                            <div class="px-3 py-2 flex items-center justify-between gap-2 text-xs @(tIdx % 2 == 1 ? "jh-row-alt" : "")">
+                                                <div class="min-w-0">
+                                                    <div class="font-semibold text-slate-800 dark:text-slate-100 truncate">
+                                                        @if (!string.IsNullOrWhiteSpace(t.Reference))
+                                                        {
+                                                            <span class="font-mono text-[10px] text-slate-400 mr-1">@t.Reference</span>
+                                                        }
+                                                        @t.Title
+                                                    </div>
+                                                    <div class="text-[11px] text-slate-500 dark:text-slate-400 truncate">@t.ProjectName</div>
+                                                </div>
+                                                <div class="flex items-center gap-1.5 shrink-0">
+                                                    <span class="font-mono text-[10px] font-semibold text-slate-600 dark:text-slate-300">@t.Progress%</span>
+                                                    <span class="rounded-full px-2 py-0.5 text-[10px] font-semibold @WorkStatusClass(t.Status)">@t.Status</span>
+                                                </div>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </article>
+            }
+        </div>
+    }
+</section>
+
+<style>
+    .jh-metrics-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.5rem;
+    }
+
+    @@media (min-width: 768px) {
+        .jh-metrics-grid {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+    }
+
+    @@media (min-width: 1100px) {
+        .jh-metrics-grid {
+            grid-template-columns: repeat(6, minmax(0, 1fr));
+        }
+    }
+
+    .jh-work-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 0.75rem;
+        align-items: start;
+    }
+
+    @@media (min-width: 1024px) {
+        .jh-work-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+
+    .jh-card-alt {
+        background-color: #f3f8fd;
+    }
+
+    .jh-card-header-alt {
+        background-color: #e6f0fb;
+    }
+
+    .jh-row-alt {
+        background-color: #f3f8fd;
+    }
+
+    .dark .jh-card-alt {
+        background-color: rgba(30, 41, 59, 0.45);
+    }
+
+    .dark .jh-card-header-alt {
+        background-color: rgba(30, 41, 59, 0.8);
+    }
+
+    .dark .jh-row-alt {
+        background-color: rgba(30, 41, 59, 0.35);
+    }
+</style>
+
+@code {
+    [Parameter] public int StaffId { get; set; }
+
+    private List<StaffJobHistorySummaryDto> jobs = [];
+    private int loadedStaffId;
+    private bool loading;
+    private string? error;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (StaffId <= 0 || loadedStaffId == StaffId) return;
+        loadedStaffId = StaffId;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (StaffId <= 0) return;
+        loading = true;
+        error = null;
+        try
+        {
+            jobs = await Directory.GetStaffJobHistoryAsync(StaffId);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            jobs = [];
+            error = ex.Message;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to load job history for staff {StaffId}", StaffId);
+            jobs = [];
+            error = "Job history could not be loaded. Please try again.";
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private static string FormatDuration(int totalDays)
+    {
+        if (totalDays <= 0) return "0 days";
+        var years = totalDays / 365;
+        var months = (totalDays % 365) / 30;
+        var days = (totalDays % 365) % 30;
+        var parts = new List<string>(3);
+        if (years > 0) parts.Add($"{years}y");
+        if (months > 0) parts.Add($"{months}m");
+        if (days > 0 || parts.Count == 0) parts.Add($"{days}d");
+        return string.Join(" ", parts);
+    }
+
+    private static string WorkStatusClass(string? status) => (status ?? string.Empty).Trim().ToLowerInvariant() switch
+    {
+        "completed" or "done" or "closed" => "bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800",
+        "active" or "ongoing" or "in progress" => "bg-teal-50 dark:bg-teal-950/50 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800",
+        "parked" or "on hold" or "pending" => "bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800",
+        _ => "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700"
+    };
+}

@@ -1,152 +1,113 @@
-using System;
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
-using HRM.Api.Infrastructure;
-using HRM.DTOs;
-using HRM.DTOs.AttendanceDeductions;
-using HRM.Models.AttendanceDeductions;
-using HRM.Services.Interfaces;
+// Typed endpoints delegate to canonical application services.
 using Microsoft.AspNetCore.Mvc;
-
+using HRM.Api.Infrastructure;
 namespace HRM.Api.Controllers.V1;
 
-[Route("api/v1/attendance-deductions")]
-public sealed class AttendanceDeductionController(
-    IAttendanceDeductionService service,
-    IUserAccessService access) : HrmApiController
+[Route("api/v1/attendance-deduction")]
+public sealed class AttendanceDeductionController(global::HRM.Services.Interfaces.IAttendanceDeductionService service) : HrmApiController
 {
-    private async Task<int> ResolveOrganisationIdAsync(int organisationId)
+    [HttpGet("get-effective-policy")]
+    public async Task<ActionResult<global::HRM.Models.AttendanceDeductions.AttendanceDeductionPolicy>> GetEffectivePolicy([FromQuery] global::System.Int32 organisationId, [FromQuery] global::System.DateOnly workDate)
     {
-        if (organisationId > 0) return organisationId;
-        try
-        {
-            var currentOrg = await access.GetCurrentOrganisationIdAsync();
-            if (currentOrg > 0) return currentOrg;
-        }
-        catch { }
-
-        var context = await access.GetContextAsync();
-        return context?.Organisation?.OrganisationBusinessEntityId
-            ?? context?.ActiveJob?.OrganisationId
-            ?? 1;
+        return Ok(await service.GetEffectivePolicyAsync(organisationId, workDate));
     }
 
-    [HttpGet("policy")]
-    public async Task<ActionResult<AttendanceDeductionPolicy>> GetEffectivePolicy(
-        [FromQuery] int organisationId = 0,
-        [FromQuery] DateOnly? effectiveDate = null)
+    [HttpPost("evaluate-daily-deduction")]
+    public async Task<ActionResult<global::HRM.Models.AttendanceDeductions.AttendanceAdjustment?>> EvaluateDailyDeduction([FromBody] AttendanceDeductionEvaluateDailyDeductionRequest request)
     {
-        var orgId = await ResolveOrganisationIdAsync(organisationId);
-        var date = effectiveDate ?? DateOnly.FromDateTime(DateTime.UtcNow);
-        var policy = await service.GetEffectivePolicyAsync(orgId, date);
-        return Ok(policy);
+        return Ok(await service.EvaluateDailyDeductionAsync(request.organisationId, request.individualId, request.jobId, request.workDate, HttpContext.RequestAborted));
     }
 
-    [HttpGet("policies")]
-    public async Task<ActionResult<List<AttendanceDeductionPolicyDto>>> GetPolicies([FromQuery] int organisationId = 0)
+    public sealed class AttendanceDeductionEvaluateDailyDeductionRequest
     {
-        var orgId = await ResolveOrganisationIdAsync(organisationId);
-        var policies = await service.GetPoliciesAsync(orgId);
-        return Ok(policies);
-    }
-
-    [HttpPost("save-policy")]
-    public async Task<ActionResult<ServiceResult>> SavePolicy(
-        [FromBody] SavePolicyRequest request)
-    {
-        var orgId = await ResolveOrganisationIdAsync(request.Policy.OrganisationId);
-        request.Policy.OrganisationId = orgId;
-        var result = await service.SavePolicyAsync(request.Policy, request.UserId);
-        return Ok(result);
-    }
-
-    [HttpPost("evaluate-day")]
-    public async Task<ActionResult<AttendanceAdjustment?>> EvaluateDay(
-        [FromBody] EvaluateDayRequest request,
-        CancellationToken ct = default)
-    {
-        var orgId = await ResolveOrganisationIdAsync(request.OrganisationId);
-        var adjustment = await service.EvaluateDailyDeductionAsync(
-            orgId,
-            request.IndividualId,
-            request.JobId,
-            request.WorkDate,
-            ct);
-        return Ok(adjustment);
+        public global::System.Int32 organisationId { get; set; }
+        public global::System.Int32 individualId { get; set; }
+        public global::System.Int32 jobId { get; set; }
+        public global::System.DateOnly workDate { get; set; }
     }
 
     [HttpPost("evaluate-range")]
-    public async Task<ActionResult<List<AttendanceAdjustment>>> EvaluateRange(
-        [FromBody] EvaluateRangeRequest request,
-        CancellationToken ct = default)
+    public async Task<ActionResult<global::System.Collections.Generic.List<global::HRM.Models.AttendanceDeductions.AttendanceAdjustment>>> EvaluateRange([FromBody] AttendanceDeductionEvaluateRangeRequest request)
     {
-        var orgId = await ResolveOrganisationIdAsync(request.OrganisationId);
-        var adjustments = await service.EvaluateRangeAsync(
-            orgId,
-            request.IndividualId,
-            request.JobId,
-            request.StartDate,
-            request.EndDate,
-            ct);
-        return Ok(adjustments);
+        return Ok(await service.EvaluateRangeAsync(request.organisationId, request.individualId, request.jobId, request.fromDate, request.toDate, HttpContext.RequestAborted));
     }
 
-    [HttpGet("adjustments")]
-    public async Task<ActionResult<List<AttendanceAdjustmentDto>>> GetAdjustments(
-        [FromQuery] int organisationId = 0,
-        [FromQuery] DateOnly? startDate = null,
-        [FromQuery] DateOnly? endDate = null,
-        [FromQuery] string? verificationStatus = null,
-        [FromQuery] string? payrollStatus = null)
+    public sealed class AttendanceDeductionEvaluateRangeRequest
     {
-        var orgId = await ResolveOrganisationIdAsync(organisationId);
-        var list = await service.GetAdjustmentsAsync(
-            orgId,
-            startDate,
-            endDate,
-            verificationStatus,
-            payrollStatus);
-        return Ok(list);
+        public global::System.Int32 organisationId { get; set; }
+        public global::System.Int32? individualId { get; set; }
+        public global::System.Int32? jobId { get; set; }
+        public global::System.DateOnly fromDate { get; set; }
+        public global::System.DateOnly toDate { get; set; }
     }
 
-    [HttpPost("verify")]
-    public async Task<ActionResult<ServiceResult>> Verify([FromBody] ActionAdjustmentRequest request)
+    [HttpGet("get-adjustments")]
+    public async Task<ActionResult<global::System.Collections.Generic.List<global::HRM.DTOs.AttendanceDeductions.AttendanceAdjustmentDto>>> GetAdjustments([FromQuery] global::System.Int32 organisationId, [FromQuery] global::System.DateOnly? fromDate = null, [FromQuery] global::System.DateOnly? toDate = null, [FromQuery] global::System.String? verificationStatus = null, [FromQuery] global::System.String? payrollStatus = null)
     {
-        var result = await service.VerifyAdjustmentAsync(request.AdjustmentId, request.UserId, request.Note ?? string.Empty);
-        return Ok(result);
+        return Ok(await service.GetAdjustmentsAsync(organisationId, fromDate, toDate, verificationStatus, payrollStatus));
     }
 
-    [HttpPost("excuse")]
-    public async Task<ActionResult<ServiceResult>> Excuse([FromBody] ActionAdjustmentRequest request)
+    [HttpPost("verify-adjustment")]
+    public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> VerifyAdjustment([FromBody] AttendanceDeductionVerifyAdjustmentRequest request)
     {
-        var result = await service.ExcuseAdjustmentAsync(request.AdjustmentId, request.UserId, request.Note ?? string.Empty);
-        return Ok(result);
+        return Ok(await service.VerifyAdjustmentAsync(request.adjustmentId, request.userId, request.comments));
     }
 
-    [HttpPost("reject")]
-    public async Task<ActionResult<ServiceResult>> Reject([FromBody] ActionAdjustmentRequest request)
+    public sealed class AttendanceDeductionVerifyAdjustmentRequest
     {
-        var result = await service.RejectAdjustmentAsync(request.AdjustmentId, request.UserId, request.Note ?? string.Empty);
-        return Ok(result);
+        public global::System.Int64 adjustmentId { get; set; }
+        public global::System.Int32 userId { get; set; }
+        public global::System.String comments { get; set; } = default!;
     }
 
-    [HttpPost("preview")]
-    public async Task<ActionResult<AttendanceDeductionCalculationPreviewDto>> PreviewCalculation([FromBody] PreviewCalcRequest request)
+    [HttpPost("excuse-adjustment")]
+    public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> ExcuseAdjustment([FromBody] AttendanceDeductionExcuseAdjustmentRequest request)
     {
-        var orgId = await ResolveOrganisationIdAsync(request.OrganisationId);
-        var preview = await service.PreviewCalculationAsync(
-            orgId,
-            request.JobId,
-            request.WorkDate,
-            request.LateMinutes,
-            request.Kind);
-        return Ok(preview);
+        return Ok(await service.ExcuseAdjustmentAsync(request.adjustmentId, request.userId, request.reason));
     }
 
-    public sealed record SavePolicyRequest(AttendanceDeductionPolicy Policy, int UserId);
-    public sealed record EvaluateDayRequest(int OrganisationId, int IndividualId, int JobId, DateOnly WorkDate);
-    public sealed record EvaluateRangeRequest(int OrganisationId, int? IndividualId, int? JobId, DateOnly StartDate, DateOnly EndDate);
-    public sealed record ActionAdjustmentRequest(long AdjustmentId, int UserId, string? Note = null);
-    public sealed record PreviewCalcRequest(int OrganisationId, int JobId, DateOnly WorkDate, int LateMinutes, string Kind);
+    public sealed class AttendanceDeductionExcuseAdjustmentRequest
+    {
+        public global::System.Int64 adjustmentId { get; set; }
+        public global::System.Int32 userId { get; set; }
+        public global::System.String reason { get; set; } = default!;
+    }
+
+    [HttpPost("reject-adjustment")]
+    public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> RejectAdjustment([FromBody] AttendanceDeductionRejectAdjustmentRequest request)
+    {
+        return Ok(await service.RejectAdjustmentAsync(request.adjustmentId, request.userId, request.reason));
+    }
+
+    public sealed class AttendanceDeductionRejectAdjustmentRequest
+    {
+        public global::System.Int64 adjustmentId { get; set; }
+        public global::System.Int32 userId { get; set; }
+        public global::System.String reason { get; set; } = default!;
+    }
+
+    [HttpGet("get-policies")]
+    public async Task<ActionResult<global::System.Collections.Generic.List<global::HRM.DTOs.AttendanceDeductions.AttendanceDeductionPolicyDto>>> GetPolicies([FromQuery] global::System.Int32 organisationId)
+    {
+        return Ok(await service.GetPoliciesAsync(organisationId));
+    }
+
+    [HttpPost("save-policy")]
+    public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> SavePolicy([FromBody] AttendanceDeductionSavePolicyRequest request)
+    {
+        return Ok(await service.SavePolicyAsync(request.policy, request.userId));
+    }
+
+    public sealed class AttendanceDeductionSavePolicyRequest
+    {
+        public global::HRM.Models.AttendanceDeductions.AttendanceDeductionPolicy policy { get; set; } = default!;
+        public global::System.Int32 userId { get; set; }
+    }
+
+    [HttpGet("preview-calculation")]
+    public async Task<ActionResult<global::HRM.DTOs.AttendanceDeductions.AttendanceDeductionCalculationPreviewDto>> PreviewCalculation([FromQuery] global::System.Int32 organisationId, [FromQuery] global::System.Int32 jobId, [FromQuery] global::System.DateOnly workDate, [FromQuery] global::System.Int32 lateMinutes, [FromQuery] global::System.String kind)
+    {
+        return Ok(await service.PreviewCalculationAsync(organisationId, jobId, workDate, lateMinutes, kind));
+    }
+
 }

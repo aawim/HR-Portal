@@ -86,7 +86,7 @@
 
             @if (id == 0 && (!CanCreateDirect || matrixCreation))
             {
-                <PositionMatrixEditor FrameworkId="framework" Data="payData" OnCreated="Load" />
+                <PositionMatrixEditor FrameworkId="framework" Data="payData" InitialJobMatrixId="selectedJobMatrixId" OnCreated="Load" />
             }
             else
             {
@@ -225,8 +225,184 @@
             }
         }
 
+        <!-- Job Matrices & Editable Position Matrices Explorer -->
+        @if (payData != null && payData.Matrices.Any())
+        {
+            var visibleJobMatrices = payData.Matrices
+                .Where(jm => (filter == 0 || jm.FrameworkId == filter) &&
+                             (string.IsNullOrWhiteSpace(jobMatrixSearch) ||
+                              jm.Code.Contains(jobMatrixSearch, StringComparison.OrdinalIgnoreCase) ||
+                              jm.Name.Contains(jobMatrixSearch, StringComparison.OrdinalIgnoreCase)))
+                .OrderBy(jm => jm.Code)
+                .ToList();
+            var filteredPositionMatrices = data.Matrices
+                .Where(pm => (selectedJobMatrixId == 0 || pm.JobMatrixId == selectedJobMatrixId) &&
+                             (filter == 0 || pm.FrameworkId == filter))
+                .OrderBy(pm => pm.Name)
+                .ToList();
+
+            <div class="grid items-start gap-4 lg:grid-cols-12">
+                <!-- Left: Clickable Job Matrices List -->
+                <div class="lg:col-span-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-xs space-y-3">
+                    <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2">
+                        <div>
+                            <h3 class="text-sm font-bold text-slate-900">Job Matrices (@visibleJobMatrices.Count)</h3>
+                            <p class="text-[11px] text-slate-500">Click a job matrix to view its position matrices &amp; slots.</p>
+                        </div>
+                        @if (selectedJobMatrixId > 0)
+                        {
+                            <button type="button" class="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50" @onclick="() => selectedJobMatrixId = 0">
+                                Show All
+                            </button>
+                        }
+                    </div>
+                    <input type="search" @bind="jobMatrixSearch" @bind:event="oninput" placeholder="Search job matrix code or name…"
+                           class="w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                    <div class="max-h-72 overflow-y-auto divide-y divide-slate-100 rounded-xl border border-slate-200">
+                        @foreach (var jm in visibleJobMatrices)
+                        {
+                            var jmPms = data.Matrices.Where(x => x.JobMatrixId == jm.Id).ToList();
+                            var usedSlots = jmPms.Sum(x => x.UsedSlots);
+                            var availSlots = jmPms.Sum(x => x.AvailableSlots);
+                            bool isSel = selectedJobMatrixId == jm.Id;
+                            <button type="button"
+                                    class="w-full text-left px-3 py-2.5 text-xs transition flex items-center justify-between gap-2 @(isSel ? "bg-blue-50 text-blue-900" : "bg-white hover:bg-slate-50")"
+                                    @onclick="() => SelectJobMatrix(jm.Id)">
+                                <div class="min-w-0">
+                                    <div class="font-mono font-bold @(isSel ? "text-blue-700" : "text-slate-900") truncate">@jm.Code · @jm.Name</div>
+                                    <div class="text-[11px] text-slate-500">Basic: @jm.BasicSalary.ToString("N2") · @jmPms.Count position matrix(es)</div>
+                                </div>
+                                <div class="flex shrink-0 items-center gap-1">
+                                    <span class="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-800" title="Available slots">@availSlots avail</span>
+                                    <span class="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-semibold text-blue-800" title="Used slots">@usedSlots used</span>
+                                </div>
+                            </button>
+                        }
+                    </div>
+                </div>
+
+                <!-- Right: Position Matrices created from Selected Job Matrix (Editable / Add Extra Slots) -->
+                <div class="lg:col-span-7 rounded-2xl border border-slate-200 bg-white p-4 shadow-xs space-y-3">
+                    <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2">
+                        <div>
+                            <h3 class="text-sm font-bold text-slate-900">
+                                @(selectedJobMatrixId > 0
+                                    ? $"Position Matrices for {payData.Matrices.FirstOrDefault(x => x.Id == selectedJobMatrixId)?.Code}"
+                                    : "Organisation Position Matrices")
+                                (@filteredPositionMatrices.Count)
+                            </h3>
+                            <p class="text-[11px] text-slate-500">Edit approved slots or add extra positions when slots are exhausted.</p>
+                        </div>
+                    </div>
+
+                    @if (editingPm != null)
+                    {
+                        <div class="rounded-xl border border-blue-200 bg-blue-50/40 p-3 space-y-2.5 text-xs">
+                            <div class="flex items-center justify-between">
+                                <span class="font-bold text-blue-900">Edit Position Matrix: @editingPm.Name</span>
+                                <button type="button" class="text-slate-500 hover:text-slate-800 font-bold" @onclick="() => editingPm = null">✕</button>
+                            </div>
+                            <div class="flex flex-wrap items-center gap-1.5 text-[11px]">
+                                <span class="rounded-full bg-slate-200 px-2 py-0.5 font-semibold text-slate-700">Current: @editingPm.ApprovedSlots</span>
+                                <span class="rounded-full bg-blue-100 px-2 py-0.5 font-semibold text-blue-800">Used: @editingPm.UsedSlots</span>
+                                <span class="rounded-full bg-emerald-100 px-2 py-0.5 font-semibold text-emerald-800">Available: @editingPm.AvailableSlots</span>
+                                <button type="button" class="ml-auto rounded border border-blue-300 bg-white px-2 py-0.5 font-semibold text-blue-700 hover:bg-blue-50" @onclick="() => editPmSlots += 1">+1 Slot</button>
+                                <button type="button" class="rounded border border-blue-300 bg-white px-2 py-0.5 font-semibold text-blue-700 hover:bg-blue-50" @onclick="() => editPmSlots += 5">+5 Slots</button>
+                            </div>
+                            <div class="grid gap-2 sm:grid-cols-3">
+                                <label class="block text-xs font-medium text-slate-700">
+                                    Total Approved Slots
+                                    <input type="number" min="@Math.Max(1, editingPm.UsedSlots)" max="100000" @bind="editPmSlots"
+                                           class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs" />
+                                </label>
+                                <label class="block text-xs font-medium text-slate-700">
+                                    Effective Through (Optional)
+                                    <input type="date" @bind="editPmEffectiveTo"
+                                           class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs" />
+                                </label>
+                                <label class="block text-xs font-medium text-slate-700">
+                                    Change Reason
+                                    <input maxlength="500" @bind="editPmReason" placeholder="e.g. Slots exhausted, budget approved"
+                                           class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs" />
+                                </label>
+                            </div>
+                            <div class="flex justify-end gap-2">
+                                <button type="button" class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50" @onclick="() => editingPm = null">Cancel</button>
+                                <button type="button" disabled="@busy" class="rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50" @onclick="SavePositionMatrixAsync">
+                                    Save Slots
+                                </button>
+                            </div>
+                        </div>
+                    }
+
+                    @if (!filteredPositionMatrices.Any())
+                    {
+                        <div class="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-xs text-slate-500">
+                            No position matrices created yet for this selection.
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="overflow-x-auto rounded-xl border border-slate-200">
+                            <table class="w-full text-left text-xs">
+                                <thead class="border-b border-slate-200 bg-slate-50 text-[11px] font-bold uppercase text-slate-500">
+                                    <tr>
+                                        <th class="px-3 py-2">Position Matrix</th>
+                                        <th class="px-3 py-2">Approved</th>
+                                        <th class="px-3 py-2">Used</th>
+                                        <th class="px-3 py-2">Available</th>
+                                        <th class="px-3 py-2 text-right">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-100">
+                                    @foreach (var pm in filteredPositionMatrices)
+                                    {
+                                        <tr class="hover:bg-slate-50/70">
+                                            <td class="px-3 py-2 font-medium text-slate-900">
+                                                <div>@pm.Name</div>
+                                                <div class="font-mono text-[10px] text-slate-400">Matrix #@pm.Id · Basic @pm.BasicSalary.ToString("N2")</div>
+                                            </td>
+                                            <td class="px-3 py-2 font-bold text-slate-900">@pm.ApprovedSlots</td>
+                                            <td class="px-3 py-2">
+                                                <span class="rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-semibold text-blue-800">@pm.UsedSlots</span>
+                                            </td>
+                                            <td class="px-3 py-2">
+                                                @if (pm.AvailableSlots == 0)
+                                                {
+                                                    <span class="rounded-full bg-rose-100 px-2 py-0.5 text-[11px] font-semibold text-rose-800">0 (Exhausted)</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-800">@pm.AvailableSlots</span>
+                                                }
+                                            </td>
+                                            <td class="px-3 py-2 text-right">
+                                                @if (data.CanManage)
+                                                {
+                                                    <button type="button"
+                                                            class="rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700 hover:bg-blue-100"
+                                                            @onclick="() => StartEditPositionMatrix(pm)">
+                                                        @(pm.AvailableSlots == 0 ? "+ Add Slots" : "Edit Slots")
+                                                    </button>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+
         <div class="space-y-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
             <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
+                <div class="flex items-center gap-2">
+                    <h3 class="text-sm font-bold text-slate-900">
+                        @(selectedJobMatrixId > 0 ? "Positions Created From Selected Job Matrix" : "Positions Directory")
+                    </h3>
+                </div>
                 <div class="flex flex-wrap items-center gap-2 flex-1 min-w-[280px]">
                     <input type="search"
                            @bind="search"
@@ -263,7 +439,8 @@
                     </thead>
                     <tbody class="divide-y divide-slate-100">
                         @{
-                            var filteredList = data.Positions.Where(x => (filter == 0 || x.FrameworkId == filter) &&
+                            var filteredList = data.Positions.Where(x => (selectedJobMatrixId == 0 || x.JobMatrixId == selectedJobMatrixId) &&
+                                                                       (filter == 0 || x.FrameworkId == filter) &&
                                                                        (state == "all" || x.Active == (state == "active")) &&
                                                                        x.Name.Contains(search, StringComparison.OrdinalIgnoreCase)).ToList();
                         }
@@ -303,9 +480,18 @@
                                         }
                                     </td>
                                     <td class="px-3 py-2.5 font-medium text-slate-700">
-                                        <span class="inline-flex items-center gap-1 rounded bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-700">
-                                            @p.CurrentStaff staff
-                                        </span>
+                                        @if (p.CurrentStaff > 0)
+                                        {
+                                            <span class="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2.5 py-0.5 text-[11px] font-semibold text-blue-800">
+                                                Used (@p.CurrentStaff staff)
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-800">
+                                                Available
+                                            </span>
+                                        }
                                     </td>
                                     <td class="px-3 py-2.5">
                                         <span class="rounded-full px-2.5 py-0.5 font-semibold text-[11px] @(p.Active ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-600")">
@@ -313,7 +499,13 @@
                                         </span>
                                     </td>
                                     <td class="px-3 py-2.5 text-right">
-                                        @if (p.CanEdit)
+                                        @if (p.CurrentStaff > 0)
+                                        {
+                                            <span class="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] font-semibold text-slate-500" title="Assigned to active staff — change via approval flow">
+                                                Assigned (Locked)
+                                            </span>
+                                        }
+                                        else if (p.CanEdit)
                                         {
                                             <button type="button"
                                                     class="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-blue-600 hover:bg-blue-50 transition"
@@ -336,8 +528,54 @@
     private PositionManagementData? data;
     private PayFrameworkData? payData;
     private bool busy, active = true, global, matrixCreation;
-    private int id, framework, matrix, filter;
-    private string name = "", dhivehi = "", description = "", search = "", state = "active";
+    private int id, framework, matrix, filter, selectedJobMatrixId;
+    private string name = "", dhivehi = "", description = "", search = "", jobMatrixSearch = "", state = "active";
+    private PositionMatrixOption? editingPm;
+    private int editPmSlots = 1;
+    private DateTime? editPmEffectiveTo;
+    private string editPmReason = "";
+
+    private void SelectJobMatrix(int jmId)
+    {
+        selectedJobMatrixId = selectedJobMatrixId == jmId ? 0 : jmId;
+        editingPm = null;
+    }
+
+    private void StartEditPositionMatrix(PositionMatrixOption pm)
+    {
+        editingPm = pm;
+        editPmSlots = pm.AvailableSlots == 0 ? pm.ApprovedSlots + 1 : pm.ApprovedSlots;
+        editPmEffectiveTo = pm.EffectiveTo;
+        editPmReason = pm.AvailableSlots == 0 ? "Additional position slots approved" : "";
+    }
+
+    private async Task SavePositionMatrixAsync()
+    {
+        if (editingPm == null || busy) return;
+        busy = true; error = null;
+        try
+        {
+            var result = await Positions.UpdatePositionMatrixAsync(new(editingPm.Id, editPmSlots, editPmEffectiveTo, editPmReason));
+            if (result.Success)
+            {
+                Toasts.Success(result.Message);
+                editingPm = null;
+                await Load();
+            }
+            else
+            {
+                error = result.Message;
+            }
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
     private string? error;
     private int? typeId, rankId, classificationId;
     private decimal? salary;

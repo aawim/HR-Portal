@@ -1,5 +1,6 @@
 @using HRM.Components.Tools
 @using HRM.DTOs.Attendance
+@using HRM.DTOs.WorkTypes
 @using HRM.Models
 @using HRM.Services
 @using HRM.Services.Interfaces
@@ -8,81 +9,107 @@
 @* @inject IAttendance AttendanceLogService *@
 @inject IAttendanceService AttendanceService
 @inject IWorkTypeService WorkTypes
+@inject IJSRuntime JS
+@inject ToastService ToastService
 
 @inject HRM.Services.Contracts.AttendanceLogServiceContracts.IOperations AttendanceLogService
 
 
-<div class="time-clock-card bg-white rounded-xl shadow-sm border">
+<div class="time-clock-card bg-white dark:bg-slate-900 rounded-2xl shadow-xs border border-slate-200 dark:border-slate-800">
 
-    <h3 class="text-lg font-semibold mb-5">
-        Time Clock
-    </h3>
-
+    <div class="flex items-center justify-between gap-2 mb-3">
+        <h3 class="text-base font-bold text-slate-900 dark:text-slate-100">
+            Time Clock
+        </h3>
+        <span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold @StatusBadgeClass">
+            @StatusLabel
+        </span>
+    </div>
 
     <AnalogClock />
 
-@*
-    @if (TodayCheckIn == null)
+    @if (todayCheckIn != null || todayCheckOut != null)
     {
-        <div class="mb-5 rounded-lg border border-amber-200 bg-amber-50 p-4">
-            <div class="font-semibold text-amber-700">
-                Not Clocked In
+        <div class="mt-3 grid grid-cols-2 gap-2 rounded-xl border border-slate-100 bg-slate-50/80 p-2.5 text-center text-xs dark:border-slate-800 dark:bg-slate-800/50">
+            <div>
+                <span class="block text-[11px] text-slate-500">First In</span>
+                <strong class="font-semibold tabular-nums @(todayCheckIn != null ? "text-emerald-700" : "text-slate-400")">
+                    @(todayCheckIn?.Date.ToString("HH:mm") ?? "--:--")
+                </strong>
             </div>
-
-            <div class="text-sm text-slate-500">
-                Please check in to begin your workday.
+            <div>
+                <span class="block text-[11px] text-slate-500">Last Out</span>
+                <strong class="font-semibold tabular-nums @(todayCheckOut != null ? "text-blue-700" : "text-slate-400")">
+                    @(todayCheckOut?.Date.ToString("HH:mm") ?? "--:--")
+                </strong>
             </div>
         </div>
     }
-    else if (TodayCheckOut == null)
-    {
-        <div class="mb-5 rounded-lg border border-green-200 bg-green-50 p-4">
-            <div class="font-semibold text-green-700">
-                Currently Clocked In
-            </div>
 
-            <div class="text-sm text-slate-500">
-                Checked in at @TodayCheckIn.Date.ToString("hh:mm tt")
-            </div>
+    @if (!string.IsNullOrWhiteSpace(feedbackMessage))
+    {
+        <p role="@(feedbackIsError ? "alert" : "status")"
+           class="mt-3 rounded-lg border px-3 py-2 text-xs font-medium @(feedbackIsError ? "border-rose-200 bg-rose-50 text-rose-700" : "border-emerald-200 bg-emerald-50 text-emerald-700")">
+            @feedbackMessage
+        </p>
+    }
+
+    @if (canClock)
+    {
+        <div class="mt-4 flex flex-col gap-2">
+            @if (activeGeofences.Count > 0)
+            {
+                <div class="rounded-lg border border-emerald-200 bg-emerald-50/70 px-2.5 py-1.5 text-[11px] font-medium text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200 space-y-1">
+                    <div class="flex items-center justify-between gap-2">
+                        <span class="inline-flex items-center gap-1.5">
+                            <i class="bi bi-geo-alt-fill text-emerald-600" aria-hidden="true"></i>
+                            <span>Geo-fenced: @string.Join(", ", activeGeofences.Select(g => $"{g.Label} ({g.RadiusMeters} m)"))</span>
+                        </span>
+                        <button type="button"
+                                class="text-[10px] font-semibold text-blue-700 dark:text-blue-300 hover:underline disabled:opacity-50"
+                                disabled="@(checkingLocation || ProcessingClock)"
+                                @onclick="CheckLocationAsync">
+                            @(checkingLocation ? "Locating..." : "Check Location")
+                        </button>
+                    </div>
+                    @if (!string.IsNullOrWhiteSpace(locationStatusText))
+                    {
+                        <div class="text-[10px] @(locationWithinBoundary ? "text-emerald-700 dark:text-emerald-300" : "text-rose-700 dark:text-rose-300")">
+                            @locationStatusText
+                        </div>
+                    }
+                </div>
+            }
+            <button type="button"
+                    @onclick="HandleClock"
+                    disabled="@ProcessingClock"
+                    class="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold text-sm py-2.5 px-4 shadow-xs hover:shadow-sm transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900">
+
+                @if (ProcessingClock)
+                {
+                    <div class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    <span>Processing...</span>
+                }
+                else
+                {
+                    <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span>@PrimaryActionLabel</span>
+                }
+            </button>
+            <p class="text-center text-[11px] text-slate-500">
+                Smart clock automatically matches your shift, break, or duty event.
+                <a href="/online/attendance/my-clock-events" class="font-semibold text-blue-600 hover:underline">View events</a>
+            </p>
         </div>
     }
     else
     {
-        <div class="mb-5 rounded-lg border border-slate-200 bg-slate-50 p-4">
-            <div class="font-semibold text-slate-700">
-                Checked Out
-            </div>
-
-            <div class="text-sm text-slate-500 mt-1">
-                Check In : @TodayCheckIn.Date.ToString("hh:mm tt")
-                <br />
-                Check Out : @TodayCheckOut.Date.ToString("hh:mm tt")
-            </div>
-        </div>
-    } *@
-
-    @if (canClock)
-    {
-    <div class="flex gap-3">
-
-        <button @onclick="HandleClock"
-                disabled="@ProcessingClock"
-                class="w-full rounded-lg bg-blue-600 px-4 py-3
-                       font-semibold text-white hover:bg-blue-700
-                       disabled:opacity-50">
-
-            @if (ProcessingClock)
-            {
-                <span>Processing...</span>
-            }
-            else
-            {
-                <span>Clock</span>
-            }
-
-        </button>
-
-    </div>
+        <p class="mt-3 text-center text-xs text-slate-500">
+            Online clocking is not enabled for your current work type.
+            <a href="/online/attendance/my-clock-events" class="font-semibold text-blue-600 hover:underline">View events</a>
+        </p>
     }
 
 </div>
@@ -116,21 +143,106 @@
     // private bool DisableCheckOut => ProcessingCheckIn || ProcessingCheckOut;
 
     private bool ProcessingClock;
+    private bool checkingLocation;
     private bool canClock;
+    private List<WorkTypeGeofenceDto> activeGeofences = [];
+    private string? locationStatusText;
+    private bool locationWithinBoundary;
     private bool _useTime = false;
+    private AttendanceLogDto? todayCheckIn;
+    private AttendanceLogDto? todayCheckOut;
+    private string? feedbackMessage;
+    private bool feedbackIsError;
 
+    private string StatusLabel =>
+        todayCheckIn == null ? "Not Clocked In" :
+        todayCheckOut == null ? "Clocked In" : "Clocked Out";
 
-    // private bool ProcessingCheckIn;
-    // private bool ProcessingCheckOut;
+    private string StatusBadgeClass =>
+        todayCheckIn == null ? "bg-amber-50 text-amber-700 border border-amber-200" :
+        todayCheckOut == null ? "bg-emerald-50 text-emerald-700 border border-emerald-200" :
+        "bg-slate-100 text-slate-700 border border-slate-200";
+
+    private string PrimaryActionLabel =>
+        todayCheckIn == null ? "Clock In" :
+        todayCheckOut == null ? "Clock Out / Event" : "Record Clock Event";
 
     protected override async Task OnInitializedAsync()
     {
+        try
+        {
+            canClock = await WorkTypes.CanClockAsync();
+        }
+        catch
+        {
+            canClock = false;
+        }
 
-        try { canClock = await WorkTypes.CanClockAsync(); }
-        catch { canClock = false; }
+        if (canClock)
+        {
+            try { activeGeofences = await WorkTypes.GetActiveClockGeofencesAsync(); }
+            catch { activeGeofences = []; }
+        }
 
-        // TodayCheckIn = result.checkIn;
-        // TodayCheckOut = result.checkOut;
+        await RefreshTodayStatusAsync();
+    }
+
+    private async Task CheckLocationAsync()
+    {
+        if (checkingLocation || activeGeofences.Count == 0) return;
+        checkingLocation = true;
+        try
+        {
+            var pos = await JS.InvokeAsync<GeoPositionResult>("hrmGeoMap.getCurrentPosition");
+            if (pos is not { Ok: true })
+            {
+                locationWithinBoundary = false;
+                locationStatusText = pos?.Error ?? "Could not resolve your current GPS location.";
+                return;
+            }
+
+            var closest = activeGeofences
+                .Select(g => new
+                {
+                    Geofence = g,
+                    Distance = WorkTypeGeofenceHelper.DistanceMeters(pos.Lat, pos.Lng, g.Latitude, g.Longitude)
+                })
+                .OrderBy(x => x.Distance)
+                .First();
+
+            locationWithinBoundary = closest.Distance <= closest.Geofence.RadiusMeters;
+            var distRounded = Math.Round(closest.Distance);
+            locationStatusText = locationWithinBoundary
+                ? $"Inside boundary · {distRounded:N0} m from {closest.Geofence.Label} ({pos.Lat:F5}, {pos.Lng:F5} ±{pos.Accuracy} m)"
+                : $"Outside boundary · {distRounded:N0} m from {closest.Geofence.Label} (allowed: {closest.Geofence.RadiusMeters} m; your GPS: {pos.Lat:F5}, {pos.Lng:F5})";
+        }
+        catch
+        {
+            locationWithinBoundary = false;
+            locationStatusText = "Could not access browser location.";
+        }
+        finally
+        {
+            checkingLocation = false;
+        }
+    }
+
+    private async Task RefreshTodayStatusAsync()
+    {
+        try
+        {
+            var ctx = await UserAccessService.GetContextAsync();
+            if (ctx?.IndividualId > 0)
+            {
+                var status = await AttendanceService.GetTodayStatusAsync(ctx.IndividualId);
+                todayCheckIn = status.checkIn;
+                todayCheckOut = status.checkOut;
+            }
+        }
+        catch
+        {
+            // Keep UI resilient if status lookup is unavailable in test or offline contexts.
+        }
     }
 
     private DateTime _Date = DateTime.Today;
@@ -161,22 +273,96 @@
     private async Task HandleClock()
     {
         ProcessingClock = true;
+        feedbackMessage = null;
+        feedbackIsError = false;
 
         try
         {
             var context = await UserAccessService.RequireContextAsync();
+            try { activeGeofences = await WorkTypes.GetActiveClockGeofencesAsync(); }
+            catch { }
 
-            await AttendanceLogService.AddClockEventAsync(context.IndividualId);
+            if (activeGeofences.Count > 0)
+            {
+                var pos = await JS.InvokeAsync<GeoPositionResult>("hrmGeoMap.getCurrentPosition");
+                if (pos is not { Ok: true })
+                {
+                    feedbackIsError = true;
+                    feedbackMessage = pos?.Error ?? "Location access is required to clock in for your Geo Location work type.";
+                    ToastService.Error(feedbackMessage);
+                    return;
+                }
+
+                var closest = activeGeofences
+                    .Select(g => new
+                    {
+                        Geofence = g,
+                        Distance = WorkTypeGeofenceHelper.DistanceMeters(pos.Lat, pos.Lng, g.Latitude, g.Longitude)
+                    })
+                    .OrderBy(x => x.Distance)
+                    .First();
+
+                if (closest.Distance > closest.Geofence.RadiusMeters)
+                {
+                    locationWithinBoundary = false;
+                    locationStatusText = $"Outside boundary · {Math.Round(closest.Distance):N0} m from {closest.Geofence.Label} (allowed: {closest.Geofence.RadiusMeters} m; GPS: {pos.Lat:F5}, {pos.Lng:F5})";
+                    feedbackIsError = true;
+                    feedbackMessage = $"Outside allowed clock-in boundary: you are {Math.Round(closest.Distance):N0} m away from {closest.Geofence.Label} (allowed radius: {closest.Geofence.RadiusMeters} m).";
+                    ToastService.Error(feedbackMessage);
+                    return;
+                }
+
+                locationWithinBoundary = true;
+                locationStatusText = $"Verified inside {closest.Geofence.Label} · {Math.Round(closest.Distance):N0} m from center ({pos.Lat:F5}, {pos.Lng:F5})";
+                await AttendanceLogService.AddClockEventWithLocationAsync(context.IndividualId, pos.Lat, pos.Lng);
+            }
+            else
+            {
+                await AttendanceLogService.AddClockEventAsync(context.IndividualId);
+            }
+
+            await RefreshTodayStatusAsync();
+            feedbackMessage = activeGeofences.Count > 0 && !string.IsNullOrWhiteSpace(locationStatusText)
+                ? $"Clock event recorded at {DateTime.UtcNow.AddHours(5):HH:mm} ({locationStatusText})."
+                : $"Clock event recorded at {DateTime.UtcNow.AddHours(5):HH:mm}.";
+            ToastService.Success(feedbackMessage);
 
             if (OnClock.HasDelegate)
             {
                 await OnClock.InvokeAsync();
             }
         }
+        catch (UnauthorizedAccessException ex)
+        {
+            feedbackIsError = true;
+            feedbackMessage = ex.Message;
+            ToastService.Error(feedbackMessage);
+        }
+        catch (InvalidOperationException ex)
+        {
+            feedbackIsError = true;
+            feedbackMessage = ex.Message;
+            ToastService.Error(feedbackMessage);
+        }
+        catch
+        {
+            feedbackIsError = true;
+            feedbackMessage = "Could not record your clock event right now. Please try again.";
+            ToastService.Error(feedbackMessage);
+        }
         finally
         {
             ProcessingClock = false;
         }
+    }
+
+    private sealed class GeoPositionResult
+    {
+        public bool Ok { get; set; }
+        public double Lat { get; set; }
+        public double Lng { get; set; }
+        public int Accuracy { get; set; }
+        public string? Error { get; set; }
     }
 
 

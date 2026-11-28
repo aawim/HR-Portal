@@ -17,51 +17,42 @@
 
 <PageTitle>Employment &amp; Work Experience Certificates - Digital HR</PageTitle>
 
-<div class="mx-auto min-w-7xl max-w-full p-2 flex flex-col gap-2">
-    <!-- Full-Width Sticky Header -->
-    <header class="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur-xs px-3 py-3 shadow-xs rounded-2xl flex flex-wrap items-center justify-between gap-3">
+<div class="mx-auto min-w-7xl max-w-full p-2 flex flex-col gap-3">
+    <!-- Compact, Transparent, Borderless Header (UI_DESIGN_STANDARD §3) -->
+    <header class="flex flex-wrap items-center justify-between gap-2 px-1 py-0.5">
         <div class="min-w-0">
-            <div class="flex items-center gap-2">
-                <span class="rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-semibold text-blue-800">HR Verification</span>
-                <span class="text-xs text-slate-400">Official Correspondence</span>
+            <div class="flex items-center gap-2 flex-wrap">
+                <h1 class="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 truncate">Employment &amp; Work Experience Certificates</h1>
+                <span class="inline-flex items-center gap-1 rounded-full bg-teal-50 border border-teal-200/80 px-2 py-0.5 text-[10px] font-semibold text-teal-700">
+                    <span class="h-1.5 w-1.5 rounded-full bg-teal-500"></span>
+                    HR Verification
+                </span>
             </div>
-            <h1 class="text-lg font-bold text-slate-900 truncate mt-0.5">Employment &amp; Work Experience Certificates</h1>
             <p class="text-xs text-slate-500">Request, track, and download official HR-issued service and work experience certificates.</p>
         </div>
 
-        <div class="flex flex-wrap items-center gap-2">
-            <!-- Full Width / Shrink View Toggle -->
+        <div class="flex flex-wrap items-center gap-1.5">
             <button type="button"
-                    class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition-colors"
+                    class="app-button app-button-neutral app-button-sm"
                     @onclick="ToggleFullWidth"
                     title="@(isFullWidth ? "Shrink view width" : "Expand to full viewport width")">
-                @if (isFullWidth)
-                {
-                    <svg class="w-3.5 h-3.5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/></svg>
-                    <span>Shrink View</span>
-                }
-                else
-                {
-                    <svg class="w-3.5 h-3.5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-5h-4m4 0v4m0-4l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 4h-4m4 0l-5-5"/></svg>
-                    <span>Full Width</span>
-                }
+                <AppIcon Name="@(isFullWidth ? "fullscreen_exit" : "fullscreen")" />
+                <span>@(isFullWidth ? "Shrink View" : "Full Width")</span>
             </button>
 
-            <!-- Refresh Button -->
             <button type="button"
-                    class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition-colors"
+                    class="app-button app-button-secondary app-button-sm"
                     @onclick="RefreshAsync"
                     disabled="@isLoading">
-                <svg class="w-3.5 h-3.5 @(isLoading ? "animate-spin" : "")" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                <AppIcon Name="arrow-clockwise" Class="@(isLoading ? "animate-spin" : "")" />
                 <span>Refresh</span>
             </button>
 
-            <!-- Primary Action: New Request -->
             <button type="button"
-                    class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 transition-colors"
+                    class="app-button app-button-primary app-button-sm"
                     @onclick="OpenNewRequestForm">
-                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-                <span>+ Request Certificate</span>
+                <AppIcon Name="add" />
+                <span>Request Certificate</span>
             </button>
         </div>
     </header>
@@ -245,12 +236,12 @@
                             @onclick="SubmitRequestAsync">
                         @if (isSubmitting)
                         {
-                            <svg class="w-3.5 h-3.5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                            <AppIcon Name="refresh" Class="w-3.5 h-3.5 animate-spin text-sm" />
                             <span>Submitting...</span>
                         }
                         else
                         {
-                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                            <AppIcon Name="check_circle" Class="w-3.5 h-3.5 text-sm" />
                             <span>Submit Request to HR</span>
                         }
                     </button>
@@ -288,7 +279,7 @@
                             <button type="button"
                                     class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-emerald-700 transition"
                                     @onclick="() => DownloadPdfAsync(selectedIssuedCert.IssuedCertificateId, selectedIssuedCert.CertificateNumber)">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                                <AppIcon Name="download" Class="w-4 h-4 text-base" />
                                 <span>Download Official PDF</span>
                             </button>
                         </div>
@@ -320,7 +311,7 @@
                 {
                     <div class="rounded-xl border border-purple-200 bg-purple-50 p-3.5 flex flex-col gap-2 text-xs">
                         <div class="flex items-center gap-2 text-purple-900 font-bold">
-                            <svg class="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                            <AppIcon Name="warning" Class="w-4 h-4 text-purple-600 text-base" />
                             <span>Returned by HR for Clarification</span>
                         </div>
                         <p class="text-purple-800">HR Reason: @selectedRequest.ReturnReason</p>
@@ -330,7 +321,7 @@
                 {
                     <div class="rounded-xl border border-rose-200 bg-rose-50 p-3.5 flex flex-col gap-2 text-xs">
                         <div class="flex items-center gap-2 text-rose-900 font-bold">
-                            <svg class="w-4 h-4 text-rose-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                            <AppIcon Name="close" Class="w-4 h-4 text-rose-600 text-base" />
                             <span>Certificate Request Rejected</span>
                         </div>
                         <p class="text-rose-800">HR Reason: @selectedRequest.RejectionReason</p>
@@ -471,7 +462,7 @@
                 <!-- EMPTY STATE / INSTRUCTIONS -->
                 <div class="rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center text-xs text-slate-500 flex flex-col items-center gap-3">
                     <div class="w-12 h-12 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center">
-                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                        <AppIcon Name="description" Class="w-6 h-6 text-2xl" />
                     </div>
                     <div>
                         <h3 class="text-sm font-bold text-slate-800">Employment Certificates</h3>
@@ -574,7 +565,7 @@
                                     <button type="button"
                                             class="inline-flex items-center gap-1 rounded-md bg-emerald-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-emerald-700 transition"
                                             @onclick="() => DownloadPdfAsync(cert.IssuedCertificateId, cert.CertificateNumber)">
-                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                                        <AppIcon Name="download" Class="w-3.5 h-3.5 text-sm" />
                                         <span>PDF</span>
                                     </button>
                                 </div>

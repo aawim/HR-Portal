@@ -3,34 +3,134 @@
 @using HRM.Components.Admin.Settings.Workplan
 @using HRM.Components.Pages.Online
 @inject NavigationManager Navigation
+@inject Microsoft.JSInterop.IJSRuntime JS
 
-<PageTitle>Duty roster</PageTitle>
+<PageTitle>Schedule Manager</PageTitle>
 
-<section class="space-y-4 p-4">
-    <div class="flex flex-wrap gap-2" role="tablist" aria-label="Duty roster sections">
-        <button type="button" role="tab" aria-selected="@(tab == "roster")" class="@(tab == "roster" ? "inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" : "inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors")" @onclick='() => SelectTab("roster")'>Roster</button>
-        <button type="button" role="tab" aria-selected="@(tab == "schedule")" class="@(tab == "schedule" ? "inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" : "inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors")" @onclick='() => SelectTab("schedule")'>Schedule assignment</button>
-        <button type="button" role="tab" aria-selected="@(tab == "manual")" class="@(tab == "manual" ? "inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" : "inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors")" @onclick='() => SelectTab("manual")'>Manual assignment</button>
+<section class="w-full min-w-0 p-2 flex flex-col gap-3 text-slate-900 dark:text-slate-100">
+    <!-- Compact Header (no background/border) -->
+    <header class="flex flex-wrap items-center justify-between gap-2 px-1 py-0.5">
+        <div class="min-w-0">
+            <div class="flex flex-wrap items-center gap-2">
+                <h1 class="truncate text-lg font-bold text-slate-900 dark:text-slate-100">Schedule Manager</h1>
+                <span class="inline-flex items-center gap-1 rounded-full bg-teal-50 dark:bg-teal-950/60 border border-teal-200/80 dark:border-teal-800 px-2 py-0.5 text-[10px] font-semibold text-teal-700 dark:text-teal-300">
+                    <span class="h-1.5 w-1.5 rounded-full bg-teal-500"></span>
+                    Workforce Scheduling
+                </span>
+            </div>
+            <p class="text-xs text-slate-500 dark:text-slate-400">Manage rosters, draft planning, schedule assignments, manual duty planning, policies, and ledger reviews.</p>
+        </div>
+        <div class="flex flex-wrap items-center gap-1.5">
+            <button type="button"
+                    class="app-button app-button-neutral app-button-sm"
+                    @onclick="ToggleWidthAsync">
+                <AppIcon Name="@(isFullWidth ? "fullscreen_exit" : "fullscreen")" Class="text-xs" />
+                <span>@(isFullWidth ? "Shrink View" : "Full Width")</span>
+            </button>
+        </div>
+    </header>
+
+    <div class="dr-shell @(isFullWidth ? "dr-shell-full" : "dr-shell-standard")">
+        <!-- Narrow Sub-Navigation Bar -->
+        <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2 flex flex-wrap items-center justify-between gap-2">
+            <div class="flex flex-wrap items-center gap-1 overflow-x-auto" role="tablist" aria-label="Duty roster sections">
+                @foreach (var item in TabItems)
+                {
+                    var isActive = tab == item.Key;
+                    <button type="button"
+                            role="tab"
+                            aria-selected="@isActive"
+                            class="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors whitespace-nowrap @(isActive ? "bg-teal-50 dark:bg-teal-950/50 text-teal-800 dark:text-teal-300 border border-teal-200 dark:border-teal-800" : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 border border-transparent")"
+                            @onclick="() => SelectTab(item.Key)">
+                        @item.Label
+                    </button>
+                }
+            </div>
+        </div>
+
+        <div class="w-full min-w-0">
+            @if (tab == "schedule")
+            {
+                <ScopeScheduleSettings />
+            }
+            else if (tab == "draft")
+            {
+                <ScheduleManagerDraft />
+            }
+            else if (tab == "manual")
+            {
+                <ManualAssignment />
+            }
+            else if (tab == "policies")
+            {
+                <ScheduleManagerPolicies />
+            }
+            else if (tab == "review")
+            {
+                <ScheduleManagerReviews />
+            }
+            else
+            {
+                <DutyRoster />
+            }
+        </div>
     </div>
-    @if (tab == "schedule")
-    {
-        <ScopeScheduleSettings />
-    }
-    else if (tab == "manual")
-    {
-        <ManualAssignment />
-    }
-    else
-    {
-        <DutyRoster />
-    }
 </section>
+
+<style>
+    .dr-shell {
+        width: 100%;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+        transition: max-width 200ms ease;
+    }
+
+    .dr-shell-standard {
+        max-width: 80rem;
+        margin-left: auto;
+        margin-right: auto;
+    }
+
+    .dr-shell-full {
+        max-width: none;
+    }
+</style>
 
 @code {
     [SupplyParameterFromQuery(Name = "tab")] public string? RequestedTab { get; set; }
-    private static readonly string[] Tabs = ["roster", "schedule", "manual"];
+    private sealed record TabItem(string Key, string Label);
+    private static readonly TabItem[] TabItems =
+    [
+        new("roster", "Roster"),
+        new("draft", "Draft Planner"),
+        new("schedule", "Schedule Assignment"),
+        new("manual", "Manual Assignment"),
+        new("policies", "Policies"),
+        new("review", "Session & Ledger Review")
+    ];
+    private static readonly string[] Tabs = ["roster", "draft", "schedule", "manual", "policies", "review"];
     private string tab = "roster";
+    private bool isFullWidth;
+
     protected override void OnParametersSet() => tab = RequestedTab is { } requested && Tabs.Contains(requested) ? requested : "roster";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            isFullWidth = await JS.InvokeAsync<string?>("localStorage.getItem", "hrm.schedule-manager.full-width") == "true";
+            StateHasChanged();
+        }
+    }
+
+    private async Task ToggleWidthAsync()
+    {
+        isFullWidth = !isFullWidth;
+        await JS.InvokeVoidAsync("localStorage.setItem", "hrm.schedule-manager.full-width", isFullWidth ? "true" : "false");
+    }
+
     private void SelectTab(string value)
     {
         if (!Tabs.Contains(value) || value == tab) return;

@@ -32,17 +32,24 @@ public sealed partial class LeaveCarryForwardService(IDbContextFactory<HrmTeCont
         await using var db = await factory.CreateDbContextAsync();
         var rules = await db.JobTypeLeaveAccrualRules.AsNoTracking().Where(x => x.OrganisationId == org && x.IsEnabled && x.CarryForwardMode != "Unspecified").ToListAsync();
         var result = new List<CarryForwardReview>();
+        var today = LeaveAccrualCalculator.Today;
         foreach (var rule in rules)
         {
-            var jobs = await db.Jobs.AsNoTracking().Where(x => x.OrganisationID == org && x.JobTypeId == rule.JobTypeId && x.JobStateId == 4 && x.TerminatedDate == null && x.JoinedDate <= LeaveAccrualCalculator.Today).ToListAsync();
-            var name = await db.LeaveTypes.Where(x => x.LeaveTypeId == rule.LeaveTypeId).Select(x => x.Name).SingleAsync();
+            var leaveType = await db.LeaveTypes.AsNoTracking().SingleOrDefaultAsync(x => x.LeaveTypeId == rule.LeaveTypeId && x.IsActive);
+            if (leaveType == null) continue;
+            var name = leaveType.Name;
+            var jobs = await db.Jobs.AsNoTracking().Where(x => x.OrganisationID == org && x.JobTypeId == rule.JobTypeId && x.JobStateId == 4 &&
+                (x.TerminatedDate == null || x.TerminatedDate >= today) && x.JoinedDate <= today).ToListAsync();
             foreach (var job in jobs)
             {
                 var balances = await db.JobLeaveTypes.AsNoTracking().Where(x => x.JobId == job.JobId && x.IsValid && (x.LeaveTypeId == rule.LeaveTypeId || x.LeaveType.Name == name)).ToListAsync();
                 if (balances.Count != 1 || balances[0].LeaveTypeId != rule.LeaveTypeId) continue;
                 var balance = balances[0];
                 var posted = await db.LeaveAccrualPostings.Where(x => x.RuleId == rule.Id && x.JobId == job.JobId).Select(x => x.DueDate).ToListAsync();
-                var next = LeaveAccrualCalculator.DueDates(rule, job.JoinedDate, LeaveAccrualCalculator.Today)
+                var effectiveThrough = job.TerminatedDate.HasValue && job.TerminatedDate.Value.Date < today
+                    ? job.TerminatedDate.Value.Date
+                    : today;
+                var next = LeaveAccrualCalculator.DueDates(rule, job.JoinedDate, effectiveThrough)
                     .FirstOrDefault(x => !posted.Contains(x.Date) && !(balance.RenewedDate?.Date > x.Date));
                 if (!next.Renewal || await db.LeaveCarryForwards.AnyAsync(x => x.RuleId == rule.Id && x.JobId == job.JobId && x.RenewalDate == next.Date)) continue;
                 var amount = balance.RemainingDays ?? 0;
@@ -78,7 +85,11 @@ public sealed partial class LeaveCarryForwardService(IDbContextFactory<HrmTeCont
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
         var rule = await db.JobTypeLeaveAccrualRules.SingleOrDefaultAsync(x => x.Id == preview.RuleId && x.OrganisationId == org && x.IsEnabled)
             ?? throw new UnauthorizedAccessException("Rule unavailable in this tenant.");
-        var job = await db.Jobs.SingleOrDefaultAsync(x => x.JobId == preview.JobId && x.OrganisationID == org && x.JobTypeId == rule.JobTypeId && x.JobStateId == 4 && x.TerminatedDate == null)
+        if (!await db.LeaveTypes.AnyAsync(x => x.LeaveTypeId == rule.LeaveTypeId && x.IsActive))
+            throw new InvalidOperationException("This leave type is inactive and cannot process carry-forward.");
+        var today = LeaveAccrualCalculator.Today;
+        var job = await db.Jobs.SingleOrDefaultAsync(x => x.JobId == preview.JobId && x.OrganisationID == org && x.JobTypeId == rule.JobTypeId && x.JobStateId == 4 &&
+            (x.TerminatedDate == null || x.TerminatedDate >= today))
             ?? throw new InvalidOperationException("Staff job is no longer eligible.");
         var balances = await db.JobLeaveTypes.Where(x => x.JobId == job.JobId && x.IsValid && (x.LeaveTypeId == rule.LeaveTypeId || x.LeaveType.Name == db.LeaveTypes.Where(t => t.LeaveTypeId == rule.LeaveTypeId).Select(t => t.Name).First())).ToListAsync();
         var balance = balances.Count == 1 ? balances[0] : null;

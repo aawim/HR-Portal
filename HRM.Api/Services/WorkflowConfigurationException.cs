@@ -2,6 +2,7 @@ using System.Data;
 using HRM.DTOs.ApprovalFlow;
 using HRM.Models;
 using Microsoft.EntityFrameworkCore;
+using System.Text.RegularExpressions;
 
 namespace HRM.Services;
 
@@ -36,18 +37,16 @@ public sealed class WorkflowConfigurationException(WorkflowRequestContextDto con
                 .Where(x => x.UserGroup.IsGlobal || x.UserGroup.UserOrganisationId == x.User.UserOrganisationId)
                 .Select(x => new { x.UserId, x.UserGroup.GroupName, x.UserGroup.IsGlobal }).ToListAsync();
             var permissions = new EffectivePermissionService(factory);
-            var recipients = new List<(int User, int Person, int Org)>();
+            var recipients = new List<(int User, int Person, int Org, bool Developer)>();
             foreach (var user in users)
             {
                 var memberships = groups.Where(x => x.UserId == user.UserId).ToList();
                 var hr = user.Org == org && memberships.Any(x => x.GroupName is "Human Resource: Staff" or "Human Resource :Head");
-                var developer = memberships.Any(x => x.GroupName == "Developer" && (user.Org == org || x.IsGlobal));
-                if (hr || developer || await permissions.HasPermissionAsync(user.UserId, "Super.Admin.Manage") ||
-                    user.Org == org && await permissions.HasPermissionAsync(user.UserId, "Developer"))
-                    recipients.Add((user.UserId, user.BusinessEntityID, user.Org));
+                var developer = memberships.Any(x => x.GroupName == "Developer" && (user.Org == org || x.IsGlobal)) ||
+                    user.Org == org && await permissions.HasPermissionAsync(user.UserId, "Developer");
+                if (hr || developer || await permissions.HasPermissionAsync(user.UserId, "Super.Admin.Manage"))
+                    recipients.Add((user.UserId, user.BusinessEntityID, user.Org, developer));
             }
-            // The source organisation is explicit; this link never switches tenant context.
-            var url = ConfigurationUrl ?? $"/admin/settings/config/approval-flows?issueOrganisationId={org}&jobTypeId={Context.JobTypeId}&requestTypeId={Context.RequestTypeId}";
             var kind = AlertKind ?? (ConfigurationUrl == null ? "Approval flow needs attention" : "Request transition needs attention");
             var message = $"A request action was blocked in {organisation}. Job Type: {jobType}. Request Type: {requestType}. {Detail}";
             if (message.Length > 500) message = message[..497] + "…";
@@ -55,6 +54,13 @@ public sealed class WorkflowConfigurationException(WorkflowRequestContextDto con
             var cutoff = DateTime.UtcNow.AddHours(-24);
             foreach (var recipient in recipients)
             {
+                // Keep each recipient inside the portal they are authorised to use.
+                var transition = Regex.Match(Detail, @"From State\s*=.*?\(ID\s+(\d+)\).*?To State\s*=.*?\(ID\s+(\d+)\)", RegexOptions.IgnoreCase);
+                var developerUrl = $"/developer/notification-resolution?jobTypeId={Context.JobTypeId}&requestTypeId={Context.RequestTypeId}";
+                if (transition.Success)
+                    developerUrl += $"&fromStateId={transition.Groups[1].Value}&toStateId={transition.Groups[2].Value}";
+                var url = recipient.Developer ? developerUrl :
+                    ConfigurationUrl ?? $"/admin/settings/config/approval-flows?issueOrganisationId={org}&jobTypeId={Context.JobTypeId}&requestTypeId={Context.RequestTypeId}";
                 if (await db.StaffNotifications.AnyAsync(x => x.UserId == recipient.User && x.OrganisationId == recipient.Org &&
                     x.Kind == kind && x.Url == url && x.Message == message && x.CreatedAtUtc >= cutoff)) continue;
                 db.StaffNotifications.Add(new StaffNotification { UserId = recipient.User, IndividualId = recipient.Person,

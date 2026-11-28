@@ -2,11 +2,12 @@
 @using Microsoft.AspNetCore.Components.Authorization
 @using HRM.Models
 @using HRM.Services
- 
+@using HRM.Services.Interfaces
+@inject IUserAccessService UserAccess
 
 @rendermode RenderMode.InteractiveServer
 
-<PageTitle>Settings - HR Portal</PageTitle>
+<PageTitle>HR - HR Portal</PageTitle>
 
 <AuthorizeView>
     <Authorized>
@@ -19,9 +20,21 @@
             </div>
 
             <!-- Grid: 4 columns on large screens, 2 on medium -->
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                @foreach (var cat in mainCategories.Where(c => new[]{"individuals","staff","staff-transfers","separations","documents","groups","items","supervisors","departments","requests","attendance","performance","payroll","budget","duty-roster","work-handovers"}.Contains(c.Url)))
-                {
+            @if (loading)
+            {
+                <div class="rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-500">Checking HR permissions…</div>
+            }
+            else if (visibleCategories.Count == 0)
+            {
+                <div class="rounded-xl border border-amber-200 bg-amber-50 p-6 text-sm text-amber-900">
+                    You do not have permission to view any HR menu items.
+                </div>
+            }
+            else
+            {
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    @foreach (var cat in visibleCategories)
+                    {
                     <a href="@(cat.Target ?? $"/admin/hr/{cat.Url}")"
                        class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md hover:border-blue-400 hover:bg-slate-50 transition-all duration-200 group flex items-center gap-6">
 
@@ -38,34 +51,76 @@
 
                         <!-- Right: Arrow (Optional) -->
                         <div class="text-slate-300 group-hover:text-blue-600 transition-colors">
-                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                            <AppIcon Name="chevron_right" Class="w-6 h-6 text-2xl" />
                         </div>
                     </a>
                 }
-            </div>
+                </div>
+            }
         </div>
 
         @code {
-        private record Category(string Title, string Url, string Icon, string Description, string? Target = null);
+        private record Category(string Title, string Url, string Icon, string Description, string? Target = null, params string[] Permissions);
+        private bool loading = true;
+        private List<Category> visibleCategories = new();
         private List<Category> mainCategories = new() {
-            new("Attendance", "attendance", "⏱️", "Manage staff attendance, leave and attendance requests.", "/admin/attendance"),
-            new("Performance", "performance", "📈", "Open performance management.", "/admin/performance"),
-            new("Payroll", "payroll", "💵", "Manage payroll periods, processing and reports.", "/admin/payroll"),
-            new("Budget", "budget", "📊", "Manage budget allocations, transactions and reports.", "/admin/budget"),
-            new("Duty roster", "duty-roster", "🗓️", "View scheduled duties, transfers and swaps.", "/admin/hr/work-planning/duty-roster"),
-            new("Work handovers", "work-handovers", "🤝", "Review work handovers and their approvals.", "/admin/hr/work-handovers"),
-            new("Staff", "staff", "💼", "Manage employee records, job assignments, and employment history."),
-            new("Staff Transfers", "staff-transfers", "🔄", "Initiate, confirm, approve and schedule internal staff transfers.", "/admin/hr/staff-transfers"),
-            new("Staff Separation", "separations", "🚪", "Manage employee resignations, clearances, handovers, asset returns, and offboarding.", "/admin/hr/separations"),
-            new("Document Centre", "documents", "🗂️", "Central enterprise document repository, staff files, organisation libraries, templates and records governance.", "/admin/hr/documents"),
-            new("Departments", "departments", "🏢", "View departments, supervisors and assigned staff."),
-            new("Received Requests", "requests", "📥", "Received requests grouped by request type."),
-            new("Supervisors Management", "supervisors", "👥", "Assign supervisors to departments and teams."),
-            new("Groups", "groups", "👥", "Organize employees into functional teams, committees, or project groups."),
-            new("Items", "items", "📦", "Manage item categories, asset inventory and consumable stock."),
-            new("CSC Viuga", "viuga", "🏛️", "Manage integrations and data synchronization with the Civil Service Commission network."),
-            new("Others", "others", "⚙️", "Configure miscellaneous settings, lookup values, and general system preferences.")
+            new("Attendance", "attendance", "⏱️", "Manage staff attendance, leave and attendance requests.", "/admin/attendance", "Admin", "Attendance.View", "Attendance.Manage"),
+            new("Performance", "performance", "📈", "Open performance management.", "/admin/performance", "Admin", "Performance.View", "Performance.Manage"),
+            new("Payroll", "payroll", "💵", "Manage payroll periods, processing and reports.", "/admin/payroll", "Admin", "Payroll.View", "Payroll.Review"),
+            new("Budget", "budget", "📊", "Manage budget allocations, transactions and reports.", "/admin/budget", "Admin", "Budget.View", "Budget.Manage"),
+            new("Duty Roster", "duty-roster", "🗓️", "View scheduled duties, transfers and swaps.", "/admin/hr/work-planning/duty-roster", "Admin", "WorkPlanning.Manage", "DutyRoster.View"),
+            new("Work Handovers", "work-handovers", "🤝", "Review work handovers and their approvals.", "/admin/hr/work-handovers", "Admin", "Leave.View", "Leave.Approve"),
+            new("Staff", "staff", "💼", "Manage employee records, job assignments, and employment history.", "/admin/hr/staff/manage", "Admin", "Employee.View", "Staff.Details"),
+            new("Staff Transfers", "staff-transfers", "🔄", "Initiate, confirm, approve and schedule internal staff transfers.", "/admin/hr/staff-transfers", "Admin", "Staff.Transfer", "Employee.View"),
+            new("Document Centre", "documents", "🗂️", "Central enterprise document repository, staff files, organisation libraries, templates and records governance.", "/admin/hr/documents", "Admin", "Documents.View", "Employee.View"),
+            new("Departments", "departments", "🏢", "View departments, supervisors and assigned staff.", "/admin/my/workspace/organisation", "Admin", "Organisation.View", "Employee.View"),
+            new("Received Requests", "requests", "📥", "Received requests grouped by request type.", null, "Admin", "Requests.View", "Employee.View"),
+            new("Supervisors Management", "supervisors", "👥", "Assign supervisors to departments and teams.", null, "Admin", "Organisation.Manage", "Team.Manage"),
+            new("Groups", "groups", "👥", "Organize employees into functional teams, committees, or project groups.", null, "Admin", "Groups.Manage", "Employee.View"),
+            new("Staff Groups", "staff-groups", "🧩", "Create cross-department staff groups with schedule, OT, work type, leave policy, and admin access overrides.", "/admin/hr/staff-groups", "Admin", "Employee.View"),
+            new("Document Slogans", "slogans", "🏷️", "Configure text or image slogans and assign them to Leave Chits, Salary Slips, and HRM documents.", "/admin/hr/slogans", "Admin", "Documents.Manage"),
+            new("Items", "items", "📦", "Manage item categories, asset inventory and consumable stock.", null, "Admin", "Items.View", "Items.Manage"),
+            new("CSC Viuga", "viuga", "🏛️", "Manage integrations and data synchronization with the Civil Service Commission network.", null, "Admin"),
+            new("Others", "others", "⚙️", "Configure miscellaneous settings, lookup values, and general system preferences.", null, "Admin")
         };
+
+        protected override async Task OnInitializedAsync()
+        {
+            try
+            {
+                var actor = await UserAccess.RequireContextAsync();
+                var allowedUrls = new HashSet<string> { "individuals", "staff", "staff-transfers", "documents", "slogans", "groups", "staff-groups", "items", "supervisors", "departments", "requests", "attendance", "payroll", "budget", "duty-roster", "work-handovers" };
+                var candidates = mainCategories.Where(c => allowedUrls.Contains(c.Url)).ToList();
+
+                var isAdmin = actor.IsSuperAdministrator || await UserAccess.HasPermissionAsync("Admin");
+                var isHr = await UserAccess.HasUserGroupAsync("Human Resource: Staff") || await UserAccess.HasUserGroupAsync("Human Resource :Head");
+                if (isAdmin || isHr)
+                {
+                    visibleCategories = candidates;
+                    return;
+                }
+
+                var result = new List<Category>();
+                foreach (var cat in candidates)
+                {
+                    var granted = false;
+                    foreach (var perm in cat.Permissions)
+                    {
+                        if (await UserAccess.HasPermissionAsync(perm)) { granted = true; break; }
+                    }
+                    if (granted) result.Add(cat);
+                }
+                visibleCategories = result;
+            }
+            catch
+            {
+                visibleCategories = new();
+            }
+            finally
+            {
+                loading = false;
+            }
+        }
         }
       
     </Authorized>

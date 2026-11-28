@@ -21,8 +21,8 @@ public sealed class AttendanceDeductionClient
 
     public async Task<AttendanceDeductionPolicy?> GetEffectivePolicyAsync(int organisationId, DateOnly? date = null, CancellationToken ct = default)
     {
-        var url = $"/api/v1/attendance-deductions/policy?organisationId={organisationId}";
-        if (date.HasValue) url += $"&effectiveDate={date.Value:yyyy-MM-dd}";
+        var workDate = date ?? DateOnly.FromDateTime(DateTime.UtcNow);
+        var url = $"/api/v1/attendance-deduction/get-effective-policy?organisationId={organisationId}&workDate={workDate:yyyy-MM-dd}";
         return await _http.GetFromJsonAsync<AttendanceDeductionPolicy>(url, ct);
     }
 
@@ -34,9 +34,9 @@ public sealed class AttendanceDeductionClient
         string? payrollStatus = null,
         CancellationToken ct = default)
     {
-        var url = $"/api/v1/attendance-deductions/adjustments?organisationId={organisationId}";
-        if (startDate.HasValue) url += $"&startDate={startDate.Value:yyyy-MM-dd}";
-        if (endDate.HasValue) url += $"&endDate={endDate.Value:yyyy-MM-dd}";
+        var url = $"/api/v1/attendance-deduction/get-adjustments?organisationId={organisationId}";
+        if (startDate.HasValue) url += $"&fromDate={startDate.Value:yyyy-MM-dd}";
+        if (endDate.HasValue) url += $"&toDate={endDate.Value:yyyy-MM-dd}";
         if (!string.IsNullOrWhiteSpace(verificationStatus)) url += $"&verificationStatus={Uri.EscapeDataString(verificationStatus)}";
         if (!string.IsNullOrWhiteSpace(payrollStatus)) url += $"&payrollStatus={Uri.EscapeDataString(payrollStatus)}";
 
@@ -45,44 +45,42 @@ public sealed class AttendanceDeductionClient
 
     public async Task<ServiceResult> VerifyAdjustmentAsync(long adjustmentId, int userId, string note, CancellationToken ct = default)
     {
-        var resp = await _http.PostAsJsonAsync("/api/v1/attendance-deductions/verify", new { AdjustmentId = adjustmentId, UserId = userId, Note = note }, ct);
+        using var resp = await _http.PostAsJsonAsync("/api/v1/attendance-deduction/verify-adjustment", new { adjustmentId, userId, comments = note }, ct);
+        if (!resp.IsSuccessStatusCode) return ServiceResult.Fail($"Verification request failed ({(int)resp.StatusCode}).");
         return await resp.Content.ReadFromJsonAsync<ServiceResult>(cancellationToken: ct) ?? ServiceResult.Fail("Verification request failed.");
     }
 
     public async Task<ServiceResult> ExcuseAdjustmentAsync(long adjustmentId, int userId, string note, CancellationToken ct = default)
     {
-        var resp = await _http.PostAsJsonAsync("/api/v1/attendance-deductions/excuse", new { AdjustmentId = adjustmentId, UserId = userId, Note = note }, ct);
+        using var resp = await _http.PostAsJsonAsync("/api/v1/attendance-deduction/excuse-adjustment", new { adjustmentId, userId, reason = note }, ct);
+        if (!resp.IsSuccessStatusCode) return ServiceResult.Fail($"Excuse request failed ({(int)resp.StatusCode}).");
         return await resp.Content.ReadFromJsonAsync<ServiceResult>(cancellationToken: ct) ?? ServiceResult.Fail("Excuse request failed.");
     }
 
     public async Task<ServiceResult> RejectAdjustmentAsync(long adjustmentId, int userId, string note, CancellationToken ct = default)
     {
-        var resp = await _http.PostAsJsonAsync("/api/v1/attendance-deductions/reject", new { AdjustmentId = adjustmentId, UserId = userId, Note = note }, ct);
+        using var resp = await _http.PostAsJsonAsync("/api/v1/attendance-deduction/reject-adjustment", new { adjustmentId, userId, reason = note }, ct);
+        if (!resp.IsSuccessStatusCode) return ServiceResult.Fail($"Rejection request failed ({(int)resp.StatusCode}).");
         return await resp.Content.ReadFromJsonAsync<ServiceResult>(cancellationToken: ct) ?? ServiceResult.Fail("Rejection request failed.");
     }
 
     public async Task<List<AttendanceAdjustment>> EvaluateRangeAsync(int organisationId, DateOnly startDate, DateOnly endDate, int? jobId = null, CancellationToken ct = default)
     {
-        var resp = await _http.PostAsJsonAsync("/api/v1/attendance-deductions/evaluate-range", new
+        using var resp = await _http.PostAsJsonAsync("/api/v1/attendance-deduction/evaluate-range", new
         {
-            OrganisationId = organisationId,
-            StartDate = startDate,
-            EndDate = endDate,
-            JobId = jobId
+            organisationId,
+            individualId = (int?)null,
+            jobId,
+            fromDate = startDate,
+            toDate = endDate
         }, ct);
+        resp.EnsureSuccessStatusCode();
         return await resp.Content.ReadFromJsonAsync<List<AttendanceAdjustment>>(cancellationToken: ct) ?? new();
     }
 
     public async Task<AttendanceDeductionCalculationPreviewDto?> PreviewCalculationAsync(int organisationId, int jobId, DateOnly workDate, int lateMinutes, string kind, CancellationToken ct = default)
     {
-        var resp = await _http.PostAsJsonAsync("/api/v1/attendance-deductions/preview", new
-        {
-            OrganisationId = organisationId,
-            JobId = jobId,
-            WorkDate = workDate,
-            LateMinutes = lateMinutes,
-            Kind = kind
-        }, ct);
-        return await resp.Content.ReadFromJsonAsync<AttendanceDeductionCalculationPreviewDto>(cancellationToken: ct);
+        var url = $"/api/v1/attendance-deduction/preview-calculation?organisationId={organisationId}&jobId={jobId}&workDate={workDate:yyyy-MM-dd}&lateMinutes={lateMinutes}&kind={Uri.EscapeDataString(kind)}";
+        return await _http.GetFromJsonAsync<AttendanceDeductionCalculationPreviewDto>(url, ct);
     }
 }

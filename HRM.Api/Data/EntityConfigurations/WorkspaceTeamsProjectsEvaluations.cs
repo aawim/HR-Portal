@@ -15,9 +15,11 @@ public sealed class ProjectMapping : IEntityTypeConfiguration<Project>
         b.Property(x => x.ProjectManagerName).HasMaxLength(200);
         b.Property(x => x.Status).HasMaxLength(50);
         b.HasOne(x => x.Team).WithMany().HasForeignKey(x => x.TeamId).OnDelete(DeleteBehavior.SetNull);
+        b.HasOne(x => x.OrganisationStructure).WithMany().HasForeignKey(x => x.OrganisationStructureId).OnDelete(DeleteBehavior.SetNull);
         b.HasMany(x => x.Members).WithOne(x => x.Project).HasForeignKey(x => x.ProjectId).OnDelete(DeleteBehavior.Cascade);
         b.HasMany(x => x.Tasks).WithOne(x => x.Project).HasForeignKey(x => x.ProjectId).OnDelete(DeleteBehavior.Cascade);
         b.HasIndex(x => new { x.OrganisationId, x.Status });
+        b.HasIndex(x => x.OrganisationStructureId);
     }
 }
 

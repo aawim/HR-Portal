@@ -6,14 +6,21 @@ namespace HRM.Api.Controllers.V1;
 [Route("api/v1/workspace-directory")]
 public sealed class WorkspaceDirectoryController(global::HRM.Services.Interfaces.IWorkspaceDirectoryService service) : HrmApiController
 {
-    [ApiPermission("Employee.View")]
+    [ApiPermission("Employee.View", "Staff.Details", "Individual.View", "Organisation.View", "Attendance.View", "Leave.View", "Payroll.View", "Recruitment.View", "Team.View")]
     [HttpGet("get-staff-identity")]
     public async Task<ActionResult<global::HRM.DTOs.StaffWorkspaceIdentity?>> GetStaffIdentity([FromQuery] global::System.Int32 staffId)
     {
         return Ok(await service.GetStaffIdentityAsync(staffId, HttpContext.RequestAborted));
     }
 
-    [ApiPermission("Employee.View")]
+    [ApiPermission("Employee.View", "Staff.Details", "Individual.View", "Organisation.View", "Attendance.View", "Leave.View", "Payroll.View", "Recruitment.View", "Team.View")]
+    [HttpGet("get-staff-job-history")]
+    public async Task<ActionResult<global::System.Collections.Generic.List<global::HRM.DTOs.StaffJobHistorySummaryDto>>> GetStaffJobHistory([FromQuery] global::System.Int32 staffId)
+    {
+        return Ok(await service.GetStaffJobHistoryAsync(staffId, HttpContext.RequestAborted));
+    }
+
+    [ApiPermission("Employee.View", "Staff.Details", "Individual.View", "Organisation.View", "Attendance.View", "Leave.View", "Payroll.View", "Recruitment.View", "Team.View")]
     [HttpPost("query/search")]
     public async Task<ActionResult<global::HRM.DTOs.WorkspaceSearchPage>> Search([FromBody] WorkspaceDirectorySearchRequest request)
     {

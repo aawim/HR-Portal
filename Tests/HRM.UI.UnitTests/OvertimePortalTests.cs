@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.JSInterop;
 using Xunit;
 namespace HRM.UI.UnitTests;
 
@@ -32,19 +33,36 @@ public sealed class OvertimePortalTests
     {
         var service = Proxy.Create(approved);
         using var provider = new ServiceCollection().AddLogging().AddSingleton(service).AddSingleton<ToastService>()
+            .AddSingleton<IJSRuntime>(new TestJsRuntime())
             .AddSingleton<NavigationManager>(new Navigation(admin ? OvertimeNavigation.AdminUrl : OvertimeNavigation.StaffUrl)).BuildServiceProvider();
         await using var renderer = new HtmlRenderer(provider, provider.GetRequiredService<ILoggerFactory>());
         var html = await renderer.Dispatcher.InvokeAsync(async () =>
-            (await renderer.RenderComponentAsync<OvertimeRequests>(ParameterView.FromDictionary(new Dictionary<string, object?> { ["PendingOnly"] = true }))).ToHtmlString());
-        if (admin) Assert.Contains("Approve stage", html);
+            (await renderer.RenderComponentAsync<SelectedOvertimeRequests>(ParameterView.FromDictionary(new Dictionary<string, object?> { ["PendingOnly"] = true }))).ToHtmlString());
+        if (admin) Assert.Contains(approved ? "Return as Incomplete" : "Approve OT", html);
         else { Assert.DoesNotContain("Approve stage", html); Assert.DoesNotContain(">Reject<", html); Assert.Contains("Review in Admin portal", html); Assert.Contains("manage-overtimes?requestId=42", html); }
-        if(admin || !approved) Assert.Contains(">Cancel<", html); else Assert.DoesNotContain(">Cancel<", html);
+        if(admin || !approved) Assert.Contains("Cancel Request", html); else Assert.DoesNotContain("Cancel Request", html);
     }
 
     private sealed class Navigation : NavigationManager
     {
         public Navigation(string path) => Initialize("https://localhost/", "https://localhost" + path);
         protected override void NavigateToCore(string uri, bool forceLoad) => throw new NotSupportedException();
+    }
+    private sealed class TestJsRuntime : IJSRuntime
+    {
+        public ValueTask<TValue> InvokeAsync<TValue>(string identifier, object?[]? args) =>
+            ValueTask.FromResult(default(TValue)!);
+        public ValueTask<TValue> InvokeAsync<TValue>(string identifier, CancellationToken cancellationToken, object?[]? args) =>
+            ValueTask.FromResult(default(TValue)!);
+    }
+    private sealed class SelectedOvertimeRequests : OvertimeRequests
+    {
+        protected override async Task OnInitializedAsync()
+        {
+            await base.OnInitializedAsync();
+            typeof(OvertimeRequests).GetField("selectedRequestId", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .SetValue(this, 42);
+        }
     }
     public class Proxy : DispatchProxy
     {

@@ -1,136 +1,104 @@
 @using HRM.DTOs.Leave
 @using HRM.DTOs.LeaveTypes
 
-<section class="overflow-hidden rounded-2xl
-                border border-slate-200
-                bg-white shadow-sm">
-
-    <div class="border-b border-slate-200 px-5 py-4">
-
-        <h2 class="text-sm font-semibold text-slate-900">
-            Leave Types
-        </h2>
-
-        <p class="mt-1 text-xs text-slate-500">
-            
-        </p>
-
+<section class="overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+    <!-- Filter Header -->
+    <div class="border-b border-slate-200 dark:border-slate-800 px-3.5 py-2.5 flex flex-wrap items-center justify-between gap-2">
+        <div>
+            <h2 class="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-100">Leave Types</h2>
+            <p class="text-[11px] text-slate-500 dark:text-slate-400">@Filtered.Count of @Types.Count shown</p>
+        </div>
+        <div class="relative w-full sm:w-44">
+            <input type="search"
+                   class="h-8 w-full rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                   placeholder="Search name or code…"
+                   @bind="search"
+                   @bind:event="oninput" />
+        </div>
     </div>
 
     @if (IsLoading)
     {
-        <div class="p-5 text-sm text-slate-500">
-            Loading...
-        </div>
+        <div class="p-6 text-center text-xs text-slate-500 dark:text-slate-400">Loading leave types…</div>
     }
-    else if (Types.Count == 0)
+    else if (Filtered.Count == 0)
     {
-        <div class="p-10 text-center">
-
-           @*  <span class="material-symbols-rounded
-                         text-4xl text-slate-300">
-                event_busy
-            </span> *@
-
-            <p class="mt-2 text-sm font-medium
-                      text-slate-700">
-                No leave types
-            </p>
-
+        <div class="p-8 text-center text-xs text-slate-500 dark:text-slate-400">
+            No leave types match this view.
         </div>
     }
     else
     {
-        <div class="divide-y divide-slate-100">
-
-            @foreach (var item in Types)
-            {
-                <button type="button"
-                        @onclick="() => SelectAsync(item)"
-                        class="@GetItemClass(item)">
-
-                    <div class="min-w-0 flex-1">
-
-                        <div class="flex flex-wrap items-center gap-2">
-
-                            <p class="truncate text-sm font-semibold
-                                      text-slate-800">
-                                @item.Name
-                            </p>
-
-                            @if (item.IsGlobal)
-                            {
-                                <span class="rounded-full bg-blue-50
-                                             px-2 py-0.5 text-[10px]
-                                             font-semibold text-blue-700">
-                                    Global
-                                </span>
-                            }
-
-                            @if (item.IsSystemType)
-                            {
-                                <span class="rounded-full bg-violet-50
-                                             px-2 py-0.5 text-[10px]
-                                             font-semibold text-violet-700">
-                                    System
-                                </span>
-                            }
-
-                        </div>
-
-                        <p class="mt-1 font-mono text-[11px]
-                                  text-slate-400">
-                            @item.Code
-                        </p>
-
-                    </div>
-
-            @*         <span class="material-symbols-rounded
-                                 text-[18px] text-slate-300">
-                        chevron_right
-                    </span> *@
-
-                </button>
-            }
-
+        <div class="overflow-x-auto max-h-[38rem] overflow-y-auto">
+            <table class="min-w-full divide-y divide-slate-200/80 dark:divide-slate-800 text-left text-xs">
+                <thead class="sticky top-0 z-10 bg-slate-50 dark:bg-slate-800/90 text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">
+                    <tr>
+                        <th class="px-3 py-2.5">Leave Type</th>
+                        <th class="px-3 py-2.5">Status / Scope</th>
+                        <th class="px-3 py-2.5 text-right">Action</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                    @for (var i = 0; i < Filtered.Count; i++)
+                    {
+                        var item = Filtered[i];
+                        var isSelected = SelectedId == item.LeaveTypeId;
+                        var isAlt = i % 2 == 1;
+                        <tr @key="item.LeaveTypeId"
+                            class="cursor-pointer transition-colors @(isSelected ? "bg-blue-50/90 dark:bg-blue-950/40" : isAlt ? "bg-[#f3f8fd] dark:bg-slate-800/30 hover:bg-blue-50/50 dark:hover:bg-slate-800/60" : "bg-white dark:bg-slate-900 hover:bg-blue-50/50 dark:hover:bg-slate-800/60")"
+                            @onclick="() => SelectAsync(item)">
+                            <td class="px-3 py-2.5">
+                                <div class="font-semibold text-slate-900 dark:text-slate-100 leading-tight">@item.Name</div>
+                                <div class="mt-0.5 font-mono text-[11px] text-slate-500 dark:text-slate-400">@item.Code</div>
+                            </td>
+                            <td class="px-3 py-2.5">
+                                <div class="flex flex-wrap items-center gap-1">
+                                    <span class="inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold @(item.IsActive ? "border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300" : "border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400")">
+                                        @(item.IsActive ? "Active" : "Inactive")
+                                    </span>
+                                    @if (item.IsGlobal)
+                                    {
+                                        <span class="inline-flex rounded-full border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/50 px-2 py-0.5 text-[10px] font-semibold text-blue-700 dark:text-blue-300">
+                                            Global
+                                        </span>
+                                    }
+                                    @if (item.IsSystemType)
+                                    {
+                                        <span class="inline-flex rounded-full border border-violet-200 dark:border-violet-800 bg-violet-50 dark:bg-violet-950/50 px-2 py-0.5 text-[10px] font-semibold text-violet-700 dark:text-violet-300">
+                                            System
+                                        </span>
+                                    }
+                                </div>
+                            </td>
+                            <td class="px-3 py-2.5 text-right whitespace-nowrap">
+                                <button type="button"
+                                        class="rounded-md border px-2 py-1 text-[11px] font-medium transition-colors @(isSelected ? "border-blue-300 dark:border-blue-700 bg-blue-100 dark:bg-blue-900/60 text-blue-800 dark:text-blue-200" : "border-blue-200/80 dark:border-slate-700 bg-blue-50/70 dark:bg-slate-800 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-slate-700")"
+                                        @onclick:stopPropagation="true"
+                                        @onclick="() => SelectAsync(item)">
+                                    Edit
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
         </div>
     }
-
 </section>
 
 @code {
-    [Parameter]
-    public IReadOnlyList<LeaveTypeCatalogueDto>
-        Types
-    { get; set; } =
-            Array.Empty<LeaveTypeCatalogueDto>();
+    [Parameter] public IReadOnlyList<LeaveTypeCatalogueDto> Types { get; set; } = Array.Empty<LeaveTypeCatalogueDto>();
+    [Parameter] public bool IsLoading { get; set; }
+    [Parameter] public int? SelectedId { get; set; }
+    [Parameter] public EventCallback<LeaveTypeCatalogueDto> OnSelected { get; set; }
 
-    [Parameter]
-    public bool IsLoading { get; set; }
+    private string search = string.Empty;
 
-    [Parameter]
-    public int? SelectedId { get; set; }
+    private List<LeaveTypeCatalogueDto> Filtered => Types
+        .Where(x => string.IsNullOrWhiteSpace(search) ||
+                    x.Name.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                    x.Code.Contains(search, StringComparison.OrdinalIgnoreCase))
+        .ToList();
 
-    [Parameter]
-    public EventCallback<LeaveTypeCatalogueDto>
-        OnSelected
-    { get; set; }
-
-    private async Task SelectAsync(
-        LeaveTypeCatalogueDto item)
-    {
-        await OnSelected.InvokeAsync(item);
-    }
-
-    private string GetItemClass(
-        LeaveTypeCatalogueDto item)
-    {
-        var selected =
-            SelectedId ==
-            item.LeaveTypeId;
-
-        return selected
-            ? "flex w-full items-center gap-3 bg-blue-50 px-4 py-3 text-left"
-            : "flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-slate-50";
-    }
+    private Task SelectAsync(LeaveTypeCatalogueDto item) => OnSelected.InvokeAsync(item);
 }

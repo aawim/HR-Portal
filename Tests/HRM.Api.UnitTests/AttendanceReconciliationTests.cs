@@ -12,7 +12,7 @@ using Xunit;
 
 namespace HRM.Api.UnitTests;
 
-public sealed class AttendanceReconciliationTests
+public sealed partial class AttendanceReconciliationTests
 {
     private static readonly DateOnly DefaultWorkDate = new(2026, 10, 20);
     private const int OrgId = 10;

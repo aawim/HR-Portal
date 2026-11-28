@@ -2,29 +2,141 @@
 @inject HRM.Services.Contracts.WeeklyWorkingHoursServiceContracts.IOperations WorkingHours
 @inject ILogger<WeeklyHoursReview> Logger
 
-<section class="space-y-3 rounded-xl border p-4">
-    <div class="flex flex-wrap items-end justify-between gap-3"><h3 class="font-semibold">Weekly hours reconciliation</h3>
-        <div class="flex flex-wrap items-end gap-2"><label class="text-sm">Week containing<InputDate @bind-Value="week" class="mt-1 block rounded border bg-transparent p-2" /></label><button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@busy" @onclick="LoadAsync">Show week</button></div></div>
-    @if (error != null) { <p role="alert" class="text-sm">@error</p> }
-    @if (busy) { <p role="status">Loading weekly hours…</p> }
-    else if (result != null)
-    {
-        <HRM.Components.Shared.AttendanceExportButtons CreateReport="BuildExport" Disabled="@busy" />
-        <p class="text-sm text-slate-500">@result.WeekStart.ToString("dd MMM") – @result.WeekEnd.ToString("dd MMM yyyy"). Only completed clock pairs count as worked time.</p>
-        @if (!result.HasWorkingHoursRule) { <p role="status" class="text-sm">@result.ConfigurationMessage</p> }
-        <dl class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <div class="rounded-lg border p-3"><dt class="text-sm">Required</dt><dd class="font-semibold">@(result.HasWorkingHoursRule ? Hours(result.RequiredWeekHours) : "Not configured")</dd></div>
-            <div class="rounded-lg border p-3"><dt class="text-sm">Worked</dt><dd class="font-semibold">@Hours(result.CurrentWeekHours)</dd></div>
-            <div class="rounded-lg border p-3"><dt class="text-sm">Remaining</dt><dd class="font-semibold">@(result.HasWorkingHoursRule ? Hours(result.RemainingWeekHours) : "—")</dd></div>
-            <div class="rounded-lg border p-3"><dt class="text-sm">Potential overtime</dt><dd class="font-semibold">@(result.HasWorkingHoursRule ? Hours(result.PotentialOvertimeHours) : "—")</dd></div>
-        </dl>
-        <div class="flex flex-wrap gap-4 text-sm"><span>Official: @Hours(result.OfficialHours)</span><span>Duty: @Hours(result.DutyHours)</span><span>Overlap: @Hours(result.DutyOverlapHours)</span><span>Organisation time waived: @Hours(result.AmendmentCreditHours)</span><span>Leave credit: @Hours(result.LeaveCreditHours)</span></div>
-        <p class="text-xs text-slate-500">Duty contributes to weekly hours: @(result.DutyCountsTowardWeek ? "Yes" : "No"). Additional duty outside official hours: @Hours(result.DutyOutsideOfficialHours).</p>
-        @if (result.ApprovedEarlyCheckoutShortfallHours > 0) { <p class="text-sm">Early check-out make-up: @Hours(result.ApprovedEarlyCheckoutShortfallHours) owed · @Hours(result.MakeupCompletedHours) completed · @Hours(result.MakeupRemainingHours) remaining.</p> }
-        @if (result.ApprovedExceptionHours > 0) { <p class="text-sm">Approved exceptions: @Hours(result.ApprovedExceptionHours) · applied to shortfall: @Hours(result.ExceptionCreditHours).</p> }
-        <p class="text-xs text-slate-500">Overlapping periods count once. Early check-out still requires make-up within the same week. An organisation amendment waives time and keeps the original end time.</p>
-    }
+<section class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden text-slate-900 dark:text-slate-100">
+    <header class="bg-slate-50/80 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 px-3.5 py-2.5 flex flex-wrap items-center justify-between gap-2.5">
+        <div class="flex flex-wrap items-center gap-2 min-w-0">
+            <h3 class="text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-200">Weekly Hours Reconciliation</h3>
+            @if (result != null)
+            {
+                <span class="inline-flex items-center rounded-full border border-teal-200 dark:border-teal-800 bg-teal-50 dark:bg-teal-950/50 px-2 py-0.5 text-[10px] font-semibold text-teal-800 dark:text-teal-300">
+                    @result.WeekStart.ToString("dd MMM") – @result.WeekEnd.ToString("dd MMM yyyy")
+                </span>
+            }
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2">
+            <label class="inline-flex items-center gap-1.5 text-[11px] font-semibold text-slate-600 dark:text-slate-300">
+                <span>Week</span>
+                <InputDate @bind-Value="week" class="h-8 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2 text-xs text-slate-800 dark:text-slate-100 focus:border-teal-600 focus:outline-none" />
+            </label>
+            <button type="button"
+                    class="app-button app-button-primary app-button-sm"
+                    disabled="@busy"
+                    @onclick="LoadAsync">
+                Show week
+            </button>
+            @if (result != null)
+            {
+                <HRM.Components.Shared.AttendanceExportButtons CreateReport="BuildExport" Disabled="@busy" />
+            }
+        </div>
+    </header>
+
+    <div class="p-3.5 space-y-3">
+        @if (error != null)
+        {
+            <div role="alert" class="rounded-lg border border-rose-200 dark:border-rose-800 bg-rose-50/80 dark:bg-rose-950/40 px-3 py-2 text-xs text-rose-800 dark:text-rose-200">
+                @error
+            </div>
+        }
+
+        @if (busy)
+        {
+            <div role="status" class="flex items-center gap-2 py-2 text-xs text-slate-500 dark:text-slate-400">
+                <span class="h-3.5 w-3.5 rounded-full border-2 border-blue-600 border-t-transparent animate-spin"></span>
+                <span>Loading weekly hours…</span>
+            </div>
+        }
+        else if (result != null)
+        {
+            @if (!result.HasWorkingHoursRule)
+            {
+                <div role="status" class="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50/80 dark:bg-amber-950/40 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
+                    @result.ConfigurationMessage
+                </div>
+            }
+
+            <dl class="whr-kpi-grid">
+                <div class="rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40 px-3 py-2">
+                    <dt class="flex items-center gap-1.5 text-[11px] font-medium text-slate-500 dark:text-slate-400">
+                        <span class="h-1.5 w-1.5 rounded-full bg-slate-400"></span>
+                        <span>Required</span>
+                    </dt>
+                    <dd class="mt-0.5 text-base font-bold text-slate-900 dark:text-slate-100 tabular-nums">@(result.HasWorkingHoursRule ? Hours(result.RequiredWeekHours) : "Not configured")</dd>
+                </div>
+                <div class="rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40 px-3 py-2">
+                    <dt class="flex items-center gap-1.5 text-[11px] font-medium text-slate-500 dark:text-slate-400">
+                        <span class="h-1.5 w-1.5 rounded-full bg-teal-500"></span>
+                        <span>Worked</span>
+                    </dt>
+                    <dd class="mt-0.5 text-base font-bold text-slate-900 dark:text-slate-100 tabular-nums">@Hours(result.CurrentWeekHours)</dd>
+                </div>
+                <div class="rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40 px-3 py-2">
+                    <dt class="flex items-center gap-1.5 text-[11px] font-medium text-slate-500 dark:text-slate-400">
+                        <span class="h-1.5 w-1.5 rounded-full bg-amber-500"></span>
+                        <span>Remaining</span>
+                    </dt>
+                    <dd class="mt-0.5 text-base font-bold text-slate-900 dark:text-slate-100 tabular-nums">@(result.HasWorkingHoursRule ? Hours(result.RemainingWeekHours) : "—")</dd>
+                </div>
+                <div class="rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40 px-3 py-2">
+                    <dt class="flex items-center gap-1.5 text-[11px] font-medium text-slate-500 dark:text-slate-400">
+                        <span class="h-1.5 w-1.5 rounded-full bg-blue-500"></span>
+                        <span>Potential overtime</span>
+                    </dt>
+                    <dd class="mt-0.5 text-base font-bold text-slate-900 dark:text-slate-100 tabular-nums">@(result.HasWorkingHoursRule ? Hours(result.PotentialOvertimeHours) : "—")</dd>
+                </div>
+            </dl>
+
+            <div class="rounded-lg border border-slate-200/80 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 px-3 py-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-600 dark:text-slate-300">
+                <span>Official: <strong class="text-slate-900 dark:text-slate-100 tabular-nums">@Hours(result.OfficialHours)</strong></span>
+                <span aria-hidden="true" class="text-slate-300 dark:text-slate-600">·</span>
+                <span>Duty: <strong class="text-slate-900 dark:text-slate-100 tabular-nums">@Hours(result.DutyHours)</strong></span>
+                <span aria-hidden="true" class="text-slate-300 dark:text-slate-600">·</span>
+                <span>Overlap: <strong class="text-slate-900 dark:text-slate-100 tabular-nums">@Hours(result.DutyOverlapHours)</strong></span>
+                <span aria-hidden="true" class="text-slate-300 dark:text-slate-600">·</span>
+                <span>Org waived: <strong class="text-slate-900 dark:text-slate-100 tabular-nums">@Hours(result.AmendmentCreditHours)</strong></span>
+                <span aria-hidden="true" class="text-slate-300 dark:text-slate-600">·</span>
+                <span>Leave credit: <strong class="text-slate-900 dark:text-slate-100 tabular-nums">@Hours(result.LeaveCreditHours)</strong></span>
+                <span aria-hidden="true" class="text-slate-300 dark:text-slate-600">·</span>
+                <span>Duty counts toward week: <strong class="text-slate-900 dark:text-slate-100">@(result.DutyCountsTowardWeek ? "Yes" : "No")</strong></span>
+                <span aria-hidden="true" class="text-slate-300 dark:text-slate-600">·</span>
+                <span>Extra duty outside official: <strong class="text-slate-900 dark:text-slate-100 tabular-nums">@Hours(result.DutyOutsideOfficialHours)</strong></span>
+            </div>
+
+            @if (result.ApprovedEarlyCheckoutShortfallHours > 0)
+            {
+                <div class="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50/70 dark:bg-amber-950/30 px-3 py-2 text-xs text-amber-900 dark:text-amber-200">
+                    Early check-out make-up: <strong>@Hours(result.ApprovedEarlyCheckoutShortfallHours)</strong> owed · <strong>@Hours(result.MakeupCompletedHours)</strong> completed · <strong>@Hours(result.MakeupRemainingHours)</strong> remaining.
+                </div>
+            }
+
+            @if (result.ApprovedExceptionHours > 0)
+            {
+                <div class="rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50/70 dark:bg-blue-950/30 px-3 py-2 text-xs text-blue-900 dark:text-blue-200">
+                    Approved exceptions: <strong>@Hours(result.ApprovedExceptionHours)</strong> · applied to shortfall: <strong>@Hours(result.ExceptionCreditHours)</strong>.
+                </div>
+            }
+
+            <p class="text-[11px] text-slate-500 dark:text-slate-400">
+                Only completed clock pairs count as worked time. Overlapping periods count once. Early check-out still requires make-up within the same week. An organisation amendment waives time and keeps the original end time.
+            </p>
+        }
+    </div>
 </section>
+
+<style>
+    .whr-kpi-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.625rem;
+    }
+
+    @@media (min-width: 768px) {
+        .whr-kpi-grid {
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+        }
+    }
+</style>
 
 @code {
     [Parameter] public int StaffId { get; set; }

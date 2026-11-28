@@ -1,213 +1,211 @@
 @page "/budget/{CategoryName}"
-@using HRM.Components.Admin.Hr.Individual
 @page "/budget/{CategoryName}/{Section}"
 @page "/admin/budget/{CategoryName}"
 @page "/admin/budget/{CategoryName}/{Section}"
 @inject NavigationManager Navigation
+@inject IUserAccessService UserAccess
+@inject IJSRuntime JS
 @using HRM.Models
 @using HRM.Services
 @using HRM.Services.Interfaces
-@using HRM.Services.Interfaces.Leave
 @using Microsoft.AspNetCore.Components.Authorization
-
- 
-
-@inject HRM.Application.Contracts.Pages.ILeaveApplications LeaveService
+@using Microsoft.JSInterop
 @rendermode RenderMode.InteractiveServer
 
-<PageTitle>Settings - HR Portal</PageTitle>
+<PageTitle>Budget Management - HR Portal</PageTitle>
 
 <AuthorizeView>
     <Authorized>
-        <div class="max-w-12xl mx-auto py-0 px-4">
-            <!-- Back Button -->
-            <a href="/budget" class="text-slate-400 hover:text-slate-600 text-sm mb-2 flex items-center gap-1 transition-colors w-fit">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
-                Back to Settings Hub
-            </a>
-
-            <!-- Main Responsive Layout: Stacks vertically on mobile, side-by-side on md+ screens -->
-            <div class="flex flex-col md:flex-row gap-1 items-start">
-                <!-- LEFT: Sidebar Menu (Responsive width) -->
-                <div class="flex-shrink-0 flex flex-col gap-1 transition-all duration-300 ease-in-out overflow-hidden @(isSidebarExpanded ? "w-full md:w-80" : "w-20")">
-
-                    <div class="flex items-center @(isSidebarExpanded ? "justify-between" : "justify-center") px-1 mb-3">
-
-                        <h2 class="text-xl font-bold text-slate-800 capitalize truncate transition-opacity duration-300 @(isSidebarExpanded ? "opacity-100 block" : "opacity-0 hidden")">
-                            @CategoryName Management
-                        </h2>
-
-                        <button @onclick="ToggleSidebar" class="p-2 rounded-lg text-slate-500 hover:bg-slate-100 hover:text-blue-600 transition-colors flex-shrink-0" title="@(isSidebarExpanded ? "Collapse Sidebar" : "Expand Sidebar")">
-                            <svg class="w-6 h-6 transition-transform duration-300 @(isSidebarExpanded ? "rotate-180" : "")" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h7"></path>
-                            </svg>
+        @if (checkingAccess)
+        {
+            <div class="m-2 flex items-center justify-center gap-2 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-8 text-xs text-slate-500">
+                <span class="h-4 w-4 rounded-full border-2 border-blue-600 border-t-transparent animate-spin"></span>
+                <span>Checking budget permissions…</span>
+            </div>
+        }
+        else if (!canAccess)
+        {
+            <div role="alert" class="m-2 rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 p-6 text-xs text-amber-900 dark:text-amber-200">
+                You do not have permission to access Budget Management.
+            </div>
+        }
+        else
+        {
+            <section class="w-full min-w-0 p-2 flex flex-col gap-3 text-slate-900 dark:text-slate-100">
+                <!-- Compact Transparent Borderless Header (always full width) -->
+                <header class="staff-overview-no-print bg-transparent flex flex-wrap items-center justify-between gap-2 px-1 py-0.5">
+                    <div class="min-w-0">
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <h1 class="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 truncate">Budget Management</h1>
+                            <span class="inline-flex items-center gap-1 rounded-full bg-teal-50 dark:bg-teal-950/60 border border-teal-200/80 dark:border-teal-800 px-2 py-0.5 text-[10px] font-semibold text-teal-700 dark:text-teal-300">
+                                <span class="h-1.5 w-1.5 rounded-full bg-teal-500"></span>
+                                Public Finance &amp; Emoluments
+                            </span>
+                        </div>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">
+                            @(activeItem?.Description ?? "Manage state budget execution, fiscal year allocations, virements, and payroll budget solvency.")
+                        </p>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-1.5">
+                        <button type="button"
+                                class="app-button app-button-neutral app-button-sm"
+                                title="@(isFullWidth ? "Shrink to standard layout" : "Expand to full page width")"
+                                @onclick="ToggleFullWidthAsync">
+                            <AppIcon Name="@(isFullWidth ? "fullscreen_exit" : "fullscreen")" Class="text-xs" />
+                            <span>@(isFullWidth ? "Shrink View" : "Full Width")</span>
+                        </button>
+                        <button type="button"
+                                class="app-button app-button-secondary app-button-sm"
+                                @onclick="RefreshActiveView">
+                            <AppIcon Name="refresh" Class="text-xs" />
+                            <span>Refresh</span>
                         </button>
                     </div>
+                </header>
 
-                    @foreach (var item in GetSubItems(CategoryName).Where(x => x.ComponentType != null))
-                    {
-                        <button @onclick="() => SelectItem(item)"
-                                title="@(!isSidebarExpanded ? item.Title : null)"
-                                class="text-left p-1 rounded-xl border shadow-sm transition-all duration-200 group flex items-center gap-3 overflow-hidden
-                       @(activeItem?.Title == item.Title ? "bg-blue-50 border-blue-200 ring-1 ring-blue-500/20" : "bg-white border-slate-200 hover:shadow-md hover:border-blue-200 hover:bg-slate-50")">
-
-                            @*      <div class="w-10 h-12 flex items-center justify-center rounded-lg text-xl flex-shrink-0 transition-colors duration-300 mx-auto
-                        @(activeItem?.Title == item.Title ? "bg-blue-600 text-white" : "bg-blue-50 text-blue-600 group-hover:bg-blue-100 group-hover:text-white")">
-                                @item.Icon
-                            </div> *@
-
-                            <div class="w-10 h-12 flex items-center justify-center rounded-lg text-xl flex-shrink-0 transition-colors duration-300 mx-auto
-                        @(activeItem?.Title == item.Title ? "bg-blue-600 text-white" : "bg-blue-50 text-blue-600 group-hover:bg-blue-100 group-hover:text-white")">
-                                @item.Icon
-                            </div>
-
-                            <div class="flex-grow min-w-0 transition-all duration-300 @(isSidebarExpanded ? "opacity-100 w-auto" : "opacity-0 w-0 hidden")">
-                                <h3 class="font-bold text-sm mb-0.5 truncate @(activeItem?.Title == item.Title ? "text-blue-800" : "text-slate-800 group-hover:text-blue-700")">
-                                    @item.Title
-                                </h3>
-                                <p class="text-slate-500 text-xs leading-tight line-clamp-2">
-                                    @item.Description
-                                </p>
-                            </div>
-
-                            <div class="flex-shrink-0 transition-all duration-300 @(isSidebarExpanded ? "opacity-100 block" : "opacity-0 hidden") @(activeItem?.Title == item.Title ? "text-blue-600" : "text-slate-300 group-hover:text-blue-600")">
-                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
-                            </div>
-                        </button>
-                    }
+                <!-- Full-Width Folder Navigation Tabs -->
+                <div class="org-workspace-tabs my-workspace-tabs w-full border-b-2 border-teal-700 dark:border-teal-600 overflow-x-auto">
+                    <nav class="flex items-end gap-1 min-w-max pb-0" aria-label="Budget Management Sections">
+                        @foreach (var item in budgetItems)
+                        {
+                            var isActive = activeItem?.Key == item.Key;
+                            <button type="button"
+                                    aria-current="@(isActive ? "page" : null)"
+                                    class="rounded-t-xl px-4 py-2 font-bold text-xs md:text-sm transition-all border-t border-l border-r inline-flex items-center gap-1.5 @(isActive ? "bg-teal-700 dark:bg-teal-600 text-white border-teal-700 dark:border-teal-600 shadow-sm" : "bg-[#86b0be]/30 text-slate-700 hover:text-slate-900 hover:bg-[#86b0be]/50 dark:bg-slate-800/90 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-700 border-slate-300 dark:border-slate-700")"
+                                    @onclick="() => SelectItem(item)">
+                                <i class="bi @item.Icon text-xs" aria-hidden="true"></i>
+                                <span>@item.Title</span>
+                            </button>
+                        }
+                    </nav>
                 </div>
 
-                <!-- RIGHT: Dynamic Data Display -->
-                <div class="w-full md:w-2/3 lg:w-3/4 flex-grow bg-white rounded-2xl border border-slate-200 shadow-sm p-2 md:p-8 min-h-[600px] mt-[40px]">
-                    @if (activeItem == null)
+                <!-- Content Shell (shrinks in Shrink View; header & tabs remain full width) -->
+                <div class="budget-ws-shell @(isFullWidth ? "budget-ws-shell-full" : "budget-ws-shell-standard")">
+                    @if (activeItem?.ComponentType != null)
                     {
-                        <div class="h-full flex flex-col items-center justify-center text-slate-400 opacity-60 min-h-[400px]">
-                            <div class="text-6xl mb-4">👈</div>
-                            <p class="text-lg font-medium">Select an item from the menu to view data.</p>
-                        </div>
-                    }
-                    else
-                    {
-                        <!-- Header for the selected data -->
-                        @*    <div class="border-b border-slate-100 pb-4 mb-6 flex justify-between items-end">
-                            <div>
-                                <h2 class="text-xl font-bold text-slate-800">@activeItem.Title</h2>
-                                <p class="text-sm text-slate-500 mt-1">@activeItem.Description</p>
-                            </div>
-                        </div> *@
-
-                        <!-- Dynamic Component Rendering -->
-                        <div class="mt-4">
-                            @if (activeItem.ComponentType != null)
-                            {
-                                <DynamicComponent Type="@activeItem.ComponentType" />
-                            }
-                            else
-                            {
-                                <div class="bg-slate-50 border border-slate-100 rounded-xl p-8 text-center text-slate-500">
-                                    <p><strong>@activeItem.Title</strong> is not available yet. Return to the section menu to choose an available feature.</p>
-                                </div>
-                            }
-                        </div>
+                        <DynamicComponent @key="(activeItem.Key, refreshKey)" Type="@activeItem.ComponentType" />
                     }
                 </div>
-            </div>
-        </div>
+            </section>
+
+            <style>
+                .budget-ws-shell {
+                    width: 100%;
+                    min-width: 0;
+                    display: flex;
+                    flex-direction: column;
+                    gap: 0.75rem;
+                    transition: max-width 200ms ease;
+                }
+
+                .budget-ws-shell-standard {
+                    max-width: 80rem;
+                    margin-left: auto;
+                    margin-right: auto;
+                }
+
+                .budget-ws-shell-full {
+                    max-width: none;
+                }
+            </style>
+        }
     </Authorized>
 
     <NotAuthorized>
         <div class="p-6 text-center mt-12">
-            <p class="text-slate-500 text-lg">
-                Please log in to view the settings dashboard.
+            <p class="text-slate-500 text-sm">
+                Please log in to view the budget dashboard.
             </p>
         </div>
     </NotAuthorized>
 </AuthorizeView>
 
 @code {
+    private const string FullWidthStorageKey = "hrm.budget.full-width";
+
     [Parameter] public string CategoryName { get; set; } = string.Empty;
     [Parameter] public string? Section { get; set; }
-    protected override void OnParametersSet()
+
+    private record SubItem(string Key, string Title, string Icon, string Description, Type ComponentType);
+
+    private static readonly List<SubItem> budgetItems = new()
     {
-        if(CategoryName.Equals("reports",StringComparison.OrdinalIgnoreCase) && Section is "groups" or "group-types")
-        {
-            Navigation.NavigateTo("/admin/hr/groups/management"+(Section=="group-types"?"?tab=types":""),replace:true);return;
-        }
-        activeItem = string.IsNullOrWhiteSpace(Section) ? GetSubItems(CategoryName).FirstOrDefault() :
-        GetSubItems(CategoryName).FirstOrDefault(x => HRM.Helpers.SectionRoutes.Matches(Section, HRM.Helpers.SectionRoutes.Slug(x.Title)));
-    }
-
-    // Fixed Record: Replaced 'Url' with 'ComponentType' to match your dynamic rendering goals
-    private record SubItem(string Title, string Icon, string Description, Type? ComponentType = null);
-
-    private SubItem? activeItem;
-
-    private void SelectItem(SubItem item)
-    {
-        if(item.Title is "Manage Groups" or "Manage Group Types")
-        {
-            Navigation.NavigateTo("/admin/hr/groups/management"+(item.Title=="Manage Group Types"?"?tab=types":""));return;
-        }
-        activeItem = item;
-        Navigation.NavigateTo($"/admin/budget/{CategoryName.ToLowerInvariant()}/{HRM.Helpers.SectionRoutes.Slug(item.Title)}");
-    }
-    private bool isSidebarExpanded = true;
-
-    private void ToggleSidebar()
-    {
-        isSidebarExpanded = !isSidebarExpanded;
-    }
-    private List<SubItem> GetSubItems(string cat) => cat.ToLower() switch
-    {
-        "overview" => new() {
-            new("Search", "🔍", "Find existing individual profiles in the system.", typeof(IndividualSearchGrid)),
-            new("Add New", "➕", "Register a new individual profile.", null),
-    },
-
-        "transactions" => new() {
-            new("Search", "🔍", "Find registered organisations and units.", null),
-            new("Structure", "🏗️", "Manage hierarchy, departments, and reporting lines.", null),
-            new("Add New", "🏢", "Register a new organisation or department.", null)
-    },
-
-        "import" => new() {
-            new("Search", "🔍", "Find active and past employee records.", null),
-            new("Add New Job", "💼", "Assign a new job role or contract to an individual.", null),
-            new("Manage Key Holders", "🔑", "Assign and track physical or system access keys.", null),
-            new("Fetch From CSC Viuga", "🔄", "Sync and import employee data directly from the CSC network.", null),
-            new("Employee Bulk Upload", "📤", "Import multiple employee records using a spreadsheet.", null)
-    },
-
-        "reports" => new() {
-            new("Manage Groups", "👥", "Create and manage committees, teams, or operational groups.", null),
-            new("Manage Group Types", "🏷️", "Define categories and permissions for different group types.", null),
-    },
-
-        "manage" => new() {
-            new("Staff Fetch", "🔄", "Synchronize staff data with the central Civil Service database.", null),
-            new("Classifications", "🗂️", "Map and manage official Civil Service classifications.", null),
-            new("Designations", "🎖️", "Manage official job titles and rank designations.", null),
-            new("Job Types", "📝", "Define employment types (e.g., Permanent, Contract, Wage).", null),
-            new("Offices", "🏛️", "Sync official government office locations and details.", null)
-    },
- 
-
-        _ => new() {
-        new("General Configuration", "🔧", "System-level management and core settings.", null)
-    }
+        new("overview", "Overview & Execution Reports", "bi-pie-chart", "High-level summary of budget allocations, personal emoluments, and MoF CSV/PDF exports.", typeof(HRM.Components.Admin.Budget.BudgetOverviewPanel)),
+        new("manage", "Budget Operations & Fiscal Years", "bi-bank", "Configure Fiscal Years, Allocations, MoF Economic Codes, Virements, and Ledger Transactions.", typeof(HRM.Components.Admin.Budget.BudgetManagementHub)),
+        new("payroll-bridge", "Payroll Budget Bridge", "bi-link-45deg", "Pre-payroll budget solvency check and MoF COA component mappings.", typeof(HRM.Components.Admin.Budget.PayrollBudgetBridgePanel))
     };
 
-    // --- Authentication and Service Logic ---
-    [CascadingParameter]
-    private Task<AuthenticationState>? AuthState { get; set; }
-
-
-    // Variables for Dashboard Data
-    private List<HRM.DTOs.Leave.JobLeaveTypeDto>? leaveBalances;
-
+    private SubItem? activeItem;
+    private bool isFullWidth;
+    private int refreshKey;
+    private bool checkingAccess = true;
+    private bool canAccess;
 
     protected override async Task OnInitializedAsync()
     {
-      leaveBalances = await LeaveService.GetMyLeaveBalancesAsync();
+        try
+        {
+            var actor = await UserAccess.RequireContextAsync();
+            var isAdmin = actor.IsSuperAdministrator || await UserAccess.HasPermissionAsync("Admin");
+            var isHr = await UserAccess.HasUserGroupAsync("Human Resource: Staff") || await UserAccess.HasUserGroupAsync("Human Resource :Head");
+            canAccess = isAdmin || isHr || await UserAccess.HasPermissionAsync("Budget.View") || await UserAccess.HasPermissionAsync("Budget.Manage");
+        }
+        catch
+        {
+            canAccess = false;
+        }
+        finally
+        {
+            checkingAccess = false;
+        }
     }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                var saved = await JS.InvokeAsync<string?>("localStorage.getItem", FullWidthStorageKey);
+                if (bool.TryParse(saved, out var parsed) && parsed != isFullWidth)
+                {
+                    isFullWidth = parsed;
+                    StateHasChanged();
+                }
+            }
+            catch { }
+        }
+    }
+
+    protected override void OnParametersSet()
+    {
+        var key = (Section ?? CategoryName ?? "overview").Trim().ToLowerInvariant();
+        activeItem = key switch
+        {
+            "overview" or "reports" or "budget-overview" or "execution-statement" => budgetItems[0],
+            "payroll-bridge" or "import" => budgetItems[2],
+            "manage" or "transactions" or "operations-hub" or "allocations-config" or "virements-transfers" or "ledger-entries" => budgetItems[1],
+            _ => budgetItems.FirstOrDefault(x => HRM.Helpers.SectionRoutes.Matches(key, x.Key) || HRM.Helpers.SectionRoutes.Matches(key, HRM.Helpers.SectionRoutes.Slug(x.Title)))
+                 ?? budgetItems[0]
+        };
+    }
+
+    private void SelectItem(SubItem item)
+    {
+        activeItem = item;
+        Navigation.NavigateTo($"/admin/budget/{item.Key}");
+    }
+
+    private async Task ToggleFullWidthAsync()
+    {
+        isFullWidth = !isFullWidth;
+        try
+        {
+            await JS.InvokeVoidAsync("localStorage.setItem", FullWidthStorageKey, isFullWidth.ToString().ToLowerInvariant());
+        }
+        catch { }
+    }
+
+    private void RefreshActiveView() => refreshKey++;
 }

@@ -92,7 +92,7 @@ namespace HRM.Services
                 await _dbFactory.CreateDbContextAsync();
 
             var actor=await _access.RequireContextAsync();var org=await _access.GetCurrentOrganisationIdAsync();
-            var allowed=actor.IsSuperAdministrator||await _access.HasPermissionAsync("Admin")||await _access.HasPermissionAsync("Requests.View");
+            var allowed=actor.IsSuperAdministrator||actor.IsHRStaff||actor.IsHRHead||actor.IsHRManager||actor.IsOrganisationAdmin||await _access.HasPermissionAsync("Admin")||await _access.HasPermissionAsync("Requests.View");
             if(org<=0||!await _access.HasOrganisationAccessAsync(org))throw new UnauthorizedAccessException("Select your current organisation.");
             return await db.Requests.Include(x=>x.RequestState).Include(x=>x.RequestType)
                 .SingleOrDefaultAsync(x=>x.RequestId==requestId&&x.OrganisationBusinessEntityID==org&&

@@ -15,55 +15,43 @@
 
 <PageTitle>Internal Staff Transfers - HR Portal</PageTitle>
 
-<div class="mx-auto w-full @(isFullWidth ? "w-full" : "max-w-7xl") p-2 flex flex-col gap-2">
-    @if (StaffId <= 0)
-    {
-        <!-- Header -->
-        <div class="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 pb-4">
-            <div>
-                <div class="flex items-center gap-2">
-                    <span class="rounded-md bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-700">
-                        Internal Staff Transfer Management
-                    </span>
-                    <span class="text-xs text-slate-400">Workflow &amp; Effective-Date Activation</span>
-                </div>
-                <h1 class="mt-1 text-2xl font-bold text-slate-900">Internal Staff Transfers</h1>
-                <p class="text-sm text-slate-500">
-                    Manage inter- and intra-department staff movements, work schedules, access reviews, mandatory staff confirmation, and receiving department approval.
-                </p>
+<section class="w-full min-w-0 flex flex-col gap-3 text-slate-900 dark:text-slate-100">
+    <!-- Compact Header (no background/border) -->
+    <header class="flex flex-wrap items-center justify-between gap-2 px-1 py-0.5">
+        <div class="min-w-0">
+            <div class="flex items-center gap-2 flex-wrap">
+                <h1 class="text-base font-bold text-slate-900 dark:text-slate-100 truncate">Internal Staff Transfers</h1>
+                <span class="inline-flex items-center gap-1 rounded-full bg-teal-50 dark:bg-teal-950/60 border border-teal-200/80 dark:border-teal-800 px-2 py-0.5 text-[10px] font-semibold text-teal-700 dark:text-teal-300">
+                    <span class="h-1.5 w-1.5 rounded-full bg-teal-500"></span>
+                    Workflow &amp; Effective-Date Activation
+                </span>
             </div>
-
-            <div class="flex flex-wrap items-center gap-2">
-                <!-- Full Page Width Toggle Button -->
-                <button type="button"
-                        class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50 transition-colors"
-                        title="@(isFullWidth ? "Shrink to standard layout" : "Expand to full page width")"
-                        @onclick="ToggleFullWidth">
-                    @if (isFullWidth)
-                    {
-                        <svg class="h-4 w-4 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 9L4 4m0 0l5 0m-5 0l0 5m11 11l5 5m0 0l-5 0m5 0l0-5M9 15l-5 5m0 0l5 0m-5 0l0-5m11-11l5-5m0 0l-5 0m5 0l0 5" />
-                        </svg>
-                        <span>Shrink View</span>
-                    }
-                    else
-                    {
-                        <svg class="h-4 w-4 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
-                        </svg>
-                        <span>Full Width</span>
-                    }
-                </button>
-
-                <button type="button"
-                        @onclick="StartNewTransferAsync"
-                        class="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-blue-700">
-                    <span>＋</span>
-                    <span>New Transfer Request</span>
-                </button>
-            </div>
+            <p class="text-xs text-slate-500 dark:text-slate-400">
+                Manage inter- and intra-department staff movements, work schedules, access reviews, staff confirmation, and receiving department approval.
+            </p>
         </div>
 
+        <div class="flex flex-wrap items-center gap-1.5">
+            <button type="button"
+                    class="app-button app-button-neutral app-button-sm"
+                    title="@(isFullWidth ? "Shrink to standard layout" : "Expand to full page width")"
+                    @onclick="ToggleFullWidth">
+                <AppIcon Name="@(isFullWidth ? "fullscreen_exit" : "fullscreen")" Class="text-xs" />
+                <span>@(isFullWidth ? "Shrink View" : "Full Width")</span>
+            </button>
+
+            <button type="button"
+                    @onclick="StartNewTransferAsync"
+                    class="app-button app-button-primary app-button-sm">
+                <AppIcon Name="add" Class="text-xs" />
+                <span>New Transfer Request</span>
+            </button>
+        </div>
+    </header>
+
+    <div class="st-shell @(isFullWidth ? "st-shell-full" : "st-shell-standard")">
+    @if (StaffId <= 0)
+    {
         <!-- Clean Status Summary Boxes -->
         @if (dashboard is not null)
         {
@@ -219,16 +207,12 @@
                                 @onclick="ToggleFullWidth">
                             @if (isFullWidth)
                             {
-                                <svg class="h-4 w-4 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 9L4 4m0 0l5 0m-5 0l0 5m11 11l5 5m0 0l-5 0m5 0l0-5M9 15l-5 5m0 0l5 0m-5 0l0-5m11-11l5-5m0 0l-5 0m5 0l0 5" />
-                                </svg>
+                                <AppIcon Name="fullscreen_exit" Class="h-4 w-4 text-slate-600 text-base" />
                                 <span>Shrink View</span>
                             }
                             else
                             {
-                                <svg class="h-4 w-4 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
-                                </svg>
+                                <AppIcon Name="fullscreen" Class="h-4 w-4 text-slate-600 text-base" />
                                 <span>Full Width</span>
                             }
                         </button>
@@ -1571,16 +1555,12 @@
                             @onclick="ToggleFullWidth">
                         @if (isFullWidth)
                         {
-                            <svg class="h-4 w-4 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 9L4 4m0 0l5 0m-5 0l0 5m11 11l5 5m0 0l-5 0m5 0l0-5M9 15l-5 5m0 0l5 0m-5 0l0-5m11-11l5-5m0 0l-5 0m5 0l0 5" />
-                            </svg>
+                            <AppIcon Name="fullscreen_exit" Class="h-4 w-4 text-slate-600 text-base" />
                             <span>Shrink View</span>
                         }
                         else
                         {
-                            <svg class="h-4 w-4 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
-                            </svg>
+                            <AppIcon Name="fullscreen" Class="h-4 w-4 text-slate-600 text-base" />
                             <span>Full Width</span>
                         }
                     </button>
@@ -1691,7 +1671,29 @@
             </table>
         </div>
     </div>
-</div>
+    </div>
+</section>
+
+<style>
+    .st-shell {
+        width: 100%;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+        transition: max-width 200ms ease;
+    }
+
+    .st-shell-standard {
+        max-width: 80rem;
+        margin-left: auto;
+        margin-right: auto;
+    }
+
+    .st-shell-full {
+        max-width: none;
+    }
+</style>
 
 @code {
     private static readonly (int Index, string Code, string Title)[] Tabs =

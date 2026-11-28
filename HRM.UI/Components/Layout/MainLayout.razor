@@ -19,12 +19,16 @@
 
 <div class="app-shell flex h-screen bg-slate-50 @ShellContextClass">
 
-    <Sidebar HasSystemAccess="HasSystemAccess"
-             CanAccessAdminPortal="CanAccessAdminPortal"
-             CanAccessDeveloperPortal="CanAccessDeveloperPortal"
-             CanAccessAuditPortal="CanAccessAuditPortal"
-             MobileOpen="mobileNavOpen"
-             OnMobileClose="CloseMobileNav" />
+    @if (_isAuthenticated && HasSystemAccess)
+    {
+        <Sidebar HasSystemAccess="HasSystemAccess"
+                 CanAccessAdminPortal="CanAccessAdminPortal"
+                 CanAccessDeveloperPortal="CanAccessDeveloperPortal"
+                 CanAccessAuditPortal="CanAccessAuditPortal"
+                 CanAccessSuperAdminPortal="CanAccessSuperAdminPortal"
+                 MobileOpen="mobileNavOpen"
+                 OnMobileClose="CloseMobileNav" />
+    }
 
     <div class="app-shell-content flex flex-col flex-1 overflow-hidden">
 
@@ -37,26 +41,40 @@
             {
                 <p role="status" class="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-600 shadow-card">Checking account access…</p>
             }
-            else if (_isAuthenticated && !HasSystemAccess)
+            else if (_isAuthenticated && !HasSystemAccess && !IsPublicRecruitmentRoute)
             {
-                <section role="alert" class="rounded-xl border border-slate-200 bg-white p-6 space-y-3 shadow-card">
-                    <h1 class="text-lg font-semibold text-slate-900">HRM access is not enabled for your account.</h1>
-                    <p class="text-sm text-slate-600">You have signed in successfully through eFaas. Please contact your organisation's HR team to set up or activate your employee account and grant the appropriate access.</p>
-                    <p class="text-sm text-slate-500">The employee menu will remain disabled until your HRM access is enabled.</p>
-                    <a href="/Online/Auth/NoAccessLogout" class="inline-flex items-center text-sm font-semibold text-blue-600 hover:text-blue-700 underline">Sign out</a>
+                <section role="alert" class="rounded-xl border border-slate-200 bg-white p-6 space-y-3 shadow-card max-w-2xl mx-auto mt-4">
+                    @if (_session is { UserId: > 0 } && !IsActiveStaff)
+                    {
+                        <h1 class="text-lg font-semibold text-slate-900">No active employment found for your account.</h1>
+                        <p class="text-sm text-slate-600">Your HRM account does not currently have an active job assignment in an organisation. You can still browse and apply for open vacancies through the Careers Portal, or contact HR if you believe this is an error.</p>
+                    }
+                    else
+                    {
+                        <h1 class="text-lg font-semibold text-slate-900">Signed in with eFaas (External Applicant)</h1>
+                        <p class="text-sm text-slate-600">You have signed in successfully through eFaas. You can browse open vacancies, submit applications, view published merit results, and respond to job offers in the Careers Portal.</p>
+                    }
+                    <div class="flex flex-wrap items-center gap-3 pt-1">
+                        <a href="/careers" class="app-button app-button-primary app-button-sm">Open Careers Portal</a>
+                        <a href="/Online/Auth/NoAccessLogout" class="inline-flex items-center text-sm font-semibold text-blue-600 hover:text-blue-700 underline">Sign out</a>
+                    </div>
                 </section>
+            }
+            else if (IsSuperAdminPortal && !CanAccessSuperAdminPortal)
+            {
+                <div class="rounded-xl border p-4 text-sm text-slate-900 shadow-sm" style="background-color: #eef8fc; border-color: #ADD8E6;"><p role="alert" class="font-medium">You do not have access to the SuperAdmin portal.</p><a href="@DefaultPortalHref" class="mt-2 inline-block font-semibold text-blue-700 underline">Return to your portal</a></div>
             }
             else if (IsAdminPortal && _session?.CanAccessAdminPortal != true)
             {
-                <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 shadow-sm"><p role="alert" class="font-medium">You do not have access to the Admin portal.</p><a href="/online" class="mt-2 inline-block font-semibold text-blue-700 underline">Return to employee portal</a></div>
+                <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 shadow-sm"><p role="alert" class="font-medium">You do not have access to the Admin portal.</p><a href="@DefaultPortalHref" class="mt-2 inline-block font-semibold text-blue-700 underline">Return to your portal</a></div>
             }
-            else if (IsDeveloperPortal && _session?.CanAccessDeveloperPortal != true)
+            else if (IsDeveloperPortal && !CanAccessDeveloperPortal)
             {
-                <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 shadow-sm"><p role="alert" class="font-medium">You do not have access to the Developer portal.</p><a href="/online" class="mt-2 inline-block font-semibold text-blue-700 underline">Return to employee portal</a></div>
+                <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 shadow-sm"><p role="alert" class="font-medium">You do not have access to the Developer portal.</p><a href="@DefaultPortalHref" class="mt-2 inline-block font-semibold text-blue-700 underline">Return to your portal</a></div>
             }
             else if (IsAuditPortal && _session?.CanAccessAuditPortal != true)
             {
-                <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 shadow-sm"><p role="alert" class="font-medium">You do not have access to the Audit portal.</p><a href="/online" class="mt-2 inline-block font-semibold text-blue-700 underline">Return to employee portal</a></div>
+                <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 shadow-sm"><p role="alert" class="font-medium">You do not have access to the Audit portal.</p><a href="@DefaultPortalHref" class="mt-2 inline-block font-semibold text-blue-700 underline">Return to your portal</a></div>
             }
             else
             {
@@ -66,6 +84,11 @@
         </main>
         <footer class="app-shell-footer">Government HR Platform, Maldives Digital Service.</footer>
     </div>
+
+    @if (_isAuthenticated && HasSystemAccess)
+    {
+        <GlobalHelpdeskWidget />
+    }
 </div>
 
 @code {
@@ -75,24 +98,72 @@
     private bool _isAuthenticated;
     private bool mobileNavOpen;
     private int _accessLoadVersion;
-    private bool HasSystemAccess => !_checkingAccess && _session?.CanAccessSystem == true;
+    private bool IsActiveStaff => _session is { CanAccessSystem: true, UserId: > 0, OrganisationId: > 0, JobId: > 0 };
+    private bool HasManagementPortalAccess => _session is { CanAccessSystem: true } && (_session.CanAccessAdminPortal || _session.CanAccessDeveloperPortal || _session.CanAccessAuditPortal || _session.CanAccessSuperAdminPortal);
+    private bool HasSystemAccess => !_checkingAccess && (IsActiveStaff || HasManagementPortalAccess);
     private bool CanAccessAdminPortal => HasSystemAccess && _session?.CanAccessAdminPortal == true;
     private bool CanAccessDeveloperPortal => HasSystemAccess && _session?.CanAccessDeveloperPortal == true;
     private bool CanAccessAuditPortal => HasSystemAccess && _session?.CanAccessAuditPortal == true;
+    private bool CanAccessSuperAdminPortal => HasSystemAccess && _session?.CanAccessSuperAdminPortal == true;
+    private string? _lastAllowedUri;
+    private bool _revertingCrossPortal;
     [CascadingParameter]
     private Task<AuthenticationState>? AuthenticationState { get; set; }
 
-    private bool IsAdminPortal =>
-     new Uri(Navigation.Uri).AbsolutePath
-         .Split('/', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.Equals("admin", StringComparison.OrdinalIgnoreCase) == true;
+    private string DefaultPortalHref =>
+        IsActiveStaff ? "/online" :
+        CanAccessSuperAdminPortal ? "/superadmin" :
+        CanAccessDeveloperPortal ? "/developer" :
+        CanAccessAdminPortal ? "/admin" : "/careers";
+
+    private static string? FirstSegment(string uri) =>
+        new Uri(uri).AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
+
+    private bool IsSuperAdminPortal =>
+        FirstSegment(Navigation.Uri)?.Equals("superadmin", StringComparison.OrdinalIgnoreCase) == true;
 
     private bool IsDeveloperPortal =>
-     new Uri(Navigation.Uri).AbsolutePath
-         .Split('/', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.Equals("developer", StringComparison.OrdinalIgnoreCase) == true;
+        FirstSegment(Navigation.Uri)?.Equals("developer", StringComparison.OrdinalIgnoreCase) == true;
+
+    private bool IsAdminPortal =>
+        FirstSegment(Navigation.Uri)?.Equals("admin", StringComparison.OrdinalIgnoreCase) == true;
 
     private bool IsAuditPortal =>
-     new Uri(Navigation.Uri).AbsolutePath
-         .Split('/', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.Equals("audit", StringComparison.OrdinalIgnoreCase) == true;
+        FirstSegment(Navigation.Uri)?.Equals("audit", StringComparison.OrdinalIgnoreCase) == true;
+
+    private static TransactionContext? GetRoutePortalContext(string uri)
+    {
+        var path = new Uri(uri).AbsolutePath;
+        if (string.IsNullOrEmpty(path) || path == "/")
+            return TransactionContext.Online;
+
+        var first = path.Split('/', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
+        if (string.IsNullOrEmpty(first)) return TransactionContext.Online;
+        if (first.Equals("superadmin", StringComparison.OrdinalIgnoreCase)) return TransactionContext.SuperAdmin;
+        if (first.Equals("developer", StringComparison.OrdinalIgnoreCase)) return TransactionContext.Developer;
+        if (first.Equals("admin", StringComparison.OrdinalIgnoreCase)) return TransactionContext.Admin;
+        if (first.Equals("audit", StringComparison.OrdinalIgnoreCase)) return TransactionContext.Audit;
+        if (first.Equals("online", StringComparison.OrdinalIgnoreCase)) return TransactionContext.Online;
+        // Shared / public routes (e.g., /profile, /careers, /vacancies, /verify) are neutral.
+        return null;
+    }
+
+    private bool IsPublicRecruitmentRoute
+    {
+        get
+        {
+            var segments = new Uri(Navigation.Uri).AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries);
+            if (segments.Length >= 1 && segments[0].Equals("careers", StringComparison.OrdinalIgnoreCase)) return true;
+            if (segments.Length == 1 && segments[0].Equals("vacancies", StringComparison.OrdinalIgnoreCase)) return true;
+            if (segments.Length == 2 && segments[0].Equals("online", StringComparison.OrdinalIgnoreCase) && segments[1].Equals("recruitment", StringComparison.OrdinalIgnoreCase)) return true;
+            if (segments.Length == 2 && segments[1].Equals("vacancies", StringComparison.OrdinalIgnoreCase)
+                && !segments[0].Equals("admin", StringComparison.OrdinalIgnoreCase)
+                && !segments[0].Equals("audit", StringComparison.OrdinalIgnoreCase)
+                && !segments[0].Equals("developer", StringComparison.OrdinalIgnoreCase)
+                && !segments[0].Equals("superadmin", StringComparison.OrdinalIgnoreCase)) return true;
+            return false;
+        }
+    }
 
     private bool IsOnlinePortal
     {
@@ -103,18 +174,76 @@
         }
     }
 
-    private string ShellContextClass => IsAdminPortal ? "portal-admin" :
+    private string ShellContextClass => IsSuperAdminPortal ? "portal-superadmin" :
         IsDeveloperPortal ? "portal-developer" :
+        IsAdminPortal ? "portal-admin" :
         IsAuditPortal ? "portal-audit" :
         IsOnlinePortal ? "portal-online" : "portal-public";
 
     private void OpenMobileNav() => mobileNavOpen = true;
     private Task CloseMobileNav() { mobileNavOpen = false; return InvokeAsync(StateHasChanged); }
 
+    private bool CanNavigateToPortalContext(TransactionContext targetContext, string uri)
+    {
+        if (_session is null) return targetContext == TransactionContext.Online;
+        return targetContext switch
+        {
+            TransactionContext.SuperAdmin => CanAccessSuperAdminPortal,
+            TransactionContext.Developer => CanAccessDeveloperPortal,
+            TransactionContext.Audit => CanAccessAuditPortal,
+            TransactionContext.Admin => CanAccessAdminPortal || IsWorkspaceApproverRoute(uri),
+            TransactionContext.Online => true,
+            _ => true
+        };
+    }
+
+    private static bool IsWorkspaceApproverRoute(string uri)
+    {
+        var path = new Uri(uri).AbsolutePath;
+        return path.Equals("/admin/my/workspace", StringComparison.OrdinalIgnoreCase)
+            || path.StartsWith("/admin/my/workspace/", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private void SyncPortalContext(TransactionContext targetContext)
+    {
+        switch (targetContext)
+        {
+            case TransactionContext.SuperAdmin: PortalContext.SwitchToSuperAdmin(); break;
+            case TransactionContext.Developer: PortalContext.SwitchToDeveloper(); break;
+            case TransactionContext.Admin: PortalContext.SwitchToAdmin(); break;
+            case TransactionContext.Audit: PortalContext.SwitchToAudit(); break;
+            default: PortalContext.SwitchToEmployee(); break;
+        }
+    }
+
     protected override void OnInitialized() => Navigation.LocationChanged += OnLocationChanged;
     private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs args)
     {
         mobileNavOpen = false;
+
+        if (!_revertingCrossPortal && _isAuthenticated && !_checkingAccess)
+        {
+            var targetContext = GetRoutePortalContext(args.Location);
+            if (targetContext.HasValue)
+            {
+                if (!CanNavigateToPortalContext(targetContext.Value, args.Location))
+                {
+                    _revertingCrossPortal = true;
+                    var fallback = !string.IsNullOrWhiteSpace(_lastAllowedUri) ? _lastAllowedUri : DefaultPortalHref;
+                    ToastService.Error("You do not have permission to access that portal.");
+                    _ = InvokeAsync(() =>
+                    {
+                        try { Navigation.NavigateTo(fallback, replace: true); }
+                        finally { _revertingCrossPortal = false; }
+                    });
+                    return;
+                }
+
+                SyncPortalContext(targetContext.Value);
+            }
+        }
+
+        _lastAllowedUri = args.Location;
         _ = InvokeAsync(StateHasChanged);
     }
 
@@ -137,14 +266,31 @@
         PortalContext.Initialize(_session?.OrganisationId, _session?.OrganisationName ?? "",
             _session?.CanAccessAdminPortal == true,
             _session?.CanAccessDeveloperPortal == true,
-            _session?.CanAccessAuditPortal == true);
+            _session?.CanAccessAuditPortal == true,
+            _session?.CanAccessSuperAdminPortal == true);
 
-        if (IsAdminPortal) PortalContext.SwitchToAdmin();
+        if (IsSuperAdminPortal) PortalContext.SwitchToSuperAdmin();
+        else if (IsAdminPortal) PortalContext.SwitchToAdmin();
         else if (IsDeveloperPortal) PortalContext.SwitchToDeveloper();
         else if (IsAuditPortal) PortalContext.SwitchToAudit();
         else PortalContext.SwitchToEmployee();
 
+        if (_isAuthenticated && string.IsNullOrWhiteSpace(_lastAllowedUri))
+        {
+            _lastAllowedUri = Navigation.Uri;
+        }
+
         _checkingAccess = false;
+
+        // Route non-staff eFaas applicants landing on root or /online directly to the Careers Portal.
+        if (_isAuthenticated && _session is null && !IsPublicRecruitmentRoute)
+        {
+            var path = new Uri(Navigation.Uri).AbsolutePath;
+            if (path == "/" || path.Equals("/online", StringComparison.OrdinalIgnoreCase))
+            {
+                Navigation.NavigateTo("/careers", replace: true);
+            }
+        }
     }
 
     public void Dispose() => Navigation.LocationChanged -= OnLocationChanged;

@@ -13,7 +13,7 @@ using Microsoft.EntityFrameworkCore;
 namespace HRM.Services;
 
 public sealed class StaffOnboardingService(IDbContextFactory<HrmTeContext> factory, IUserAccessService access,
-    IOperationLogService logs, IWorkflowApproverResolver approvers, ILogger<StaffOnboardingService>? logger = null)
+    IOperationLogService logs, IWorkflowApproverResolver approvers, ILogger<StaffOnboardingService>? logger = null, IUserContextService? userContexts = null)
 :global::HRM.Services.Contracts.StaffOnboardingServiceContracts,global::HRM.Services.Contracts.StaffOnboardingServiceContracts.IOperations{
     
     
@@ -66,9 +66,7 @@ public sealed class StaffOnboardingService(IDbContextFactory<HrmTeContext> facto
 
     private static async Task ValidatePersonAsync(HrmTeContext db, int person, int org, bool super)
     {
-        if (!await db.Individuals.AnyAsync(x => x.BusinessEntityId == person) ||
-            (!super && await db.Jobs.AnyAsync(x => x.IndividualID == person) &&
-             !await db.Jobs.AnyAsync(x => x.IndividualID == person && x.OrganisationID == org)))
+        if (!await db.Individuals.AnyAsync(x => x.BusinessEntityId == person))
             throw new UnauthorizedAccessException("This individual is not available in the current organisation’s registry.");
         if (await db.StaffOnboardingRequests.AnyAsync(x => x.IndividualId == person && x.IsOpen))
             throw new InvalidOperationException("An onboarding request is already processing for this individual.");
@@ -106,9 +104,9 @@ public sealed class StaffOnboardingService(IDbContextFactory<HrmTeContext> facto
             throw new InvalidOperationException("Select an active position available to this organisation, or assign it later.");
         if(r.PositionId.HasValue)await PositionVacancy.RequireAsync(db,r.PositionId.Value,r.JoinedDate,null);
         if(r.PositionId.HasValue){var info=await PositionMatrixAssignments.SummaryAsync(db,r.PositionId.Value,r.JobMatrixStepId);if(info!=null&&(!r.JobMatrixStepId.HasValue||!info.Steps.Any(x=>x.Id==r.JobMatrixStepId)))throw new InvalidOperationException("Select the employee job pay step.");if(info==null&&r.JobMatrixStepId.HasValue)throw new InvalidOperationException("This position has no Job Matrix pay step.");}
-        if (await db.Jobs.AnyAsync(x => x.IndividualID == r.IndividualId && x.JobStateId == 4 &&
-            (!x.TerminatedDate.HasValue || x.TerminatedDate >= r.JoinedDate)))
-            throw new InvalidOperationException("This individual already has approved employment overlapping the proposed joining date.");
+        // Existing overlapping employment of the same job type is permitted during submission/approval;
+        // on final approval, ActivateAsync terminates the previous overlapping job, activates the newly
+        // approved job, and carries forward existing leave entitlements without changing their reset/update dates.
         var identity = await IdentityAsync(db, r.IndividualId);
         if (await db.Users.AnyAsync(x => x.Username == identity && x.BusinessEntityID != r.IndividualId))
             throw new InvalidOperationException("The National ID is linked to another account. Contact the administrator.");
@@ -302,6 +300,8 @@ public sealed class StaffOnboardingService(IDbContextFactory<HrmTeContext> facto
             var to = action == "Cancel" ? 5 : action == "Reject" ? 6 : from;
             if (action is "Reject" or "Cancel" && string.IsNullOrWhiteSpace(comment))
                 throw new InvalidOperationException("Enter a reason for rejecting or cancelling this request.");
+            var replacedExistingJob = false;
+            int? activatedUserId = null;
             if (action == "Approve")
             {
                 var own = stage.Approvals.Single(x => x.ApproverUserId == actor.UserId);
@@ -326,7 +326,8 @@ public sealed class StaffOnboardingService(IDbContextFactory<HrmTeContext> facto
                     {
                         await LockPersonAsync(db, r.IndividualId);
                         await ValidateFieldsAsync(db, r);
-                        await ActivateAsync(db, r, actor);
+                        replacedExistingJob = await ActivateAsync(db, r, actor);
+                        activatedUserId = r.UserId;
                         r.IsOpen = false; instance.WorkflowStatus = "Approved"; instance.ExecutionStatus = "Succeeded"; instance.CompletedAt = DateTime.UtcNow;
                     }
                 }
@@ -359,7 +360,13 @@ public sealed class StaffOnboardingService(IDbContextFactory<HrmTeContext> facto
             Audit(db, instance, stage, actor.UserId, action, from, to, comment);
             await NotifyCreatorAsync(db, r, from, to);
             await db.SaveChangesAsync(); await tx.CommitAsync();
-            return ServiceResult.Ok(to == 4 ? "Onboarding approved. Employment is active and the employee account is created or linked. Address and contact details can be completed later." : "Onboarding action saved.");
+            if (to == 4 && activatedUserId.HasValue && userContexts != null)
+                await userContexts.InvalidateAsync(activatedUserId.Value);
+            return ServiceResult.Ok(to == 4
+                ? (replacedExistingJob
+                    ? "Onboarding approved. The previous overlapping employment was terminated, the new job is now active, and existing leave balances and update/reset dates were preserved (can be adjusted manually)."
+                    : "Onboarding approved. Employment is active and the employee account is created or linked. Address and contact details can be completed later.")
+                : "Onboarding action saved.");
         }
         catch (Exception ex) when (ex is InvalidOperationException or UnauthorizedAccessException or DbUpdateException)
         {
@@ -430,13 +437,50 @@ public sealed class StaffOnboardingService(IDbContextFactory<HrmTeContext> facto
         }
     }
 
-    private async Task ActivateAsync(HrmTeContext db, StaffOnboardingRequest r, UserContextDto actor)
+    private async Task<bool> ActivateAsync(HrmTeContext db, StaffOnboardingRequest r, UserContextDto actor)
     {
         var individual = await db.Individuals.SingleAsync(x => x.BusinessEntityId == r.IndividualId);
         var username = await IdentityAsync(db, r.IndividualId);
         var userOrg = await db.UserOrganisations.Where(x => x.BusinessEntityID == r.OrganisationId).Select(x => (int?)x.UserOrganisationID).SingleOrDefaultAsync()
             ?? throw new InvalidOperationException("Configure a User Organisation for this tenant before approving onboarding.");
         var audit = await logs.CreateAsync(db, SharedConfig.OperationLogActionTypes.JOB_CREATE, $"Approved onboarding {r.Request.ReferenceNumber}: employment and employee account for Individual {r.IndividualId}.");
+
+        // Find any overlapping active approved jobs of the same job type so we can terminate them cleanly
+        // and carry forward their leave entitlements without altering leave update/reset dates.
+        var overlappingJobs = await db.Jobs
+            .Where(x => x.IndividualID == r.IndividualId && x.JobStateId == 4 && x.JobTypeId == r.JobTypeId &&
+                (!x.TerminatedDate.HasValue || x.TerminatedDate >= r.JoinedDate))
+            .OrderByDescending(x => x.JoinedDate)
+            .ThenByDescending(x => x.JobId)
+            .ToListAsync();
+
+        var primaryReplacedJob = overlappingJobs.FirstOrDefault();
+        List<JobLeaveType> carryForwardLeaves = [];
+        if (primaryReplacedJob != null)
+        {
+            carryForwardLeaves = await db.JobLeaveTypes.AsNoTracking()
+                .Where(x => x.JobId == primaryReplacedJob.JobId && x.IsValid)
+                .ToListAsync();
+        }
+
+        foreach (var oldJob in overlappingJobs)
+        {
+            var termDate = r.JoinedDate.Date > oldJob.JoinedDate.Date
+                ? r.JoinedDate.Date.AddDays(-1)
+                : r.JoinedDate.Date;
+            oldJob.TerminatedDate = termDate;
+            oldJob.OperationLogId = audit.OperationLogId;
+
+            var openPositions = await db.JobPositions
+                .Where(jp => jp.JobId == oldJob.JobId && (!jp.ToDate.HasValue || jp.ToDate >= r.JoinedDate.Date))
+                .ToListAsync();
+            foreach (var jp in openPositions)
+            {
+                jp.ToDate = termDate;
+                jp.OperationLogId = audit.OperationLogId;
+            }
+        }
+
         var user = await db.Users.SingleOrDefaultAsync(x => x.BusinessEntityID == r.IndividualId);
         if (user == null)
         {
@@ -446,14 +490,48 @@ public sealed class StaffOnboardingService(IDbContextFactory<HrmTeContext> facto
                 CreatedByUserId = actor.UserId, CreatedContextId = 1, RequestId = r.RequestId, OperationLogId = audit.OperationLogId };
             db.Users.Add(user);
         }
-        else if (user.Username != username || user.UserOrganisationId != userOrg)
-            throw new InvalidOperationException("The existing account identity or home organisation differs. An administrator must resolve the account before onboarding can be approved.");
+        else if (user.Username != username)
+        {
+            throw new InvalidOperationException("The existing account identity differs. An administrator must resolve the account before onboarding can be approved.");
+        }
+        else if (user.UserOrganisationId != userOrg)
+        {
+            user.UserOrganisationId = userOrg;
+            user.OperationLogId = audit.OperationLogId;
+        }
+
         if (!await db.Staffs.AnyAsync(x => x.IndividualId == r.IndividualId))
             db.Staffs.Add(new Staff { IndividualId = r.IndividualId, OperationLogId = audit.OperationLogId });
         await db.SaveChangesAsync();
+
         var job = new Job { IndividualID = r.IndividualId, OrganisationID = r.OrganisationId, OrganisationStructureId = r.OrganisationStructureId,
             JobTypeId = r.JobTypeId, JobStateId = 4, JoinedDate = r.JoinedDate, OperationLogId = audit.OperationLogId };
         db.Jobs.Add(job); await db.SaveChangesAsync();
+
+        // Carry forward existing leave entitlements to the newly approved job WITHOUT changing leave update/reset dates.
+        if (primaryReplacedJob != null && carryForwardLeaves.Count > 0)
+        {
+            foreach (var oldLeave in carryForwardLeaves)
+            {
+                db.JobLeaveTypes.Add(new JobLeaveType
+                {
+                    JobId = job.JobId,
+                    LeaveTypeId = oldLeave.LeaveTypeId,
+                    RemainingDays = oldLeave.RemainingDays,
+                    LastLeaveTakenDate = oldLeave.LastLeaveTakenDate,
+                    IsValid = true,
+                    RenewedDate = oldLeave.RenewedDate,
+                    IsLeaveInfoUpdated = oldLeave.IsLeaveInfoUpdated,
+                    EffectiveFromDate = oldLeave.EffectiveFromDate ?? primaryReplacedJob.JoinedDate,
+                    EffectiveToDate = oldLeave.EffectiveToDate,
+                    AutoCorrectDate = oldLeave.AutoCorrectDate,
+                    AutoCorrectRemark = oldLeave.AutoCorrectRemark,
+                    OperationLogId = audit.OperationLogId
+                });
+            }
+            await db.SaveChangesAsync();
+        }
+
         if (r.PositionId.HasValue)
         {
             await PositionMatrixAssignments.ValidateAsync(db,r.OrganisationId,r.PositionId.Value,r.JoinedDate,null,selectedStepId:r.JobMatrixStepId);
@@ -466,8 +544,11 @@ public sealed class StaffOnboardingService(IDbContextFactory<HrmTeContext> facto
         db.RequestJobs.Add(new RequestJob { JobId = job.JobId, RequestId = r.RequestId, IsValid = true, OperationLogId = audit.OperationLogId });
         r.JobId = job.JobId; r.UserId = user.UserId;
         db.StaffNotifications.Add(new StaffNotification { UserId = user.UserId, IndividualId = r.IndividualId, OrganisationId = r.OrganisationId,
-            Kind = "Onboarding", Message = "Your employment appointment has been approved. Please complete your address and contact details in My Profile.",
+            Kind = "Onboarding", Message = primaryReplacedJob != null
+                ? "Your new employment appointment has been approved and your previous employment has been transitioned. Your existing leave update/reset dates were preserved."
+                : "Your employment appointment has been approved. Please complete your address and contact details in My Profile.",
             Url = "/profile", CreatedAtUtc = DateTime.UtcNow });
+        return primaryReplacedJob != null;
     }
 
     private static void Audit(HrmTeContext db, WfRequestInstance instance, WfRequestStageInstance? stage, int actor, string action, int from, int to, string? comment) =>

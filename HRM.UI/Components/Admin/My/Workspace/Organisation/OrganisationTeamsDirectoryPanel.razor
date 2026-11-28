@@ -1,0 +1,738 @@
+@using HRM.Application.Contracts.Pages
+@using HRM.DTOs
+@using HRM.DTOs.Organisation
+@using HRM.Enum
+@inject IOrganisationDirectoryQueries Directory
+@inject HRM.Services.Contracts.OrganisationSettingsServiceContracts.IOperations Settings
+@inject HRM.Services.Contracts.OrganisationWorkspaceServiceContracts.IOperations WorkspaceService
+@inject HRM.Services.ToastService Toast
+
+<section class="w-full min-w-0 flex flex-col gap-3">
+    @if (!string.IsNullOrWhiteSpace(error))
+    {
+        <div role="alert" class="flex items-center justify-between rounded-xl border border-rose-200 dark:border-rose-900/60 bg-rose-50 dark:bg-rose-950/40 p-3 text-xs text-rose-800 dark:text-rose-200">
+            <span>@error</span>
+            <button type="button" @onclick="() => error = null" class="font-bold text-rose-600 dark:text-rose-300 hover:text-rose-800">✕</button>
+        </div>
+    }
+
+    @if (loading)
+    {
+        <div role="status" class="flex flex-col items-center justify-center rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-10 text-center shadow-xs">
+            <div class="h-8 w-8 animate-spin rounded-full border-4 border-teal-600 border-t-transparent"></div>
+            <p class="mt-3 text-xs font-semibold text-slate-600 dark:text-slate-300">Loading organisation teams…</p>
+        </div>
+    }
+    else
+    {
+        <!-- MyWorkspace Teams Style Layout for Organisation (All Organisation Teams) -->
+        <div class="org-workspace-teams-grid">
+            <!-- LEFT COLUMN (~25%): All Organisation Parent Teams with Nested Sub-Teams -->
+            <aside class="min-w-0 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-2.5 shadow-xs space-y-2">
+                <div class="flex items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-2">
+                    <div class="min-w-0">
+                        <h3 class="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">
+                            Organisation Teams
+                        </h3>
+                        <p class="text-[10px] text-slate-400">
+                            @parentTeams.Count team@(parentTeams.Count == 1 ? "" : "s") · @subTeamCount sub-team@(subTeamCount == 1 ? "" : "s")
+                        </p>
+                    </div>
+                    <div class="flex items-center gap-1 shrink-0">
+                        <button type="button"
+                                class="app-button app-button-primary app-button-sm"
+                                title="Add a team"
+                                @onclick="OpenAddTeamModal">
+                            <AppIcon Name="add" /> Add
+                        </button>
+                        <button type="button"
+                                class="app-button app-button-secondary app-button-sm"
+                                title="Edit the selected team"
+                                disabled="@(ActiveTeam is null)"
+                                @onclick="OpenEditTeamModal">
+                            <AppIcon Name="edit" /> Edit
+                        </button>
+                        @if (selectedSubTeamId.HasValue)
+                        {
+                            <button type="button"
+                                    class="text-[10px] font-semibold text-teal-600 dark:text-teal-400 hover:underline px-1.5 py-0.5 rounded border border-teal-200 dark:border-teal-800 bg-teal-50/50 dark:bg-teal-950/40"
+                                    @onclick="ClearSubTeamSelection"
+                                    title="Clear sub-team filter">
+                                Clear ✕
+                            </button>
+                        }
+                        <button type="button"
+                                class="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-[11px] font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700"
+                                title="Refresh teams"
+                                @onclick="LoadAsync">
+                            ↻
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Search -->
+                <div class="relative">
+                    <span class="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-slate-400 text-[11px]">🔍</span>
+                    <input type="text"
+                           class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 pl-7 pr-6 py-1 text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                           placeholder="Search teams or sub-teams..."
+                           @bind="teamSearch"
+                           @bind:event="oninput" />
+                    @if (!string.IsNullOrWhiteSpace(teamSearch))
+                    {
+                        <button type="button"
+                                class="absolute inset-y-0 right-0 pr-2 flex items-center text-slate-400 hover:text-slate-600 text-[11px]"
+                                @onclick="() => teamSearch = string.Empty">✕</button>
+                    }
+                </div>
+
+                <!-- Scope Filter Pills: All | Organisational | Individual -->
+                <div class="flex rounded-lg border border-slate-200 dark:border-slate-700 p-0.5 bg-slate-50 dark:bg-slate-800/60 text-[11px]">
+                    <button type="button"
+                            class="flex-1 py-1 text-center font-semibold rounded-md transition-colors @(scopeFilter == "all" ? "bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-400 shadow-2xs" : "text-slate-600 dark:text-slate-400 hover:text-slate-900")"
+                            @onclick='() => SetScopeFilter("all")'>
+                        All (@parentTeams.Count)
+                    </button>
+                    <button type="button"
+                            class="flex-1 py-1 text-center font-semibold rounded-md transition-colors @(scopeFilter == "org" ? "bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-400 shadow-2xs" : "text-slate-600 dark:text-slate-400 hover:text-slate-900")"
+                            @onclick='() => SetScopeFilter("org")'>
+                        Org (@OrganisationalTeamCount)
+                    </button>
+                    <button type="button"
+                            class="flex-1 py-1 text-center font-semibold rounded-md transition-colors @(scopeFilter == "individual" ? "bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-400 shadow-2xs" : "text-slate-600 dark:text-slate-400 hover:text-slate-900")"
+                            @onclick='() => SetScopeFilter("individual")'>
+                        Individual (@IndividualTeamCount)
+                    </button>
+                </div>
+
+                <!-- Scrollable Parent Teams List with Nested Sub-Teams -->
+                @if (FilteredParentTeams.Count == 0)
+                {
+                    <p class="py-8 text-center text-xs text-slate-500 dark:text-slate-400">No teams match this filter.</p>
+                }
+                else
+                {
+                    <div class="space-y-1.5 max-h-[42rem] overflow-y-auto pr-1">
+                        @foreach (var team in FilteredParentTeams)
+                        {
+                            var isTeamSelected = selectedTeamId == team.Id;
+                            <div @key="team.Id"
+                                 class="rounded-xl border transition @(isTeamSelected ? "border-teal-500 bg-teal-50/30 dark:bg-teal-950/20 shadow-xs ring-1 ring-teal-500/50" : "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-700")">
+                                <button type="button"
+                                        class="w-full text-left p-2 rounded-t-xl text-xs transition cursor-pointer flex flex-col gap-1"
+                                        @onclick="() => SelectTeam(team.Id)">
+                                    <div class="flex items-center justify-between gap-1">
+                                        <h4 class="font-bold text-slate-900 dark:text-slate-100 truncate text-xs" title="@team.Name">@team.Name</h4>
+                                        @if (team.SubTeams.Count > 0)
+                                        {
+                                            <span class="rounded bg-teal-100 dark:bg-teal-950/60 text-teal-800 dark:text-teal-300 px-1.5 py-0.5 text-[10px] font-bold shrink-0 whitespace-nowrap">
+                                                @team.SubTeams.Count @(team.SubTeams.Count == 1 ? "sub-team" : "sub-teams")
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="rounded px-1.5 py-0.5 text-[10px] font-semibold shrink-0 whitespace-nowrap @(team.IsBoundToStructure ? "bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300" : "bg-purple-50 dark:bg-purple-950/50 text-purple-700 dark:text-purple-300")">
+                                                @(team.IsBoundToStructure ? "Org" : "Individual")
+                                            </span>
+                                        }
+                                    </div>
+                                    @if (!string.IsNullOrWhiteSpace(team.NameDhivehi))
+                                    {
+                                        <p lang="dv" dir="rtl" class="text-[10px] text-slate-400 truncate">@team.NameDhivehi</p>
+                                    }
+                                    @if (!string.IsNullOrWhiteSpace(team.DepartmentName))
+                                    {
+                                        <p class="text-[10px] text-slate-500 dark:text-slate-400 truncate" title="@team.DepartmentName">🏢 @team.DepartmentName</p>
+                                    }
+                                    <div class="flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400">
+                                        <span>@team.Members.Count member@(team.Members.Count == 1 ? "" : "s")</span>
+                                        <span>@team.Supervisors.Count sup</span>
+                                    </div>
+                                </button>
+
+                                <!-- Nested Sub-Teams under Selected Parent Team (matching MyWorkspace Teams) -->
+                                @if (isTeamSelected)
+                                {
+                                    <div class="border-t border-slate-100 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-950/30 p-1.5 rounded-b-xl space-y-1">
+                                        <div class="flex items-center justify-between px-1 pb-0.5">
+                                            <span class="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Sub-teams</span>
+                                            <span class="text-[10px] text-slate-400">@team.SubTeams.Count</span>
+                                        </div>
+
+                                        @if (team.SubTeams.Count == 0)
+                                        {
+                                            <div class="py-1.5 text-center text-[10px] text-slate-400">No sub-teams.</div>
+                                        }
+                                        else
+                                        {
+                                            <button type="button"
+                                                    class="w-full text-left px-2 py-1 rounded-lg text-[11px] font-semibold transition cursor-pointer flex items-center justify-between @(!selectedSubTeamId.HasValue ? "bg-teal-700 text-white shadow-2xs" : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800")"
+                                                    @onclick="ClearSubTeamSelection">
+                                                <span>All Members</span>
+                                                <span class="text-[10px] opacity-80">@team.Members.Count</span>
+                                            </button>
+
+                                            @foreach (var st in team.SubTeams)
+                                            {
+                                                var isSubSelected = selectedSubTeamId == st.Id;
+                                                <button type="button"
+                                                        @key="st.Id"
+                                                        class="w-full text-left px-2 py-1 rounded-lg text-[11px] font-semibold transition cursor-pointer flex items-center justify-between gap-1 @(isSubSelected ? "bg-teal-700 text-white shadow-2xs" : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800")"
+                                                        @onclick="() => SelectSubTeam(st.Id)">
+                                                    <span class="truncate" title="@st.Name">@st.Name</span>
+                                                    <span class="text-[10px] opacity-80 shrink-0">@st.Members.Count</span>
+                                                </button>
+                                            }
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+            </aside>
+
+            <!-- RIGHT COLUMN (~75%): Selected Team / Sub-Team Workspace (Banner, Supervisors, Members & Sub-Teams) -->
+            <section class="min-w-0 space-y-2.5">
+                @if (ActiveTeam == null)
+                {
+                    <div class="rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-12 text-center text-xs text-slate-500 dark:text-slate-400">
+                        Select a team from the left to view its members, supervisors, and sub-teams.
+                    </div>
+                }
+                else
+                {
+                    <!-- Team Summary Banner (matching MyWorkspace Teams) -->
+                    <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3.5 shadow-xs space-y-3">
+                        <div class="flex items-start justify-between flex-wrap gap-2">
+                            <div class="min-w-0">
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <h3 class="text-base font-bold text-slate-900 dark:text-slate-100">@SelectedParentTeam?.Name</h3>
+                                    @if (SelectedSubTeam != null)
+                                    {
+                                        <span class="rounded-full bg-teal-100 dark:bg-teal-950/60 text-teal-800 dark:text-teal-300 px-2.5 py-0.5 text-[11px] font-bold">
+                                            Sub-Team: @SelectedSubTeam.Name
+                                        </span>
+                                    }
+                                    <span class="rounded-full px-2 py-0.5 text-[10px] font-semibold @(ActiveTeam.IsBoundToStructure ? "bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300" : "bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300")">
+                                        @(ActiveTeam.IsBoundToStructure ? (ActiveTeam.DepartmentName ?? "Organisational Team") : "Individual Team")
+                                    </span>
+                                </div>
+                                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                                    @ActiveTeam.Members.Count assigned personnel · @ActiveTeam.Supervisors.Count supervisor@(ActiveTeam.Supervisors.Count == 1 ? "" : "s")
+                                    @if (SelectedParentTeam != null && SelectedParentTeam.SubTeams.Count > 0)
+                                    {
+                                        <span> · @SelectedParentTeam.SubTeams.Count sub-team@(SelectedParentTeam.SubTeams.Count == 1 ? "" : "s")</span>
+                                    }
+                                </p>
+                            </div>
+
+                            <!-- Inner Sub-Tabs: Members | Sub-Teams -->
+                            <div class="flex flex-wrap items-center gap-1 rounded-lg border border-slate-300 dark:border-slate-700 p-0.5 bg-slate-100 dark:bg-slate-800 text-xs">
+                                <button type="button"
+                                        class="rounded-md px-3 py-1 font-semibold transition @(centerTab == "members" ? "bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-400 shadow-2xs" : "text-slate-600 dark:text-slate-400")"
+                                        @onclick='() => centerTab = "members"'>
+                                    Members (@ActiveTeam.Members.Count)
+                                </button>
+                                @if (SelectedParentTeam != null && SelectedParentTeam.SubTeams.Count > 0)
+                                {
+                                    <button type="button"
+                                            class="rounded-md px-3 py-1 font-semibold transition @(centerTab == "subteams" ? "bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-400 shadow-2xs" : "text-slate-600 dark:text-slate-400")"
+                                            @onclick='() => centerTab = "subteams"'>
+                                        Sub-Teams (@SelectedParentTeam.SubTeams.Count)
+                                    </button>
+                                }
+                            </div>
+                        </div>
+
+                        <!-- Supervisors Strip -->
+                        <div class="flex flex-wrap items-center gap-2 border-t border-slate-100 dark:border-slate-800 pt-2.5 text-xs">
+                            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Supervisors:</span>
+                            @if (ActiveTeam.Supervisors.Count == 0)
+                            {
+                                <span class="text-xs text-slate-400">None assigned</span>
+                            }
+                            else
+                            {
+                                @foreach (var sup in ActiveTeam.Supervisors)
+                                {
+                                    <span class="inline-flex items-center gap-1 rounded-full border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/50 px-2.5 py-0.5 text-[11px] font-semibold text-indigo-800 dark:text-indigo-200">
+                                        <span>🛡️</span>
+                                        <span>@sup.Name</span>
+                                    </span>
+                                }
+                            }
+                        </div>
+                    </div>
+
+                    @if (centerTab == "subteams" && SelectedParentTeam != null)
+                    {
+                        <!-- Sub-Teams Grid -->
+                        <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-xs space-y-3">
+                            <div class="flex items-center justify-between">
+                                <h4 class="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">Sub-Teams of @SelectedParentTeam.Name</h4>
+                                <span class="text-xs text-slate-500 dark:text-slate-400">@SelectedParentTeam.SubTeams.Count total</span>
+                            </div>
+                            <div class="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+                                @foreach (var st in SelectedParentTeam.SubTeams)
+                                {
+                                    var isSubActive = selectedSubTeamId == st.Id;
+                                    <button type="button"
+                                            @key="st.Id"
+                                            class="text-left rounded-xl border p-3 transition @(isSubActive ? "border-teal-500 bg-teal-50/40 dark:bg-teal-950/30 ring-1 ring-teal-500/40" : "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/50")"
+                                            @onclick="() => SelectSubTeamAndShowMembers(st.Id)">
+                                        <div class="flex items-center justify-between gap-2">
+                                            <span class="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">@st.Name</span>
+                                            <span class="rounded-full bg-emerald-100 dark:bg-emerald-900/50 px-2 py-0.5 text-[10px] font-semibold text-emerald-800 dark:text-emerald-200 shrink-0">
+                                                @st.Members.Count staff
+                                            </span>
+                                        </div>
+                                        @if (!string.IsNullOrWhiteSpace(st.DepartmentName))
+                                        {
+                                            <p class="mt-1 text-[11px] text-slate-500 dark:text-slate-400 truncate">🏢 @st.DepartmentName</p>
+                                        }
+                                        <p class="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                                            @st.Supervisors.Count supervisor@(st.Supervisors.Count == 1 ? "" : "s")
+                                        </p>
+                                    </button>
+                                }
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <!-- Members Panel -->
+                        <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-xs space-y-3">
+                            <div class="flex flex-wrap items-center justify-between gap-2">
+                                <div>
+                                    <h4 class="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                                        Team Members (@FilteredStaff.Count)
+                                    </h4>
+                                    @if (SelectedSubTeam != null)
+                                    {
+                                        <p class="text-[11px] text-slate-500 dark:text-slate-400">Filtered to sub-team @SelectedSubTeam.Name</p>
+                                    }
+                                </div>
+                                <div class="relative w-full sm:w-64">
+                                    <span class="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-slate-400 text-xs">🔍</span>
+                                    <input type="text"
+                                           class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 pl-7 pr-6 py-1.5 text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                           placeholder="Search members..."
+                                           @bind="staffSearch"
+                                           @bind:event="oninput" />
+                                    @if (!string.IsNullOrWhiteSpace(staffSearch))
+                                    {
+                                        <button type="button"
+                                                class="absolute inset-y-0 right-0 pr-2 flex items-center text-slate-400 hover:text-slate-600 text-xs"
+                                                @onclick="() => staffSearch = string.Empty">✕</button>
+                                    }
+                                </div>
+                            </div>
+
+                            @if (FilteredStaff.Count == 0)
+                            {
+                                <div class="rounded-xl border border-dashed border-slate-200 dark:border-slate-700 py-10 text-center text-xs text-slate-500 dark:text-slate-400">
+                                    No staff members assigned to this team.
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
+                                    <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-800 text-left text-xs">
+                                        <thead class="bg-slate-50 dark:bg-slate-800/70 text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                                            <tr>
+                                                <th class="px-3 py-2.5">Staff Member</th>
+                                                <th class="px-3 py-2.5 text-right">Role</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody class="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-900">
+                                            @foreach (var member in FilteredStaff)
+                                            {
+                                                var isSup = ActiveTeam.Supervisors.Any(s => s.Id == member.Id || string.Equals(s.Name, member.Name, StringComparison.OrdinalIgnoreCase));
+                                                <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                                                    <td class="px-3 py-2.5">
+                                                        @if (member.Id > 0 && OnStaffSelected.HasDelegate)
+                                                        {
+                                                            <button type="button"
+                                                                    class="text-left font-semibold text-teal-700 dark:text-teal-400 hover:underline"
+                                                                    @onclick="() => OpenStaffAsync(member)">
+                                                                @member.Name
+                                                            </button>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="font-semibold text-slate-800 dark:text-slate-200">@member.Name</span>
+                                                        }
+                                                    </td>
+                                                    <td class="px-3 py-2.5 text-right whitespace-nowrap">
+                                                        <span class="inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-semibold @(isSup ? "bg-indigo-100 text-indigo-800 dark:bg-indigo-900/50 dark:text-indigo-200" : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300")">
+                                                            @(isSup ? "Supervisor" : "Member")
+                                                        </span>
+                                                    </td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            }
+                        </div>
+                    }
+                }
+            </section>
+        </div>
+    }
+
+    @if (showTeamModal)
+    {
+        <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4" role="dialog" aria-modal="true" aria-label="@(teamDraftId == 0 ? "Add Team" : "Edit Team")">
+            <div class="w-full max-w-md rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl overflow-hidden">
+                <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 px-4 py-3">
+                    <h3 class="text-sm font-bold text-slate-900 dark:text-slate-100">@(teamDraftId == 0 ? "Add Team" : "Edit Team")</h3>
+                    <button type="button" class="text-slate-400 hover:text-slate-600 text-sm font-bold" @onclick="CloseTeamModal">✕</button>
+                </div>
+                <div class="flex flex-col gap-2 p-4">
+                    @if (!string.IsNullOrWhiteSpace(teamModalError))
+                    {
+                        <div role="alert" class="rounded-xl border border-rose-200 bg-rose-50 p-2.5 text-xs text-rose-800">@teamModalError</div>
+                    }
+                    <label class="block text-xs font-medium text-slate-700 dark:text-slate-300">
+                        Team Name
+                        <input class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs text-slate-900 dark:text-slate-100 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                               maxlength="250"
+                               @bind="teamDraftName" />
+                    </label>
+                    <label class="block text-xs font-medium text-slate-700 dark:text-slate-300">
+                        Department (optional)
+                        <select class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs text-slate-900 dark:text-slate-100 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                @bind="teamDraftDepartmentId">
+                            <option value="">Organisation-wide (no department)</option>
+                            @foreach (var dept in departments)
+                            {
+                                <option value="@dept.Id">@dept.Name</option>
+                            }
+                        </select>
+                    </label>
+                </div>
+                <div class="flex justify-end gap-2 border-t border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 px-4 py-3">
+                    <button type="button" class="app-button app-button-secondary app-button-sm" disabled="@savingTeam" @onclick="CloseTeamModal">Cancel</button>
+                    <button type="button" class="app-button app-button-primary app-button-sm" disabled="@savingTeam" @onclick="SaveTeamModalAsync">@(savingTeam ? "Saving…" : "Save team")</button>
+                </div>
+            </div>
+        </div>
+    }
+</section>
+
+<style>
+    .org-workspace-teams-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        align-items: start;
+        gap: 0.75rem;
+        width: 100%;
+        min-width: 0;
+        box-sizing: border-box;
+    }
+
+    @@media (min-width: 1024px) {
+        .org-workspace-teams-grid {
+            grid-template-columns: minmax(0, 3fr) minmax(0, 9fr);
+        }
+    }
+</style>
+
+@code {
+    private sealed class OrgTeamNode
+    {
+        public int Id { get; init; }
+        public string Name { get; init; } = "";
+        public string? NameDhivehi { get; init; }
+        public int? ParentTeamId { get; init; }
+        public int? OrganisationStructureId { get; init; }
+        public string? DepartmentName { get; init; }
+        public bool IsBoundToStructure => OrganisationStructureId.HasValue;
+        public List<OrganisationSettingsOption> Supervisors { get; init; } = [];
+        public List<OrganisationSettingsOption> Members { get; init; } = [];
+        public List<OrgTeamNode> SubTeams { get; init; } = [];
+    }
+
+    [Parameter] public int OrganisationId { get; set; }
+    [Parameter] public EventCallback<WorkspaceSearchResult> OnStaffSelected { get; set; }
+
+    private int loadedOrgId;
+    private bool loading;
+    private string? error;
+    private string teamSearch = "";
+    private string staffSearch = "";
+    private string scopeFilter = "all"; // all | org | individual
+    private string centerTab = "members"; // members | subteams
+    private List<OrgTeamNode> parentTeams = [];
+    private List<OrganisationSettingsOption> departments = [];
+    private int subTeamCount;
+    private int? selectedTeamId;
+    private int? selectedSubTeamId;
+    private bool showTeamModal, savingTeam;
+    private int teamDraftId;
+    private string teamDraftName = "";
+    private int? teamDraftDepartmentId;
+    private string? teamModalError;
+
+    private int OrganisationalTeamCount => parentTeams.Count(t => t.IsBoundToStructure || t.SubTeams.Count > 0);
+    private int IndividualTeamCount => parentTeams.Count(t => !t.IsBoundToStructure && t.SubTeams.Count == 0);
+
+    private List<OrgTeamNode> FilteredParentTeams => parentTeams
+        .Where(t => scopeFilter switch
+        {
+            "org" => t.IsBoundToStructure || t.SubTeams.Count > 0,
+            "individual" => !t.IsBoundToStructure && t.SubTeams.Count == 0,
+            _ => true
+        })
+        .Where(t => string.IsNullOrWhiteSpace(teamSearch) ||
+                    t.Name.Contains(teamSearch, StringComparison.OrdinalIgnoreCase) ||
+                    (t.DepartmentName?.Contains(teamSearch, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                    t.SubTeams.Any(st => st.Name.Contains(teamSearch, StringComparison.OrdinalIgnoreCase)))
+        .ToList();
+
+    private OrgTeamNode? SelectedParentTeam => parentTeams.FirstOrDefault(t => t.Id == selectedTeamId);
+    private OrgTeamNode? SelectedSubTeam => SelectedParentTeam?.SubTeams.FirstOrDefault(st => st.Id == selectedSubTeamId);
+    private OrgTeamNode? ActiveTeam => SelectedSubTeam ?? SelectedParentTeam;
+
+    private List<OrganisationSettingsOption> FilteredStaff => (ActiveTeam?.Members ?? [])
+        .Where(m => string.IsNullOrWhiteSpace(staffSearch) || m.Name.Contains(staffSearch, StringComparison.OrdinalIgnoreCase))
+        .ToList();
+
+    private void OpenAddTeamModal()
+    {
+        teamDraftId = 0;
+        teamDraftName = "";
+        teamDraftDepartmentId = null;
+        teamModalError = null;
+        showTeamModal = true;
+    }
+
+    private void OpenEditTeamModal()
+    {
+        if (ActiveTeam is null) return;
+        teamDraftId = ActiveTeam.Id;
+        teamDraftName = ActiveTeam.Name;
+        teamDraftDepartmentId = ActiveTeam.OrganisationStructureId;
+        teamModalError = null;
+        showTeamModal = true;
+    }
+
+    private void CloseTeamModal()
+    {
+        showTeamModal = false;
+        teamModalError = null;
+    }
+
+    private async Task SaveTeamModalAsync()
+    {
+        if (savingTeam) return;
+        teamModalError = null;
+        if (string.IsNullOrWhiteSpace(teamDraftName))
+        {
+            teamModalError = "Enter a team name.";
+            return;
+        }
+        savingTeam = true;
+        try
+        {
+            var result = await Settings.SaveTeamSummaryAsync(OrganisationId, teamDraftId, teamDraftName.Trim(), teamDraftDepartmentId);
+            if (!result.Success)
+            {
+                teamModalError = result.Message;
+                Toast.Error(result.Message);
+                return;
+            }
+            Toast.Success(result.Message);
+            showTeamModal = false;
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            teamModalError = ex is UnauthorizedAccessException ? ex.Message : "Could not save team. Please try again.";
+            Toast.Error(teamModalError);
+        }
+        finally
+        {
+            savingTeam = false;
+        }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (OrganisationId > 0 && loadedOrgId != OrganisationId)
+        {
+            loadedOrgId = OrganisationId;
+            await LoadAsync();
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        if (OrganisationId <= 0) return;
+        loading = true;
+        error = null;
+        try
+        {
+            var unitsTask = Directory.GetTeamsAsync(OrganisationId);
+
+            OrganisationTeamSettingsData? settingsData = null;
+            List<OrganisationWorkspaceResource>? fallbackResources = null;
+            try
+            {
+                settingsData = await Settings.GetTeamSettingsAsync(OrganisationId);
+            }
+            catch
+            {
+                fallbackResources = await WorkspaceService.ResourcesAsync(OrganisationId, WorkspaceTab.Teams);
+            }
+
+            var teamUnits = (await unitsTask).Where(u => u.IsActive).OrderBy(t => t.Name).ToList();
+            var structureNames = (settingsData?.Rows ?? [])
+                .Where(r => string.Equals(r.Kind, "Department", StringComparison.OrdinalIgnoreCase))
+                .GroupBy(r => r.Id)
+                .ToDictionary(g => g.Key, g => g.First().Name);
+            departments = structureNames
+                .OrderBy(kv => kv.Value, StringComparer.OrdinalIgnoreCase)
+                .Select(kv => new OrganisationSettingsOption(kv.Key, kv.Value))
+                .ToList();
+
+            var settingsByTeamId = (settingsData?.Rows ?? [])
+                .Where(r => string.Equals(r.Kind, "Team", StringComparison.OrdinalIgnoreCase))
+                .ToDictionary(r => r.Id);
+            var fallbackByTeamId = (fallbackResources ?? []).ToDictionary(r => r.Id);
+
+            var nodesById = new Dictionary<int, OrgTeamNode>();
+            foreach (var unit in teamUnits)
+            {
+                List<OrganisationSettingsOption> supervisors = [];
+                List<OrganisationSettingsOption> members = [];
+
+                if (settingsByTeamId.TryGetValue(unit.Id, out var sRow))
+                {
+                    supervisors = sRow.Supervisors;
+                    members = sRow.Members;
+                }
+                else if (fallbackByTeamId.TryGetValue(unit.Id, out var res))
+                {
+                    foreach (var d in res.Details)
+                    {
+                        var parts = d.Split('·', 2, StringSplitOptions.TrimEntries);
+                        var name = parts[0];
+                        var isSup = parts.Length > 1 && parts[1].Contains("Supervisor", StringComparison.OrdinalIgnoreCase);
+                        var opt = new OrganisationSettingsOption(0, name);
+                        members.Add(opt);
+                        if (isSup) supervisors.Add(opt);
+                    }
+                }
+
+                string? deptName = unit.OrganisationStructureId.HasValue && structureNames.TryGetValue(unit.OrganisationStructureId.Value, out var dn)
+                    ? dn
+                    : null;
+
+                nodesById[unit.Id] = new OrgTeamNode
+                {
+                    Id = unit.Id,
+                    Name = unit.Name,
+                    NameDhivehi = unit.NameDhivehi,
+                    ParentTeamId = unit.ParentTeamId,
+                    OrganisationStructureId = unit.OrganisationStructureId,
+                    DepartmentName = deptName,
+                    Supervisors = supervisors,
+                    Members = members
+                };
+            }
+
+            var roots = new List<OrgTeamNode>();
+            var nestedCount = 0;
+            foreach (var node in nodesById.Values.OrderBy(n => n.Name))
+            {
+                if (node.ParentTeamId.HasValue && nodesById.TryGetValue(node.ParentTeamId.Value, out var parent))
+                {
+                    parent.SubTeams.Add(node);
+                    nestedCount++;
+                }
+                else
+                {
+                    roots.Add(node);
+                }
+            }
+
+            parentTeams = roots;
+            subTeamCount = nestedCount;
+
+            if (!selectedTeamId.HasValue || !parentTeams.Any(t => t.Id == selectedTeamId.Value))
+            {
+                selectedTeamId = parentTeams.FirstOrDefault()?.Id;
+                selectedSubTeamId = null;
+            }
+            else if (selectedSubTeamId.HasValue && !(SelectedParentTeam?.SubTeams.Any(st => st.Id == selectedSubTeamId.Value) ?? false))
+            {
+                selectedSubTeamId = null;
+            }
+        }
+        catch (Exception ex)
+        {
+            error = ex is UnauthorizedAccessException or InvalidOperationException
+                ? ex.Message
+                : "Organisation teams could not be loaded. Please try again.";
+            parentTeams = [];
+            subTeamCount = 0;
+            selectedTeamId = null;
+            selectedSubTeamId = null;
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private void SelectTeam(int teamId)
+    {
+        selectedTeamId = teamId;
+        selectedSubTeamId = null;
+        staffSearch = "";
+        centerTab = "members";
+    }
+
+    private void SelectSubTeam(int subTeamId)
+    {
+        selectedSubTeamId = subTeamId;
+        staffSearch = "";
+    }
+
+    private void SelectSubTeamAndShowMembers(int subTeamId)
+    {
+        SelectSubTeam(subTeamId);
+        centerTab = "members";
+    }
+
+    private void ClearSubTeamSelection()
+    {
+        selectedSubTeamId = null;
+        staffSearch = "";
+    }
+
+    private void SetScopeFilter(string filter)
+    {
+        scopeFilter = filter;
+        var visible = FilteredParentTeams;
+        if (!visible.Any(t => t.Id == selectedTeamId))
+        {
+            selectedTeamId = visible.FirstOrDefault()?.Id;
+            selectedSubTeamId = null;
+            centerTab = "members";
+        }
+    }
+
+    private Task OpenStaffAsync(OrganisationSettingsOption member) => OnStaffSelected.InvokeAsync(new WorkspaceSearchResult
+    {
+        Id = member.Id,
+        IndividualId = member.Id,
+        BusinessEntityId = member.Id,
+        Name = member.Name,
+        Description = ActiveTeam?.Name ?? "",
+        EntityType = WorkspaceEntityType.Staff
+    });
+}

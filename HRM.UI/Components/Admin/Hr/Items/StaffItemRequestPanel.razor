@@ -2,13 +2,15 @@
 @inject HRM.Services.Contracts.ItemCatalogueServiceContracts.IOperations Items
 @inject HRM.Services.ToastService Toasts
 @inject IJSRuntime JS
+@inject NavigationManager Navigation
 
-<section class="staff-items-page w-full min-w-0 p-2 flex flex-col gap-2">
+<section class="staff-items-page w-full min-w-0 flex flex-col gap-3 text-slate-900 dark:text-slate-100">
 
-    <header class="staff-items-header sticky top-0 z-30 m-0 flex w-full min-w-0 flex-wrap items-center justify-between gap-3 border-b border-slate-200  px-3 py-3 shadow-sm">
-        <div>
-            <div class="flex items-center gap-2">
-                <h2 class="text-lg font-bold text-slate-900">
+    <!-- Compact Header (no background/border) -->
+    <header class="staff-items-header flex w-full min-w-0 flex-wrap items-center justify-between gap-2 px-1 py-0.5">
+        <div class="min-w-0">
+            <div class="flex items-center gap-2 flex-wrap">
+                <h2 class="text-base font-bold text-slate-900 dark:text-slate-100 truncate">
                     @(InitialItemsMode ? "Initial Staff Equipment & Items" :
                         PersonalItemsOnly ? "Personal Items & Consumables" :
                         JobRelatedOnly ? "Job-Related Equipment & Assets" :
@@ -17,14 +19,20 @@
                 </h2>
                 @if (PersonalItemsOnly)
                 {
-                    <span class="rounded-full bg-purple-100 px-2.5 py-0.5 text-xs font-semibold text-purple-800">Personal Items</span>
+                    <span class="inline-flex items-center gap-1 rounded-full bg-teal-50 dark:bg-teal-950/60 border border-teal-200/80 dark:border-teal-800 px-2 py-0.5 text-[10px] font-semibold text-teal-700 dark:text-teal-300">
+                        <span class="h-1.5 w-1.5 rounded-full bg-teal-500"></span>
+                        Personal Items
+                    </span>
                 }
                 else if (JobRelatedOnly)
                 {
-                    <span class="rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-semibold text-blue-800">Job Related</span>
+                    <span class="inline-flex items-center gap-1 rounded-full bg-blue-50 dark:bg-blue-950/60 border border-blue-200/80 dark:border-blue-800 px-2 py-0.5 text-[10px] font-semibold text-blue-700 dark:text-blue-300">
+                        <span class="h-1.5 w-1.5 rounded-full bg-blue-500"></span>
+                        Job Related
+                    </span>
                 }
             </div>
-            <p class="text-xs text-slate-500 mt-0.5">
+            <p class="text-xs text-slate-500 dark:text-slate-400">
                 @(PersonalItemsOnly
                     ? "Manage office supplies, consumables, and personal items requested or issued to staff."
                     : JobRelatedOnly
@@ -34,53 +42,40 @@
                     : "Submit item requisitions, track issued inventory assets, and review approval workflows.")
             </p>
         </div>
-        <div class="flex flex-wrap items-center gap-2">
+        <div class="flex flex-wrap items-center gap-1.5">
             <!-- Full Page Width Toggle Button -->
             <button type="button"
-                    class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50 transition-colors"
+                    class="app-button app-button-neutral app-button-sm"
                     title="@(isFullWidth ? "Shrink to standard layout" : "Expand to full page width")"
                     @onclick="ToggleFullWidth">
-                @if (isFullWidth)
-                {
-                    <svg class="h-4 w-4 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 9L4 4m0 0l5 0m-5 0l0 5m11 11l5 5m0 0l-5 0m5 0l0-5M9 15l-5 5m0 0l5 0m-5 0l0-5m11-11l5-5m0 0l-5 0m5 0l0 5" />
-                    </svg>
-                    <span>Shrink View</span>
-                }
-                else
-                {
-                    <svg class="h-4 w-4 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
-                    </svg>
-                    <span>Full Width</span>
-                }
+                <AppIcon Name="@(isFullWidth ? "fullscreen_exit" : "fullscreen")" Class="text-xs" />
+                <span>@(isFullWidth ? "Shrink View" : "Full Width")</span>
             </button>
 
             <!-- Complete History & Clearance Report Note Button -->
             @if (EffectiveIndividualId > 0 && !PersonalItemsOnly)
             {
                 <button type="button"
-                        class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 shadow-sm hover:bg-indigo-100 transition-colors"
+                        class="app-button app-button-secondary app-button-sm"
                         disabled="@busy"
                         @onclick="OpenClearanceReport">
-                    <svg class="h-4 w-4 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
+                    <AppIcon Name="description" Class="text-xs" />
                     <span>Release Note / History</span>
                 </button>
             }
 
-            <button class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-50 transition-colors"
+            <button type="button"
+                    class="app-button app-button-secondary app-button-sm"
                     disabled="@busy"
                     @onclick="Load">
-                <span>↻</span>
+                <AppIcon Name="refresh" Class="@(busy ? "animate-spin text-xs" : "text-xs")" />
                 <span>Refresh</span>
             </button>
             <button type="button"
-                    class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-2xs hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+                    class="app-button app-button-primary app-button-sm"
                     disabled="@busy"
                     @onclick="AddNew">
-                <span>+</span>
+                <AppIcon Name="add" Class="text-xs" />
                 <span>@(IsHrAssign ? "Assign New Items" : "New Request")</span>
             </button>
         </div>
@@ -825,8 +820,8 @@
     [Parameter] public bool PersonalItemsOnly { get; set; }
 
     [Parameter]
-    [SupplyParameterFromQuery(Name = "requestId")]
     public int? RequestId { get; set; }
+    private int? EffectiveRequestId => RequestId ?? HRM.Helpers.QueryStringReader.GetInt(Navigation.Uri, "requestId");
 
     private List<string> previousNames = [];
     private List<ItemStaffRequestDto> rows = [];
@@ -954,9 +949,9 @@
 
     protected override async Task OnParametersSetAsync()
     {
-        if (RequestId.HasValue && RequestId.Value > 0)
+        if (EffectiveRequestId.HasValue && EffectiveRequestId.Value > 0)
         {
-            selectedRequestId = RequestId.Value;
+            selectedRequestId = EffectiveRequestId.Value;
         }
 
         if (loadedIndividualId == IndividualId && loadedJobRelatedOnly == JobRelatedOnly && loadedPersonalItemsOnly == PersonalItemsOnly)

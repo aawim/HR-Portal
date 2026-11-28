@@ -1,0 +1,100 @@
+@using HRM.Application.Contracts.Pages
+
+<section class="w-full min-w-0 rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-3 dark:border-slate-700 dark:bg-slate-900">
+    <header class="flex flex-wrap items-center justify-between gap-2">
+        <div>
+            <h3 class="font-semibold text-sm">Employee tax declarations</h3>
+            <p class="text-xs text-slate-500">MVR values after employee pension. Save payroll configurations to persist these declarations.</p>
+        </div>
+        <button type="button" class="app-button app-button-secondary app-button-sm" @onclick="New">Add declaration</button>
+    </header>
+    <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
+        <table class="w-full text-left text-xs">
+            <thead class="bg-slate-100 dark:bg-slate-800"><tr><th class="p-2.5">Employee ID</th><th class="p-2.5">Effective</th><th class="p-2.5">Treatment</th><th class="p-2.5">Evidence</th><th class="p-2.5">Actions</th></tr></thead>
+            <tbody>
+                @foreach (var profile in Profiles)
+                {
+                    <tr class="border-t border-slate-200 dark:border-slate-700">
+                        <td class="p-2.5">@profile.IndividualId</td><td class="p-2.5">@profile.EffectiveFrom.ToString("yyyy-MM-dd") – @(profile.EffectiveTo?.ToString("yyyy-MM-dd") ?? "ongoing")</td>
+                        <td class="p-2.5">@profile.TaxTreatment</td><td class="p-2.5">@profile.AuthorityReference</td>
+                        <td class="p-2.5"><button type="button" class="app-button app-button-ghost app-button-sm" @onclick="() => Edit(profile)">Edit</button><button type="button" class="app-button app-button-danger app-button-sm" @onclick="() => Profiles.Remove(profile)">Remove</button></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+    @if (editing)
+    {
+        <div class="grid grid-cols-1 gap-3 md:grid-cols-3 text-xs">
+            <label class="p-1">Employee individual ID<input type="number" min="1" class="@InputClass" @bind="individualId" /></label>
+            <label class="p-1">Effective from<input type="date" class="@InputClass" @bind="effectiveFrom" /></label>
+            <label class="p-1">Effective to (optional)<input type="date" class="@InputClass" @bind="effectiveTo" /></label>
+            <label class="p-1">EWT treatment<select class="@InputClass" @bind="treatment"><option value="Primary">Primary / sole employer</option><option value="Secondary">Other employer (MIRA 916)</option><option value="MiraDirection">MIRA-directed brackets</option></select></label>
+            <label class="p-1 md:col-span-2">Declaration / MIRA reference<input class="@InputClass" @bind="reference" /></label>
+            <label class="p-1">Regular monthly taxable remuneration<input type="number" min="0" step="0.01" class="@InputClass" @bind="regular" /></label>
+            <label class="p-1">Estimated annual taxable remuneration<input type="number" min="0" step="0.01" class="@InputClass" @bind="annual" /></label>
+            <label class="p-1">Tax accounting period days (365 for full year)<input type="number" min="1" max="365" class="@InputClass" @bind="days" /></label>
+            <label class="p-1">Opening taxable remuneration<input type="number" min="0" step="0.01" class="@InputClass" @bind="openingIncome" /></label>
+            <label class="p-1">Opening EWT already withheld<input type="number" min="0" step="0.01" class="@InputClass" @bind="openingTax" /></label>
+            <label class="p-1">Opening balances through (month end)<input type="date" class="@InputClass" @bind="openingThrough" /></label>
+            <label class="p-1">Monthly taxable non-cash benefits<input type="number" min="0" step="0.01" class="@InputClass" @bind="benefits" /></label>
+            <label class="flex items-center gap-2 p-1"><input type="checkbox" @bind="ceased" />Section 42 exemption already ceased</label>
+            <label class="flex items-center gap-2 p-1"><input type="checkbox" @bind="voluntary" />Expatriate voluntarily enrolled in MRPS</label>
+        </div>
+        <p class="text-xs text-slate-500">Opening balances replace system history up to the selected month end. Include all earlier taxable remuneration and EWT, with supporting records. Non-cash benefits increase tax only; they are not paid as cash.</p>
+        @if (treatment == "MiraDirection")
+        {
+            <div class="space-y-2 text-xs">
+                <p>Enter the exact MIRA-approved brackets. Use a blank upper limit for the final bracket.</p>
+                @foreach (var b in directed)
+                {
+                    <div class="grid grid-cols-4 gap-2">
+                        <label>From<input type="number" class="@InputClass" @bind="b.From" /></label>
+                        <label>Up to<input type="number" class="@InputClass" @bind="b.To" /></label>
+                        <label>Rate %<input type="number" step="0.01" class="@InputClass" @bind="b.Rate" /></label>
+                        <button type="button" class="app-button app-button-ghost app-button-sm" @onclick="() => directed.Remove(b)">Remove</button>
+                    </div>
+                }
+                <button type="button" class="app-button app-button-secondary app-button-sm" @onclick="() => directed.Add(new())">Add bracket</button>
+            </div>
+        }
+        @if (error != null) { <p role="alert" class="text-xs text-rose-700">@error</p> }
+        <div class="flex gap-2"><button type="button" class="app-button app-button-primary app-button-sm" @onclick="Apply">Apply declaration</button><button type="button" class="app-button app-button-neutral app-button-sm" @onclick="() => editing = false">Cancel</button></div>
+    }
+</section>
+
+@code {
+    [Parameter] public List<PayrollEmployeeTaxProfile> Profiles { get; set; } = [];
+    private const string InputClass = "mt-1 w-full rounded-lg border border-slate-300 bg-white p-1 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100";
+    private PayrollEmployeeTaxProfile? original;
+    private bool editing, ceased, voluntary;
+    private int individualId, days = 365;
+    private DateOnly effectiveFrom;
+    private DateOnly? effectiveTo, openingThrough;
+    private string treatment = "Primary", reference = "";
+    private string? error;
+    private decimal? regular, annual;
+    private decimal openingIncome, openingTax, benefits;
+    private List<Bracket> directed = [];
+    private sealed class Bracket { public decimal From { get; set; } public decimal? To { get; set; } public decimal Rate { get; set; } }
+    private void New() { Edit(new(0, DateOnly.FromDateTime(DateTime.UtcNow.AddHours(5)))); original = null; }
+    private void Edit(PayrollEmployeeTaxProfile p)
+    {
+        original = p; individualId = p.IndividualId; effectiveFrom = p.EffectiveFrom; effectiveTo = p.EffectiveTo;
+        treatment = p.TaxTreatment; reference = p.AuthorityReference; regular = p.RegularMonthlyTaxableRemuneration;
+        annual = p.EstimatedAnnualTaxableRemuneration; days = p.AccountingPeriodDays; openingIncome = p.OpeningTaxableRemuneration;
+        openingTax = p.OpeningTaxWithheld; openingThrough = p.OpeningBalanceThrough; ceased = p.ExemptionCeased;
+        voluntary = p.VoluntaryExpatriatePension; benefits = p.MonthlyTaxableNonCashBenefits;
+        directed = p.DirectedTaxBrackets?.Select(b => new Bracket { From = b.MinAmount, To = b.MaxAmount, Rate = b.RatePercentage }).ToList() ?? [];
+        error = null; editing = true;
+    }
+    private void Apply()
+    {
+        if (individualId <= 0 || string.IsNullOrWhiteSpace(reference)) { error = "Enter the employee ID and supporting reference."; return; }
+        var p = new PayrollEmployeeTaxProfile(individualId, effectiveFrom, effectiveTo, treatment, reference, regular, annual, days,
+            openingIncome, openingTax, openingThrough, ceased, voluntary, benefits,
+            directed.Select(b => new PayrollTaxBracketDto(b.From, b.To, b.Rate)).ToList());
+        if (original != null) Profiles.Remove(original);
+        Profiles.Add(p); editing = false;
+    }
+}

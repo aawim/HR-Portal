@@ -1,0 +1,333 @@
+@using HRM.Application.Contracts.Recruitment
+@inject HRM.UI.Services.Recruitment.IRecruitmentApiClient Api
+@inject HRM.Services.ToastService Toasts
+
+<section class="w-full min-w-0 flex flex-col gap-3 text-slate-900 dark:text-slate-100" aria-label="Recruitment policies">
+    <!-- Compact Header (no background/border) -->
+    <header class="flex flex-wrap items-center justify-between gap-2 px-1 py-0.5">
+        <div class="min-w-0">
+            <div class="flex items-center gap-2 flex-wrap">
+                <h2 class="text-base font-bold text-slate-900 dark:text-slate-100">Recruitment Policy &amp; Compliance Governance</h2>
+                <span class="inline-flex items-center gap-1 rounded-full bg-teal-50 dark:bg-teal-950/60 border border-teal-200/80 dark:border-teal-800 px-2 py-0.5 text-[10px] font-semibold text-teal-700 dark:text-teal-300">
+                    <span class="h-1.5 w-1.5 rounded-full bg-teal-500"></span>
+                    @workspace.Assignments.Count(a => a.IsActive) active assignment(s)
+                </span>
+            </div>
+            <p class="text-xs text-slate-500 dark:text-slate-400">
+                Create, verify, and assign effective-dated recruitment policy versions for this organisation.
+            </p>
+        </div>
+
+        <button type="button" class="app-button app-button-secondary app-button-sm" disabled="@busy" @onclick="LoadAsync">
+            <AppIcon Name="refresh" Class="@(busy ? "animate-spin text-xs" : "text-xs")" />
+            <span>Refresh</span>
+        </button>
+    </header>
+
+    @if (!string.IsNullOrWhiteSpace(message))
+    {
+        <div role="status" class="rounded-xl border border-teal-200 dark:border-teal-800 bg-teal-50/80 dark:bg-teal-950/40 px-3.5 py-2.5 text-xs text-teal-900 dark:text-teal-200 flex items-center justify-between gap-2">
+            <span>@message</span>
+            <button type="button" class="font-bold hover:opacity-80" @onclick="() => message = null">✕</button>
+        </div>
+    }
+
+    <div class="rp-grid">
+        <!-- Left Column: Organisation Policy Assignments + Assign Form -->
+        <div class="min-w-0 flex flex-col gap-3">
+            <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden">
+                <div class="bg-slate-50/80 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 px-3.5 py-2.5 flex items-center justify-between">
+                    <h3 class="text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-200">Organisation Policy Assignments</h3>
+                    <span class="rounded-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-2 py-0.5 text-[10px] font-semibold text-slate-600 dark:text-slate-300">@workspace.Assignments.Count</span>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-xs">
+                        <thead>
+                            <tr class="bg-slate-50/60 dark:bg-slate-800/40 border-b border-slate-200 dark:border-slate-800 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                                <th class="px-3 py-2">Policy Version</th>
+                                <th class="px-3 py-2">Type / Category</th>
+                                <th class="px-3 py-2">Effective</th>
+                                <th class="px-3 py-2">Status</th>
+                                <th class="px-3 py-2 text-right">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100 dark:divide-slate-800/70">
+                            @foreach (var a in workspace.Assignments)
+                            {
+                                <tr class="even:bg-slate-50/40 dark:even:bg-slate-800/20">
+                                    <td class="px-3 py-2">
+                                        <div class="font-semibold text-slate-900 dark:text-slate-100">@a.VersionCode</div>
+                                        <div class="text-[11px] text-slate-500">@a.ProfileName</div>
+                                    </td>
+                                    <td class="px-3 py-2">
+                                        <span class="font-medium text-slate-800 dark:text-slate-200">@a.RecruitmentType</span>
+                                        <div class="text-[11px] text-slate-500">@a.PositionCategory</div>
+                                    </td>
+                                    <td class="px-3 py-2 font-mono text-[11px] whitespace-nowrap">
+                                        @a.EffectiveFrom.ToString("dd MMM yyyy") – @(a.EffectiveTo?.ToString("dd MMM yyyy") ?? "Ongoing")
+                                    </td>
+                                    <td class="px-3 py-2">
+                                        <span class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold @(a.IsActive ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-slate-100 text-slate-600 border border-slate-200")">
+                                            @(a.IsActive ? "Active" : "Inactive")
+                                        </span>
+                                    </td>
+                                    <td class="px-3 py-2 text-right">
+                                        <button type="button" class="app-button app-button-secondary app-button-sm" disabled="@busy" @onclick="() => ToggleAssignmentAsync(a.Id)">
+                                            @(a.IsActive ? "Disable" : "Enable")
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                            @if (workspace.Assignments.Count == 0)
+                            {
+                                <tr><td colspan="5" class="p-6 text-center text-xs text-slate-500">No policy assignments configured for this organisation.</td></tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Assign Policy Form -->
+            <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden">
+                <div class="bg-slate-50/80 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 px-3.5 py-2.5">
+                    <h3 class="text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-200">Assign Verified Policy to Organisation</h3>
+                </div>
+                <fieldset disabled="@busy" class="p-3.5 space-y-3 text-xs">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                            Verified Policy Version
+                            <select @bind="assignVersionId" class="mt-1 w-full h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 text-xs">
+                                <option value="0">Select policy version</option>
+                                @foreach (var v in workspace.Versions.Where(x => x.IsApprovedForUse && x.VerificationStatus == "Verified"))
+                                {
+                                    <option value="@v.Id">@v.VersionCode · @v.ProfileName</option>
+                                }
+                            </select>
+                        </label>
+                        <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                            Recruitment Type
+                            <select @bind="assignRecruitmentType" class="mt-1 w-full h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 text-xs">
+                                <option value="CivilService">CivilService</option>
+                                <option value="Contract">Contract</option>
+                                <option value="Political">Political</option>
+                                <option value="All">All</option>
+                            </select>
+                        </label>
+                        <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                            Position Category
+                            <input @bind="assignCategory" maxlength="100" class="mt-1 w-full h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 text-xs" />
+                        </label>
+                        <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                            Effective From
+                            <InputDate @bind-Value="assignFrom" class="mt-1 w-full h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 text-xs" />
+                        </label>
+                    </div>
+                    <div class="pt-2 border-t border-slate-200 dark:border-slate-800">
+                        <button type="button" class="app-button app-button-primary app-button-sm" disabled="@(busy || assignVersionId <= 0)" @onclick="AssignAsync">
+                            Assign Policy
+                        </button>
+                    </div>
+                </fieldset>
+            </div>
+        </div>
+
+        <!-- Right Column: Policy Versions Registry + Create Policy Form -->
+        <div class="min-w-0 flex flex-col gap-3">
+            <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden">
+                <div class="bg-slate-50/80 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 px-3.5 py-2.5 flex items-center justify-between">
+                    <h3 class="text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-200">Policy Versions Registry</h3>
+                    <span class="rounded-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-2 py-0.5 text-[10px] font-semibold text-slate-600 dark:text-slate-300">@workspace.Versions.Count</span>
+                </div>
+                <div class="divide-y divide-slate-100 dark:divide-slate-800/70 max-h-72 overflow-y-auto">
+                    @foreach (var v in workspace.Versions)
+                    {
+                        var verified = v.IsApprovedForUse && v.VerificationStatus == "Verified";
+                        <div class="p-3 flex flex-wrap items-center justify-between gap-2 text-xs">
+                            <div class="min-w-0">
+                                <div class="flex items-center gap-1.5 flex-wrap">
+                                    <span class="font-mono font-bold text-slate-900 dark:text-slate-100">@v.VersionCode</span>
+                                    <span class="rounded-full px-2 py-0.5 text-[10px] font-semibold @(verified ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-amber-50 text-amber-700 border border-amber-200")">
+                                        @(verified ? "Verified & Approved" : v.VerificationStatus)
+                                    </span>
+                                </div>
+                                <div class="text-[11px] text-slate-600 dark:text-slate-300 mt-0.5">@v.ProfileName (@v.ProfileCode)</div>
+                                <div class="text-[11px] text-slate-400">@v.OfficialSourceReference · Effective @v.EffectiveFrom.ToString("dd MMM yyyy")</div>
+                            </div>
+                            @if (!verified)
+                            {
+                                <button type="button" class="inline-flex items-center rounded-lg bg-emerald-600 hover:bg-emerald-700 px-2.5 py-1 text-xs font-semibold text-white transition-colors" disabled="@busy" @onclick="() => VerifyAsync(v.Id)">
+                                    Verify &amp; Approve
+                                </button>
+                            }
+                        </div>
+                    }
+                    @if (workspace.Versions.Count == 0)
+                    {
+                        <p class="p-6 text-center text-xs text-slate-500">No policy versions registered yet.</p>
+                    }
+                </div>
+            </div>
+
+            <!-- Create New Policy Version Form -->
+            <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden">
+                <div class="bg-slate-50/80 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 px-3.5 py-2.5">
+                    <h3 class="text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-200">Create Policy Version</h3>
+                </div>
+                <fieldset disabled="@busy" class="p-3.5 space-y-3 text-xs">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                            Profile Code
+                            <input @bind="profileCode" maxlength="64" placeholder="e.g. CSC-2026" class="mt-1 w-full h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 text-xs" />
+                        </label>
+                        <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                            Version Code
+                            <input @bind="versionCode" maxlength="80" placeholder="e.g. CSC-2026-V1" class="mt-1 w-full h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 text-xs" />
+                        </label>
+                        <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 sm:col-span-2">
+                            Profile Name
+                            <input @bind="profileName" maxlength="200" placeholder="Maldives Civil Service Recruitment Regulation" class="mt-1 w-full h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 text-xs" />
+                        </label>
+                        <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 sm:col-span-2">
+                            Official Source Reference
+                            <input @bind="sourceRef" maxlength="500" placeholder="CSC Circular / Regulation Reference" class="mt-1 w-full h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 text-xs" />
+                        </label>
+                        <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                            Official Source URL
+                            <input @bind="sourceUrl" maxlength="2048" placeholder="https://www.csc.gov.mv/" class="mt-1 w-full h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 text-xs" />
+                        </label>
+                        <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                            Effective From
+                            <InputDate @bind-Value="policyFrom" class="mt-1 w-full h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 text-xs" />
+                        </label>
+                    </div>
+                    <label class="inline-flex items-center gap-2 text-xs text-slate-700 dark:text-slate-300">
+                        <input type="checkbox" @bind="verifyNow" />
+                        <span>Verify and approve immediately for recruitment use</span>
+                    </label>
+                    <div class="pt-2 border-t border-slate-200 dark:border-slate-800">
+                        <button type="button" class="app-button app-button-primary app-button-sm" disabled="@busy" @onclick="CreatePolicyAsync">
+                            Create Policy Version
+                        </button>
+                    </div>
+                </fieldset>
+            </div>
+        </div>
+    </div>
+</section>
+
+<style>
+    .rp-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 0.75rem;
+        align-items: start;
+    }
+
+    @@media (min-width: 1024px) {
+        .rp-grid {
+            grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+        }
+    }
+</style>
+
+@code {
+    private RecruitmentPolicyWorkspaceDto workspace = new([], []);
+    private bool busy;
+    private string? message;
+
+    private int assignVersionId;
+    private string assignRecruitmentType = "CivilService";
+    private string assignCategory = "All";
+    private DateTime assignFrom = DateTime.UtcNow.AddHours(5).Date;
+
+    private string profileCode = "CSC-DEFAULT";
+    private string profileName = "Maldives Civil Service Recruitment Regulation";
+    private string versionCode = "";
+    private string sourceUrl = "https://www.csc.gov.mv/";
+    private string sourceRef = "";
+    private DateTime policyFrom = DateTime.UtcNow.AddHours(5).Date;
+    private bool verifyNow = true;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        busy = true;
+        try
+        {
+            workspace = await Api.GetPoliciesAsync();
+            if (assignVersionId == 0)
+                assignVersionId = workspace.Versions.FirstOrDefault(v => v.IsApprovedForUse && v.VerificationStatus == "Verified")?.Id ?? 0;
+        }
+        catch (Exception ex)
+        {
+            message = ex.Message;
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task CreatePolicyAsync()
+    {
+        if (busy) return;
+        busy = true;
+        try
+        {
+            var result = await Api.CreatePolicyAsync(new(profileCode, profileName, versionCode, sourceUrl, sourceRef, policyFrom, null, true, verifyNow));
+            message = result.Message;
+            if (result.Success)
+            {
+                Toasts.Success(result.Message);
+                versionCode = "";
+                sourceRef = "";
+                await LoadAsync();
+            }
+        }
+        catch (Exception ex) { message = ex.Message; }
+        finally { busy = false; }
+    }
+
+    private async Task VerifyAsync(int id)
+    {
+        if (busy) return;
+        busy = true;
+        try
+        {
+            var result = await Api.VerifyApprovePolicyAsync(id);
+            message = result.Message;
+            if (result.Success) { Toasts.Success(result.Message); await LoadAsync(); }
+        }
+        catch (Exception ex) { message = ex.Message; }
+        finally { busy = false; }
+    }
+
+    private async Task AssignAsync()
+    {
+        if (busy || assignVersionId <= 0) return;
+        busy = true;
+        try
+        {
+            var result = await Api.AssignPolicyAsync(new(assignVersionId, assignRecruitmentType, assignCategory, assignFrom, null));
+            message = result.Message;
+            if (result.Success) { Toasts.Success(result.Message); await LoadAsync(); }
+        }
+        catch (Exception ex) { message = ex.Message; }
+        finally { busy = false; }
+    }
+
+    private async Task ToggleAssignmentAsync(int id)
+    {
+        if (busy) return;
+        busy = true;
+        try
+        {
+            var result = await Api.TogglePolicyAssignmentAsync(id);
+            message = result.Message;
+            if (result.Success) { Toasts.Success(result.Message); await LoadAsync(); }
+        }
+        catch (Exception ex) { message = ex.Message; }
+        finally { busy = false; }
+    }
+}

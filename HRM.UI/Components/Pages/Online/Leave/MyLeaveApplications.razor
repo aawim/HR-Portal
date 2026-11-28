@@ -5,6 +5,7 @@
 @using HRM.Services.Interfaces.Leave
 @using HRM.Services.State
 @inject ILeaveChangeService Applications
+@inject HRM.Application.Contracts.Pages.ILeaveApplications LeaveService
 @inject ILeaveReceiptService Receipts
 @inject IGeographyService Geography
 @inject HRM.Services.ToastService Toast
@@ -26,12 +27,19 @@
                     Approved: @items.Count(x => IsApproved(x.Status))
                 </span>
                 <span class="px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-800">
-                    Pending / Active: @items.Count(x => !IsApproved(x.Status) && !IsRejectedOrCancelled(x.Status))
+                    Pending / Active: @items.Count(x => !IsApproved(x.Status) && !IsRejectedOrCancelled(x.Status) && !IsDraft(x.Status))
                 </span>
+                @if (DraftCount > 0)
+                {
+                    <button type="button"
+                            class="px-2.5 py-1 rounded-full text-xs font-semibold border transition cursor-pointer @(statusFilter.Equals("Incomplete", StringComparison.OrdinalIgnoreCase) ? "bg-orange-600 text-white border-orange-600" : "bg-orange-50 text-orange-800 border-orange-200 hover:bg-orange-100")"
+                            title="Filter to Draft / Incomplete applications"
+                            @onclick="ToggleDraftsFilter">
+                        Drafts: @DraftCount
+                    </button>
+                }
                 <button type="button" class="portal-action-btn" disabled="@busy" @onclick="RefreshAsync">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
-                    </svg>
+                    <AppIcon Name="refresh" Class="w-4 h-4 text-base" />
                     <span>Refresh</span>
                 </button>
             </div>
@@ -198,11 +206,21 @@
                                     <span>Printable Receipt</span>
                                 </a>
                             }
+                            @if (CanCancelApplication(selectedItem.Status))
+                            {
+                                <button type="button"
+                                        class="px-2.5 py-1 rounded-md text-xs font-semibold border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 disabled:opacity-50 cursor-pointer transition"
+                                        disabled="@busy"
+                                        @onclick="() => RequestCancel(selectedItem)">
+                                    <span>Cancel Request</span>
+                                </button>
+                            }
                         </div>
                     </section>
 
                     <!-- 2. Official Leave Chit Card (Displayed with Detail on Left) -->
                     <article class="leave-chit-card" aria-label="Leave chit">
+                        <HRM.Components.Shared.DocumentSloganBanner DocumentType="@HRM.Services.Contracts.SloganServiceContracts.DocumentTypes.LeaveChit" Position="Header" />
                         <div class="leave-chit-header">
                             <div>
                                 @if (!string.IsNullOrWhiteSpace(selectedReceipt?.OrganisationDhivehi))
@@ -289,6 +307,7 @@
                                     <span>Application Chit Summary · Final balance and reporting date are issued once approved.</span>
                                 }
                             </footer>
+                            <HRM.Components.Shared.DocumentSloganBanner DocumentType="@HRM.Services.Contracts.SloganServiceContracts.DocumentTypes.LeaveChit" Position="Footer" />
                         }
                     </article>
                 }
@@ -397,6 +416,15 @@
                                                             Edit & resubmit
                                                         </button>
                                                     }
+                                                    @if (CanCancelApplication(item.Status))
+                                                    {
+                                                        <button type="button"
+                                                                class="px-2.5 py-1 rounded-md text-xs font-semibold border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 disabled:opacity-50 cursor-pointer transition"
+                                                                disabled="@busy"
+                                                                @onclick="() => RequestCancel(item)">
+                                                            Cancel
+                                                        </button>
+                                                    }
                                                 </div>
                                             </td>
                                         </tr>
@@ -430,6 +458,31 @@
             </div>
         </div>
     }
+    @if (pendingCancelItem != null)
+    {
+        <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
+            <section role="dialog" aria-modal="true" class="w-full max-w-md rounded-xl border border-slate-200 bg-white p-4 shadow-xl space-y-3">
+                <h3 class="text-sm font-bold text-slate-900">Cancel Leave Request</h3>
+                <p class="text-xs text-slate-600">
+                    Are you sure you want to cancel <strong>@pendingCancelItem.Reference</strong> (@pendingCancelItem.LeaveType, @pendingCancelItem.FromDate.ToString("dd MMM yyyy") – @pendingCancelItem.ToDate.ToString("dd MMM yyyy"))?
+                </p>
+                <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                    <button type="button"
+                            class="portal-action-btn portal-action-btn--compact"
+                            disabled="@busy"
+                            @onclick="() => pendingCancelItem = null">
+                        Keep Request
+                    </button>
+                    <button type="button"
+                            class="px-3 py-1.5 rounded-md text-xs font-semibold bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-50 cursor-pointer transition"
+                            disabled="@busy"
+                            @onclick="ConfirmCancelAsync">
+                        @(busy ? "Cancelling…" : "Confirm Cancel")
+                    </button>
+                </div>
+            </section>
+        </div>
+    }
 </div>
 
 @code {
@@ -444,6 +497,7 @@
     private List<Country> countries = [];
     private ReturnedLeaveApplicationDto? editor;
     private MyLeaveApplicationDto? selectedItem;
+    private MyLeaveApplicationDto? pendingCancelItem;
     private LeaveReceiptDto? selectedReceipt;
     private bool loadingReceipt;
     private bool busy;
@@ -582,8 +636,63 @@
     private static string DisplayValue(string? value) =>
         string.IsNullOrWhiteSpace(value) ? "Not provided" : value;
 
+    private int DraftCount => items.Count(x => IsDraft(x.Status));
+
+    private void ToggleDraftsFilter()
+    {
+        statusFilter = statusFilter.Equals("Incomplete", StringComparison.OrdinalIgnoreCase) ? "" : "Incomplete";
+        currentPage = 1;
+    }
+
+    private void RequestCancel(MyLeaveApplicationDto item) => pendingCancelItem = item;
+
+    private async Task ConfirmCancelAsync()
+    {
+        if (pendingCancelItem == null || busy) return;
+        var target = pendingCancelItem;
+        busy = true;
+        message = null;
+        try
+        {
+            var result = await LeaveService.CancelLeaveAsync(target.LeaveId);
+            if (result.Success)
+            {
+                Toast.Success(result.Message ?? "Leave request cancelled.");
+                pendingCancelItem = null;
+                busy = false;
+                await RefreshAsync();
+                if (OnSaved.HasDelegate) await OnSaved.InvokeAsync();
+            }
+            else
+            {
+                message = result.Message ?? "Leave request could not be cancelled.";
+                Toast.Error(message);
+                pendingCancelItem = null;
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Could not cancel leave request {LeaveId}.", target.LeaveId);
+            message = "This leave request could not be cancelled right now.";
+            Toast.Error(message);
+            pendingCancelItem = null;
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private static bool IsDraft(string? status) =>
+        status != null && status.Contains("Incomplete", StringComparison.OrdinalIgnoreCase);
+
+    private static bool CanCancelApplication(string? status) =>
+        !IsApproved(status) && !IsRejectedOrCancelled(status);
+
     private static bool IsApproved(string? status) =>
-        status != null && status.Contains("Approv", StringComparison.OrdinalIgnoreCase);
+        status != null &&
+        status.Contains("Approved", StringComparison.OrdinalIgnoreCase) &&
+        !status.Contains("Pending", StringComparison.OrdinalIgnoreCase);
 
     private static bool IsRejectedOrCancelled(string? status) =>
         status != null && (status.Contains("Reject", StringComparison.OrdinalIgnoreCase) || status.Contains("Cancel", StringComparison.OrdinalIgnoreCase));

@@ -13,6 +13,8 @@ public interface IOperations
 {
 Task<UserSettingsData> LoadAsync(UserSettingsTab tab)
 ;
+Task<UserSettingsData> LoadForOrganisationAsync(UserSettingsTab tab, int? organisationId)
+;
 Task<ServiceResult> SaveAccountAsync(ManagedUserDto model)
 ;
 

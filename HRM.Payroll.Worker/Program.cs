@@ -1,4 +1,5 @@
 using HRM.Application.Features.Payroll;
+using HRM.Hosting;
 using HRM.Models;
 using HRM.Payroll.Worker;
 using HRM.Services.Payroll;
@@ -6,12 +7,17 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using HRM.ErrorLogs.Extensions;
+using HRM.ErrorLogs.Services;
+using HRM.Services.Diagnostics;
 
 var builder = Host.CreateApplicationBuilder(args);
+builder.Configuration.AddSecureExternalConnectionStrings();
 
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") ??
-                       builder.Configuration.GetConnectionString("HrmTeContext") ??
-                       "Server=DESKTOP-IGBGLUQ\\SQLEXPRESS;Database=NewHRM_DB;Trusted_Connection=True;TrustServerCertificate=True;";
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
+                       ?? builder.Configuration.GetConnectionString("HrmTeContext");
+if (string.IsNullOrWhiteSpace(connectionString))
+    throw new InvalidOperationException("ConnectionStrings:DefaultConnection is required for HRM.Payroll.Worker. Configure it in the external secure connectionstrings.json file, user secrets, or environment variables.");
 
 builder.Services.AddDbContextFactory<HrmTeContext>(options =>
 {
@@ -19,6 +25,8 @@ builder.Services.AddDbContextFactory<HrmTeContext>(options =>
 });
 
 // Register Payroll services
+builder.Services.AddSingleton<IErrorLogStore, SqlErrorLogStore>();
+builder.Services.AddHrmErrorLogging("HRM.Payroll.Worker");
 builder.Services.AddSingleton<IPayrollCalculationEngine, PayrollCalculationEngine>();
 builder.Services.AddScoped<IPayrollQueueService, PayrollQueueService>();
 builder.Services.AddScoped<IPayrollSnapshotService, PayrollSnapshotService>();

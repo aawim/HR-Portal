@@ -9,30 +9,32 @@
 
 <PageTitle>My Payslips</PageTitle>
 
-<section class="mypayslips-page w-full min-w-0 p-2 flex flex-col gap-3">
+<section class="mypayslips-page w-full min-w-0 p-2 space-y-4">
 
-    <!-- Header complying with HRM.UI Design Standard -->
-    <header class="sticky top-0 z-30 m-0 flex w-full min-w-0 flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-white/95 backdrop-blur-xs px-4 py-3.5 shadow-sm rounded-xl">
-        <div>
-            <div class="flex items-center gap-2">
-                <h1 class="text-lg font-bold text-slate-900">My Payslips</h1>
-                <span class="rounded-full bg-blue-50 border border-blue-200 px-2.5 py-0.5 text-xs font-semibold text-blue-800">
+    <!-- Compact, Transparent, Borderless Header (UI_DESIGN_STANDARD §3) -->
+    <header class="flex flex-wrap items-center justify-between gap-2 px-1 py-0.5">
+        <div class="min-w-0">
+            <div class="flex items-center gap-2 flex-wrap">
+                <h1 class="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 truncate">My Payslips</h1>
+                <span class="inline-flex items-center gap-1 rounded-full bg-teal-50 border border-teal-200/80 px-2 py-0.5 text-[10px] font-semibold text-teal-700">
+                    <span class="h-1.5 w-1.5 rounded-full bg-teal-500"></span>
                     Self Service
                 </span>
             </div>
-            <p class="text-xs text-slate-500 mt-0.5">
+            <p class="text-xs text-slate-500">
                 View and download itemized monthly salary breakdowns, pension statements, and payment details.
             </p>
         </div>
 
-        <button type="button"
-                class="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition-colors"
-                @onclick="LoadPayslipsAsync">
-            <svg class="h-3.5 w-3.5 text-slate-600 @(isLoading ? "animate-spin" : "")" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-            <span>Refresh</span>
-        </button>
+        <div class="flex flex-wrap items-center gap-1.5">
+            <button type="button"
+                    class="app-button app-button-secondary app-button-sm"
+                    disabled="@isLoading"
+                    @onclick="LoadPayslipsAsync">
+                <AppIcon Name="arrow-clockwise" Class="@(isLoading ? "animate-spin" : "")" />
+                <span>Refresh</span>
+            </button>
+        </div>
     </header>
 
     @if (isLoading)
@@ -99,6 +101,7 @@
     <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4">
         <div class="w-full max-w-2xl rounded-2xl bg-white p-6 shadow-2xl border border-slate-200 flex flex-col gap-4 max-h-[90vh] overflow-y-auto">
             <!-- Payslip Top Header -->
+            <HRM.Components.Shared.DocumentSloganBanner DocumentType="@HRM.Services.Contracts.SloganServiceContracts.DocumentTypes.SalarySlip" Position="Header" />
             <div class="flex items-start justify-between border-b border-slate-200 pb-4">
                 <div>
                     <h2 class="text-base font-black text-slate-900 uppercase tracking-wide">@selectedPayslip.OrganisationName</h2>
@@ -177,7 +180,12 @@
                             @foreach (var d in selectedPayslip.Deductions)
                             {
                                 <tr>
-                                    <td class="p-2 text-slate-800">@d.ComponentName</td>
+                                    <td class="p-2 text-slate-800">@d.ComponentName
+                                        @if (d.ComponentCode is "TAX_WHT" or "PEN_EMP")
+                                        {
+                                            <div class="text-[11px] text-slate-500">@d.SourceReference</div>
+                                        }
+                                    </td>
                                     <td class="p-2 text-right font-semibold text-amber-700">@d.CalculatedAmount.ToString("N2")</td>
                                 </tr>
                             }
@@ -186,11 +194,19 @@
                 </div>
             </div>
 
+            <div class="rounded-xl border border-slate-200 p-3 text-xs dark:border-slate-700">
+                <h3 class="font-semibold">Employer contributions</h3>
+                @foreach (var item in selectedPayslip.EmployerItems)
+                {
+                    <div class="flex justify-between gap-3 py-1"><span>@item.ComponentName</span><span>@item.CalculatedAmount.ToString("N2") MVR</span></div>
+                }
+                <p class="text-slate-500">Employer contributions are additional to your net salary.</p>
+            </div>
             <!-- Net Salary Summary Box -->
             <div class="rounded-xl bg-blue-50 border border-blue-200 p-4 flex items-center justify-between">
                 <div>
                     <div class="text-xs font-bold text-blue-900 uppercase tracking-wide">Net Salary Payable</div>
-                    <div class="text-[11px] text-blue-700">Transferred via bank instruction · Ref: @selectedPayslip.PaymentReference</div>
+                    <div class="text-[11px] text-blue-700">Payment reference: @selectedPayslip.PaymentReference. This payslip does not confirm bank settlement.</div>
                 </div>
                 <div class="text-xl font-black text-blue-800">
                     @selectedPayslip.NetSalary.ToString("N2") <span class="text-xs font-semibold">MVR</span>
@@ -198,6 +214,7 @@
             </div>
 
             <!-- Footer Action -->
+            <HRM.Components.Shared.DocumentSloganBanner DocumentType="@HRM.Services.Contracts.SloganServiceContracts.DocumentTypes.SalarySlip" Position="Footer" />
             <div class="flex justify-end gap-2 border-t border-slate-100 pt-3">
                 <button type="button" class="rounded-lg border border-slate-300 px-4 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50" @onclick="() => selectedPayslip = null">
                     Close

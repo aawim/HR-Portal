@@ -42,7 +42,7 @@ public sealed class AttendanceRequestReviewService(IDbContextFactory<HrmTeContex
     {
         var(actor,org)=await ScopeAsync();await using var db=await factory.CreateDbContextAsync();var row=await LoadAsync(db,requestId,org);
         var assigned=await db.WfRequestApprovals.AnyAsync(a=>a.ApproverUserId==actor.UserId&&a.RequestStageInstance.WorkflowRequestInstance.RequestId==requestId);
-        if(actor.IndividualId!=row.Log.IndividualId&&!assigned&&!actor.IsSuperAdministrator&&!await access.HasPermissionAsync("Attendance.View")&&!await access.HasPermissionAsync("Admin"))throw new UnauthorizedAccessException();
+        if(actor.IndividualId!=row.Log.IndividualId&&!assigned&&!actor.IsSuperAdministrator&&!actor.IsHRStaff&&!actor.IsHRHead&&!actor.IsHRManager&&!actor.IsOrganisationAdmin&&!await access.HasPermissionAsync("Attendance.View")&&!await access.HasPermissionAsync("Admin"))throw new UnauthorizedAccessException();
         var instance=await WorkflowRequestProcessing.Instance(db,requestId);var stage=instance?.CurrentStage?.WorkflowStage.StageName??"";
         var canApprove=await Processing.CanApprove(db,row.Workflow,instance,actor.UserId,actor.IndividualId);
         var canCancel=row.Log.IndividualId==actor.IndividualId&&!row.Request.RequestState.IsFinalState&&instance?.WorkflowStatus=="InProgress";

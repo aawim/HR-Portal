@@ -124,6 +124,107 @@ public sealed class OrganisationSettingsController(global::HRM.Services.Contract
         return Ok(await service.SetTeamSupervisorAsync(request.organisationId, request.kind, request.teamId, request.staffId, request.assign));
     }
 
+    [HttpPost("save-department")]
+    public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> SaveDepartment([FromBody] OrganisationSettingsSaveDepartmentRequest request)
+    {
+        return Ok(await service.SaveDepartmentAsync(request.organisationId, request.departmentId, request.name, request.typeId));
+    }
+
+    public sealed class OrganisationSettingsSaveDepartmentRequest
+    {
+        public global::System.Int32 organisationId { get; set; }
+        public global::System.Int32 departmentId { get; set; }
+        public global::System.String name { get; set; } = default!;
+        public global::System.Int32 typeId { get; set; }
+    }
+
+    [HttpPost("soft-delete-department")]
+    public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> SoftDeleteDepartment([FromBody] OrganisationSettingsSoftDeleteDepartmentRequest request)
+    {
+        return Ok(await service.SoftDeleteDepartmentAsync(request.organisationId, request.departmentId));
+    }
+
+    public sealed class OrganisationSettingsSoftDeleteDepartmentRequest
+    {
+        public global::System.Int32 organisationId { get; set; }
+        public global::System.Int32 departmentId { get; set; }
+    }
+
+    [HttpPost("save-group-summary")]
+    public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> SaveGroupSummary([FromBody] OrganisationSettingsSaveGroupSummaryRequest request)
+    {
+        return Ok(await service.SaveGroupSummaryAsync(request.organisationId, request.groupId, request.name, request.code, request.description));
+    }
+
+    public sealed class OrganisationSettingsSaveGroupSummaryRequest
+    {
+        public global::System.Int32 organisationId { get; set; }
+        public global::System.Int32 groupId { get; set; }
+        public global::System.String name { get; set; } = default!;
+        public global::System.String? code { get; set; }
+        public global::System.String? description { get; set; }
+    }
+
+    [HttpPost("soft-delete-group")]
+    public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> SoftDeleteGroup([FromBody] OrganisationSettingsSoftDeleteGroupRequest request)
+    {
+        return Ok(await service.SoftDeleteGroupAsync(request.organisationId, request.groupId));
+    }
+
+    [HttpPost("save-team-summary")]
+    public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> SaveTeamSummary([FromBody] OrganisationSettingsSaveTeamSummaryRequest request)
+    {
+        return Ok(await service.SaveTeamSummaryAsync(request.organisationId, request.teamId, request.name, request.departmentId));
+    }
+
+    public sealed class OrganisationSettingsSaveTeamSummaryRequest
+    {
+        public global::System.Int32 organisationId { get; set; }
+        public global::System.Int32 teamId { get; set; }
+        public global::System.String name { get; set; } = default!;
+        public global::System.Int32? departmentId { get; set; }
+    }
+
+    [HttpPost("soft-delete-team")]
+    public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> SoftDeleteTeam([FromBody] OrganisationSettingsSoftDeleteTeamRequest request)
+    {
+        return Ok(await service.SoftDeleteTeamAsync(request.organisationId, request.teamId));
+    }
+
+    public sealed class OrganisationSettingsSoftDeleteTeamRequest
+    {
+        public global::System.Int32 organisationId { get; set; }
+        public global::System.Int32 teamId { get; set; }
+    }
+
+    [HttpGet("get-unassigned-individuals")]
+    public async Task<ActionResult<global::System.Collections.Generic.List<global::HRM.DTOs.Organisation.UnassignedIndividualOption>>> GetUnassignedIndividuals([FromQuery] global::System.Int32 organisationId, [FromQuery] global::System.String? query)
+    {
+        return Ok(await service.GetUnassignedIndividualsAsync(organisationId, query));
+    }
+
+    [HttpPost("add-staff-to-department")]
+    public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> AddStaffToDepartment([FromBody] OrganisationSettingsAddStaffToDepartmentRequest request)
+    {
+        return Ok(await service.AddStaffToDepartmentAsync(request.organisationId, request.departmentId, request.individualId, request.jobTypeId, request.joinedDate, request.employeeNumber));
+    }
+
+    public sealed class OrganisationSettingsAddStaffToDepartmentRequest
+    {
+        public global::System.Int32 organisationId { get; set; }
+        public global::System.Int32 departmentId { get; set; }
+        public global::System.Int32 individualId { get; set; }
+        public global::System.Int32 jobTypeId { get; set; }
+        public global::System.DateTime joinedDate { get; set; }
+        public global::System.String? employeeNumber { get; set; }
+    }
+
+    public sealed class OrganisationSettingsSoftDeleteGroupRequest
+    {
+        public global::System.Int32 organisationId { get; set; }
+        public global::System.Int32 groupId { get; set; }
+    }
+
     public sealed class OrganisationSettingsSetTeamSupervisorRequest
     {
         public global::System.Int32 organisationId { get; set; }

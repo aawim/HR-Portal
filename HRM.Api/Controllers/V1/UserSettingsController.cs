@@ -12,6 +12,12 @@ public sealed class UserSettingsController(global::HRM.Services.Contracts.UserSe
         return Ok(await service.LoadAsync(tab));
     }
 
+    [HttpGet("load-for-organisation")]
+    public async Task<ActionResult<global::HRM.DTOs.UserSettingsData>> LoadForOrganisation([FromQuery] global::HRM.DTOs.UserSettingsTab tab, [FromQuery] global::System.Int32? organisationId = null)
+    {
+        return Ok(await service.LoadForOrganisationAsync(tab, organisationId));
+    }
+
     [HttpPost("save-account")]
     public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> SaveAccount([FromBody] UserSettingsSaveAccountRequest request)
     {

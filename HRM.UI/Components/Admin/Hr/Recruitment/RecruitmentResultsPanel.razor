@@ -1,0 +1,300 @@
+@using HRM.Application.Contracts.Recruitment
+@inject HRM.UI.Services.Recruitment.IRecruitmentApiClient Api
+
+<style>
+    .rrp-grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 1rem;
+        align-items: start;
+    }
+
+    @@media (min-width: 1024px) {
+        .rrp-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+</style>
+
+<section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs space-y-4">
+    <div>
+        <h2 class="text-sm font-bold text-slate-900">Merit Results &amp; Objections</h2>
+        <p class="mt-0.5 text-xs text-slate-500">Inspect published rankings, resolve submitted objections, and finalise vacancy results.</p>
+    </div>
+
+    <label class="block text-xs font-medium text-slate-700 max-w-lg">
+        Vacancy
+        <select class="@InputClass" @bind="vacancy" @bind:after="Load">
+            <option value="0">-- Select vacancy --</option>
+            @foreach (var v in vacancies)
+            {
+                <option value="@v.Id">@(string.IsNullOrWhiteSpace(v.PositionName) ? v.Reference : $"{v.PositionName} — {v.Reference}") · @v.Status</option>
+            }
+        </select>
+    </label>
+
+    @if (SelectedVacancy is not null)
+    {
+        <div class="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-blue-100 bg-blue-50/50 px-3 py-2 text-xs">
+            <div class="flex flex-wrap items-center gap-2">
+                <i class="bi bi-briefcase text-blue-600" aria-hidden="true"></i>
+                <span class="font-bold text-slate-900">@(string.IsNullOrWhiteSpace(SelectedVacancy.PositionName) ? SelectedVacancy.Reference : SelectedVacancy.PositionName)</span>
+                <span class="font-mono text-[11px] text-blue-700">@SelectedVacancy.Reference</span>
+            </div>
+            <div class="flex flex-wrap items-center gap-1.5">
+                <span class="rounded-full bg-white border border-slate-200 px-2 py-0.5 text-[10px] font-semibold text-slate-700">@SelectedVacancy.Slots slot(s) · @SelectedVacancy.Status</span>
+                <a href="@($"/admin/hr/recruitment/a2-sheet/{SelectedVacancy.Id}?lang=en")"
+                   target="_blank"
+                   rel="noopener"
+                   class="inline-flex items-center gap-1 rounded-lg border border-blue-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-blue-700 hover:bg-blue-50">
+                    <i class="bi bi-printer" aria-hidden="true"></i>
+                    <span>A2 Sheet (EN)</span>
+                </a>
+                <a href="@($"/admin/hr/recruitment/a2-sheet/{SelectedVacancy.Id}?lang=dv")"
+                   target="_blank"
+                   rel="noopener"
+                   class="inline-flex items-center gap-1 rounded-lg border border-teal-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-teal-700 hover:bg-teal-50">
+                    <i class="bi bi-printer" aria-hidden="true"></i>
+                    <span>A2 ޝީޓު (DV)</span>
+                </a>
+            </div>
+        </div>
+    }
+
+    @if (workspace is not null)
+    {
+        @if (workspace.PublicationId is null)
+        {
+            <div class="rounded-xl border border-blue-200 bg-blue-50/40 p-4 space-y-3 max-w-lg">
+                <div>
+                    <h3 class="text-xs font-bold uppercase tracking-wide text-slate-800">Publish Merit Results</h3>
+                    <p class="mt-0.5 text-xs text-slate-600">
+                        Calculate merit rankings from all locked panel scorecards and open the objection review window.
+                    </p>
+                </div>
+                <label class="block text-xs font-medium text-slate-700">
+                    Objection Period Closes (Maldives)
+                    <input type="datetime-local" class="@InputClass" @bind="objectionCloses" />
+                </label>
+                <div class="flex justify-end">
+                    <button type="button"
+                            class="inline-flex items-center justify-center rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                            disabled="@(busy || vacancy <= 0)"
+                            @onclick="PublishResults">
+                        Publish Merit Results
+                    </button>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-xs">
+                <div class="flex flex-wrap items-center gap-2">
+                    <span class="rounded-full px-2.5 py-0.5 text-[11px] font-semibold @(workspace.IsFinal ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800")">
+                        @(workspace.IsFinal ? "Finalised" : "Objection Review")
+                    </span>
+                    <span class="inline-flex items-center gap-1 rounded-full bg-slate-200/80 px-2.5 py-0.5 text-[11px] font-semibold text-slate-700">
+                        <i class="bi bi-lock-fill text-[10px]" aria-hidden="true"></i>
+                        Frozen · Read-Only
+                    </span>
+                    <span class="text-slate-600">Objections close: <strong>@(workspace.ObjectionClosesAtUtc?.AddHours(5).ToString("dd MMM yyyy HH:mm") ?? "—") MVT</strong></span>
+                </div>
+                <div class="flex flex-wrap items-center gap-2">
+                    @if (!workspace.IsFinal)
+                    {
+                        <div class="flex flex-wrap items-center gap-1.5">
+                            <input type="datetime-local"
+                                   class="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs text-slate-800 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                   disabled="@busy"
+                                   @bind="editObjectionCloses" />
+                            <button type="button"
+                                    class="inline-flex items-center justify-center rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-50 transition-colors"
+                                    disabled="@busy"
+                                    @onclick="UpdateObjectionClosingDate">
+                                Update Date
+                            </button>
+                        </div>
+                    }
+                    <button type="button"
+                            class="inline-flex items-center justify-center rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                            disabled="@(busy || workspace.IsFinal || workspace.Objections.Any(x => x.Status is "Submitted" or "Upheld"))"
+                            @onclick="FinalizeResults">
+                        @(workspace.ObjectionClosesAtUtc > DateTime.UtcNow && !workspace.IsFinal ? "Finalise Results Now (Testing)" : "Finalise Results")
+                    </button>
+                </div>
+            </div>
+
+            @if (workspace.IsFinal)
+            {
+                <div class="rounded-xl border border-emerald-200 bg-emerald-50/70 px-4 py-3 text-xs text-emerald-950 flex flex-wrap items-center justify-between gap-2">
+                    <div class="flex items-start gap-2">
+                        <i class="bi bi-arrow-right-circle-fill text-emerald-600 mt-0.5" aria-hidden="true"></i>
+                        <div>
+                            <div class="font-bold">Next Step: Issue, Sign &amp; Publish Job Offer</div>
+                            <p class="mt-0.5 text-[11px] text-emerald-900">
+                                Go to the <strong>Offers &amp; Onboarding</strong> tab → <strong>1. Create Offer Draft</strong> → <strong>2. Sign Offer Letter</strong> (Agency Issuer PIN) → <strong>3. Publish Offer</strong> so the applicant receives the Job Offer Letter &amp; Agreement form to fill, sign, and submit back to HR before Onboarding starts.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            <div class="rrp-grid">
+                <div class="overflow-x-auto rounded-xl border border-slate-200">
+                    <table class="w-full text-left text-xs">
+                        <thead class="border-b border-slate-200 bg-slate-50 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+                            <tr>
+                                <th class="p-2.5">Rank</th>
+                                <th class="p-2.5">Application</th>
+                                <th class="p-2.5">Applicant</th>
+                                <th class="p-2.5 text-right">Score</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            @foreach (var r in workspace.Results)
+                            {
+                                <tr class="hover:bg-slate-50/70">
+                                    <td class="p-2.5 font-bold text-slate-900">#@r.Rank</td>
+                                    <td class="p-2.5 font-mono text-[11px] text-blue-700">@(string.IsNullOrWhiteSpace(r.ApplicationReference) ? $"#{r.ApplicationId}" : r.ApplicationReference)</td>
+                                    <td class="p-2.5 text-slate-800 font-medium">@(string.IsNullOrWhiteSpace(r.ApplicantName) ? "—" : r.ApplicantName)</td>
+                                    <td class="p-2.5 text-right font-mono font-semibold text-slate-800 tabular-nums">@r.Score.ToString("0.##")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="space-y-3">
+                    <h3 class="text-xs font-bold uppercase tracking-wide text-slate-600">Objections (@workspace.Objections.Count)</h3>
+                    @if (workspace.Objections.Count == 0)
+                    {
+                        <div class="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4 text-center text-xs text-slate-500">
+                            No objections have been submitted.
+                        </div>
+                    }
+                    else
+                    {
+                        @foreach (var objection in workspace.Objections)
+                        {
+                            <div class="rounded-xl border border-slate-200 bg-slate-50/60 p-3 text-xs space-y-1.5">
+                                <div class="flex items-center justify-between">
+                                    <span class="font-semibold text-slate-900">Application #@objection.ApplicationId</span>
+                                    <span class="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">@objection.Status</span>
+                                </div>
+                                <p class="whitespace-pre-wrap text-slate-700">@objection.Grounds</p>
+                                @if (!string.IsNullOrWhiteSpace(objection.Resolution))
+                                {
+                                    <p class="whitespace-pre-wrap rounded-lg bg-white p-2 text-slate-600 border border-slate-200">@objection.Resolution</p>
+                                }
+                                @if (objection.Status == "Submitted")
+                                {
+                                    <button type="button"
+                                            class="inline-flex items-center justify-center rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                                            @onclick="() => selected = objection.Id">
+                                        Review Objection
+                                    </button>
+                                }
+                            </div>
+                        }
+                    }
+
+                    @if (selected > 0)
+                    {
+                        <div class="rounded-xl border border-blue-200 bg-blue-50/40 p-3 space-y-2.5">
+                            <label class="block text-xs font-medium text-slate-700">
+                                Written Resolution
+                                <textarea rows="3" class="@InputClass" maxlength="4000" @bind="resolution" @bind:event="oninput"></textarea>
+                            </label>
+                            <label class="inline-flex items-center gap-2 text-xs font-medium text-slate-700">
+                                <input type="checkbox" @bind="upheld" />
+                                Uphold objection (requires corrected publication)
+                            </label>
+                            <div class="flex justify-end gap-2">
+                                <button type="button" class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50" @onclick="() => selected = 0">Cancel</button>
+                                <button type="button"
+                                        class="rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+                                        disabled="@(busy || string.IsNullOrWhiteSpace(resolution))"
+                                        @onclick="Resolve">
+                                    Record Resolution
+                                </button>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+    }
+
+    @if (message is not null)
+    {
+        <div role="status" class="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-800">
+            <span>@message</span>
+            <button type="button" class="font-bold text-slate-500 hover:text-slate-800" @onclick="() => message = null">✕</button>
+        </div>
+    }
+</section>
+
+@code {
+    private IReadOnlyList<RecruitmentVacancyRow> vacancies = [];
+    private RecruitmentResultWorkspace? workspace;
+    private int vacancy, selected;
+    private RecruitmentVacancyRow? SelectedVacancy => vacancies.FirstOrDefault(x => x.Id == vacancy);
+    private string resolution = "";
+    private bool upheld, busy;
+    private string? message;
+    private DateTime objectionCloses = DateTime.UtcNow.AddHours(5).AddDays(3);
+    private DateTime editObjectionCloses = DateTime.UtcNow.AddHours(5).AddDays(3);
+    private const string InputClass = "mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try { vacancies = await Api.GetVacanciesAsync(); }
+        catch (HttpRequestException) { message = "Vacancies could not be loaded."; }
+    }
+
+    private async Task Load()
+    {
+        workspace = null;
+        selected = 0;
+        resolution = "";
+        upheld = false;
+        try
+        {
+            if (vacancy > 0)
+            {
+                workspace = await Api.GetResultWorkspaceAsync(vacancy);
+                if (workspace?.ObjectionClosesAtUtc.HasValue == true)
+                    editObjectionCloses = workspace.ObjectionClosesAtUtc.Value.AddHours(5);
+            }
+        }
+        catch (HttpRequestException)
+        {
+            message = "Results could not be loaded. Check your recruitment access.";
+        }
+    }
+
+    private Task PublishResults() => Run(() => Api.PublishResultsAsync(new(vacancy, DateTime.SpecifyKind(objectionCloses.AddHours(-5), DateTimeKind.Utc))));
+    private Task UpdateObjectionClosingDate() => Run(() => Api.UpdateObjectionClosingDateAsync(workspace!.PublicationId!.Value, DateTime.SpecifyKind(editObjectionCloses.AddHours(-5), DateTimeKind.Utc)));
+    private Task Resolve() => Run(() => Api.ResolveObjectionAsync(new(selected, resolution, upheld)));
+    private Task FinalizeResults() => Run(() => Api.FinalizeResultsAsync(workspace!.PublicationId!.Value));
+
+    private async Task Run(Func<Task<HRM.DTOs.ServiceResult>> action)
+    {
+        if (busy) return;
+        busy = true;
+        try
+        {
+            var result = await action();
+            message = result.Message;
+            if (result.Success) await Load();
+        }
+        catch (HttpRequestException)
+        {
+            message = "The action failed. Check the objection period and publication state.";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+}

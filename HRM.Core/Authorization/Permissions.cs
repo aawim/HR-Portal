@@ -80,13 +80,29 @@ namespace HRM.Authorization
         public const string OfficialScheduleAmend = "Attendance.Schedule.Amend";
 
         // =========================
-        // Administration
+        // Administration & Organisational Access Isolation
         // =========================
 
         public const string UserManage = "User.Manage";
 
 
         public const string RoleManage = "Role.Manage";
+
+        public const string AccessPolicyManage = "Staff.AccessPolicy.Manage";
+        public const string AccessScopeManage = "Staff.AccessScope.Manage";
+        public const string AccessScopeSimulate = "Staff.AccessScope.Simulate";
+
+        // =========================
+        // Data Classification & Field-Level Permissions
+        // =========================
+
+        public const string EmployeePrivateRecordView = "Employee.PrivateRecord.View";
+        public const string EmployeeSalaryView = "Employee.Salary.View";
+        public const string EmployeeIdentificationView = "Employee.Identification.View";
+        public const string EmployeeDisciplinaryView = "Employee.Disciplinary.View";
+        public const string EmployeeMedicalView = "Employee.Medical.View";
+        public const string DirectoryPublicProfileView = "Directory.PublicProfile.View";
+        public const string IntranetAnnouncementView = "Intranet.Announcement.View";
 
         // =========================
         // Staff Transfer

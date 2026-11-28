@@ -116,6 +116,10 @@ namespace HRM.Services.JobLeaveTypes
                     dto.EffectiveToDate;
 
 
+                jobLeaveType.RenewedDate =
+                    dto.RenewedDate;
+
+
                 jobLeaveType.IsValid =
                     dto.IsValid;
 

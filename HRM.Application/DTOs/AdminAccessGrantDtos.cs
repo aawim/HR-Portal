@@ -22,6 +22,8 @@ public sealed class AdminAccessAccount
     public int IndividualId { get; set; }
     public string Name { get; set; } = "";
     public bool Enabled { get; set; }
+    public bool HasDeveloperAccess { get; set; }
+    public bool HasSuperAdminAccess { get; set; }
     public List<int> GroupIds { get; set; } = [];
     public List<int> PermissionIds { get; set; } = [];
 }

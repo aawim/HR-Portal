@@ -57,6 +57,12 @@ public partial class AttendanceService
         var people = await jobs.Select(j => new { j.IndividualID, j.OrganisationStructureId,
             Name = (j.Individual.FirstNameEnglish + " " + (j.Individual.MiddleNameEnglish ?? "") + " " + (j.Individual.LastNameEnglish ?? "")).Trim() })
             .ToListAsync(cancellationToken);
+        if (!actor.IsSuperAdministrator)
+        {
+            var visible = await HRM.Helpers.StaffAttributeAccess.FilterViewableAsync(db, _userAccessService, org,
+                people.Select(x => x.IndividualID), cancellationToken);
+            people = people.Where(x => visible.Contains(x.IndividualID)).ToList();
+        }
         var ids = people.Select(p => p.IndividualID).Distinct().ToArray();
         var links = await memberships.Where(m => ids.Contains(m.StaffId)).Select(m => new { m.StaffId, m.TeamId }).ToListAsync(cancellationToken);
         var departmentIds = people.Select(p => p.OrganisationStructureId).Distinct().ToArray();

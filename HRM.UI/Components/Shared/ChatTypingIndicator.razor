@@ -1,0 +1,20 @@
+<div class="ct-row @(Compact ? "ct-row-compact" : null)" role="status" aria-live="polite">
+    <div class="ct-avatar @(IsBot ? "ct-avatar-bot" : IsOfficer ? "ct-avatar-officer" : "ct-avatar-staff") @(Compact ? "ct-avatar-compact" : null)">
+        <AppIcon Name="@(IsBot ? "bi-robot" : IsOfficer ? "bi-headset" : "bi-chat-dots")" Class="@(Compact ? "text-[10px]" : "text-xs")" />
+    </div>
+    <div class="ct-bubble @(IsBot ? "ct-bubble-bot" : null) @(Compact ? "ct-bubble-compact" : null)">
+        <span class="ct-label">@Label</span>
+        <span class="ct-dots" aria-hidden="true">
+            <span class="ct-dot"></span>
+            <span class="ct-dot"></span>
+            <span class="ct-dot"></span>
+        </span>
+    </div>
+</div>
+
+@code {
+    [Parameter] public string Label { get; set; } = "Typing";
+    [Parameter] public bool IsBot { get; set; }
+    [Parameter] public bool IsOfficer { get; set; }
+    [Parameter] public bool Compact { get; set; }
+}

@@ -119,11 +119,12 @@
     [Parameter] public EventCallback OnCreated { get; set; }
     [Parameter] public int FrameworkId { get; set; }
     [Parameter] public PayFrameworkData? Data { get; set; }
+    [Parameter] public int InitialJobMatrixId { get; set; }
 
     private PayFrameworkData? data;
     private bool busy;
     private string? error;
-    private int previousFramework = -1, matrixId, titleId, slots = 1;
+    private int previousFramework = -1, previousInitialMatrix, matrixId, titleId, slots = 1;
     private DateTime from = DateTime.UtcNow.AddHours(5).Date;
     private DateTime? to;
 
@@ -141,6 +142,12 @@
                 error = null;
                 previousFramework = FrameworkId;
             }
+            if (InitialJobMatrixId > 0 && InitialJobMatrixId != previousInitialMatrix)
+            {
+                previousInitialMatrix = InitialJobMatrixId;
+                matrixId = InitialJobMatrixId;
+                ChangeMatrix();
+            }
         }
         catch (Exception)
         {
@@ -150,7 +157,7 @@
 
     private void ChangeMatrix()
     {
-        titleId = 0;
+        titleId = Selected?.Titles.FirstOrDefault()?.Id ?? 0;
         if (Selected != null)
         {
             from = Selected.From > DateTime.UtcNow.AddHours(5).Date ? Selected.From : DateTime.UtcNow.AddHours(5).Date;
@@ -174,6 +181,10 @@
                 await OnCreated.InvokeAsync();
             }
             else error = result.Message;
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or InvalidOperationException)
+        {
+            error = ex.Message;
         }
         catch (Exception)
         {

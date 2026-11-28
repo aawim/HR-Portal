@@ -2,18 +2,81 @@
 
 @using HRM.Services
 @using HRM.Services.Interfaces
+@using HRM.Enum
 
 @inject IUserContext UserContext
 @inject PortalContext PortalContext
 @inject NavigationManager NavManager
 
-@if (CanAccessAdminPortal && PortalContext.CanAccessAdminPortal)
+@if (ShowSegmentedSwitcher)
+{
+    <div class="portal-switch-container">
+        <div class="portal-segmented-group" role="group" aria-label="Portal Selection">
+            <button type="button" class="portal-seg-btn @(IsSelfActive ? "active" : "")"
+                    title="Switch to Self (Employee) Portal"
+                    disabled="@switching" @onclick="SwitchToSelf">
+                Self
+            </button>
+            @if (HasAdminAccess)
+            {
+                <button type="button" class="portal-seg-btn @(PortalContext.IsAdminPortal ? "active admin" : "")"
+                        title="Switch to Admin Portal"
+                        disabled="@switching" @onclick="SwitchToOrganisation">
+                    Admin
+                </button>
+            }
+            @if (HasDeveloperAccess)
+            {
+                <button type="button" class="portal-seg-btn @(PortalContext.IsDeveloperPortal ? "active dev" : "")"
+                        title="Switch to Developer Portal"
+                        disabled="@switching" @onclick="SwitchToDeveloper">
+                    Dev
+                </button>
+            }
+            @if (HasSuperAdminAccess)
+            {
+                <button type="button" class="portal-seg-btn @(PortalContext.IsSuperAdminPortal ? "active superadmin" : "")"
+                        title="Switch to SuperAdmin Portal"
+                        disabled="@switching" @onclick="SwitchToSuperAdmin">
+                    Super
+                </button>
+            }
+        </div>
+    </div>
+}
+else if (HasSuperAdminAccess)
+{
+    <div class="portal-switch-container">
+        <button type="button" role="switch" class="portal-switch"
+                aria-label="SuperAdmin portal" aria-checked="@(PortalContext.IsSuperAdminPortal ? "true" : "false")"
+                title="@(PortalContext.IsSuperAdminPortal ? "Switch to Self" : "Switch to SuperAdmin")"
+                disabled="@switching" @onclick="ToggleSuperAdminAsync">
+            <span class="portal-label @(!PortalContext.IsSuperAdminPortal ? "selected" : "")">Self</span>
+            <span class="portal-track @(PortalContext.IsSuperAdminPortal ? "superadmin-active" : "")" aria-hidden="true"><span class="portal-thumb"></span></span>
+            <span class="portal-label @(PortalContext.IsSuperAdminPortal ? "selected" : "")">Super</span>
+        </button>
+    </div>
+}
+else if (HasDeveloperAccess)
+{
+    <div class="portal-switch-container">
+        <button type="button" role="switch" class="portal-switch"
+                aria-label="Developer portal" aria-checked="@(PortalContext.IsDeveloperPortal ? "true" : "false")"
+                title="@(PortalContext.IsDeveloperPortal ? "Switch to Self" : "Switch to Developer")"
+                disabled="@switching" @onclick="ToggleDeveloperAsync">
+            <span class="portal-label @(!PortalContext.IsDeveloperPortal ? "selected" : "")">Self</span>
+            <span class="portal-track @(PortalContext.IsDeveloperPortal ? "developer-active" : "")" aria-hidden="true"><span class="portal-thumb"></span></span>
+            <span class="portal-label @(PortalContext.IsDeveloperPortal ? "selected" : "")">Dev</span>
+        </button>
+    </div>
+}
+else if (HasAdminAccess)
 {
     <div class="portal-switch-container">
         <button type="button" role="switch" class="portal-switch"
                 aria-label="Admin portal" aria-checked="@(PortalContext.IsAdminPortal ? "true" : "false")"
                 title="@(PortalContext.IsAdminPortal ? "Switch to Self" : "Switch to Admin")"
-                disabled="@switching" @onclick="TogglePortalAsync">
+                disabled="@switching" @onclick="ToggleAdminAsync">
             <span class="portal-label @(!PortalContext.IsAdminPortal ? "selected" : "")">Self</span>
             <span class="portal-track @(PortalContext.IsAdminPortal ? "admin" : "")" aria-hidden="true"><span class="portal-thumb"></span></span>
             <span class="portal-label @(PortalContext.IsAdminPortal ? "selected" : "")">Admin</span>
@@ -24,10 +87,30 @@
 @code
 {
     [Parameter] public bool CanAccessAdminPortal { get; set; }
+    [Parameter] public bool CanAccessDeveloperPortal { get; set; }
+    [Parameter] public bool CanAccessSuperAdminPortal { get; set; }
+
     private bool switching;
-    private async Task TogglePortalAsync()
+
+    private bool HasAdminAccess => CanAccessAdminPortal && PortalContext.CanAccessAdminPortal;
+    private bool HasDeveloperAccess => CanAccessDeveloperPortal && PortalContext.CanAccessDeveloperPortal;
+    private bool HasSuperAdminAccess => CanAccessSuperAdminPortal && PortalContext.CanAccessSuperAdminPortal;
+
+    private int ExtraPortalCount =>
+        (HasAdminAccess ? 1 : 0) +
+        (HasDeveloperAccess ? 1 : 0) +
+        (HasSuperAdminAccess ? 1 : 0);
+
+    private bool ShowSegmentedSwitcher => ExtraPortalCount >= 2;
+
+    private bool IsSelfActive =>
+        !PortalContext.IsAdminPortal &&
+        !PortalContext.IsDeveloperPortal &&
+        !PortalContext.IsSuperAdminPortal;
+
+    private async Task ToggleAdminAsync()
     {
-        if (switching || !CanAccessAdminPortal || !PortalContext.CanAccessAdminPortal) return;
+        if (switching || !HasAdminAccess) return;
         switching = true;
         try
         {
@@ -36,18 +119,48 @@
         }
         finally { switching = false; }
     }
+
+    private async Task ToggleDeveloperAsync()
+    {
+        if (switching || !HasDeveloperAccess) return;
+        switching = true;
+        try
+        {
+            if (PortalContext.IsDeveloperPortal) SwitchToSelf();
+            else await SwitchToDeveloper();
+        }
+        finally { switching = false; }
+    }
+
+    private async Task ToggleSuperAdminAsync()
+    {
+        if (switching || !HasSuperAdminAccess) return;
+        switching = true;
+        try
+        {
+            if (PortalContext.IsSuperAdminPortal) SwitchToSelf();
+            else await SwitchToSuperAdmin();
+        }
+        finally { switching = false; }
+    }
+
     protected override void OnInitialized()
     {
         DetermineContextFromUrl();
-
         PortalContext.OnChange += Refresh;
     }
 
     private void DetermineContextFromUrl()
     {
-        var path = new Uri(NavManager.Uri).AbsolutePath.ToLower();
+        var first = new Uri(NavManager.Uri).AbsolutePath
+            .Split('/', StringSplitOptions.RemoveEmptyEntries)
+            .FirstOrDefault()?.ToLowerInvariant();
 
-        if (path == "/admin" || path.StartsWith("/admin/"))
+        if (first == "superadmin")
+            PortalContext.SwitchToSuperAdmin();
+        else if (first == "developer")
+            PortalContext.SwitchToDeveloper();
+        else if (first == "admin")
             PortalContext.SwitchToAdmin();
         else
             PortalContext.SwitchToEmployee();
@@ -56,19 +169,40 @@
     private void SwitchToSelf()
     {
         PortalContext.SwitchToEmployee();
-
-        NavManager.NavigateTo("/", forceLoad: true);
+        NavManager.NavigateTo("/online", forceLoad: true);
     }
 
     private async Task SwitchToOrganisation()
     {
         if (!CanAccessAdminPortal) return;
         var session = await UserContext.GetSessionAsync();
-        PortalContext.Initialize(session?.OrganisationId, session?.OrganisationName ?? "", session?.CanAccessAdminPortal == true, session?.CanAccessDeveloperPortal == true, session?.CanAccessAuditPortal == true);
+        PortalContext.Initialize(session?.OrganisationId, session?.OrganisationName ?? "", session?.CanAccessAdminPortal == true, session?.CanAccessDeveloperPortal == true, session?.CanAccessAuditPortal == true, session?.CanAccessSuperAdminPortal == true);
         if (!PortalContext.CanAccessAdminPortal) return;
         PortalContext.SwitchToAdmin();
 
         NavManager.NavigateTo("/admin", forceLoad: true);
+    }
+
+    private async Task SwitchToDeveloper()
+    {
+        if (!CanAccessDeveloperPortal) return;
+        var session = await UserContext.GetSessionAsync();
+        PortalContext.Initialize(session?.OrganisationId, session?.OrganisationName ?? "", session?.CanAccessAdminPortal == true, session?.CanAccessDeveloperPortal == true, session?.CanAccessAuditPortal == true, session?.CanAccessSuperAdminPortal == true);
+        if (!PortalContext.CanAccessDeveloperPortal) return;
+        PortalContext.SwitchToDeveloper();
+
+        NavManager.NavigateTo("/developer", forceLoad: true);
+    }
+
+    private async Task SwitchToSuperAdmin()
+    {
+        if (!CanAccessSuperAdminPortal) return;
+        var session = await UserContext.GetSessionAsync();
+        PortalContext.Initialize(session?.OrganisationId, session?.OrganisationName ?? "", session?.CanAccessAdminPortal == true, session?.CanAccessDeveloperPortal == true, session?.CanAccessAuditPortal == true, session?.CanAccessSuperAdminPortal == true);
+        if (!PortalContext.CanAccessSuperAdminPortal) return;
+        PortalContext.SwitchToSuperAdmin();
+
+        NavManager.NavigateTo("/superadmin", forceLoad: true);
     }
 
     private void Refresh()

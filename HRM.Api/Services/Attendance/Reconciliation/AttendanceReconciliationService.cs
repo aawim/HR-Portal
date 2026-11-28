@@ -18,17 +18,23 @@ public sealed class AttendanceReconciliationService : IAttendanceReconciliationS
     private readonly IWorkPlanGenerator? _workPlanGenerator;
     private readonly IUserAccessService? _access;
     private readonly IOperationLogService? _operationLogs;
+    private readonly HRM.AuditLogs.Abstractions.IAuditLogService? _auditLogs;
+    private readonly HRM.ActivityLogs.Abstractions.IActivityLogService? _activityLogs;
 
     public AttendanceReconciliationService(
         IDbContextFactory<HrmTeContext> dbFactory,
         IWorkPlanGenerator? workPlanGenerator = null,
         IUserAccessService? access = null,
-        IOperationLogService? operationLogs = null)
+        IOperationLogService? operationLogs = null,
+        HRM.AuditLogs.Abstractions.IAuditLogService? auditLogs = null,
+        HRM.ActivityLogs.Abstractions.IActivityLogService? activityLogs = null)
     {
         _dbFactory = dbFactory ?? throw new ArgumentNullException(nameof(dbFactory));
         _workPlanGenerator = workPlanGenerator;
         _access = access;
         _operationLogs = operationLogs;
+        _auditLogs = auditLogs;
+        _activityLogs = activityLogs;
     }
 
     public async Task<AttendanceReconciliationResult> ReconcileAsync(
@@ -39,6 +45,19 @@ public sealed class AttendanceReconciliationService : IAttendanceReconciliationS
         CancellationToken cancellationToken = default)
     {
         await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
+        int? actorUserId = null;
+        if (_access is not null)
+        {
+            var actor = await _access.RequireContextAsync();
+            actorUserId = actor.UserId;
+            var scopedOrg = await StaffDataAccess.RequireIndividualAsync(db, _access, individualId);
+            if (scopedOrg.HasValue && scopedOrg.Value != organisationId)
+                throw new UnauthorizedAccessException("Attendance reconciliation is outside the current organisation.");
+            if (!await db.Jobs.AsNoTracking().AnyAsync(
+                j => j.JobId == jobId && j.IndividualID == individualId && j.OrganisationID == organisationId,
+                cancellationToken))
+                throw new UnauthorizedAccessException("Employment record is unavailable.");
+        }
         return await ReconcileInternalAsync(
             db,
             individualId,
@@ -46,9 +65,9 @@ public sealed class AttendanceReconciliationService : IAttendanceReconciliationS
             organisationId,
             workDate,
             persistChanges: true,
-            allowFinalizedOverride: true,
+            allowFinalizedOverride: false,
             triggerSource: "DailyReconciliation",
-            initiatedByUserId: null,
+            initiatedByUserId: actorUserId,
             operationLogId: null,
             cancellationToken: cancellationToken);
     }
@@ -61,17 +80,25 @@ public sealed class AttendanceReconciliationService : IAttendanceReconciliationS
         if (request.ToDate < request.FromDate)
             throw new ArgumentException("ToDate must be greater than or equal to FromDate.", nameof(request));
 
+        var daySpan = request.ToDate.DayNumber - request.FromDate.DayNumber + 1;
+        var maxSpan = request.IndividualId.HasValue && request.IndividualId.Value > 0 ? 366 : 93;
+        if (daySpan > maxSpan)
+            throw new ArgumentOutOfRangeException(nameof(request), $"Reconciliation date range cannot exceed {maxSpan} days.");
+
         int? actorUserId = null;
         int organisationId = request.OrganisationId;
         if (_access is not null)
         {
-            var actor = await _access.GetContextAsync();
-            if (actor is not null)
-            {
-                actorUserId = actor.UserId;
-                if (organisationId <= 0)
-                    organisationId = await _access.GetCurrentOrganisationIdAsync();
-            }
+            var actor = await _access.RequireContextAsync();
+            actorUserId = actor.UserId;
+            var currentOrg = await _access.GetCurrentOrganisationIdAsync();
+            if (organisationId <= 0)
+                organisationId = currentOrg;
+
+            var canManage = actor.IsSuperAdministrator || actor.IsHRStaff || actor.IsHRHead || actor.IsHRManager ||
+                actor.IsOrganisationAdmin || await _access.HasPermissionAsync("Attendance.Manage") || await _access.HasPermissionAsync("Admin");
+            if (!canManage || organisationId <= 0 || !await _access.HasOrganisationAccessAsync(organisationId))
+                throw new UnauthorizedAccessException("HR or Attendance management access in the selected organisation is required.");
         }
 
         await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
@@ -267,16 +294,26 @@ public sealed class AttendanceReconciliationService : IAttendanceReconciliationS
         int organisationId = request.OrganisationId;
         if (_access is not null)
         {
-            var actor = await _access.GetContextAsync();
-            if (actor is not null)
-            {
-                actorUserId = actor.UserId;
-                if (organisationId <= 0)
-                    organisationId = await _access.GetCurrentOrganisationIdAsync();
-            }
+            var actor = await _access.RequireContextAsync();
+            actorUserId = actor.UserId;
+            if (organisationId <= 0)
+                organisationId = await _access.GetCurrentOrganisationIdAsync();
+
+            var canManage = actor.IsSuperAdministrator || actor.IsHRStaff || actor.IsHRHead || actor.IsHRManager ||
+                actor.IsOrganisationAdmin || await _access.HasPermissionAsync("Attendance.Manage") || await _access.HasPermissionAsync("Admin");
+            if (!canManage || organisationId <= 0 || !await _access.HasOrganisationAccessAsync(organisationId))
+                throw new UnauthorizedAccessException("HR or Attendance management access in the selected organisation is required for manual overrides.");
+
+            if (request.AllowFinalizedPlanOverride &&
+                !(actor.IsSuperAdministrator || actor.IsHRHead || actor.IsHRManager || actor.IsOrganisationAdmin))
+                throw new UnauthorizedAccessException("Only HR leadership or administrators can override finalized work plans.");
         }
 
         await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
+        if (_access is not null && !await db.Jobs.AsNoTracking().AnyAsync(
+            j => j.JobId == request.JobId && j.IndividualID == request.IndividualId && j.OrganisationID == organisationId,
+            cancellationToken))
+            throw new UnauthorizedAccessException("Employment record is outside the selected organisation.");
         var workDateTime = request.WorkDate.ToDateTime(TimeOnly.MinValue);
 
         var workPlan = await db.WorkPlans.AsNoTracking()
@@ -339,6 +376,40 @@ public sealed class AttendanceReconciliationService : IAttendanceReconciliationS
         if (existingOverrides.Count > 0)
             await db.SaveChangesAsync(cancellationToken);
 
+        if (_auditLogs is not null)
+        {
+            await _auditLogs.RecordAttendanceCorrectionAsync(
+                entityType: "AttendanceManualOverride",
+                entityId: newOverride.AttendanceManualOverrideId.ToString(),
+                description: $"Manual attendance override ({newOverride.OverrideAction}) for Individual {request.IndividualId} on {request.WorkDate:yyyy-MM-dd}.",
+                changes:
+                [
+                    new("AttendanceLogId", null, request.AttendanceLogId),
+                    new("TargetSchedulePurpose", null, newOverride.TargetSchedulePurpose),
+                    new("TargetClockTypeId", null, newOverride.TargetClockTypeId),
+                    new("AllowFinalizedPlanOverride", null, request.AllowFinalizedPlanOverride)
+                ],
+                reason: request.Reason,
+                organisationId: newOverride.OrganisationId,
+                cancellationToken: cancellationToken);
+        }
+
+        if (_activityLogs is not null)
+        {
+            await _activityLogs.RecordAsync(new HRM.ActivityLogs.Models.ActivityLogRequest
+            {
+                Category = HRM.ActivityLogs.Models.ActivityCategory.Attendance,
+                ActivityType = HRM.ActivityLogs.Models.ActivityTypes.AttendanceCorrectionApplied,
+                Module = "Attendance",
+                Action = "OVERRIDE",
+                Description = $"Applied attendance manual override ({newOverride.OverrideAction}) for {request.WorkDate:yyyy-MM-dd}.",
+                TargetEntityType = "AttendanceManualOverride",
+                TargetEntityId = newOverride.AttendanceManualOverrideId.ToString(),
+                TargetDisplayName = $"Attendance {request.WorkDate:yyyy-MM-dd}",
+                OrganisationId = newOverride.OrganisationId
+            }, cancellationToken);
+        }
+
         return await ReconcileInternalAsync(
             db,
             request.IndividualId,
@@ -396,6 +467,9 @@ public sealed class AttendanceReconciliationService : IAttendanceReconciliationS
 
         // 2. Build Planned Obligations (Official, Official Break/Lunch, and Duties)
         var obligations = BuildObligations(workPlan, workDateTime);
+        var leadershipPolicy = await HRM.Services.LeadershipAttendancePolicyResolver.ResolveAsync(db, individualId, organisationId, workDate, cancellationToken);
+        if (leadershipPolicy is { AttendanceRequired: false })
+            foreach (var obligation in obligations) { obligation.RequiresAttendance = false; obligation.RequiresCheckOut = false; }
         var officialObligations = obligations.Where(o => o.ObligationType == "Official").OrderBy(o => o.ScheduledStart).ToList();
         var breakObligations = obligations.Where(o => o.ObligationType == "OfficialBreak").OrderBy(o => o.ScheduledStart).ToList();
         var dutyObligations = obligations.Where(o => o.ObligationType == "Duty").OrderBy(o => o.ScheduledStart).ThenBy(o => o.Priority).ThenBy(o => o.WorkAssignmentId).ToList();
@@ -492,6 +566,12 @@ public sealed class AttendanceReconciliationService : IAttendanceReconciliationS
             result);
 
         // 6. Persist Reconciled State if requested
+        if (leadershipPolicy is { AttendanceRequired: false })
+        {
+            result.DailyStatus = AttendanceDailyStatus.Exempt;
+            result.IsComplete = true;
+            result.SummaryMessage = "Attendance exemption under the active leadership policy. Recorded presence is evidence only; exemption does not create worked time.";
+        }
         if (persistChanges && (workPlan is not null || rawLogs.Count > 0))
         {
             if (workPlan is not { IsFinalized: true } || allowFinalizedOverride)
@@ -552,8 +632,8 @@ public sealed class AttendanceReconciliationService : IAttendanceReconciliationS
         public int CheckInGraceAfterMinutes { get; init; } = 60;
         public int CheckOutGraceBeforeMinutes { get; init; } = 30;
         public int CheckOutGraceAfterMinutes { get; init; } = 90;
-        public bool RequiresAttendance { get; init; } = true;
-        public bool RequiresCheckOut { get; init; } = true;
+        public bool RequiresAttendance { get; set; } = true;
+        public bool RequiresCheckOut { get; set; } = true;
         public bool IsFlexibleBreak { get; init; }
 
         public AttendanceObligationState State { get; set; } = AttendanceObligationState.NotStarted;

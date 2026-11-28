@@ -1,0 +1,2 @@
+namespace HRM.Models.Recruitment;
+public sealed class RecruitmentOffer { public int Id {get;set;} public int RecruitmentMeritResultId {get;set;} public int OrganisationId {get;set;} public int AppointmentAuthorityUserId {get;set;} public int? OnboardingRequestId {get;set;} public string TermsSnapshotJson {get;set;}="{}"; public string Status {get;set;}="Draft"; public DateTime? OfferedAtUtc {get;set;} public DateTime? AcceptedAtUtc {get;set;} public int Version {get;set;}=1; public int OperationLogId {get;set;} }

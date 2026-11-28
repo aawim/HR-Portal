@@ -1,0 +1,1033 @@
+@page "/admin/hr/recruitment/a2-sheet/{VacancyId:int}"
+@page "/careers/a2-sheet/{VacancyId:int}"
+@layout HRM.Components.Layout.ReceiptLayout
+@rendermode RenderMode.InteractiveServer
+@using HRM.Application.Contracts.Recruitment
+@using HRM.Application.Contracts.Signatures
+@using Microsoft.JSInterop
+@inject HRM.UI.Services.Recruitment.IRecruitmentApiClient Api
+@inject HRM.UI.Services.Signatures.IDocumentSignatureApiClient SignatureApi
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<PageTitle>@(IsDv ? "ވަޒީފާއަށް ކުރިމަތިލި ފަރާތްތަކަށް ޕޮއިންޓު ލިބުނުގޮތުގެ ޝީޓު (MS 1 – MS 2)" : "A2 Evaluation Sheet (MS 1 – MS 2)")</PageTitle>
+
+<HeadContent>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thaana:wght@400;600;700&display=swap" rel="stylesheet" />
+</HeadContent>
+
+<style>
+    .a2-screen-bg {
+        min-height: 100vh;
+        background: #e2e8f0;
+        padding: 1rem;
+    }
+
+    .a2-toolbar {
+        max-width: 297mm;
+        margin: 0 auto 1rem auto;
+        background: #ffffff;
+        border: 1px solid #cbd5e1;
+        border-radius: 0.75rem;
+        padding: 0.75rem 1rem;
+        box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+    }
+
+    .a2-sheet {
+        width: 297mm;
+        min-height: 210mm;
+        margin: 0 auto;
+        background: #ffffff;
+        color: #000000;
+        padding: 10mm;
+        box-shadow: 0 10px 30px rgba(15, 23, 42, 0.14);
+        border-radius: 0;
+        box-sizing: border-box;
+    }
+
+    .a2-sheet.a2-ltr {
+        direction: ltr;
+        text-align: left;
+        font-family: "Segoe UI", Arial, Helvetica, sans-serif;
+        font-size: 8.5pt;
+        line-height: 1.3;
+    }
+
+    .a2-sheet.a2-rtl {
+        direction: rtl;
+        text-align: right;
+        font-family: "Faruma", "MV Faseyha", "Noto Sans Thaana", sans-serif;
+        font-size: 9pt;
+        line-height: 1.5;
+    }
+
+    .a2-agency {
+        text-align: center;
+        font-size: 10.5pt;
+        font-weight: 700;
+        margin-bottom: 2px;
+    }
+
+    .a2-title {
+        text-align: center;
+        font-size: 12pt;
+        font-weight: 700;
+        margin: 0;
+    }
+
+    .a2-subtitle {
+        text-align: center;
+        font-size: 10pt;
+        font-weight: 700;
+        margin: 2px 0 10px 0;
+        padding-bottom: 6px;
+        border-bottom: 1.5px solid #000000;
+    }
+
+    /* Job Metadata Header: 2-column split (2x2 grid + full-height Basic Requirements box) */
+    .a2-meta-split {
+        display: grid;
+        grid-template-columns: 3fr 2fr;
+        border: 1px solid #111827;
+        margin-bottom: 8px;
+        border-radius: 0;
+    }
+
+    .a2-meta-left {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .a2-ltr .a2-meta-left {
+        border-right: 1px solid #111827;
+    }
+
+    .a2-rtl .a2-meta-left {
+        border-left: 1px solid #111827;
+    }
+
+    .a2-meta-cell {
+        padding: 4px 7px;
+        border-bottom: 1px solid #111827;
+    }
+
+    .a2-meta-cell:nth-child(n+3) {
+        border-bottom: none;
+    }
+
+    .a2-ltr .a2-meta-cell:nth-child(odd) {
+        border-right: 1px solid #111827;
+    }
+
+    .a2-rtl .a2-meta-cell:nth-child(odd) {
+        border-left: 1px solid #111827;
+    }
+
+    .a2-meta-label {
+        font-weight: 700;
+        display: block;
+        font-size: 8pt;
+        color: #111827;
+    }
+
+    .a2-meta-val {
+        display: block;
+        font-weight: 500;
+        margin-top: 1px;
+        word-break: break-word;
+    }
+
+    .a2-meta-right {
+        padding: 4px 7px;
+        display: flex;
+        flex-direction: column;
+    }
+
+    /* 16-column A2 Evaluation Table */
+    .a2-table {
+        width: 100%;
+        border-collapse: collapse;
+        table-layout: fixed;
+        border-radius: 0;
+        margin-bottom: 8px;
+    }
+
+    .a2-table th,
+    .a2-table td {
+        border: 1px solid #111827;
+        padding: 3px 3px;
+        vertical-align: middle;
+        border-radius: 0;
+        word-wrap: break-word;
+        overflow-wrap: break-word;
+    }
+
+    .a2-table thead th {
+        background: #f1f5f9;
+        font-weight: 700;
+        text-align: center;
+        font-size: 7.4pt;
+        line-height: 1.25;
+    }
+
+    .a2-rtl .a2-table thead th {
+        font-size: 7.8pt;
+        line-height: 1.35;
+    }
+
+    .a2-table thead tr.a2-subhead th {
+        background: #e2e8f0;
+        font-size: 7.5pt;
+        padding: 2px 3px;
+    }
+
+    .a2-table tbody td {
+        text-align: center;
+        font-size: 8pt;
+        height: 22px;
+    }
+
+    .a2-table tbody td.a2-name-col {
+        text-align: start;
+        font-weight: 600;
+        padding-inline: 5px;
+    }
+
+    .a2-table tbody td.a2-bold {
+        font-weight: 700;
+    }
+
+    .a2-note-box {
+        border: 1px solid #111827;
+        padding: 5px 8px;
+        margin-bottom: 10px;
+        font-weight: 600;
+        font-size: 8.5pt;
+        background: #ffffff;
+    }
+
+    .a2-signoff-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 10px;
+        font-size: 8pt;
+    }
+
+    .a2-signoff-table td {
+        border: 1px solid #111827;
+        padding: 4px 7px;
+        vertical-align: top;
+        width: 25%;
+    }
+
+    .a2-field-label {
+        display: block;
+        font-weight: 700;
+        font-size: 7.8pt;
+        margin-bottom: 10px;
+    }
+
+    .a2-field-value {
+        display: block;
+        min-height: 14px;
+        border-bottom: 1px dotted #475569;
+        padding-bottom: 1px;
+    }
+
+    .a2-footer-box {
+        border: 1px solid #111827;
+        border-radius: 0;
+    }
+
+    .a2-footer-heading {
+        background: #f1f5f9;
+        border-bottom: 1px solid #111827;
+        padding: 4px 8px;
+        font-weight: 700;
+        font-size: 8.5pt;
+    }
+
+    .a2-footer-grid {
+        display: grid;
+        grid-template-columns: 2fr 1fr;
+    }
+
+    .a2-footer-cell {
+        padding: 5px 8px;
+    }
+
+    .a2-ltr .a2-footer-cell:first-child {
+        border-right: 1px solid #111827;
+    }
+
+    .a2-rtl .a2-footer-cell:first-child {
+        border-left: 1px solid #111827;
+    }
+
+    @@page {
+        size: A4 landscape;
+        margin: 10mm;
+    }
+
+    @@media print {
+        html, body {
+            background: #ffffff !important;
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+
+        .no-print {
+            display: none !important;
+        }
+
+        .a2-screen-bg {
+            background: #ffffff !important;
+            padding: 0 !important;
+            min-height: auto !important;
+        }
+
+        .a2-sheet {
+            width: 100% !important;
+            min-height: auto !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            box-shadow: none !important;
+        }
+
+        .a2-table thead th,
+        .a2-table thead tr.a2-subhead th,
+        .a2-footer-heading {
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+    }
+</style>
+
+<div class="a2-screen-bg">
+    <!-- Non-printing Toolbar -->
+    <div class="a2-toolbar no-print space-y-3">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+            <div class="flex flex-wrap items-center gap-2">
+                <a href="@(IsAdminRoute ? "/admin/hr/recruitment" : "/careers")" class="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">
+                    <i class="bi bi-arrow-left" aria-hidden="true"></i>
+                    <span>@(IsAdminRoute ? "Back to Recruitment" : "Back to Careers")</span>
+                </a>
+                <div class="inline-flex rounded-lg border border-slate-300 bg-slate-100 p-0.5 text-xs">
+                    <button type="button"
+                            class="rounded-md px-3 py-1 font-semibold transition @(IsDv ? "text-slate-600 hover:text-slate-900" : "bg-white text-blue-700 shadow-xs")"
+                            @onclick='() => lang = "en"'>
+                        English (LTR)
+                    </button>
+                    <button type="button"
+                            class="rounded-md px-3 py-1 font-semibold transition @(IsDv ? "bg-white text-blue-700 shadow-xs" : "text-slate-600 hover:text-slate-900")"
+                            @onclick='() => lang = "dv"'>
+                        ދިވެހި (RTL)
+                    </button>
+                </div>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-2">
+                @if (IsAdminRoute)
+                {
+                    @if (PreparedSig is null)
+                    {
+                        <button type="button"
+                                class="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+                                disabled="@signBusy"
+                                @onclick='() => OpenSignModal("PreparedBy", "Sheet Prepared by")'>
+                            <i class="bi bi-shield-lock" aria-hidden="true"></i>
+                            <span>Sign: Prepared By</span>
+                        </button>
+                    }
+                    else if (PreparedSig.CanRevoke)
+                    {
+                        <button type="button"
+                                class="inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-50"
+                                disabled="@signBusy"
+                                @onclick="() => RevokeSlotAsync(PreparedSig.Id)">
+                            <span>Revoke Prepared</span>
+                        </button>
+                    }
+
+                    @if (CheckedSig is null)
+                    {
+                        <button type="button"
+                                class="inline-flex items-center gap-1 rounded-lg bg-teal-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-teal-800 disabled:opacity-50"
+                                disabled="@signBusy"
+                                @onclick='() => OpenSignModal("CheckedBy", "Sheet Checked by")'>
+                            <i class="bi bi-shield-lock" aria-hidden="true"></i>
+                            <span>Sign: Checked By</span>
+                        </button>
+                    }
+                    else if (CheckedSig.CanRevoke)
+                    {
+                        <button type="button"
+                                class="inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-50"
+                                disabled="@signBusy"
+                                @onclick="() => RevokeSlotAsync(CheckedSig.Id)">
+                            <span>Revoke Checked</span>
+                        </button>
+                    }
+
+                    <button type="button"
+                            class="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                            @onclick="() => showEditor = !showEditor">
+                        <i class="bi bi-sliders" aria-hidden="true"></i>
+                        <span>@(showEditor ? "Hide Editor" : "Edit Sheet & Scores")</span>
+                    </button>
+                }
+                <button type="button"
+                        class="inline-flex items-center gap-1.5 rounded-lg bg-blue-700 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-800"
+                        @onclick="PrintAsync">
+                    <i class="bi bi-printer" aria-hidden="true"></i>
+                    <span>Print / Export PDF (A4 Landscape)</span>
+                </button>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(signMessage))
+        {
+            <div class="flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-800">
+                <span>
+                    @signMessage
+                    @if (signMessage.Contains("My Profile", StringComparison.OrdinalIgnoreCase))
+                    {
+                        <a href="/profile" class="ml-1.5 font-bold text-blue-700 underline">Open My Profile</a>
+                    }
+                </span>
+                <button type="button" class="font-bold text-slate-500 hover:text-slate-800" @onclick="() => signMessage = null">✕</button>
+            </div>
+        }
+
+        @if (IsAdminRoute && showEditor)
+        {
+            <div class="border-t border-slate-200 pt-3 space-y-3 text-xs">
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+                    <label class="block text-slate-700 font-medium">
+                        Position Title
+                        <input class="@FieldInput" @bind="positionTitle" @bind:event="oninput" />
+                    </label>
+                    <label class="block text-slate-700 font-medium">
+                        Basic Salary
+                        <input class="@FieldInput" @bind="basicSalaryText" @bind:event="oninput" />
+                    </label>
+                    <label class="block text-slate-700 font-medium">
+                        Announcement Number
+                        <input class="@FieldInput" @bind="announcementNumber" @bind:event="oninput" />
+                    </label>
+                    <label class="block text-slate-700 font-medium">
+                        Expiry Date
+                        <input class="@FieldInput" @bind="expiryDateText" @bind:event="oninput" />
+                    </label>
+                    <label class="block text-slate-700 font-medium sm:col-span-2 lg:col-span-4">
+                        Basic Requirements
+                        <textarea rows="2" class="@FieldInput" @bind="basicRequirements" @bind:event="oninput" placeholder="Enter position minimum qualification & experience requirements..."></textarea>
+                    </label>
+                    <label class="block text-slate-700 font-medium">
+                        Prepared By (Name)
+                        <input class="@FieldInput" @bind="preparedByName" @bind:event="oninput" />
+                    </label>
+                    <label class="block text-slate-700 font-medium">
+                        Prepared By (Position)
+                        <input class="@FieldInput" @bind="preparedByPosition" @bind:event="oninput" />
+                    </label>
+                    <label class="block text-slate-700 font-medium">
+                        Prepared Date
+                        <input class="@FieldInput" @bind="preparedDate" @bind:event="oninput" />
+                    </label>
+                    <label class="block text-slate-700 font-medium">
+                        Checked By (Name)
+                        <input class="@FieldInput" @bind="checkedByName" @bind:event="oninput" />
+                    </label>
+                    <label class="block text-slate-700 font-medium">
+                        Checked By (Position)
+                        <input class="@FieldInput" @bind="checkedByPosition" @bind:event="oninput" />
+                    </label>
+                    <label class="block text-slate-700 font-medium">
+                        Checked Date
+                        <input class="@FieldInput" @bind="checkedDate" @bind:event="oninput" />
+                    </label>
+                    <label class="block text-slate-700 font-medium">
+                        Place Published
+                        <input class="@FieldInput" @bind="publishedPlace" @bind:event="oninput" />
+                    </label>
+                    <label class="block text-slate-700 font-medium">
+                        Published Date
+                        <input class="@FieldInput" @bind="publishedDate" @bind:event="oninput" />
+                    </label>
+                </div>
+
+                @if (editableRows.Count > 0)
+                {
+                    <div class="border-t border-slate-200 pt-2 space-y-1.5">
+                        <div class="font-bold text-slate-800">Candidate Score Adjustments (Live Formula Calculation: Exam = Raw/50×20 · Interview = (P1+P2+P3)/225×35)</div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left text-[11px] border border-slate-200">
+                                <thead class="bg-slate-50 text-slate-600">
+                                    <tr>
+                                        <th class="p-1.5">Candidate</th>
+                                        <th class="p-1.5">Eligible</th>
+                                        <th class="p-1.5">Basic (30)</th>
+                                        <th class="p-1.5">Core (5)</th>
+                                        <th class="p-1.5">Higher (5)</th>
+                                        <th class="p-1.5">Exp Dur.</th>
+                                        <th class="p-1.5">Exp Pts (5)</th>
+                                        <th class="p-1.5">P1 (/75)</th>
+                                        <th class="p-1.5">P2 (/75)</th>
+                                        <th class="p-1.5">P3 (/75)</th>
+                                        <th class="p-1.5">Raw Exam (/50)</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-100">
+                                    @foreach (var c in editableRows)
+                                    {
+                                        <tr>
+                                            <td class="p-1.5 font-medium">@c.FullName</td>
+                                            <td class="p-1.5 text-center"><input type="checkbox" @bind="c.MeetsBasicRequirements" /></td>
+                                            <td class="p-1"><input type="number" step="0.5" min="0" max="30" class="@TinyInput" @bind="c.BasicReqPoints" /></td>
+                                            <td class="p-1"><input type="number" step="0.5" min="0" max="5" class="@TinyInput" @bind="c.CoreDisciplinePoints" /></td>
+                                            <td class="p-1"><input type="number" step="0.5" min="0" max="5" class="@TinyInput" @bind="c.HigherQualPoints" /></td>
+                                            <td class="p-1"><input class="@TinyInput" style="width:5.5rem;" @bind="c.AdditionalExpDuration" placeholder="e.g. 2 yrs" /></td>
+                                            <td class="p-1"><input type="number" step="0.5" min="0" max="5" class="@TinyInput" @bind="c.AdditionalExpPoints" /></td>
+                                            <td class="p-1"><input type="number" step="0.5" min="0" max="75" class="@TinyInput" @bind="c.Panelist1Score" /></td>
+                                            <td class="p-1"><input type="number" step="0.5" min="0" max="75" class="@TinyInput" @bind="c.Panelist2Score" /></td>
+                                            <td class="p-1"><input type="number" step="0.5" min="0" max="75" class="@TinyInput" @bind="c.Panelist3Score" /></td>
+                                            <td class="p-1"><input type="number" step="0.5" min="0" max="50" class="@TinyInput" @bind="c.RawExamScore" /></td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+
+    @if (loading)
+    {
+        <div class="a2-sheet a2-ltr flex items-center justify-center text-sm text-slate-500">
+            Loading Civil Service A2 Evaluation Sheet...
+        </div>
+    }
+    else if (!string.IsNullOrWhiteSpace(error))
+    {
+        <div class="a2-sheet a2-ltr">
+            <div class="border border-rose-300 bg-rose-50 p-4 text-xs text-rose-800">@error</div>
+        </div>
+    }
+    else if (sheet is not null)
+    {
+        var computed = ComputeRankedRows();
+        var agencyHeading = IsDv
+            ? (!string.IsNullOrWhiteSpace(sheet.AgencyNameDhivehi) ? sheet.AgencyNameDhivehi : sheet.AgencyName)
+            : sheet.AgencyName;
+
+        <!-- Formal A4 Landscape A2 Evaluation Sheet -->
+        <article class="a2-sheet @(IsDv ? "a2-rtl" : "a2-ltr")" dir="@(IsDv ? "rtl" : "ltr")">
+            @if (!string.IsNullOrWhiteSpace(agencyHeading))
+            {
+                <div class="a2-agency">@agencyHeading</div>
+            }
+
+            <!-- 1. Centered Title & Subtitle -->
+            <h1 class="a2-title">
+                @(IsDv
+                    ? "ވަޒީފާއަށް ކުރިމަތިލި ފަރާތްތަކަށް ޕޮއިންޓު ލިބުނުގޮތުގެ ޝީޓު"
+                    : "Sheet Showing Points Awarded to Job Applicants")
+            </h1>
+            <div class="a2-subtitle">
+                @(IsDv
+                    ? "(އެމް.އެސް. 1 ން އެމް.އެސް. 2 އަށް)"
+                    : "(MS 1 to MS 2)")
+            </div>
+
+            <!-- 2. Job Metadata Header (2-column split: 2x2 grid + full-height Basic Requirements box) -->
+            <div class="a2-meta-split">
+                <div class="a2-meta-left">
+                    <div class="a2-meta-cell">
+                        <span class="a2-meta-label">@(IsDv ? "މަޤާމުގެ ނަން:" : "Position Title:")</span>
+                        <span class="a2-meta-val">@positionTitle</span>
+                    </div>
+                    <div class="a2-meta-cell">
+                        <span class="a2-meta-label">@(IsDv ? "އަސާސީ މުސާރަ:" : "Basic Salary:")</span>
+                        <span class="a2-meta-val">@basicSalaryText</span>
+                    </div>
+                    <div class="a2-meta-cell">
+                        <span class="a2-meta-label">@(IsDv ? "އިޢުލާނު ނަންބަރު:" : "Announcement Number:")</span>
+                        <span class="a2-meta-val" style="font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;">@announcementNumber</span>
+                    </div>
+                    <div class="a2-meta-cell">
+                        <span class="a2-meta-label">@(IsDv ? "މުއްދަތުހަމަވާ ތާރީޚު:" : "Expiry Date:")</span>
+                        <span class="a2-meta-val">@expiryDateText</span>
+                    </div>
+                </div>
+                <div class="a2-meta-right">
+                    <span class="a2-meta-label">@(IsDv ? "އަސާސީ ޝަރުޠު:" : "Basic Requirements:")</span>
+                    <span class="a2-meta-val" style="white-space: pre-wrap;">@basicRequirements</span>
+                </div>
+            </div>
+
+            <!-- 3. 16-Column Two-Tier Evaluation Table -->
+            <table class="a2-table">
+                <colgroup>
+                    <col style="width: 2.5%;" />  <!-- 1: # -->
+                    <col style="width: 14.5%;" /> <!-- 2: Full Name -->
+                    <col style="width: 3.5%;" />  <!-- 3: Yes -->
+                    <col style="width: 3.5%;" />  <!-- 4: No -->
+                    <col style="width: 6.5%;" />  <!-- 5: Basic Req (30) -->
+                    <col style="width: 7%;" />    <!-- 6: Core/Pref (5) -->
+                    <col style="width: 7%;" />    <!-- 7: Higher Qual (5) -->
+                    <col style="width: 7.5%;" />  <!-- 8: Add Exp Duration -->
+                    <col style="width: 6.5%;" />  <!-- 9: Add Exp Pts (5) -->
+                    <col style="width: 5.5%;" />  <!-- 10: Panelist 1 -->
+                    <col style="width: 5.5%;" />  <!-- 11: Panelist 2 -->
+                    <col style="width: 5.5%;" />  <!-- 12: Panelist 3 -->
+                    <col style="width: 6%;" />    <!-- 13: Exam (20) -->
+                    <col style="width: 6.5%;" />  <!-- 14: Interview (35) -->
+                    <col style="width: 6.5%;" />  <!-- 15: Total (100) -->
+                    <col style="width: 6%;" />    <!-- 16: Rank -->
+                </colgroup>
+                <thead>
+                    <tr>
+                        <th rowspan="2">#</th>
+                        <th rowspan="2">@(IsDv ? "ފުރިހަމަ ނަން" : "Full Name")</th>
+                        <th colspan="2">@(IsDv ? "މަޤާމުގެ އަސާސީ ޝަރުޠު ހަމަވޭތޯ؟" : "Meets Basic Requirements of the Position?")</th>
+                        <th>@(IsDv ? "އަސާސީ ޝަރުޠުހަމަވުމުން ދެވޭ ޕޮއިންޓު" : "Points for Meeting Basic Requirements")</th>
+                        <th>@(IsDv ? "މަޤާމަށް ކަނޑައަޅާފައިވާ ކޯ ނުވަތަ ޕްރިފަރޑް ޑިސިޕްލިންއާ ގުޅޭ ސަނަދެއް ނަމަ ދެވޭ ޕޮއިންޓު" : "Points for Qualification in Core or Preferred Discipline")</th>
+                        <th>@(IsDv ? "ޝަރުޠުހަމަވުމަށް ބޭނުންވާ ސަނަދަށްވުރެ މަތީ ސަނަދެއް އޮތްނަމަ ދެވޭ 5 ޕޮއިންޓު" : "5 Points for Qualification Higher than Required")</th>
+                        <th rowspan="2">@(IsDv ? "އަސާސީ ޝަރުޠުހަމަވުމަށް ބޭނުންވާ ތަޖުރިބާގެ އިތުރުން ލިބިފައިވާ ތަޖުރިބާގެ މުއްދަތު (ވެއިޓޭޖް)" : "Additional Experience Duration Beyond Basic Requirements (Weightage)")</th>
+                        <th>@(IsDv ? "ޝަރުޠުހަމަވުމަށް ބޭނުންވާ ތަޖުރިބާގެ އިތުރުން ލިބިފައިވާ ތަޖުރިބާއަށް ދެވޭ ޕޮއިންޓު (ގިނަވެގެން 5 ޕޮއިންޓު)" : "Points for Additional Experience (Max 5 Points)")</th>
+                        <th rowspan="2">@(IsDv ? "އިންޓަރވިއު ޕެނަލިސްޓު 1" : "Interview Panelist 1")</th>
+                        <th rowspan="2">@(IsDv ? "އިންޓަރވިއު ޕެނަލިސްޓު 2" : "Interview Panelist 2")</th>
+                        <th rowspan="2">@(IsDv ? "އިންޓަރވިއު ޕެނަލިސްޓު 3" : "Interview Panelist 3")</th>
+                        <th>@(IsDv ? "އިމްތިޙާނު" : "Examination")</th>
+                        <th>@(IsDv ? "އިންޓަރވިއު" : "Interview")</th>
+                        <th>@(IsDv ? "ޖުމުލަ" : "Total")</th>
+                        <th rowspan="2">@(IsDv ? "ވަނަ" : "Rank")</th>
+                    </tr>
+                    <tr class="a2-subhead">
+                        <th>@(IsDv ? "އާން" : "Yes")</th>
+                        <th>@(IsDv ? "ނޫން" : "No")</th>
+                        <th>30</th>
+                        <th>5</th>
+                        <th>5</th>
+                        <th>@(IsDv ? "އަހަރަކަށް 1" : "1 per year")</th>
+                        <th>20</th>
+                        <th>35</th>
+                        <th>100</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var r in computed)
+                    {
+                        <tr>
+                            <td>@r.RowNumber</td>
+                            <td class="a2-name-col">@r.FullName</td>
+                            <td class="a2-bold">@(r.IsBlank ? "" : r.MeetsBasicRequirements ? "✓" : "")</td>
+                            <td class="a2-bold">@(r.IsBlank ? "" : !r.MeetsBasicRequirements ? "✓" : "")</td>
+                            <td>@(r.IsBlank ? "" : Fmt(r.BasicReqPoints))</td>
+                            <td>@(r.IsBlank ? "" : Fmt(r.CoreDisciplinePoints))</td>
+                            <td>@(r.IsBlank ? "" : Fmt(r.HigherQualPoints))</td>
+                            <td>@r.AdditionalExpDuration</td>
+                            <td>@(r.IsBlank ? "" : Fmt(r.AdditionalExpPoints))</td>
+                            <td>@(r.IsBlank ? "" : FmtNullable(r.Panelist1Score))</td>
+                            <td>@(r.IsBlank ? "" : FmtNullable(r.Panelist2Score))</td>
+                            <td>@(r.IsBlank ? "" : FmtNullable(r.Panelist3Score))</td>
+                            <td>@(r.IsBlank ? "" : Fmt(r.ExamScore))</td>
+                            <td>@(r.IsBlank ? "" : Fmt(r.InterviewScore))</td>
+                            <td class="a2-bold">@(r.IsBlank ? "" : Fmt(r.TotalScore))</td>
+                            <td class="a2-bold">@(r.Rank.HasValue ? r.Rank.Value.ToString() : "")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+
+            <!-- 4. Passing Threshold Note -->
+            <div class="a2-note-box">
+                @(IsDv
+                    ? "ނޯޓް: މަޤާމަށް އައްޔަންކުރުމަށް ވަޒީފާއަށް އެދިފައިވާ ފަރާތަށް A2 ޝީޓުން މުޅިއެކު ޖުމުލަ 60 ނުވަތަ އެއަށް ވުރެ މަތިން ޕޮއިންޓު ލިބެންވާނެއެވެ."
+                    : "Note: To be appointed to the position, the applicant must obtain a total of 60 points or more on the A2 sheet.")
+            </div>
+
+            <!-- 5. Sign-Off Block (2 rows, 4 inline fields each) -->
+            <table class="a2-signoff-table">
+                <tbody>
+                    <tr>
+                        <td>
+                            <span class="a2-field-label">@(IsDv ? "ޝީޓު ފުރިހަމަކުރި މުވައްޒަފުގެ ނަން" : "Sheet Prepared by (Name)")</span>
+                            <span class="a2-field-value">@(PreparedSig?.SignerName ?? preparedByName)</span>
+                        </td>
+                        <td>
+                            <span class="a2-field-label">@(IsDv ? "މަޤާމު" : "Position")</span>
+                            <span class="a2-field-value">@(PreparedSig?.SignerPosition ?? preparedByPosition)</span>
+                        </td>
+                        <td>
+                            <span class="a2-field-label">@(IsDv ? "ތާރީޚު" : "Date")</span>
+                            <span class="a2-field-value">@(PreparedSig is not null ? PreparedSig.SignedAtUtc.AddHours(5).ToString("dd MMM yyyy") : preparedDate)</span>
+                        </td>
+                        <td>
+                            <span class="a2-field-label">@(IsDv ? "ސޮއި" : "Signature")</span>
+                            @if (PreparedSig is not null)
+                            {
+                                <div style="display:flex; flex-direction:column; align-items:center; gap:1px;">
+                                    <img src="@PreparedSig.SignatureImageDataUrl" alt="Prepared By Signature" style="max-height:28px; max-width:110px; object-fit:contain;" />
+                                    <a href="@($"/verify/{PreparedSig.VerificationCode}")" target="_blank" style="font-family:monospace; font-size:6.5pt; color:#334155; text-decoration:none;">@PreparedSig.VerificationCode</a>
+                                </div>
+                            }
+                            else
+                            {
+                                <span class="a2-field-value"></span>
+                            }
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <span class="a2-field-label">@(IsDv ? "ޝީޓު ޗެކްކުރި މުވައްޒަފުގެ ނަން" : "Sheet Checked by (Name)")</span>
+                            <span class="a2-field-value">@(CheckedSig?.SignerName ?? checkedByName)</span>
+                        </td>
+                        <td>
+                            <span class="a2-field-label">@(IsDv ? "މަޤާމު" : "Position")</span>
+                            <span class="a2-field-value">@(CheckedSig?.SignerPosition ?? checkedByPosition)</span>
+                        </td>
+                        <td>
+                            <span class="a2-field-label">@(IsDv ? "ތާރީޚު" : "Date")</span>
+                            <span class="a2-field-value">@(CheckedSig is not null ? CheckedSig.SignedAtUtc.AddHours(5).ToString("dd MMM yyyy") : checkedDate)</span>
+                        </td>
+                        <td>
+                            <span class="a2-field-label">@(IsDv ? "ސޮއި" : "Signature")</span>
+                            @if (CheckedSig is not null)
+                            {
+                                <div style="display:flex; flex-direction:column; align-items:center; gap:1px;">
+                                    <img src="@CheckedSig.SignatureImageDataUrl" alt="Checked By Signature" style="max-height:28px; max-width:110px; object-fit:contain;" />
+                                    <a href="@($"/verify/{CheckedSig.VerificationCode}")" target="_blank" style="font-family:monospace; font-size:6.5pt; color:#334155; text-decoration:none;">@CheckedSig.VerificationCode</a>
+                                </div>
+                            }
+                            else
+                            {
+                                <span class="a2-field-value"></span>
+                            }
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <!-- 6. Agency Publication Footer Box -->
+            <div class="a2-footer-box">
+                <div class="a2-footer-heading">
+                    @(IsDv
+                        ? "ވަޒީފާ ހަމަޖެއްސުމަށް ހުށަހެޅުމުގެ ކުރިން އިދާރާއިން ފުރިހަމަ ކުރަންޖެހޭ ބައި"
+                        : "Section to be completed by the agency before submitting for appointment")
+                </div>
+                <div class="a2-footer-grid">
+                    <div class="a2-footer-cell">
+                        <span class="a2-field-label">@(IsDv ? "އޭޓޫ ޝީޓު އާންމުކުރެވިފައިވާ ތަން" : "Place where the A2 Sheet was published")</span>
+                        <span class="a2-field-value">@publishedPlace</span>
+                    </div>
+                    <div class="a2-footer-cell">
+                        <span class="a2-field-label">@(IsDv ? "ތާރީޚު" : "Date")</span>
+                        <span class="a2-field-value">@publishedDate</span>
+                    </div>
+                </div>
+            </div>
+
+            <HRM.Components.Shared.DocumentQrVerificationBar Signatures="signatures" IsDhivehi="IsDv" Compact="true" />
+        </article>
+    }
+
+    <HRM.Components.Shared.SignaturePinModal IsOpen="@(pendingSignSlotKey is not null)"
+                                             SlotLabel="@(pendingSignSlotLabel ?? "Document Signature")"
+                                             OnConfirmed="ConfirmSignWithPinAsync"
+                                             OnCancelled="() => { pendingSignSlotKey = null; pendingSignSlotLabel = null; }" />
+</div>
+
+@code {
+    [Parameter] public int VacancyId { get; set; }
+    [SupplyParameterFromQuery(Name = "lang")] public string? LangQuery { get; set; }
+
+    private const string FieldInput = "mt-1 w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-800 focus:border-blue-500 focus:outline-none";
+    private const string TinyInput = "w-16 rounded border border-slate-300 bg-white px-1.5 py-1 text-[11px] text-slate-800";
+
+    private A2EvaluationSheetDto? sheet;
+    private IReadOnlyList<DocumentSignatureDto> signatures = [];
+    private DocumentSignatureDto? PreparedSig => signatures.FirstOrDefault(s => s.SlotKey == "PreparedBy");
+    private DocumentSignatureDto? CheckedSig => signatures.FirstOrDefault(s => s.SlotKey == "CheckedBy");
+    private List<EditableCandidate> editableRows = [];
+    private string lang = "en";
+    private bool loading = true;
+    private bool showEditor, signBusy;
+    private string? error, signMessage;
+
+    private string positionTitle = "";
+    private string basicSalaryText = "";
+    private string announcementNumber = "";
+    private string expiryDateText = "";
+    private string basicRequirements = "";
+    private string preparedByName = "";
+    private string preparedByPosition = "";
+    private string preparedDate = "";
+    private string checkedByName = "";
+    private string checkedByPosition = "";
+    private string checkedDate = "";
+    private string publishedPlace = "";
+    private string publishedDate = "";
+
+    private bool IsDv => string.Equals(lang, "dv", StringComparison.OrdinalIgnoreCase);
+    private bool IsAdminRoute => new Uri(Navigation.Uri).AbsolutePath.StartsWith("/admin/", StringComparison.OrdinalIgnoreCase);
+
+    private sealed class EditableCandidate
+    {
+        public string FullName { get; set; } = "";
+        public bool MeetsBasicRequirements { get; set; }
+        public decimal BasicReqPoints { get; set; }
+        public decimal CoreDisciplinePoints { get; set; }
+        public decimal HigherQualPoints { get; set; }
+        public string AdditionalExpDuration { get; set; } = "";
+        public decimal AdditionalExpPoints { get; set; }
+        public decimal? Panelist1Score { get; set; }
+        public decimal? Panelist2Score { get; set; }
+        public decimal? Panelist3Score { get; set; }
+        public decimal? RawExamScore { get; set; }
+        public decimal? DirectExamScore { get; set; }
+        public decimal? DirectInterviewScore { get; set; }
+    }
+
+    private sealed record ComputedA2Row(
+        int RowNumber,
+        bool IsBlank,
+        string FullName,
+        bool MeetsBasicRequirements,
+        decimal BasicReqPoints,
+        decimal CoreDisciplinePoints,
+        decimal HigherQualPoints,
+        string AdditionalExpDuration,
+        decimal AdditionalExpPoints,
+        decimal? Panelist1Score,
+        decimal? Panelist2Score,
+        decimal? Panelist3Score,
+        decimal ExamScore,
+        decimal InterviewScore,
+        decimal TotalScore,
+        int? Rank);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!string.IsNullOrWhiteSpace(LangQuery))
+            lang = LangQuery.Trim().Equals("dv", StringComparison.OrdinalIgnoreCase) ? "dv" : "en";
+
+        if (sheet is not null && sheet.VacancyId == VacancyId)
+            return;
+
+        loading = true;
+        error = null;
+        try
+        {
+            sheet = IsAdminRoute
+                ? await Api.GetA2EvaluationSheetAsync(VacancyId)
+                : await Api.GetPublicA2EvaluationSheetAsync(VacancyId);
+
+            if (sheet is null)
+            {
+                error = IsAdminRoute
+                    ? "A2 Evaluation Sheet could not be loaded for this vacancy."
+                    : "The published A2 Evaluation Sheet is not yet available for this vacancy.";
+                return;
+            }
+
+            positionTitle = sheet.PositionTitle;
+            basicSalaryText = sheet.BasicSalary.HasValue ? $"MVR {sheet.BasicSalary.Value:N2}" : "";
+            announcementNumber = sheet.AnnouncementNumber;
+            expiryDateText = sheet.ExpiryDateUtc.HasValue ? sheet.ExpiryDateUtc.Value.AddHours(5).ToString("dd MMM yyyy, HH:mm") : "";
+            basicRequirements = sheet.BasicRequirements ?? "";
+
+            editableRows = sheet.Candidates.Select(c => new EditableCandidate
+            {
+                FullName = c.FullName,
+                MeetsBasicRequirements = c.MeetsBasicRequirements,
+                BasicReqPoints = c.BasicReqPoints,
+                CoreDisciplinePoints = c.CoreDisciplinePoints,
+                HigherQualPoints = c.HigherQualPoints,
+                AdditionalExpDuration = c.AdditionalExpDuration,
+                AdditionalExpPoints = c.AdditionalExpPoints,
+                Panelist1Score = c.Panelist1Score,
+                Panelist2Score = c.Panelist2Score,
+                Panelist3Score = c.Panelist3Score,
+                RawExamScore = c.RawExamScore,
+                DirectExamScore = c.DirectExamScore,
+                DirectInterviewScore = c.DirectInterviewScore
+            }).ToList();
+
+            await LoadSignaturesAsync();
+        }
+        catch (HttpRequestException)
+        {
+            error = "Could not load A2 Evaluation Sheet. Check your recruitment permissions.";
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private async Task LoadSignaturesAsync()
+    {
+        try
+        {
+            signatures = IsAdminRoute
+                ? await SignatureApi.GetDocumentSignaturesAsync("RecruitmentA2Sheet", VacancyId.ToString())
+                : await SignatureApi.GetPublicDocumentSignaturesAsync("RecruitmentA2Sheet", VacancyId.ToString());
+        }
+        catch { signatures = []; }
+    }
+
+    private string? pendingSignSlotKey, pendingSignSlotLabel;
+
+    private void OpenSignModal(string slotKey, string slotLabel)
+    {
+        pendingSignSlotKey = slotKey;
+        pendingSignSlotLabel = slotLabel;
+        signMessage = null;
+    }
+
+    private async Task ConfirmSignWithPinAsync(string verifiedPin)
+    {
+        var slotKey = pendingSignSlotKey;
+        var slotLabel = pendingSignSlotLabel ?? slotKey ?? "";
+        pendingSignSlotKey = null;
+        pendingSignSlotLabel = null;
+        if (string.IsNullOrWhiteSpace(slotKey)) return;
+        await SignSlotAsync(slotKey, slotLabel, verifiedPin);
+    }
+
+    private async Task SignSlotAsync(string slotKey, string slotLabel, string pin)
+    {
+        if (signBusy || sheet is null) return;
+        signBusy = true;
+        signMessage = null;
+        try
+        {
+            var computed = ComputeRankedRows().Where(r => !r.IsBlank);
+            var canonical = System.Text.Json.JsonSerializer.Serialize(new
+            {
+                sheet.VacancyId,
+                AnnouncementNumber = announcementNumber,
+                PositionTitle = positionTitle,
+                Rows = computed.Select(r => new { r.FullName, r.MeetsBasicRequirements, r.BasicReqPoints, r.CoreDisciplinePoints, r.HigherQualPoints, r.AdditionalExpPoints, r.ExamScore, r.InterviewScore, r.TotalScore, r.Rank })
+            });
+            var posOverride = slotKey == "PreparedBy" ? preparedByPosition : checkedByPosition;
+            var res = await SignatureApi.SignDocumentAsync(new SignDocumentInput(
+                "RecruitmentA2Sheet",
+                VacancyId.ToString(),
+                slotKey,
+                slotLabel,
+                canonical,
+                string.IsNullOrWhiteSpace(posOverride) ? null : posOverride,
+                Pin: pin));
+            signMessage = res.Message;
+            if (res.Success) await LoadSignaturesAsync();
+        }
+        catch
+        {
+            signMessage = "Could not apply digital signature. Ensure your signature and Signing PIN are saved in My Profile.";
+        }
+        finally
+        {
+            signBusy = false;
+        }
+    }
+
+    private async Task RevokeSlotAsync(int signatureId)
+    {
+        if (signBusy) return;
+        signBusy = true;
+        signMessage = null;
+        try
+        {
+            var res = await SignatureApi.RevokeSignatureAsync(signatureId, "Revoked by signer/admin for A2 sheet revision.");
+            signMessage = res.Message;
+            if (res.Success) await LoadSignaturesAsync();
+        }
+        catch
+        {
+            signMessage = "Could not revoke signature.";
+        }
+        finally
+        {
+            signBusy = false;
+        }
+    }
+
+    private List<ComputedA2Row> ComputeRankedRows()
+    {
+        var temp = editableRows.Select((c, idx) =>
+        {
+            var basic = Math.Clamp(c.BasicReqPoints, 0m, 30m);
+            var core = Math.Clamp(c.CoreDisciplinePoints, 0m, 5m);
+            var higher = Math.Clamp(c.HigherQualPoints, 0m, 5m);
+            var exp = Math.Clamp(c.AdditionalExpPoints, 0m, 5m);
+
+            // Examination Score (max 20): (RawExamScore / 50) * 20
+            var exam = c.RawExamScore.HasValue
+                ? Math.Clamp(Math.Round((c.RawExamScore.Value / 50m) * 20m, 2), 0m, 20m)
+                : Math.Clamp(c.DirectExamScore ?? 0m, 0m, 20m);
+
+            // Interview Score (max 35): ((Panelist1 + Panelist2 + Panelist3) / 225) * 35
+            var hasPanelists = c.Panelist1Score.HasValue || c.Panelist2Score.HasValue || c.Panelist3Score.HasValue;
+            var interview = hasPanelists
+                ? Math.Clamp(Math.Round((((c.Panelist1Score ?? 0m) + (c.Panelist2Score ?? 0m) + (c.Panelist3Score ?? 0m)) / 225m) * 35m, 2), 0m, 35m)
+                : Math.Clamp(c.DirectInterviewScore ?? 0m, 0m, 35m);
+
+            var total = c.MeetsBasicRequirements
+                ? Math.Clamp(Math.Round(basic + core + higher + exp + exam + interview, 2), 0m, 100m)
+                : 0m;
+
+            return new { Index = idx, Candidate = c, Basic = basic, Core = core, Higher = higher, Exp = exp, Exam = exam, Interview = interview, Total = total };
+        }).ToList();
+
+        // Compute Rank descending by Total Score for eligible candidates with Total > 0
+        var rankedOrder = temp
+            .Where(x => x.Candidate.MeetsBasicRequirements && x.Total > 0)
+            .OrderByDescending(x => x.Total)
+            .ToList();
+
+        var rankByIndex = new Dictionary<int, int>();
+        for (var i = 0; i < rankedOrder.Count; i++)
+        {
+            if (i > 0 && rankedOrder[i].Total == rankedOrder[i - 1].Total)
+                rankByIndex[rankedOrder[i].Index] = rankByIndex[rankedOrder[i - 1].Index];
+            else
+                rankByIndex[rankedOrder[i].Index] = i + 1;
+        }
+
+        var result = temp.Select((x, i) => new ComputedA2Row(
+            i + 1,
+            false,
+            x.Candidate.FullName,
+            x.Candidate.MeetsBasicRequirements,
+            x.Basic,
+            x.Core,
+            x.Higher,
+            x.Candidate.AdditionalExpDuration,
+            x.Exp,
+            x.Candidate.Panelist1Score,
+            x.Candidate.Panelist2Score,
+            x.Candidate.Panelist3Score,
+            x.Exam,
+            x.Interview,
+            x.Total,
+            rankByIndex.TryGetValue(x.Index, out var rk) ? rk : null)).ToList();
+
+        while (result.Count < 4)
+        {
+            result.Add(new ComputedA2Row(result.Count + 1, true, "", false, 0, 0, 0, "", 0, null, null, null, 0, 0, 0, null));
+        }
+
+        return result;
+    }
+
+    private async Task PrintAsync() => await JS.InvokeVoidAsync("window.print");
+    private static string Fmt(decimal val) => val == 0 ? "0" : val.ToString("0.##");
+    private static string FmtNullable(decimal? val) => val.HasValue ? val.Value.ToString("0.##") : "";
+}

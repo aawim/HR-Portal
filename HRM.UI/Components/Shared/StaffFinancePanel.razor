@@ -9,89 +9,113 @@
 @inject IJSRuntime JS
 @inject ILogger<StaffFinancePanel> Logger
 
-<section class="staff-finance w-full min-w-0 p-2 flex flex-col gap-2">
+<section class="staff-finance w-full min-w-0 flex flex-col gap-3 text-slate-900 dark:text-slate-100">
 
-    <!-- Header Bar with Consistent Green Actions -->
-    <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-xs flex flex-wrap justify-between items-center gap-3">
-        <div>
-            <div class="flex items-center gap-2">
-                <h1 class="text-lg font-bold text-slate-900 dark:text-slate-100">Allowances &amp; Deductions</h1>
-                <span class="rounded-full bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/50 px-2.5 py-0.5 text-xs font-semibold">
+    <!-- Compact Header (no background/border) -->
+    <header class="flex flex-wrap items-center justify-between gap-2 px-1 py-0.5">
+        <div class="min-w-0">
+            <div class="flex items-center gap-2 flex-wrap">
+                <h1 class="text-base font-bold text-slate-900 dark:text-slate-100 truncate">Allowances &amp; Deductions</h1>
+                <span class="inline-flex items-center gap-1 rounded-full bg-teal-50 dark:bg-teal-950/60 border border-teal-200/80 dark:border-teal-800 px-2 py-0.5 text-[10px] font-semibold text-teal-700 dark:text-teal-300">
+                    <span class="h-1.5 w-1.5 rounded-full bg-teal-500"></span>
                     Finance
                 </span>
             </div>
-            <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+            <p class="text-xs text-slate-500 dark:text-slate-400">
                 Manage recurring employee allowances, deduction agreements, repayment schedules, and financial requests.
             </p>
         </div>
 
-        <div class="flex flex-wrap items-center gap-2">
+        <div class="flex flex-wrap items-center gap-1.5">
             <button type="button"
-                    class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-emerald-300 dark:border-emerald-700 bg-emerald-50/80 dark:bg-emerald-950/40 px-3.5 py-1.5 text-xs font-semibold text-emerald-800 dark:text-emerald-200 shadow-xs hover:bg-emerald-100 dark:hover:bg-emerald-900/60 disabled:opacity-50 transition"
+                    class="app-button app-button-secondary app-button-sm"
                     disabled="@busy"
                     @onclick="Load">
-                <span>↻</span>
+                <AppIcon Name="refresh" Class="@(busy ? "animate-spin text-xs" : "text-xs")" />
                 <span>Refresh</span>
             </button>
             <button type="button"
-                    class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs disabled:opacity-50 transition"
+                    class="app-button app-button-primary app-button-sm"
                     disabled="@busy"
                     @onclick='() => tab = "New request"'>
-                <span>+</span>
+                <AppIcon Name="add" Class="text-xs" />
                 <span>New Request</span>
             </button>
         </div>
-    </div>
+    </header>
 
     @if (error != null)
     {
-        <div role="alert" class="flex items-center justify-between rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800 dark:border-rose-800 dark:bg-rose-950/50 dark:text-rose-200">
+        <div role="alert" class="flex items-center justify-between rounded-xl border border-rose-200 dark:border-rose-800 bg-rose-50/80 dark:bg-rose-950/40 px-3.5 py-2.5 text-xs text-rose-800 dark:text-rose-200">
             <span>@error</span>
-            <button type="button" @onclick="() => error = null" class="font-bold text-rose-600 hover:text-rose-800 dark:text-rose-400 ml-2">✕</button>
+            <button type="button" @onclick="() => error = null" class="font-bold text-rose-600 hover:text-rose-800 dark:text-rose-400 ml-2" aria-label="Dismiss error">✕</button>
         </div>
     }
 
-    @if (busy)
+    @if (busy && (data == null || config == null))
     {
-        <div class="flex items-center gap-2 text-xs font-semibold text-emerald-700 dark:text-emerald-400 p-2">
-            <span class="animate-spin inline-block">⏳</span>
-            <span>Loading finance details...</span>
+        <div role="status" class="flex items-center justify-center gap-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-8 text-xs text-slate-500 dark:text-slate-400">
+            <span class="h-4 w-4 rounded-full border-2 border-blue-600 border-t-transparent animate-spin"></span>
+            <span>Loading finance details…</span>
         </div>
     }
 
     @if (data != null && config != null)
     {
-        <!-- Section Tabs Navigation (Folder/Pill Buttons with Green Accents) -->
-        <nav class="flex flex-wrap items-center gap-1.5 border-b border-slate-200 dark:border-slate-800 pb-2" aria-label="Finance sections">
-            @foreach (var item in Sections)
-            {
-                <button type="button"
-                        class="@(tab == item
-                            ? "inline-flex items-center justify-center gap-1.5 rounded-lg px-3.5 py-1.5 text-xs font-bold text-white bg-emerald-600 dark:bg-emerald-500 shadow-xs transition"
-                            : "inline-flex items-center justify-center gap-1.5 rounded-lg px-3.5 py-1.5 text-xs font-semibold text-emerald-950 dark:text-slate-300 bg-emerald-50/70 hover:bg-emerald-100/90 dark:bg-slate-800 dark:hover:bg-slate-700 border border-emerald-200/80 dark:border-slate-700 transition")"
-                        @onclick="() => SelectTab(item)">
-                    @item
-                    @if (item == "Requests" && data.Requests.Count > 0)
-                    {
-                        <span class="ml-1 rounded-full px-1.5 py-0.2 text-[10px] @(tab == item ? "bg-white/20 text-white" : "bg-emerald-200/80 text-emerald-900 dark:bg-slate-700 dark:text-slate-200")">
-                            @data.Requests.Count
-                        </span>
-                    }
-                    else if (item == "Allowances" && data.Allowances.Count > 0)
-                    {
-                        <span class="ml-1 rounded-full px-1.5 py-0.2 text-[10px] @(tab == item ? "bg-white/20 text-white" : "bg-emerald-200/80 text-emerald-900 dark:bg-slate-700 dark:text-slate-200")">
-                            @data.Allowances.Count
-                        </span>
-                    }
-                    else if (item == "Agreements" && data.Agreements.Count > 0)
-                    {
-                        <span class="ml-1 rounded-full px-1.5 py-0.2 text-[10px] @(tab == item ? "bg-white/20 text-white" : "bg-emerald-200/80 text-emerald-900 dark:bg-slate-700 dark:text-slate-200")">
-                            @data.Agreements.Count
-                        </span>
-                    }
-                </button>
-            }
-        </nav>
+        var activeAgreementsCount = data.Agreements.Count(x => x.Outstanding > 0);
+        var pendingRequestsCount = data.Requests.Count(x => x.Status.Contains("Processing", StringComparison.OrdinalIgnoreCase) || x.Status.Contains("Pending", StringComparison.OrdinalIgnoreCase));
+
+        <!-- Narrow Sub-Navigation & Inline KPI Bar -->
+        <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2 flex flex-wrap items-center justify-between gap-2 text-xs">
+            <nav class="flex flex-wrap items-center gap-1 overflow-x-auto" aria-label="Finance sections">
+                @foreach (var item in Sections)
+                {
+                    var isActive = tab == item;
+                    <button type="button"
+                            class="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors whitespace-nowrap @(isActive
+                                ? "bg-teal-50 dark:bg-teal-950/50 text-teal-800 dark:text-teal-300 border border-teal-200 dark:border-teal-800"
+                                : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 border border-transparent")"
+                            @onclick="() => SelectTab(item)">
+                        <span>@item</span>
+                        @if (item == "Requests" && data.Requests.Count > 0)
+                        {
+                            <span class="rounded-full px-1.5 py-0.5 text-[10px] font-bold @(isActive ? "bg-teal-100 dark:bg-teal-900 text-teal-900 dark:text-teal-200" : "bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 border border-amber-200/80 dark:border-amber-800")">
+                                @data.Requests.Count
+                            </span>
+                        }
+                        else if (item == "Allowances" && data.Allowances.Count > 0)
+                        {
+                            <span class="rounded-full px-1.5 py-0.5 text-[10px] font-bold @(isActive ? "bg-teal-100 dark:bg-teal-900 text-teal-900 dark:text-teal-200" : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300")">
+                                @data.Allowances.Count
+                            </span>
+                        }
+                        else if (item == "Agreements" && data.Agreements.Count > 0)
+                        {
+                            <span class="rounded-full px-1.5 py-0.5 text-[10px] font-bold @(isActive ? "bg-teal-100 dark:bg-teal-900 text-teal-900 dark:text-teal-200" : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300")">
+                                @data.Agreements.Count
+                            </span>
+                        }
+                    </button>
+                }
+            </nav>
+
+            <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500 dark:text-slate-400">
+                <span class="inline-flex items-center gap-1.5">
+                    <span class="h-1.5 w-1.5 rounded-full bg-teal-500"></span>
+                    Allowances: <strong class="text-slate-900 dark:text-slate-100 tabular-nums">@data.Allowances.Count</strong>
+                </span>
+                <span aria-hidden="true" class="text-slate-300 dark:text-slate-600">·</span>
+                <span class="inline-flex items-center gap-1.5">
+                    <span class="h-1.5 w-1.5 rounded-full bg-blue-500"></span>
+                    Active Agreements: <strong class="text-slate-900 dark:text-slate-100 tabular-nums">@activeAgreementsCount</strong>
+                </span>
+                <span aria-hidden="true" class="text-slate-300 dark:text-slate-600">·</span>
+                <span class="inline-flex items-center gap-1.5">
+                    <span class="h-1.5 w-1.5 rounded-full bg-amber-500"></span>
+                    Pending: <strong class="text-slate-900 dark:text-slate-100 tabular-nums">@pendingRequestsCount</strong>
+                </span>
+            </div>
+        </div>
 
         <!-- ======================================================== -->
         <!-- VIEW: NEW REQUEST (Two-Column Grid Layout) -->
@@ -100,39 +124,39 @@
         {
             @if (AdminMode && StaffId == 0 && data.CanManage)
             {
-                <div class="rounded-xl border border-slate-200 bg-white p-3 shadow-xs mb-3">
-                    <label class="block text-xs font-semibold text-slate-700 mb-1">Select Employee</label>
+                <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3.5 py-3">
+                    <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">Select Employee</label>
                     <WorkspaceSearch StaffOnly="true" RequireActivePosition="true" OnSelected="SelectStaff" />
                     @if (selectedName != null)
                     {
-                        <p class="text-xs font-medium text-emerald-700 mt-1">Selected: @selectedName</p>
+                        <p class="text-xs font-semibold text-teal-700 dark:text-teal-300 mt-1.5">Selected: @selectedName</p>
                     }
                 </div>
             }
 
             @if (jobId <= 0)
             {
-                <div class="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center text-xs text-slate-500">
+                <div class="rounded-xl border border-dashed border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-6 text-center text-xs text-slate-500 dark:text-slate-400">
                     Select a staff member with active employment to proceed with financial requests.
                 </div>
             }
             else
             {
-                <div class="grid grid-cols-1 lg:grid-cols-12 gap-2 p-2 items-start">
+                <div class="sf-grid-7-5">
 
                     <!-- Left Column: New Request Form -->
-                    <div class="lg:col-span-7 min-w-0 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-xs space-y-4">
-                        <div class="border-b border-slate-200 dark:border-slate-800 pb-2">
-                            <h2 class="text-sm font-bold text-slate-800 dark:text-slate-100">Create Financial Request</h2>
-                            <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Submit an allowance, deduction agreement, or instalment modification.</p>
+                    <div class="min-w-0 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden">
+                        <div class="bg-slate-50/80 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 px-3.5 py-2.5">
+                            <h2 class="text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-200">Create Financial Request</h2>
+                            <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">Submit an allowance, deduction agreement, or instalment modification.</p>
                         </div>
 
-                        <fieldset disabled="@busy" class="space-y-3">
+                        <fieldset disabled="@busy" class="p-3.5 space-y-3">
                             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 <div>
-                                    <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 p-1">Request Type</label>
+                                    <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">Request Type</label>
                                     <select @bind="kind"
-                                            class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs text-slate-900 dark:text-slate-100 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 shadow-2xs">
+                                            class="w-full h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 text-xs text-slate-900 dark:text-slate-100 focus:border-teal-600 focus:outline-none">
                                         <option value="Allowance">Staff-requested allowance</option>
                                         <option value="Agreement">Deduction agreement</option>
                                         <option value="Defer">Defer an instalment</option>
@@ -144,9 +168,9 @@
                                 @if (kind == "Allowance")
                                 {
                                     <div>
-                                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 p-1">Allowance Type</label>
+                                        <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">Allowance Type</label>
                                         <select @bind="allowanceType"
-                                                class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs text-slate-900 dark:text-slate-100 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 shadow-2xs">
+                                                class="w-full h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 text-xs text-slate-900 dark:text-slate-100 focus:border-teal-600 focus:outline-none">
                                             <option value="0">Select type</option>
                                             @foreach (var a in config.AllowanceTypes)
                                             {
@@ -159,9 +183,9 @@
                                 @if (kind == "EndAllowance")
                                 {
                                     <div>
-                                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 p-1">Select Allowance to End</label>
+                                        <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">Select Allowance to End</label>
                                         <select @bind="allowanceType"
-                                                class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs text-slate-900 dark:text-slate-100 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 shadow-2xs">
+                                                class="w-full h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 text-xs text-slate-900 dark:text-slate-100 focus:border-teal-600 focus:outline-none">
                                             <option value="0">Select allowance</option>
                                             @foreach (var a in data.Allowances.Where(x => x.JobId == jobId))
                                             {
@@ -174,9 +198,9 @@
                                 @if (kind is "Defer" or "Payment")
                                 {
                                     <div>
-                                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 p-1">Agreement</label>
+                                        <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">Agreement</label>
                                         <select @bind="agreementId"
-                                                class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs text-slate-900 dark:text-slate-100 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 shadow-2xs">
+                                                class="w-full h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 text-xs text-slate-900 dark:text-slate-100 focus:border-teal-600 focus:outline-none">
                                             <option value="0">Select agreement</option>
                                             @foreach (var a in data.Agreements.Where(x => x.JobId == jobId && x.Outstanding > 0))
                                             {
@@ -189,14 +213,14 @@
                                 @if (kind is "Agreement" or "Payment")
                                 {
                                     <div>
-                                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 p-1">Amount</label>
+                                        <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">Amount</label>
                                         <InputNumber @bind-Value="amount" min="0.01" step="0.01"
-                                                     class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs text-slate-900 dark:text-slate-100 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 shadow-2xs" />
+                                                     class="w-full h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 text-xs text-slate-900 dark:text-slate-100 focus:border-teal-600 focus:outline-none" />
                                     </div>
                                     <div>
-                                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 p-1">Currency</label>
+                                        <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">Currency</label>
                                         <select @bind="currency"
-                                                class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs text-slate-900 dark:text-slate-100 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 shadow-2xs">
+                                                class="w-full h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 text-xs text-slate-900 dark:text-slate-100 focus:border-teal-600 focus:outline-none">
                                             <option value="0">Select currency</option>
                                             @foreach (var c in config.Currencies)
                                             {
@@ -207,26 +231,26 @@
                                 }
 
                                 <div>
-                                    <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 p-1">@DateLabel</label>
+                                    <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">@DateLabel</label>
                                     <InputDate @bind-Value="from"
-                                               class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs text-slate-900 dark:text-slate-100 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 shadow-2xs" />
+                                               class="w-full h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 text-xs text-slate-900 dark:text-slate-100 focus:border-teal-600 focus:outline-none" />
                                 </div>
 
                                 @if (kind == "Allowance")
                                 {
                                     <div>
-                                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 p-1">End Date (optional)</label>
+                                        <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">End Date (optional)</label>
                                         <InputDate @bind-Value="to"
-                                                   class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs text-slate-900 dark:text-slate-100 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 shadow-2xs" />
+                                                   class="w-full h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 text-xs text-slate-900 dark:text-slate-100 focus:border-teal-600 focus:outline-none" />
                                     </div>
                                 }
 
                                 @if (kind is "Allowance" or "Agreement")
                                 {
                                     <div>
-                                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 p-1">Frequency</label>
+                                        <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">Frequency</label>
                                         <select @bind="frequency"
-                                                class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs text-slate-900 dark:text-slate-100 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 shadow-2xs">
+                                                class="w-full h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 text-xs text-slate-900 dark:text-slate-100 focus:border-teal-600 focus:outline-none">
                                             <option value="1">Monthly</option>
                                             <option value="6">Every six months</option>
                                             <option value="12">Annually</option>
@@ -237,14 +261,14 @@
                                 @if (kind == "Agreement")
                                 {
                                     <div>
-                                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 p-1">Instalment Count</label>
+                                        <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">Instalment Count</label>
                                         <InputNumber @bind-Value="count" min="1" max="120"
-                                                     class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs text-slate-900 dark:text-slate-100 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 shadow-2xs" />
+                                                     class="w-full h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 text-xs text-slate-900 dark:text-slate-100 focus:border-teal-600 focus:outline-none" />
                                     </div>
                                     <div>
-                                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 p-1">Category</label>
+                                        <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">Category</label>
                                         <select @bind="category"
-                                                class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs text-slate-900 dark:text-slate-100 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 shadow-2xs">
+                                                class="w-full h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 text-xs text-slate-900 dark:text-slate-100 focus:border-teal-600 focus:outline-none">
                                             <option>Loan</option>
                                             <option>Goods</option>
                                             <option>Insurance</option>
@@ -256,72 +280,72 @@
                                 @if (kind is "Agreement" or "Payment")
                                 {
                                     <div>
-                                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 p-1">
+                                        <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
                                             @(kind == "Agreement" ? "Creditor / Registry ID" : "Payer Registry ID")
                                         </label>
                                         <InputNumber @bind-Value="entityId" min="1"
-                                                     class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs text-slate-900 dark:text-slate-100 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 shadow-2xs" />
+                                                     class="w-full h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 text-xs text-slate-900 dark:text-slate-100 focus:border-teal-600 focus:outline-none" />
                                     </div>
                                     <div>
-                                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 p-1">
+                                        <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
                                             @(kind == "Agreement" ? "Agreement Reference" : "Receipt / Txn Reference")
                                         </label>
                                         <input @bind="reference" maxlength="200"
-                                               class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs text-slate-900 dark:text-slate-100 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 shadow-2xs" />
+                                               class="w-full h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 text-xs text-slate-900 dark:text-slate-100 focus:border-teal-600 focus:outline-none" />
                                     </div>
                                 }
                             </div>
 
                             <div>
-                                <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 p-1">Reason / Justification</label>
+                                <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">Reason / Justification</label>
                                 <textarea @bind="reason" rows="3" maxlength="2000"
-                                          class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2 text-xs text-slate-900 dark:text-slate-100 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 shadow-2xs"
-                                          placeholder="Provide clear justification for this request..."></textarea>
+                                          class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 p-2.5 text-xs text-slate-900 dark:text-slate-100 focus:border-teal-600 focus:outline-none"
+                                          placeholder="Provide clear justification for this request…"></textarea>
                             </div>
 
-                            <div class="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+                            <div class="flex flex-wrap items-center gap-2 pt-2.5 border-t border-slate-200 dark:border-slate-800">
                                 @if (kind == "Agreement")
                                 {
                                     <button type="button"
-                                            class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-950/40 px-3.5 py-2 text-xs font-semibold text-emerald-800 dark:text-emerald-200 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 shadow-xs transition"
+                                            class="app-button app-button-secondary app-button-sm"
                                             @onclick="PreviewSchedule">
-                                        ⚡ Preview Repayments
+                                        Preview Repayments
                                     </button>
                                 }
                                 <button type="button"
-                                        class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 px-4 py-2 text-xs font-semibold text-white shadow-xs disabled:opacity-50 transition"
+                                        class="app-button app-button-primary app-button-sm"
                                         @onclick="Submit">
-                                    ✓ Submit for Approval
+                                    Submit for Approval
                                 </button>
                             </div>
                         </fieldset>
                     </div>
 
                     <!-- Right Column: Repayment Preview & Financial Context -->
-                    <div class="lg:col-span-5 min-w-0 space-y-4">
+                    <div class="min-w-0 flex flex-col gap-3">
                         @if (schedule.Count > 0 && kind == "Agreement")
                         {
-                            <div class="rounded-2xl border border-emerald-200 dark:border-emerald-800 bg-white dark:bg-slate-900 p-4 shadow-xs">
-                                <div class="flex items-center justify-between border-b border-emerald-100 dark:border-emerald-800/60 pb-2 mb-3">
-                                    <h3 class="text-xs font-bold text-emerald-900 dark:text-emerald-300">Repayment Schedule Preview</h3>
-                                    <span class="rounded-full bg-emerald-100 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-200 px-2 py-0.5 text-[10px] font-bold">
+                            <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden">
+                                <div class="bg-slate-50/80 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 px-3.5 py-2.5 flex items-center justify-between gap-2">
+                                    <h3 class="text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-200">Repayment Schedule Preview</h3>
+                                    <span class="rounded-full bg-teal-50 dark:bg-teal-950/60 border border-teal-200 dark:border-teal-800 px-2 py-0.5 text-[10px] font-semibold text-teal-800 dark:text-teal-300">
                                         @schedule.Count instalments
                                     </span>
                                 </div>
-                                <div class="max-h-72 overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-800">
+                                <div class="max-h-72 overflow-y-auto">
                                     <table class="w-full text-left text-xs">
-                                        <thead class="bg-emerald-50/80 dark:bg-slate-800 text-emerald-950 dark:text-slate-300 font-semibold border-b border-emerald-200 dark:border-slate-700">
+                                        <thead class="bg-slate-50/60 dark:bg-slate-800/40 text-slate-500 dark:text-slate-400 text-[10px] font-bold uppercase tracking-wider border-b border-slate-200 dark:border-slate-800">
                                             <tr>
-                                                <th class="p-2">Due Date</th>
-                                                <th class="p-2 text-right">Amount</th>
+                                                <th class="px-3 py-2">Due Date</th>
+                                                <th class="px-3 py-2 text-right">Amount</th>
                                             </tr>
                                         </thead>
-                                        <tbody class="divide-y divide-slate-100 dark:divide-slate-800 text-slate-800 dark:text-slate-200">
+                                        <tbody class="divide-y divide-slate-100 dark:divide-slate-800/70">
                                             @foreach (var i in schedule)
                                             {
-                                                <tr class="hover:bg-emerald-50/40 dark:hover:bg-slate-800/60">
-                                                    <td class="p-2 font-mono">@i.DueDate.ToString("dd MMM yyyy")</td>
-                                                    <td class="p-2 text-right font-semibold">@i.Amount.ToString("N2")</td>
+                                                <tr class="even:bg-slate-50/40 dark:even:bg-slate-800/20 hover:bg-teal-50/30 dark:hover:bg-slate-800/40">
+                                                    <td class="px-3 py-2 font-mono text-[11px]">@i.DueDate.ToString("dd MMM yyyy")</td>
+                                                    <td class="px-3 py-2 text-right font-semibold tabular-nums">@i.Amount.ToString("N2")</td>
                                                 </tr>
                                             }
                                         </tbody>
@@ -331,29 +355,33 @@
                         }
 
                         <!-- Financial Commitments Summary Card -->
-                        <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-xs space-y-3">
-                            <h3 class="text-xs font-bold text-slate-800 dark:text-slate-200 border-b border-slate-100 dark:border-slate-800 pb-2">
-                                Current Financial Commitments
-                            </h3>
-                            <div class="grid grid-cols-2 gap-2 text-xs">
-                                <div class="rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 p-2.5">
-                                    <span class="text-slate-500 dark:text-slate-400 block text-[11px]">Active Allowances</span>
-                                    <span class="text-sm font-bold text-slate-800 dark:text-slate-100">
-                                        @data.Allowances.Count(x => x.JobId == jobId)
-                                    </span>
-                                </div>
-                                <div class="rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 p-2.5">
-                                    <span class="text-slate-500 dark:text-slate-400 block text-[11px]">Active Agreements</span>
-                                    <span class="text-sm font-bold text-slate-800 dark:text-slate-100">
-                                        @data.Agreements.Count(x => x.JobId == jobId && x.Outstanding > 0)
-                                    </span>
-                                </div>
+                        <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden">
+                            <div class="bg-slate-50/80 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 px-3.5 py-2.5">
+                                <h3 class="text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-200">
+                                    Current Financial Commitments
+                                </h3>
                             </div>
-                            <div class="rounded-xl border border-emerald-200 dark:border-emerald-800/50 bg-emerald-50/50 dark:bg-emerald-950/20 p-3 text-[11px] text-emerald-900 dark:text-emerald-300">
-                                <p class="font-semibold mb-1">💡 Supporting Documentation</p>
-                                <p class="text-slate-600 dark:text-slate-400">
-                                    Agreement and payment receipts can be attached to the submitted request after creation before approval.
-                                </p>
+                            <div class="p-3.5 space-y-3">
+                                <div class="grid grid-cols-2 gap-2.5 text-xs">
+                                    <div class="rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40 p-2.5">
+                                        <span class="text-slate-500 dark:text-slate-400 block text-[11px]">Active Allowances</span>
+                                        <span class="mt-0.5 block text-base font-bold text-slate-900 dark:text-slate-100 tabular-nums">
+                                            @data.Allowances.Count(x => x.JobId == jobId)
+                                        </span>
+                                    </div>
+                                    <div class="rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40 p-2.5">
+                                        <span class="text-slate-500 dark:text-slate-400 block text-[11px]">Active Agreements</span>
+                                        <span class="mt-0.5 block text-base font-bold text-slate-900 dark:text-slate-100 tabular-nums">
+                                            @data.Agreements.Count(x => x.JobId == jobId && x.Outstanding > 0)
+                                        </span>
+                                    </div>
+                                </div>
+                                <div class="rounded-lg border border-teal-200/80 dark:border-teal-800/60 bg-teal-50/50 dark:bg-teal-950/20 p-3 text-[11px] text-teal-900 dark:text-teal-200">
+                                    <p class="font-semibold mb-0.5">Supporting Documentation</p>
+                                    <p class="text-slate-600 dark:text-slate-400">
+                                        Agreement and payment receipts can be attached to the submitted request after creation before approval.
+                                    </p>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -375,249 +403,254 @@
             var currentSelected = filteredRequests.FirstOrDefault(x => x.Id == selectedRequestId)
                                   ?? filteredRequests.FirstOrDefault();
 
-            <div class="grid grid-cols-1 lg:grid-cols-12 gap-2 p-2 items-start">
+            <div class="sf-grid-5-7">
 
                 <!-- Left Column: Filterable Requests List -->
-                <div class="lg:col-span-5 min-w-0 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-xs space-y-3">
-                    <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2.5">
-                        <h2 class="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">
-                            Requests (@filteredRequests.Count)
-                        </h2>
+                <div class="min-w-0 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden">
+                    <div class="bg-slate-50/80 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 px-3.5 py-2.5 flex items-center justify-between gap-2">
+                        <h2 class="text-[11px] font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wider">Requests</h2>
+                        <span class="rounded-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-2 py-0.5 text-[10px] font-semibold text-slate-600 dark:text-slate-300">@filteredRequests.Count</span>
                     </div>
 
-                    <!-- Filter Controls -->
-                    <div class="grid grid-cols-2 gap-2">
-                        <div>
-                            <label class="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-0.5">Status</label>
-                            <select @bind="status"
-                                    class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-xs text-slate-800 dark:text-slate-200 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500">
-                                <option value="">All Statuses</option>
-                                @foreach (var s in data.Requests.Select(x => x.Status).Distinct())
-                                {
-                                    <option value="@s">@s</option>
-                                }
-                            </select>
+                    <div class="p-3 space-y-3">
+                        <!-- Filter Controls -->
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label class="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">Status</label>
+                                <select @bind="status"
+                                        class="w-full h-8 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2 text-xs text-slate-800 dark:text-slate-200 focus:border-teal-600 focus:outline-none">
+                                    <option value="">All Statuses</option>
+                                    @foreach (var s in data.Requests.Select(x => x.Status).Distinct())
+                                    {
+                                        <option value="@s">@s</option>
+                                    }
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">Type</label>
+                                <select @bind="requestKind"
+                                        class="w-full h-8 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2 text-xs text-slate-800 dark:text-slate-200 focus:border-teal-600 focus:outline-none">
+                                    <option value="">All Types</option>
+                                    @foreach (var k in data.Requests.Select(x => x.Kind).Distinct())
+                                    {
+                                        <option value="@k">@k</option>
+                                    }
+                                </select>
+                            </div>
                         </div>
-                        <div>
-                            <label class="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-0.5">Type</label>
-                            <select @bind="requestKind"
-                                    class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-xs text-slate-800 dark:text-slate-200 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500">
-                                <option value="">All Types</option>
-                                @foreach (var k in data.Requests.Select(x => x.Kind).Distinct())
-                                {
-                                    <option value="@k">@k</option>
-                                }
-                            </select>
-                        </div>
-                    </div>
 
-                    <!-- Request List Cards -->
-                    <div class="space-y-2 max-h-[600px] overflow-y-auto pr-1">
-                        @foreach (var row in filteredRequests)
-                        {
-                            var isSelected = currentSelected?.Id == row.Id;
-                            <div class="rounded-xl border p-3 text-xs transition cursor-pointer flex flex-col gap-1.5 @(isSelected ? "border-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/30 ring-1 ring-emerald-500 shadow-xs" : "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-700")"
-                                 @onclick="() => selectedRequestId = row.Id">
-                                <div class="flex items-center justify-between gap-1 flex-wrap">
-                                    <span class="font-mono text-[11px] font-bold text-emerald-800 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 px-1.5 py-0.5 rounded">
-                                        @row.Reference
-                                    </span>
-                                    <span class="rounded-full px-2 py-0.5 text-[10px] font-semibold @StatusBadgeClass(row.Status)">
-                                        @row.Status
-                                    </span>
-                                </div>
-                                <div class="flex items-center justify-between text-slate-700 dark:text-slate-300 mt-1">
-                                    <span class="font-semibold">@row.Kind</span>
-                                    <span class="text-slate-500 dark:text-slate-400 text-[11px]">@row.Application.FromDate.ToString("dd MMM yyyy")</span>
-                                </div>
-                                @if (row.Kind != "Allowance")
-                                {
-                                    <div class="text-slate-600 dark:text-slate-400 font-semibold text-[11px]">
-                                        Amount: @row.Application.Amount.ToString("N2") @CurrencyName(row.Application.CurrencyTypeId)
+                        <!-- Request List Cards -->
+                        <div class="space-y-1.5 max-h-[600px] overflow-y-auto pr-0.5">
+                            @foreach (var row in filteredRequests)
+                            {
+                                var isSelected = currentSelected?.Id == row.Id;
+                                <button type="button"
+                                        class="w-full text-left rounded-lg border p-2.5 text-xs transition-colors flex flex-col gap-1 @(isSelected ? "border-teal-500 bg-teal-50/70 dark:bg-teal-950/40 dark:border-teal-600" : "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/60")"
+                                        @onclick="() => selectedRequestId = row.Id">
+                                    <div class="flex items-center justify-between gap-1 flex-wrap w-full">
+                                        <span class="font-mono text-[11px] font-bold text-slate-800 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">
+                                            @row.Reference
+                                        </span>
+                                        <span class="rounded-full px-2 py-0.5 text-[10px] font-semibold @StatusBadgeClass(row.Status)">
+                                            @row.Status
+                                        </span>
                                     </div>
-                                }
-                                @if (StaffId == 0 && !string.IsNullOrEmpty(row.Staff))
-                                {
-                                    <div class="text-[11px] text-slate-500">Employee: @row.Staff</div>
-                                }
-                            </div>
-                        }
+                                    <div class="flex items-center justify-between text-slate-700 dark:text-slate-300 mt-0.5 w-full">
+                                        <span class="font-semibold">@row.Kind</span>
+                                        <span class="text-slate-500 dark:text-slate-400 text-[11px]">@row.Application.FromDate.ToString("dd MMM yyyy")</span>
+                                    </div>
+                                    @if (row.Kind != "Allowance")
+                                    {
+                                        <div class="text-slate-600 dark:text-slate-400 font-semibold text-[11px] tabular-nums">
+                                            Amount: @row.Application.Amount.ToString("N2") @CurrencyName(row.Application.CurrencyTypeId)
+                                        </div>
+                                    }
+                                    @if (StaffId == 0 && !string.IsNullOrEmpty(row.Staff))
+                                    {
+                                        <div class="text-[11px] text-slate-500">Employee: @row.Staff</div>
+                                    }
+                                </button>
+                            }
 
-                        @if (filteredRequests.Count == 0)
-                        {
-                            <div class="rounded-xl border border-dashed border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 p-6 text-center text-xs text-slate-500">
-                                No requests found matching the current filters.
-                            </div>
-                        }
+                            @if (filteredRequests.Count == 0)
+                            {
+                                <div class="rounded-lg border border-dashed border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/30 p-6 text-center text-xs text-slate-500">
+                                    No requests found matching the current filters.
+                                </div>
+                            }
+                        </div>
                     </div>
                 </div>
 
                 <!-- Right Column: Selected Request Inspector & Workflow Actions -->
-                <div class="lg:col-span-7 min-w-0 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-xs space-y-4">
+                <div class="min-w-0 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden">
                     @if (currentSelected is not null)
                     {
                         var row = currentSelected;
-                        <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 dark:border-slate-800 pb-3">
-                            <div class="flex items-center gap-2">
-                                <span class="font-mono text-sm font-bold text-slate-900 dark:text-slate-100">@row.Reference</span>
+                        <div class="bg-slate-50/80 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 px-3.5 py-2.5 flex flex-wrap items-center justify-between gap-2">
+                            <div class="flex items-center gap-2 min-w-0">
+                                <span class="font-mono text-xs font-bold text-slate-900 dark:text-slate-100">@row.Reference</span>
                                 <span class="text-slate-400">·</span>
                                 <span class="text-xs font-semibold text-slate-700 dark:text-slate-300">@row.Kind</span>
                             </div>
-                            <span class="rounded-full px-2.5 py-0.5 text-xs font-semibold @StatusBadgeClass(row.Status)">
+                            <span class="rounded-full px-2 py-0.5 text-[10px] font-semibold @StatusBadgeClass(row.Status)">
                                 @row.Status
                             </span>
                         </div>
 
-                        <!-- Application Summary Details -->
-                        <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
-                            <div class="rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 p-2.5">
-                                <span class="text-slate-500 dark:text-slate-400 block text-[11px]">Effective Date</span>
-                                <span class="font-semibold text-slate-800 dark:text-slate-200">
-                                    @row.Application.FromDate.ToString("dd MMM yyyy")
-                                </span>
-                            </div>
-                            @if (row.Kind != "Allowance")
-                            {
-                                <div class="rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 p-2.5">
-                                    <span class="text-slate-500 dark:text-slate-400 block text-[11px]">Application Amount</span>
-                                    <span class="font-semibold text-slate-800 dark:text-slate-200">
-                                        @row.Application.Amount.ToString("N2") @CurrencyName(row.Application.CurrencyTypeId)
+                        <div class="p-3.5 space-y-3.5">
+                            <!-- Application Summary Details -->
+                            <div class="grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-xs">
+                                <div class="rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40 p-2.5">
+                                    <span class="text-slate-500 dark:text-slate-400 block text-[11px]">Effective Date</span>
+                                    <span class="font-semibold text-slate-900 dark:text-slate-100">
+                                        @row.Application.FromDate.ToString("dd MMM yyyy")
                                     </span>
                                 </div>
-                            }
-                            @if (row.Application.ToDate.HasValue)
-                            {
-                                <div class="rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 p-2.5">
-                                    <span class="text-slate-500 dark:text-slate-400 block text-[11px]">End Date</span>
-                                    <span class="font-semibold text-slate-800 dark:text-slate-200">
-                                        @row.Application.ToDate.Value.ToString("dd MMM yyyy")
-                                    </span>
-                                </div>
-                            }
-                        </div>
-
-                        @if (!string.IsNullOrWhiteSpace(row.Application.Reason))
-                        {
-                            <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 p-3 text-xs">
-                                <span class="font-semibold text-slate-700 dark:text-slate-300 block mb-1">Reason / Notes</span>
-                                <p class="text-slate-600 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">@row.Application.Reason</p>
-                            </div>
-                        }
-
-                        <!-- HR Assessment Section (For Allowance Requests) -->
-                        @if (row.Kind == "Allowance")
-                        {
-                            <div class="rounded-xl border border-emerald-200 dark:border-emerald-800/60 bg-emerald-50/40 dark:bg-emerald-950/20 p-3.5 space-y-2">
-                                <h4 class="text-xs font-bold text-emerald-900 dark:text-emerald-300">HR Assessment</h4>
-                                @if (row.Assessments.Count == 0)
+                                @if (row.Kind != "Allowance")
                                 {
-                                    <p class="text-xs text-amber-700 dark:text-amber-400 font-medium">⏳ Awaiting HR amount assessment.</p>
+                                    <div class="rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40 p-2.5">
+                                        <span class="text-slate-500 dark:text-slate-400 block text-[11px]">Application Amount</span>
+                                        <span class="font-semibold text-slate-900 dark:text-slate-100 tabular-nums">
+                                            @row.Application.Amount.ToString("N2") @CurrencyName(row.Application.CurrencyTypeId)
+                                        </span>
+                                    </div>
                                 }
-                                @foreach (var a in row.Assessments)
+                                @if (row.Application.ToDate.HasValue)
                                 {
-                                    <p class="text-xs text-slate-700 dark:text-slate-300">
-                                        <span class="font-semibold">@(a == row.Assessments[0] ? "Current assessment" : "Previous assessment"):</span>
-                                        @a.Amount.ToString("N2") @CurrencyName(a.CurrencyTypeId)
-                                        <span class="text-[11px] text-slate-400 ml-1">· @a.AssessedAtUtc.AddHours(5).ToString("dd MMM yyyy HH:mm")</span>
-                                    </p>
-                                }
-                                @if (AdminMode && row.CanAssess)
-                                {
-                                    <div class="flex flex-wrap items-end gap-2 pt-2 border-t border-emerald-200 dark:border-emerald-800/40">
-                                        <div>
-                                            <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-0.5">Assessed Amount</label>
-                                            <InputNumber @bind-Value="assessmentAmounts[row.Id]" min="0.01" step="0.01"
-                                                         class="rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1 text-xs text-slate-900 dark:text-slate-100 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500" />
-                                        </div>
-                                        <div>
-                                            <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-0.5">Currency</label>
-                                            <select @bind="assessmentCurrencies[row.Id]"
-                                                    class="rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1 text-xs text-slate-900 dark:text-slate-100 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500">
-                                                <option value="0">Select currency</option>
-                                                @foreach (var c in config.Currencies)
-                                                {
-                                                    <option value="@c.Id">@c.Name</option>
-                                                }
-                                            </select>
-                                        </div>
-                                        <button type="button"
-                                                class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 px-3 py-1.5 text-xs font-semibold text-white shadow-xs disabled:opacity-50 transition"
-                                                disabled="@busy"
-                                                @onclick="() => Assess(row)">
-                                            Save HR Assessment
-                                        </button>
+                                    <div class="rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40 p-2.5">
+                                        <span class="text-slate-500 dark:text-slate-400 block text-[11px]">End Date</span>
+                                        <span class="font-semibold text-slate-900 dark:text-slate-100">
+                                            @row.Application.ToDate.Value.ToString("dd MMM yyyy")
+                                        </span>
                                     </div>
                                 }
                             </div>
-                        }
 
-                        <!-- Supporting Documents / Attachments -->
-                        <div class="space-y-2 pt-2 border-t border-slate-200 dark:border-slate-800">
-                            <span class="block text-xs font-semibold text-slate-700 dark:text-slate-300">Attached Documents</span>
-                            <div class="flex flex-wrap gap-2">
-                                @foreach (var d in data.Documents.Where(x => x.RequestId == row.Id))
+                            @if (!string.IsNullOrWhiteSpace(row.Application.Reason))
+                            {
+                                <div class="rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40 p-3 text-xs">
+                                    <span class="text-[11px] font-semibold text-slate-700 dark:text-slate-300 block mb-1">Reason / Notes</span>
+                                    <p class="text-slate-600 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">@row.Application.Reason</p>
+                                </div>
+                            }
+
+                            <!-- HR Assessment Section (For Allowance Requests) -->
+                            @if (row.Kind == "Allowance")
+                            {
+                                <div class="rounded-lg border border-teal-200 dark:border-teal-800/60 bg-teal-50/40 dark:bg-teal-950/20 p-3 space-y-2">
+                                    <h4 class="text-[11px] font-bold uppercase tracking-wider text-teal-900 dark:text-teal-300">HR Assessment</h4>
+                                    @if (row.Assessments.Count == 0)
+                                    {
+                                        <p class="text-xs text-amber-700 dark:text-amber-400 font-medium">Awaiting HR amount assessment.</p>
+                                    }
+                                    @foreach (var a in row.Assessments)
+                                    {
+                                        <p class="text-xs text-slate-700 dark:text-slate-300">
+                                            <span class="font-semibold">@(a == row.Assessments[0] ? "Current assessment" : "Previous assessment"):</span>
+                                            <span class="tabular-nums">@a.Amount.ToString("N2") @CurrencyName(a.CurrencyTypeId)</span>
+                                            <span class="text-[11px] text-slate-400 ml-1">· @a.AssessedAtUtc.AddHours(5).ToString("dd MMM yyyy HH:mm")</span>
+                                        </p>
+                                    }
+                                    @if (AdminMode && row.CanAssess)
+                                    {
+                                        <div class="flex flex-wrap items-end gap-2 pt-2 border-t border-teal-200/70 dark:border-teal-800/40">
+                                            <div>
+                                                <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">Assessed Amount</label>
+                                                <InputNumber @bind-Value="assessmentAmounts[row.Id]" min="0.01" step="0.01"
+                                                             class="h-8 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 text-xs text-slate-900 dark:text-slate-100 focus:border-teal-600 focus:outline-none" />
+                                            </div>
+                                            <div>
+                                                <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">Currency</label>
+                                                <select @bind="assessmentCurrencies[row.Id]"
+                                                        class="h-8 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 text-xs text-slate-900 dark:text-slate-100 focus:border-teal-600 focus:outline-none">
+                                                    <option value="0">Select currency</option>
+                                                    @foreach (var c in config.Currencies)
+                                                    {
+                                                        <option value="@c.Id">@c.Name</option>
+                                                    }
+                                                </select>
+                                            </div>
+                                            <button type="button"
+                                                    class="app-button app-button-primary app-button-sm"
+                                                    disabled="@busy"
+                                                    @onclick="() => Assess(row)">
+                                                Save HR Assessment
+                                            </button>
+                                        </div>
+                                    }
+                                </div>
+                            }
+
+                            <!-- Supporting Documents / Attachments -->
+                            <div class="space-y-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+                                <span class="block text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Attached Documents</span>
+                                <div class="flex flex-wrap gap-1.5">
+                                    @foreach (var d in data.Documents.Where(x => x.RequestId == row.Id))
+                                    {
+                                        <button type="button"
+                                                class="app-button app-button-secondary app-button-sm"
+                                                @onclick="() => Download(d.Id)">
+                                            <AppIcon Name="download" Class="text-xs" />
+                                            <span>@d.Name</span>
+                                        </button>
+                                    }
+                                    @if (!data.Documents.Any(x => x.RequestId == row.Id))
+                                    {
+                                        <span class="text-xs text-slate-400">No attached files.</span>
+                                    }
+                                </div>
+                                @if (row.CanCancel || data.CanManage && row.Status.StartsWith("Processing · ", StringComparison.Ordinal))
                                 {
-                                    <button type="button"
-                                            class="inline-flex items-center gap-1.5 rounded-lg border border-emerald-300 dark:border-emerald-700 bg-emerald-50/70 hover:bg-emerald-100 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-200 text-xs font-semibold px-2.5 py-1 shadow-2xs transition"
-                                            @onclick="() => Download(d.Id)">
-                                        📎 @d.Name
-                                    </button>
-                                }
-                                @if (!data.Documents.Any(x => x.RequestId == row.Id))
-                                {
-                                    <span class="text-xs text-slate-400">No attached files.</span>
+                                    <div class="rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 p-2.5 mt-2">
+                                        <label class="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">Attach Evidence File (PDF, PNG, JPG)</label>
+                                        <InputFile OnChange="e => Upload(row.Id, e)" accept=".pdf,.png,.jpg,.jpeg"
+                                                   class="text-xs text-slate-600 dark:text-slate-400 file:mr-2 file:rounded-lg file:border file:border-slate-300 file:bg-white file:px-2.5 file:py-1 file:text-xs file:font-semibold file:text-slate-700 hover:file:bg-slate-50" />
+                                    </div>
                                 }
                             </div>
-                            @if (row.CanCancel || data.CanManage && row.Status.StartsWith("Processing · ", StringComparison.Ordinal))
+
+                            <!-- Workflow Actions & Approval Buttons -->
+                            @if (row.CanApprove || row.CanCancel)
                             {
-                                <div class="pt-2">
-                                    <label class="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">Attach Evidence File (PDF, PNG, JPG)</label>
-                                    <InputFile OnChange="e => Upload(row.Id, e)" accept=".pdf,.png,.jpg,.jpeg"
-                                               class="text-xs text-slate-600 dark:text-slate-400 file:mr-2 file:rounded-lg file:border-0 file:bg-emerald-50 file:px-3 file:py-1 file:text-xs file:font-semibold file:text-emerald-700 hover:file:bg-emerald-100" />
+                                <div class="rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 p-3 space-y-2.5">
+                                    <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">Action Comment</label>
+                                    <textarea @bind="comments[row.Id]" maxlength="2000" rows="2"
+                                              class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 p-2 text-xs text-slate-900 dark:text-slate-100 focus:border-teal-600 focus:outline-none"
+                                              placeholder="Optional approval or rejection notes…"></textarea>
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        @if (row.CanApprove)
+                                        {
+                                            <button type="button"
+                                                    class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50 transition-colors"
+                                                    disabled="@busy"
+                                                    @onclick='() => Act(row, "Approve")'>
+                                                Approve Stage
+                                            </button>
+                                            <button type="button"
+                                                    class="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 dark:border-rose-800 bg-rose-50/80 dark:bg-rose-950/40 hover:bg-rose-100 px-3 py-1.5 text-xs font-semibold text-rose-700 dark:text-rose-300 disabled:opacity-50 transition-colors"
+                                                    disabled="@busy"
+                                                    @onclick='() => Act(row, "Reject")'>
+                                                Reject
+                                            </button>
+                                        }
+                                        @if (row.CanCancel)
+                                        {
+                                            <button type="button"
+                                                    class="app-button app-button-secondary app-button-sm"
+                                                    disabled="@busy"
+                                                    @onclick='() => Act(row, "Cancel")'>
+                                                Cancel Request
+                                            </button>
+                                        }
+                                    </div>
                                 </div>
                             }
                         </div>
-
-                        <!-- Workflow Actions & Approval Buttons -->
-                        @if (row.CanApprove || row.CanCancel)
-                        {
-                            <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 p-3 space-y-2.5">
-                                <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300">Action Comment</label>
-                                <textarea @bind="comments[row.Id]" maxlength="2000" rows="2"
-                                          class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2 text-xs text-slate-900 dark:text-slate-100 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 shadow-2xs"
-                                          placeholder="Optional approval or rejection notes..."></textarea>
-                                <div class="flex flex-wrap items-center gap-2">
-                                    @if (row.CanApprove)
-                                    {
-                                        <button type="button"
-                                                class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs disabled:opacity-50 transition"
-                                                disabled="@busy"
-                                                @onclick='() => Act(row, "Approve")'>
-                                            ✓ Approve Stage
-                                        </button>
-                                        <button type="button"
-                                                class="inline-flex items-center gap-1.5 rounded-lg border border-rose-300 bg-white hover:bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700 shadow-xs disabled:opacity-50 transition"
-                                                disabled="@busy"
-                                                @onclick='() => Act(row, "Reject")'>
-                                            ✕ Reject
-                                        </button>
-                                    }
-                                    @if (row.CanCancel)
-                                    {
-                                        <button type="button"
-                                                class="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs disabled:opacity-50 transition"
-                                                disabled="@busy"
-                                                @onclick='() => Act(row, "Cancel")'>
-                                            Cancel Request
-                                        </button>
-                                    }
-                                </div>
-                            </div>
-                        }
                     }
                     else
                     {
-                        <div class="rounded-xl border border-dashed border-slate-300 dark:border-slate-700 p-8 text-center text-xs text-slate-500">
+                        <div class="p-8 text-center text-xs text-slate-500 dark:text-slate-400">
                             Select a request from the list to view its details and workflow actions.
                         </div>
                     }
@@ -630,46 +663,49 @@
         <!-- ======================================================== -->
         else if (tab == "Allowances")
         {
-            <div class="grid grid-cols-1 lg:grid-cols-12 gap-2 p-2 items-start">
+            <div class="sf-grid-8-4">
                 <!-- Left Column: Allowances Table -->
-                <div class="lg:col-span-8 min-w-0 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-xs space-y-3">
-                    <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2.5">
-                        <h2 class="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">
-                            Active &amp; Recurring Allowances (@data.Allowances.Count)
+                <div class="min-w-0 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden">
+                    <div class="bg-slate-50/80 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 px-3.5 py-2.5 flex items-center justify-between gap-2">
+                        <h2 class="text-[11px] font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wider">
+                            Active &amp; Recurring Allowances
                         </h2>
+                        <span class="rounded-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-2 py-0.5 text-[10px] font-semibold text-slate-600 dark:text-slate-300">
+                            @data.Allowances.Count
+                        </span>
                     </div>
 
-                    <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
+                    <div class="overflow-x-auto">
                         <table class="w-full text-left text-xs">
-                            <thead class="bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold border-b border-slate-200 dark:border-slate-700">
+                            <thead class="bg-slate-50/60 dark:bg-slate-800/40 text-slate-500 dark:text-slate-400 text-[10px] font-bold uppercase tracking-wider border-b border-slate-200 dark:border-slate-800">
                                 <tr>
                                     @if (StaffId == 0)
                                     {
-                                        <th class="p-2.5">Staff</th>
+                                        <th class="px-3 py-2">Staff</th>
                                     }
-                                    <th class="p-2.5">Allowance Type</th>
-                                    <th class="p-2.5">Amount</th>
-                                    <th class="p-2.5">Period</th>
-                                    <th class="p-2.5">Source</th>
+                                    <th class="px-3 py-2">Allowance Type</th>
+                                    <th class="px-3 py-2 text-right">Amount</th>
+                                    <th class="px-3 py-2">Period</th>
+                                    <th class="px-3 py-2">Source</th>
                                 </tr>
                             </thead>
-                            <tbody class="divide-y divide-slate-100 dark:divide-slate-800 text-slate-800 dark:text-slate-200">
+                            <tbody class="divide-y divide-slate-100 dark:divide-slate-800/70">
                                 @foreach (var a in data.Allowances)
                                 {
-                                    <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-800/50">
+                                    <tr class="even:bg-slate-50/40 dark:even:bg-slate-800/20 hover:bg-teal-50/30 dark:hover:bg-slate-800/40 transition-colors">
                                         @if (StaffId == 0)
                                         {
-                                            <td class="p-2.5 font-medium">@a.Staff</td>
+                                            <td class="px-3 py-2 font-medium">@a.Staff</td>
                                         }
-                                        <td class="p-2.5 font-semibold text-emerald-800 dark:text-emerald-300">@a.Type</td>
-                                        <td class="p-2.5 font-bold font-mono">
+                                        <td class="px-3 py-2 font-semibold text-slate-900 dark:text-slate-100">@a.Type</td>
+                                        <td class="px-3 py-2 text-right font-bold font-mono tabular-nums text-slate-900 dark:text-slate-100">
                                             @a.Amount.ToString("N2") @CurrencyName(a.CurrencyTypeId)
                                         </td>
-                                        <td class="p-2.5 text-slate-600 dark:text-slate-400">
+                                        <td class="px-3 py-2 text-slate-600 dark:text-slate-400 whitespace-nowrap">
                                             @a.FromDate.ToString("dd MMM yyyy") – @(a.ToDate?.ToString("dd MMM yyyy") ?? "Ongoing")
                                         </td>
-                                        <td class="p-2.5">
-                                            <span class="rounded-full bg-slate-100 dark:bg-slate-800 px-2 py-0.5 text-[10px] font-semibold text-slate-700 dark:text-slate-300">
+                                        <td class="px-3 py-2">
+                                            <span class="rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-2 py-0.5 text-[10px] font-semibold text-slate-700 dark:text-slate-300">
                                                 @a.Source
                                             </span>
                                         </td>
@@ -689,25 +725,28 @@
                 </div>
 
                 <!-- Right Column: Summary Card & Quick Action -->
-                <div class="lg:col-span-4 min-w-0 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-xs space-y-4">
-                    <h3 class="text-xs font-bold text-slate-800 dark:text-slate-200 border-b border-slate-100 dark:border-slate-800 pb-2">
-                        Allowance Summary
-                    </h3>
-                    <div class="rounded-xl border border-emerald-200 dark:border-emerald-800/60 bg-emerald-50/50 dark:bg-emerald-950/20 p-4 space-y-2">
-                        <span class="text-xs font-semibold text-emerald-900 dark:text-emerald-300">Monthly Entitlement</span>
-                        <div class="text-2xl font-bold font-mono text-emerald-800 dark:text-emerald-200">
-                            @data.Allowances.Sum(x => x.Amount).ToString("N2")
-                        </div>
-                        <p class="text-[11px] text-emerald-700 dark:text-emerald-400">
-                            Based on active recurring allowances registered in the system.
-                        </p>
+                <div class="min-w-0 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden">
+                    <div class="bg-slate-50/80 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 px-3.5 py-2.5">
+                        <h3 class="text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-200">Allowance Summary</h3>
                     </div>
+                    <div class="p-3.5 space-y-3">
+                        <div class="rounded-lg border border-teal-200 dark:border-teal-800/60 bg-teal-50/50 dark:bg-teal-950/20 p-3.5 space-y-1">
+                            <span class="text-[11px] font-semibold text-teal-900 dark:text-teal-300">Monthly Entitlement</span>
+                            <div class="text-2xl font-bold font-mono tabular-nums text-teal-800 dark:text-teal-200">
+                                @data.Allowances.Sum(x => x.Amount).ToString("N2")
+                            </div>
+                            <p class="text-[11px] text-slate-600 dark:text-slate-400">
+                                Based on active recurring allowances registered in the system.
+                            </p>
+                        </div>
 
-                    <button type="button"
-                            class="w-full inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 px-3.5 py-2 text-xs font-semibold text-white shadow-xs transition"
-                            @onclick='() => { tab = "New request"; kind = "Allowance"; }'>
-                        + Request New Allowance
-                    </button>
+                        <button type="button"
+                                class="w-full app-button app-button-primary app-button-sm justify-center"
+                                @onclick='() => { tab = "New request"; kind = "Allowance"; }'>
+                            <AppIcon Name="add" Class="text-xs" />
+                            <span>Request New Allowance</span>
+                        </button>
+                    </div>
                 </div>
             </div>
         }
@@ -719,48 +758,42 @@
             var selectedAgreement = data.Agreements.FirstOrDefault(x => x.Id == selectedAgreementId)
                                     ?? data.Agreements.FirstOrDefault();
 
-            <div class="grid grid-cols-1 lg:grid-cols-12 gap-2 p-2 items-start">
+            <div class="sf-grid-5-7">
                 <!-- Left Column: Agreements List -->
-                <div class="lg:col-span-5 min-w-0 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-xs space-y-3">
-                    <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2.5">
-                        <h2 class="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">
-                            Deduction Agreements (@data.Agreements.Count)
-                        </h2>
+                <div class="min-w-0 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden">
+                    <div class="bg-slate-50/80 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 px-3.5 py-2.5 flex items-center justify-between gap-2">
+                        <h2 class="text-[11px] font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wider">Deduction Agreements</h2>
+                        <span class="rounded-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-2 py-0.5 text-[10px] font-semibold text-slate-600 dark:text-slate-300">@data.Agreements.Count</span>
                     </div>
 
-                    <div class="space-y-2.5 max-h-[600px] overflow-y-auto pr-1">
+                    <div class="p-3 space-y-2 max-h-[600px] overflow-y-auto">
                         @foreach (var a in data.Agreements)
                         {
                             var isSel = selectedAgreement?.Id == a.Id;
-                            <div class="rounded-xl border p-3 text-xs transition cursor-pointer flex flex-col gap-1.5 @(isSel ? "border-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/30 ring-1 ring-emerald-500 shadow-xs" : "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-700")"
-                                 @onclick="() => selectedAgreementId = a.Id">
-                                <div class="flex items-center justify-between gap-1 flex-wrap">
-                                    <span class="font-mono text-xs font-bold text-slate-900 dark:text-slate-100">
-                                        @a.Reference
-                                    </span>
-                                    <span class="rounded-full bg-slate-100 dark:bg-slate-800 px-2 py-0.5 text-[10px] font-semibold text-slate-700 dark:text-slate-300">
-                                        @a.Category
-                                    </span>
+                            <button type="button"
+                                    class="w-full text-left rounded-lg border p-2.5 text-xs transition-colors flex flex-col gap-1 @(isSel ? "border-teal-500 bg-teal-50/70 dark:bg-teal-950/40 dark:border-teal-600" : "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/60")"
+                                    @onclick="() => selectedAgreementId = a.Id">
+                                <div class="flex items-center justify-between gap-1 flex-wrap w-full">
+                                    <span class="font-mono text-xs font-bold text-slate-900 dark:text-slate-100">@a.Reference</span>
+                                    <span class="rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-2 py-0.5 text-[10px] font-semibold text-slate-700 dark:text-slate-300">@a.Category</span>
                                 </div>
-                                <div class="flex items-center justify-between mt-1">
+                                <div class="flex items-center justify-between mt-0.5 w-full">
                                     <span class="text-slate-500 dark:text-slate-400 text-[11px]">Outstanding:</span>
-                                    <span class="font-bold text-emerald-800 dark:text-emerald-300 font-mono">
+                                    <span class="font-bold text-teal-800 dark:text-teal-300 font-mono tabular-nums">
                                         @a.Outstanding.ToString("N2") @CurrencyName(a.CurrencyTypeId)
                                     </span>
                                 </div>
-                                <div class="text-[11px] text-slate-500">
-                                    @a.Instalments.Count instalments configured
-                                </div>
+                                <div class="text-[11px] text-slate-500">@a.Instalments.Count instalments configured</div>
                                 @if (StaffId == 0 && !string.IsNullOrEmpty(a.Staff))
                                 {
                                     <div class="text-[11px] text-slate-500">Staff: @a.Staff</div>
                                 }
-                            </div>
+                            </button>
                         }
 
                         @if (data.Agreements.Count == 0)
                         {
-                            <div class="rounded-xl border border-dashed border-slate-300 dark:border-slate-700 p-6 text-center text-xs text-slate-500">
+                            <div class="rounded-lg border border-dashed border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/30 p-6 text-center text-xs text-slate-500">
                                 No approved deduction agreements on record.
                             </div>
                         }
@@ -768,41 +801,41 @@
                 </div>
 
                 <!-- Right Column: Selected Agreement Instalments Schedule -->
-                <div class="lg:col-span-7 min-w-0 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-xs space-y-4">
+                <div class="min-w-0 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden">
                     @if (selectedAgreement is not null)
                     {
                         var a = selectedAgreement;
-                        <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
-                            <div>
-                                <h3 class="text-sm font-bold text-slate-900 dark:text-slate-100">@a.Reference</h3>
-                                <p class="text-xs text-slate-500 mt-0.5">Category: @a.Category · Outstanding: @a.Outstanding.ToString("N2") @CurrencyName(a.CurrencyTypeId)</p>
+                        <div class="bg-slate-50/80 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 px-3.5 py-2.5 flex flex-wrap items-center justify-between gap-2">
+                            <div class="min-w-0">
+                                <h3 class="text-xs font-bold text-slate-900 dark:text-slate-100">@a.Reference</h3>
+                                <p class="text-[11px] text-slate-500 dark:text-slate-400">Category: @a.Category · Outstanding: <strong class="tabular-nums">@a.Outstanding.ToString("N2") @CurrencyName(a.CurrencyTypeId)</strong></p>
                             </div>
-                            <span class="rounded-full bg-emerald-100 text-emerald-800 px-2.5 py-0.5 text-xs font-semibold">
+                            <span class="rounded-full border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-300 px-2 py-0.5 text-[10px] font-semibold">
                                 Active Agreement
                             </span>
                         </div>
 
-                        <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
+                        <div class="overflow-x-auto">
                             <table class="w-full text-left text-xs">
-                                <thead class="bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold border-b border-slate-200 dark:border-slate-700">
+                                <thead class="bg-slate-50/60 dark:bg-slate-800/40 text-slate-500 dark:text-slate-400 text-[10px] font-bold uppercase tracking-wider border-b border-slate-200 dark:border-slate-800">
                                     <tr>
-                                        <th class="p-2.5">Version</th>
-                                        <th class="p-2.5">Due Date</th>
-                                        <th class="p-2.5 text-right">Amount</th>
-                                        <th class="p-2.5 text-right">Paid</th>
-                                        <th class="p-2.5 text-center">Status</th>
+                                        <th class="px-3 py-2">Version</th>
+                                        <th class="px-3 py-2">Due Date</th>
+                                        <th class="px-3 py-2 text-right">Amount</th>
+                                        <th class="px-3 py-2 text-right">Paid</th>
+                                        <th class="px-3 py-2 text-center">Status</th>
                                     </tr>
                                 </thead>
-                                <tbody class="divide-y divide-slate-100 dark:divide-slate-800 text-slate-800 dark:text-slate-200">
+                                <tbody class="divide-y divide-slate-100 dark:divide-slate-800/70">
                                     @foreach (var i in a.Instalments)
                                     {
-                                        <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-800/50">
-                                            <td class="p-2.5 font-mono">v@(i.Version)</td>
-                                            <td class="p-2.5 font-mono">@i.DueDate.ToString("dd MMM yyyy")</td>
-                                            <td class="p-2.5 text-right font-semibold">@i.Amount.ToString("N2")</td>
-                                            <td class="p-2.5 text-right font-semibold text-emerald-700 dark:text-emerald-400">@i.Paid.ToString("N2")</td>
-                                            <td class="p-2.5 text-center">
-                                                <span class="rounded-full px-2 py-0.5 text-[10px] font-semibold @(i.Superseded ? "bg-slate-100 text-slate-600" : i.Paid == i.Amount ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800")">
+                                        <tr class="even:bg-slate-50/40 dark:even:bg-slate-800/20 hover:bg-teal-50/30 dark:hover:bg-slate-800/40 transition-colors">
+                                            <td class="px-3 py-2 font-mono text-[11px]">v@(i.Version)</td>
+                                            <td class="px-3 py-2 font-mono text-[11px]">@i.DueDate.ToString("dd MMM yyyy")</td>
+                                            <td class="px-3 py-2 text-right font-semibold tabular-nums">@i.Amount.ToString("N2")</td>
+                                            <td class="px-3 py-2 text-right font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">@i.Paid.ToString("N2")</td>
+                                            <td class="px-3 py-2 text-center">
+                                                <span class="rounded-full px-2 py-0.5 text-[10px] font-semibold @(i.Superseded ? "bg-slate-100 text-slate-600 border border-slate-200" : i.Paid == i.Amount ? "bg-emerald-50 text-emerald-800 border border-emerald-200" : "bg-amber-50 text-amber-800 border border-amber-200")">
                                                     @(i.Superseded ? "Superseded" : i.Paid == i.Amount ? "Paid" : "Outstanding")
                                                 </span>
                                             </td>
@@ -814,7 +847,7 @@
                     }
                     else
                     {
-                        <div class="rounded-xl border border-dashed border-slate-300 dark:border-slate-700 p-8 text-center text-xs text-slate-500">
+                        <div class="p-8 text-center text-xs text-slate-500 dark:text-slate-400">
                             Select a deduction agreement from the left to view its repayment schedule.
                         </div>
                     }
@@ -842,6 +875,31 @@
     }
 
 </section>
+
+<style>
+    .sf-grid-7-5,
+    .sf-grid-5-7,
+    .sf-grid-8-4 {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 0.75rem;
+        align-items: start;
+    }
+
+    @@media (min-width: 1024px) {
+        .sf-grid-7-5 {
+            grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+        }
+
+        .sf-grid-5-7 {
+            grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+        }
+
+        .sf-grid-8-4 {
+            grid-template-columns: minmax(0, 8fr) minmax(0, 4fr);
+        }
+    }
+</style>
 
 @code {
     [Parameter] public bool AdminMode { get; set; }

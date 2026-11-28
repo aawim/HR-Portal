@@ -1,0 +1,1 @@
+using HRM.Models.Recruitment;using Microsoft.EntityFrameworkCore;namespace HRM.Models;public partial class HrmTeContext{public DbSet<RecruitmentApplicant> RecruitmentApplicants=>Set<RecruitmentApplicant>();public DbSet<RecruitmentApplication> RecruitmentApplications=>Set<RecruitmentApplication>();}

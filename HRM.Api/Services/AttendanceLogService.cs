@@ -35,9 +35,11 @@ namespace HRM.Services
             _environment = environment;
             _configuration = configuration;
         }
-       public async Task<List<TeamAttendanceDto>> GetMyTeamAttendanceTodayAsync()
+       public async Task<List<TeamAttendanceDto>> GetMyTeamAttendanceTodayAsync(bool includeAllStaff = false)
         {
             var context = await _access.RequireContextAsync();
+            if (includeAllStaff && !(context.IsSuperAdministrator || context.IsHRStaff || context.IsHRHead || context.IsHRManager || context.IsOrganisationAdmin || await _access.HasPermissionAsync("Attendance.View") || await _access.HasPermissionAsync("Admin")))
+                throw new UnauthorizedAccessException("Organisation-wide attendance access is required to view all staff.");
             using var db = await _dbFactory.CreateDbContextAsync();
             var today = DateTime.UtcNow.AddHours(5).Date;
             var organisationId = await _access.GetCurrentOrganisationIdAsync();
@@ -56,7 +58,7 @@ namespace HRM.Services
                 .ToListAsync();
 
 
-            if (!teamIds.Any())
+            if (!includeAllStaff && !teamIds.Any())
                 return new List<TeamAttendanceDto>();
 
 
@@ -64,7 +66,12 @@ namespace HRM.Services
             // 2. Get all staff from those teams
             // =====================================================
 
-            var teamStaff = await
+            var teamStaff = includeAllStaff
+                ? await (from job in FormerStaffPolicy.CurrentJobs(db)
+                         join i in db.Individuals on job.IndividualID equals i.BusinessEntityId
+                         where job.OrganisationID == organisationId
+                         select new { TeamID = 0, TeamName = "All staff", StaffID = job.IndividualID, Name = (i.FirstNameEnglish ?? "") + " " + (i.MiddleNameEnglish ?? "") + " " + (i.LastNameEnglish ?? "") }).ToListAsync()
+                : await
             (
                 from ts in db.TeamStaffs
 
@@ -94,8 +101,7 @@ namespace HRM.Services
                         (i.LastNameEnglish ?? "")
                 }
 
-            )
-            .ToListAsync();
+            ).ToListAsync();
 
 
 
@@ -244,8 +250,15 @@ namespace HRM.Services
         public async Task<bool> CanUseTestClockAsync() => _environment?.IsDevelopment() == true &&
             _configuration?.GetValue<bool>("Security:AllowTestClock") == true && await _access.HasUserGroupAsync("Developer");
 
-        public async Task AddClockEventAsync(
+        public Task AddClockEventAsync(
             int individualId,
+            DateTime? checkTime = null)
+            => AddClockEventWithLocationAsync(individualId, null, null, checkTime);
+
+        public async Task AddClockEventWithLocationAsync(
+            int individualId,
+            double? latitude = null,
+            double? longitude = null,
             DateTime? checkTime = null)
         {
             var actor = await _access.RequireContextAsync();
@@ -255,9 +268,34 @@ namespace HRM.Services
                 throw new UnauthorizedAccessException("Custom clock times are restricted to explicitly enabled development diagnostics.");
             var clockTime =
                 checkTime ?? DateTime.UtcNow.AddHours(5);
-            if (!await WorkTypeService.HasClockAssignmentAsync(_context, individualId, actor.ActiveJob?.JobId ?? 0,
-                    await _access.GetCurrentOrganisationIdAsync(), DateOnly.FromDateTime(clockTime)))
+            var orgId = await _access.GetCurrentOrganisationIdAsync();
+            var activeJobId = actor.ActiveJob?.JobId ?? 0;
+            var clockDate = DateOnly.FromDateTime(clockTime);
+            if (!await WorkTypeService.HasClockAssignmentAsync(_context, individualId, activeJobId, orgId, clockDate))
                 throw new UnauthorizedAccessException("An active Work Type assignment is required to clock attendance. Contact your HR team.");
+
+            var geofences = await WorkTypeService.GetActiveGeofencesAsync(_context, individualId, activeJobId, orgId, clockDate);
+            if (geofences.Count > 0)
+            {
+                if (!latitude.HasValue || !longitude.HasValue)
+                    throw new InvalidOperationException("Location access is required to clock in for your Geo Location work type. Please enable GPS/location permission in your browser and try again.");
+
+                var closest = geofences
+                    .Select(g => new
+                    {
+                        Geofence = g,
+                        Distance = HRM.DTOs.WorkTypes.WorkTypeGeofenceHelper.DistanceMeters(latitude.Value, longitude.Value, g.Latitude, g.Longitude)
+                    })
+                    .OrderBy(x => x.Distance)
+                    .First();
+
+                if (closest.Distance > closest.Geofence.RadiusMeters)
+                {
+                    var roundedDistance = Math.Round(closest.Distance);
+                    throw new InvalidOperationException(
+                        $"You are outside your allowed clock-in boundary ({roundedDistance:N0} m away from {closest.Geofence.Label}; allowed radius: {closest.Geofence.RadiusMeters} m). Please move within the designated location boundary to clock in.");
+                }
+            }
 
             var job =
                 await _context.Jobs

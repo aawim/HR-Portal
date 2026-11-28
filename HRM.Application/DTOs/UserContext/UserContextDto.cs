@@ -18,6 +18,16 @@ namespace HRM.DTOs.UserContext
 
         public string FullName { get; set; } = string.Empty;
 
+        public string? ImageUrl { get; set; }
+
+        public string? IdentityCardNumber { get; set; }
+
+        public DateTime? IdentityCardExpiryDate { get; set; }
+
+        public string? PassportNumber { get; set; }
+
+        public DateTime? PassportExpiryDate { get; set; }
+
 
         // ==========================
         // Status

@@ -1,0 +1,3 @@
+using HRM.DTOs.Leadership;
+namespace HRM.Services.Contracts;
+public abstract class LeadershipAuthorityServiceContracts { public interface IOperations { Task<IReadOnlyList<LeadershipOrganisationAccessDto>> GetCurrentOrganisationAccessAsync(CancellationToken ct = default); Task<bool> HasAuthorityAsync(int organisationId, string permissionCode, DateOnly? onDate = null, CancellationToken ct = default); Task RequireAuthorityAsync(int organisationId, string permissionCode, DateOnly? onDate = null, CancellationToken ct = default); Task<IReadOnlyList<LeadershipAppointmentSummaryDto>> GetMyAppointmentsAsync(CancellationToken ct = default); } }

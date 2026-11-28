@@ -1,0 +1,748 @@
+@page "/admin/hr/recruitment/screening-sheet/{VacancyId:int}"
+@page "/careers/screening-sheet/{VacancyId:int}"
+@layout HRM.Components.Layout.ReceiptLayout
+@rendermode RenderMode.InteractiveServer
+@using HRM.Application.Contracts.Recruitment
+@using HRM.Application.Contracts.Signatures
+@using Microsoft.JSInterop
+@inject HRM.UI.Services.Recruitment.IRecruitmentApiClient Api
+@inject HRM.UI.Services.Signatures.IDocumentSignatureApiClient SignatureApi
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<PageTitle>@(IsDv ? "ސްކްރީނިންގ މަރުޙަލާގެ ނަތީޖާ ޝީޓު" : "Screening Stage Result Sheet")</PageTitle>
+
+<HeadContent>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thaana:wght@400;600;700&display=swap" rel="stylesheet" />
+</HeadContent>
+
+<style>
+    .srs-screen-bg {
+        min-height: 100vh;
+        background: #e2e8f0;
+        padding: 1rem;
+    }
+
+    .srs-toolbar {
+        max-width: 210mm;
+        margin: 0 auto 1rem auto;
+        background: #ffffff;
+        border: 1px solid #cbd5e1;
+        border-radius: 0.75rem;
+        padding: 0.75rem 1rem;
+        box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+    }
+
+    .srs-a4 {
+        width: 210mm;
+        min-height: 297mm;
+        margin: 0 auto;
+        background: #ffffff;
+        color: #000000;
+        padding: 16mm 15mm;
+        box-shadow: 0 10px 30px rgba(15, 23, 42, 0.14);
+        border-radius: 0;
+        box-sizing: border-box;
+    }
+
+    .srs-a4.srs-ltr {
+        direction: ltr;
+        text-align: left;
+        font-family: "Times New Roman", "Liberation Serif", Georgia, "Segoe UI", serif;
+        font-size: 11pt;
+        line-height: 1.45;
+    }
+
+    .srs-a4.srs-rtl {
+        direction: rtl;
+        text-align: right;
+        font-family: "Faruma", "MV Faseyha", "Noto Sans Thaana", sans-serif;
+        font-size: 11.5pt;
+        line-height: 1.7;
+    }
+
+    .srs-agency-header {
+        text-align: center;
+        font-size: 12pt;
+        font-weight: 700;
+        margin-bottom: 4px;
+    }
+
+    .srs-doc-title {
+        text-align: center;
+        font-size: 14pt;
+        font-weight: 700;
+        margin: 0 0 16px 0;
+        padding-bottom: 8px;
+        border-bottom: 2px solid #000000;
+    }
+
+    .srs-table {
+        width: 100%;
+        border-collapse: collapse;
+        border-radius: 0;
+        margin-bottom: 14px;
+    }
+
+    .srs-table th,
+    .srs-table td {
+        border: 1px solid #111827;
+        padding: 6px 9px;
+        vertical-align: middle;
+        border-radius: 0;
+    }
+
+    .srs-meta-table th {
+        width: 34%;
+        font-weight: 700;
+        background: #f8fafc;
+    }
+
+    .srs-results-table thead th {
+        background: #f1f5f9;
+        font-weight: 700;
+        text-align: center;
+    }
+
+    .srs-results-table td.srs-col-num {
+        width: 8%;
+        text-align: center;
+    }
+
+    .srs-results-table td.srs-col-code {
+        width: 44%;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-weight: 600;
+    }
+
+    .srs-results-table td.srs-col-check {
+        width: 24%;
+        text-align: center;
+        font-size: 13pt;
+        font-weight: 700;
+    }
+
+    .srs-notice-box {
+        border: 1px solid #111827;
+        padding: 9px 11px;
+        margin-bottom: 18px;
+        background: #ffffff;
+        font-size: 10.5pt;
+    }
+
+    .srs-signoff-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 18px;
+        font-size: 10pt;
+    }
+
+    .srs-signoff-table td {
+        border: 1px solid #111827;
+        padding: 7px 8px;
+        vertical-align: top;
+        width: 25%;
+    }
+
+    .srs-field-label {
+        display: block;
+        font-weight: 700;
+        font-size: 9.5pt;
+        margin-bottom: 14px;
+    }
+
+    .srs-field-value {
+        display: block;
+        min-height: 18px;
+        border-bottom: 1px dotted #475569;
+        padding-bottom: 2px;
+    }
+
+    .srs-footer-box {
+        border: 1px solid #111827;
+        border-radius: 0;
+    }
+
+    .srs-footer-heading {
+        background: #f1f5f9;
+        border-bottom: 1px solid #111827;
+        padding: 6px 10px;
+        font-weight: 700;
+        font-size: 10.5pt;
+    }
+
+    .srs-footer-grid {
+        display: grid;
+        grid-template-columns: 2fr 1fr;
+    }
+
+    .srs-footer-cell {
+        padding: 8px 10px;
+    }
+
+    .srs-ltr .srs-footer-cell:first-child {
+        border-right: 1px solid #111827;
+    }
+
+    .srs-rtl .srs-footer-cell:first-child {
+        border-left: 1px solid #111827;
+    }
+
+    @@page {
+        size: A4 portrait;
+        margin: 12mm;
+    }
+
+    @@media print {
+        html, body {
+            background: #ffffff !important;
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+
+        .no-print {
+            display: none !important;
+        }
+
+        .srs-screen-bg {
+            background: #ffffff !important;
+            padding: 0 !important;
+            min-height: auto !important;
+        }
+
+        .srs-a4 {
+            width: 100% !important;
+            min-height: auto !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            box-shadow: none !important;
+        }
+
+        .srs-meta-table th,
+        .srs-results-table thead th,
+        .srs-footer-heading {
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+    }
+</style>
+
+<div class="srs-screen-bg">
+    <!-- Non-printing Controls Toolbar -->
+    <div class="srs-toolbar no-print space-y-3">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+            <div class="flex flex-wrap items-center gap-2">
+                <a href="@(IsAdminRoute ? "/admin/hr/recruitment" : "/careers")" class="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">
+                    <i class="bi bi-arrow-left" aria-hidden="true"></i>
+                    <span>@(IsAdminRoute ? "Back to Recruitment" : "Back to Careers")</span>
+                </a>
+                <div class="inline-flex rounded-lg border border-slate-300 bg-slate-100 p-0.5 text-xs">
+                    <button type="button"
+                            class="rounded-md px-3 py-1 font-semibold transition @(IsDv ? "text-slate-600 hover:text-slate-900" : "bg-white text-blue-700 shadow-xs")"
+                            @onclick='() => SetLang("en")'>
+                        English (LTR)
+                    </button>
+                    <button type="button"
+                            class="rounded-md px-3 py-1 font-semibold transition @(IsDv ? "bg-white text-blue-700 shadow-xs" : "text-slate-600 hover:text-slate-900")"
+                            @onclick='() => SetLang("dv")'>
+                        ދިވެހި (RTL)
+                    </button>
+                </div>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-2">
+                @if (IsAdminRoute)
+                {
+                    @if (PreparedSig is null)
+                    {
+                        <button type="button"
+                                class="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+                                disabled="@signBusy"
+                                @onclick='() => OpenSignModal("PreparedBy", "Prepared by")'>
+                            <i class="bi bi-shield-lock" aria-hidden="true"></i>
+                            <span>Sign: Prepared By</span>
+                        </button>
+                    }
+                    else if (PreparedSig.CanRevoke)
+                    {
+                        <button type="button"
+                                class="inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-50"
+                                disabled="@signBusy"
+                                @onclick="() => RevokeSlotAsync(PreparedSig.Id)">
+                            <span>Revoke Prepared</span>
+                        </button>
+                    }
+
+                    @if (CheckedSig is null)
+                    {
+                        <button type="button"
+                                class="inline-flex items-center gap-1 rounded-lg bg-teal-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-teal-800 disabled:opacity-50"
+                                disabled="@signBusy"
+                                @onclick='() => OpenSignModal("CheckedBy", "Checked by")'>
+                            <i class="bi bi-shield-lock" aria-hidden="true"></i>
+                            <span>Sign: Checked By</span>
+                        </button>
+                    }
+                    else if (CheckedSig.CanRevoke)
+                    {
+                        <button type="button"
+                                class="inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-50"
+                                disabled="@signBusy"
+                                @onclick="() => RevokeSlotAsync(CheckedSig.Id)">
+                            <span>Revoke Checked</span>
+                        </button>
+                    }
+
+                    <button type="button"
+                            class="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                            @onclick="() => showDetailsForm = !showDetailsForm">
+                        <i class="bi bi-sliders" aria-hidden="true"></i>
+                        <span>@(showDetailsForm ? "Hide Sheet Fields" : "Edit Sheet Details")</span>
+                    </button>
+                }
+                <button type="button"
+                        class="inline-flex items-center gap-1.5 rounded-lg bg-blue-700 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-800"
+                        @onclick="PrintAsync">
+                    <i class="bi bi-printer" aria-hidden="true"></i>
+                    <span>Print / Export PDF</span>
+                </button>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(signMessage))
+        {
+            <div class="flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-800">
+                <span>
+                    @signMessage
+                    @if (signMessage.Contains("My Profile", StringComparison.OrdinalIgnoreCase))
+                    {
+                        <a href="/profile" class="ml-1.5 font-bold text-blue-700 underline">Open My Profile</a>
+                    }
+                </span>
+                <button type="button" class="font-bold text-slate-500 hover:text-slate-800" @onclick="() => signMessage = null">✕</button>
+            </div>
+        }
+
+        @if (IsAdminRoute && showDetailsForm)
+        {
+            <div class="border-t border-slate-200 pt-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 text-xs">
+                <label class="block text-slate-700 font-medium">
+                    Position Title @(IsDv ? "(Dhivehi)" : "(English)")
+                    <input class="@FieldInput" @bind="positionTitle" @bind:event="oninput" />
+                </label>
+                <label class="block text-slate-700 font-medium">
+                    Basic Salary
+                    <input class="@FieldInput" @bind="basicSalaryText" @bind:event="oninput" placeholder="e.g. MVR 6,295.00" />
+                </label>
+                <label class="block text-slate-700 font-medium">
+                    Announcement Number
+                    <input class="@FieldInput" @bind="announcementNumber" @bind:event="oninput" placeholder="(IUL)..." />
+                </label>
+                <label class="block text-slate-700 font-medium">
+                    Announcement Expiry Date
+                    <input class="@FieldInput" @bind="expiryDateText" @bind:event="oninput" />
+                </label>
+                <label class="block text-slate-700 font-medium">
+                    Agency Email
+                    <input class="@FieldInput" @bind="agencyEmail" @bind:event="oninput" placeholder="hr@agency.gov.mv" />
+                </label>
+                <label class="block text-slate-700 font-medium">
+                    Agency Phone Number
+                    <input class="@FieldInput" @bind="agencyPhone" @bind:event="oninput" placeholder="3300000" />
+                </label>
+                <label class="block text-slate-700 font-medium">
+                    Prepared By (Name)
+                    <input class="@FieldInput" @bind="preparedByName" @bind:event="oninput" />
+                </label>
+                <label class="block text-slate-700 font-medium">
+                    Prepared By (Position)
+                    <input class="@FieldInput" @bind="preparedByPosition" @bind:event="oninput" />
+                </label>
+                <label class="block text-slate-700 font-medium">
+                    Prepared Date
+                    <input class="@FieldInput" @bind="preparedDate" @bind:event="oninput" placeholder="dd MMM yyyy" />
+                </label>
+                <label class="block text-slate-700 font-medium">
+                    Checked By (Name)
+                    <input class="@FieldInput" @bind="checkedByName" @bind:event="oninput" />
+                </label>
+                <label class="block text-slate-700 font-medium">
+                    Checked By (Position)
+                    <input class="@FieldInput" @bind="checkedByPosition" @bind:event="oninput" />
+                </label>
+                <label class="block text-slate-700 font-medium">
+                    Checked Date
+                    <input class="@FieldInput" @bind="checkedDate" @bind:event="oninput" placeholder="dd MMM yyyy" />
+                </label>
+                <label class="block text-slate-700 font-medium sm:col-span-2">
+                    Place Published
+                    <input class="@FieldInput" @bind="publishedPlace" @bind:event="oninput" placeholder="e.g. Gazette / Agency Website / Notice Board" />
+                </label>
+                <label class="block text-slate-700 font-medium">
+                    Published Date
+                    <input class="@FieldInput" @bind="publishedDate" @bind:event="oninput" placeholder="dd MMM yyyy" />
+                </label>
+            </div>
+        }
+    </div>
+
+    @if (loading)
+    {
+        <div class="srs-a4 srs-ltr flex items-center justify-center text-sm text-slate-500">
+            Loading Screening Stage Result Sheet...
+        </div>
+    }
+    else if (!string.IsNullOrWhiteSpace(error))
+    {
+        <div class="srs-a4 srs-ltr">
+            <div class="border border-rose-300 bg-rose-50 p-4 text-xs text-rose-800">@error</div>
+        </div>
+    }
+    else if (sheet is not null)
+    {
+        var displayRows = BuildDisplayRows(sheet.Rows);
+        var emailDisplay = string.IsNullOrWhiteSpace(agencyEmail) ? (IsDv ? "އިދާރާގެ އީމެއިލް" : "Agency Email") : agencyEmail.Trim();
+        var phoneDisplay = string.IsNullOrWhiteSpace(agencyPhone) ? (IsDv ? "އިދާރާގެ ފޯނު ނަންބަރު" : "Agency Phone Number") : agencyPhone.Trim();
+        var agencyHeading = IsDv
+            ? (!string.IsNullOrWhiteSpace(sheet.AgencyNameDhivehi) ? sheet.AgencyNameDhivehi : sheet.AgencyName)
+            : sheet.AgencyName;
+
+        <!-- Formal A4 Print-Ready Document -->
+        <article class="srs-a4 @(IsDv ? "srs-rtl" : "srs-ltr")" dir="@(IsDv ? "rtl" : "ltr")">
+            @if (!string.IsNullOrWhiteSpace(agencyHeading))
+            {
+                <div class="srs-agency-header">@agencyHeading</div>
+            }
+
+            <!-- 1. Centered Document Title -->
+            <h1 class="srs-doc-title">
+                @(IsDv
+                    ? "ވަޒީފާއަށް ކުރިމަތިލި ފަރާތްތަކުގެ ސްކްރީނިންގ މަރުޙަލާގެ ނަތީޖާ ޝީޓު"
+                    : "Screening Stage Result Sheet of Job Applicants")
+            </h1>
+
+            <!-- 2. Job Metadata Block (4 rows) -->
+            <table class="srs-table srs-meta-table">
+                <tbody>
+                    <tr>
+                        <th>@(IsDv ? "މަޤާމުގެ ނަން:" : "Position Title:")</th>
+                        <td>@positionTitle</td>
+                    </tr>
+                    <tr>
+                        <th>@(IsDv ? "އަސާސީ މުސާރަ:" : "Basic Salary:")</th>
+                        <td>@basicSalaryText</td>
+                    </tr>
+                    <tr>
+                        <th>@(IsDv ? "އިޢުލާނު ނަންބަރު:" : "Announcement Number:")</th>
+                        <td style="font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;">@announcementNumber</td>
+                    </tr>
+                    <tr>
+                        <th>@(IsDv ? "އިޢުލާނުގެ މުއްދަތުހަމަވި ތާރީޚު:" : "Announcement Expiry Date:")</th>
+                        <td>@expiryDateText</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <!-- 3. Results Table (4 columns) -->
+            <table class="srs-table srs-results-table">
+                <thead>
+                    <tr>
+                        <th style="width: 8%;">#</th>
+                        <th style="width: 44%;">@(IsDv ? "ކޯޑު ނަންބަރު" : "Code Number")</th>
+                        <th style="width: 24%;">@(IsDv ? "ޝަރުޠު ހަމަވޭ" : "Meets Criteria")</th>
+                        <th style="width: 24%;">@(IsDv ? "ޝަރުޠު ހަމަނުވޭ" : "Does Not Meet Criteria")</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var r in displayRows)
+                    {
+                        <tr>
+                            <td class="srs-col-num">@r.RowNumber</td>
+                            <td class="srs-col-code">@r.CodeNumber</td>
+                            <td class="srs-col-check">@(r.MeetsCriteria ? "✓" : "")</td>
+                            <td class="srs-col-check">@(r.DoesNotMeetCriteria ? "✓" : "")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+
+            <!-- 4. Complaint Notice Box -->
+            <div class="srs-notice-box">
+                @if (IsDv)
+                {
+                    <span>މި ޝީޓުގައިވާ މަޢުލޫމާތާ ގުޅިގެން ނުވަތަ ވަޒީފާއަށް ކުރިމަތިލާފައިވާ ފަރާތްތަކުގެ ހުށަހެޅުމަކާ ގުޅިގެން ޝަކުވާއެއް އޮތްނަމަ، ފޮނުއްވާނީ (<strong dir="ltr">@emailDisplay</strong>) ނުވަތަ ގުޅުއްވާނީ (<strong dir="ltr">@phoneDisplay</strong>) އަށެވެ.</span>
+                }
+                else
+                {
+                    <span>If you have any complaints regarding the information in this sheet or regarding the submission of job applicants, please send them to (<strong>@emailDisplay</strong>) or call (<strong>@phoneDisplay</strong>).</span>
+                }
+            </div>
+
+            <!-- 5. Verification & Sign-Off Block (2 rows, 4 inline fields each) -->
+            <table class="srs-signoff-table">
+                <tbody>
+                    <tr>
+                        <td>
+                            <span class="srs-field-label">@(IsDv ? "ފުރިހަމަކުރި މުވައްޒަފުގެ ނަން" : "Prepared by (Name)")</span>
+                            <span class="srs-field-value">@(PreparedSig?.SignerName ?? preparedByName)</span>
+                        </td>
+                        <td>
+                            <span class="srs-field-label">@(IsDv ? "މަޤާމު" : "Position")</span>
+                            <span class="srs-field-value">@(PreparedSig?.SignerPosition ?? preparedByPosition)</span>
+                        </td>
+                        <td>
+                            <span class="srs-field-label">@(IsDv ? "ސޮއި" : "Signature")</span>
+                            @if (PreparedSig is not null)
+                            {
+                                <div style="display:flex; flex-direction:column; align-items:center; gap:2px;">
+                                    <img src="@PreparedSig.SignatureImageDataUrl" alt="Prepared By Signature" style="max-height:34px; max-width:120px; object-fit:contain;" />
+                                    <a href="@($"/verify/{PreparedSig.VerificationCode}")" target="_blank" style="font-family:monospace; font-size:7pt; color:#334155; text-decoration:none;">@PreparedSig.VerificationCode</a>
+                                </div>
+                            }
+                            else
+                            {
+                                <span class="srs-field-value"></span>
+                            }
+                        </td>
+                        <td>
+                            <span class="srs-field-label">@(IsDv ? "ތާރީޚު" : "Date")</span>
+                            <span class="srs-field-value">@(PreparedSig is not null ? PreparedSig.SignedAtUtc.AddHours(5).ToString("dd MMM yyyy") : preparedDate)</span>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <span class="srs-field-label">@(IsDv ? "ޗެކްކުރި މުވައްޒަފުގެ ނަން" : "Checked by (Name)")</span>
+                            <span class="srs-field-value">@(CheckedSig?.SignerName ?? checkedByName)</span>
+                        </td>
+                        <td>
+                            <span class="srs-field-label">@(IsDv ? "މަޤާމު" : "Position")</span>
+                            <span class="srs-field-value">@(CheckedSig?.SignerPosition ?? checkedByPosition)</span>
+                        </td>
+                        <td>
+                            <span class="srs-field-label">@(IsDv ? "ސޮއި" : "Signature")</span>
+                            @if (CheckedSig is not null)
+                            {
+                                <div style="display:flex; flex-direction:column; align-items:center; gap:2px;">
+                                    <img src="@CheckedSig.SignatureImageDataUrl" alt="Checked By Signature" style="max-height:34px; max-width:120px; object-fit:contain;" />
+                                    <a href="@($"/verify/{CheckedSig.VerificationCode}")" target="_blank" style="font-family:monospace; font-size:7pt; color:#334155; text-decoration:none;">@CheckedSig.VerificationCode</a>
+                                </div>
+                            }
+                            else
+                            {
+                                <span class="srs-field-value"></span>
+                            }
+                        </td>
+                        <td>
+                            <span class="srs-field-label">@(IsDv ? "ތާރީޚު" : "Date")</span>
+                            <span class="srs-field-value">@(CheckedSig is not null ? CheckedSig.SignedAtUtc.AddHours(5).ToString("dd MMM yyyy") : checkedDate)</span>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <!-- 6. Agency Publication Footer Box -->
+            <div class="srs-footer-box">
+                <div class="srs-footer-heading">
+                    @(IsDv
+                        ? "މި ޝީޓު ހުށަހެޅުމުގެ ކުރިން އިދާރާއިން ފުރިހަމަ ކުރަންޖެހޭ ބައި"
+                        : "Section to be completed by the agency before submitting this sheet")
+                </div>
+                <div class="srs-footer-grid">
+                    <div class="srs-footer-cell">
+                        <span class="srs-field-label">@(IsDv ? "ސްކްރީނިންގ ޝީޓް އާންމު ކުރެވިފައިވާ ތަން" : "Place where the Screening Sheet was published")</span>
+                        <span class="srs-field-value">@publishedPlace</span>
+                    </div>
+                    <div class="srs-footer-cell">
+                        <span class="srs-field-label">@(IsDv ? "ތާރީޚު" : "Date")</span>
+                        <span class="srs-field-value">@publishedDate</span>
+                    </div>
+                </div>
+            </div>
+
+            <HRM.Components.Shared.DocumentQrVerificationBar Signatures="signatures" IsDhivehi="IsDv" />
+        </article>
+    }
+
+    <HRM.Components.Shared.SignaturePinModal IsOpen="@(pendingSignSlotKey is not null)"
+                                             SlotLabel="@(pendingSignSlotLabel ?? "Document Signature")"
+                                             OnConfirmed="ConfirmSignWithPinAsync"
+                                             OnCancelled="() => { pendingSignSlotKey = null; pendingSignSlotLabel = null; }" />
+</div>
+
+@code {
+    [Parameter] public int VacancyId { get; set; }
+    [SupplyParameterFromQuery(Name = "lang")] public string? LangQuery { get; set; }
+
+    private const string FieldInput = "mt-1 w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-800 focus:border-blue-500 focus:outline-none";
+
+    private ScreeningResultSheetDto? sheet;
+    private IReadOnlyList<DocumentSignatureDto> signatures = [];
+    private DocumentSignatureDto? PreparedSig => signatures.FirstOrDefault(s => s.SlotKey == "PreparedBy");
+    private DocumentSignatureDto? CheckedSig => signatures.FirstOrDefault(s => s.SlotKey == "CheckedBy");
+    private string lang = "en";
+    private bool loading = true;
+    private bool showDetailsForm, signBusy;
+    private string? error, signMessage;
+
+    private string positionTitle = "";
+    private string basicSalaryText = "";
+    private string announcementNumber = "";
+    private string expiryDateText = "";
+    private string agencyEmail = "";
+    private string agencyPhone = "";
+    private string preparedByName = "";
+    private string preparedByPosition = "";
+    private string preparedDate = "";
+    private string checkedByName = "";
+    private string checkedByPosition = "";
+    private string checkedDate = "";
+    private string publishedPlace = "";
+    private string publishedDate = "";
+
+    private bool IsDv => string.Equals(lang, "dv", StringComparison.OrdinalIgnoreCase);
+    private bool IsAdminRoute => new Uri(Navigation.Uri).AbsolutePath.StartsWith("/admin/", StringComparison.OrdinalIgnoreCase);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!string.IsNullOrWhiteSpace(LangQuery))
+            lang = LangQuery.Trim().Equals("dv", StringComparison.OrdinalIgnoreCase) ? "dv" : "en";
+
+        if (sheet is not null && sheet.VacancyId == VacancyId)
+            return;
+
+        loading = true;
+        error = null;
+        try
+        {
+            sheet = IsAdminRoute
+                ? await Api.GetScreeningResultSheetAsync(VacancyId)
+                : await Api.GetPublicScreeningResultSheetAsync(VacancyId);
+            if (sheet is null)
+            {
+                error = IsAdminRoute
+                    ? "Vacancy screening sheet was not found or you do not have access."
+                    : "The Screening Stage Result Sheet is not yet available for this vacancy.";
+                return;
+            }
+
+            positionTitle = sheet.PositionTitle;
+            basicSalaryText = sheet.BasicSalary.HasValue ? $"MVR {sheet.BasicSalary.Value:N2}" : "";
+            announcementNumber = sheet.AnnouncementNumber;
+            expiryDateText = sheet.ExpiryDateUtc.HasValue ? sheet.ExpiryDateUtc.Value.AddHours(5).ToString("dd MMM yyyy, HH:mm") : "";
+            agencyEmail = sheet.AgencyEmail ?? "";
+            agencyPhone = sheet.AgencyPhone ?? "";
+            await LoadSignaturesAsync();
+        }
+        catch (HttpRequestException)
+        {
+            error = "Could not load Screening Stage Result Sheet. Check your recruitment permissions.";
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private async Task LoadSignaturesAsync()
+    {
+        try
+        {
+            signatures = IsAdminRoute
+                ? await SignatureApi.GetDocumentSignaturesAsync("RecruitmentScreeningSheet", VacancyId.ToString())
+                : await SignatureApi.GetPublicDocumentSignaturesAsync("RecruitmentScreeningSheet", VacancyId.ToString());
+        }
+        catch { signatures = []; }
+    }
+
+    private string? pendingSignSlotKey, pendingSignSlotLabel;
+
+    private void OpenSignModal(string slotKey, string slotLabel)
+    {
+        pendingSignSlotKey = slotKey;
+        pendingSignSlotLabel = slotLabel;
+        signMessage = null;
+    }
+
+    private async Task ConfirmSignWithPinAsync(string verifiedPin)
+    {
+        var slotKey = pendingSignSlotKey;
+        var slotLabel = pendingSignSlotLabel ?? slotKey ?? "";
+        pendingSignSlotKey = null;
+        pendingSignSlotLabel = null;
+        if (string.IsNullOrWhiteSpace(slotKey)) return;
+        await SignSlotAsync(slotKey, slotLabel, verifiedPin);
+    }
+
+    private async Task SignSlotAsync(string slotKey, string slotLabel, string pin)
+    {
+        if (signBusy || sheet is null) return;
+        signBusy = true;
+        signMessage = null;
+        try
+        {
+            var canonical = System.Text.Json.JsonSerializer.Serialize(new
+            {
+                sheet.VacancyId,
+                AnnouncementNumber = announcementNumber,
+                PositionTitle = positionTitle,
+                Rows = sheet.Rows.Select(r => new { r.CodeNumber, r.MeetsCriteria, r.DoesNotMeetCriteria })
+            });
+            var posOverride = slotKey == "PreparedBy" ? preparedByPosition : checkedByPosition;
+            var res = await SignatureApi.SignDocumentAsync(new SignDocumentInput(
+                "RecruitmentScreeningSheet",
+                VacancyId.ToString(),
+                slotKey,
+                slotLabel,
+                canonical,
+                string.IsNullOrWhiteSpace(posOverride) ? null : posOverride,
+                Pin: pin));
+            signMessage = res.Message;
+            if (res.Success) await LoadSignaturesAsync();
+        }
+        catch
+        {
+            signMessage = "Could not apply digital signature. Ensure your signature and Signing PIN are saved in My Profile.";
+        }
+        finally
+        {
+            signBusy = false;
+        }
+    }
+
+    private async Task RevokeSlotAsync(int signatureId)
+    {
+        if (signBusy) return;
+        signBusy = true;
+        signMessage = null;
+        try
+        {
+            var res = await SignatureApi.RevokeSignatureAsync(signatureId, "Revoked by signer/admin for sheet revision.");
+            signMessage = res.Message;
+            if (res.Success) await LoadSignaturesAsync();
+        }
+        catch
+        {
+            signMessage = "Could not revoke signature.";
+        }
+        finally
+        {
+            signBusy = false;
+        }
+    }
+
+    private void SetLang(string next) => lang = next;
+
+    private async Task PrintAsync() => await JS.InvokeVoidAsync("window.print");
+
+    private static List<ScreeningResultSheetRow> BuildDisplayRows(IReadOnlyList<ScreeningResultSheetRow> source)
+    {
+        var list = source.ToList();
+        while (list.Count < 4)
+        {
+            list.Add(new ScreeningResultSheetRow(list.Count + 1, "", false, false, ""));
+        }
+        return list;
+    }
+}

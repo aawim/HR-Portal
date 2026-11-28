@@ -1,88 +1,126 @@
 @page "/admin/budget"
+@page "/budget"
 @using Microsoft.AspNetCore.Components.Authorization
 @using HRM.Models
 @using HRM.Services
- 
-
+@using HRM.Services.Interfaces
+@inject IUserAccessService UserAccess
 @rendermode RenderMode.InteractiveServer
 
-<PageTitle>Settings - HR Portal</PageTitle>
+<PageTitle>Budget - HR Portal</PageTitle>
 
 <AuthorizeView>
     <Authorized>
-        
+        <section class="w-full min-w-0 p-2 flex flex-col gap-3 text-slate-900 dark:text-slate-100">
+            <!-- Compact Header (no background/border) -->
+            <header class="flex flex-wrap items-center justify-between gap-2 px-1 py-0.5">
+                <div class="min-w-0">
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <h1 class="text-lg font-bold text-slate-900 dark:text-slate-100 truncate">State Budget &amp; Appropriations</h1>
+                        <span class="inline-flex items-center gap-1 rounded-full bg-teal-50 dark:bg-teal-950/60 border border-teal-200/80 dark:border-teal-800 px-2 py-0.5 text-[10px] font-semibold text-teal-700 dark:text-teal-300">
+                            <span class="h-1.5 w-1.5 rounded-full bg-teal-500"></span>
+                            Public Finance
+                        </span>
+                    </div>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Manage fiscal years, Ministry of Finance allocations, virements, ledger transactions, and payroll budget checks.</p>
+                </div>
+            </header>
 
-        <div class="max-w-12xl mx-auto py-8 px-">
-            <div class="mb-10">
-                <h1 class="text-3xl font-extrabold text-slate-800">Budget</h1>
-                <p class="text-slate-500 mt-2">Manage your organization's core configuration and operational parameters.</p>
-            </div>
-
-            <!-- Grid: 4 columns on large screens, 2 on medium -->
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                @foreach (var cat in mainCategories)
+            <div class="w-full max-w-7xl mx-auto">
+                @if (loading)
                 {
-                    <a href="/admin/budget/@cat.Url"
-                       class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md hover:border-blue-400 hover:bg-slate-50 transition-all duration-200 group flex items-center gap-6">
+                    <div role="status" class="flex items-center justify-center gap-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-8 text-xs text-slate-500">
+                        <span class="h-4 w-4 rounded-full border-2 border-blue-600 border-t-transparent animate-spin"></span>
+                        <span>Checking budget permissions…</span>
+                    </div>
+                }
+                else if (!canViewBudget)
+                {
+                    <div role="alert" class="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50/80 dark:bg-amber-950/40 p-4 text-xs text-amber-900 dark:text-amber-200">
+                        You do not have permission to view Budget modules.
+                    </div>
+                }
+                else
+                {
+                    <div class="budget-cards-grid">
+                        @foreach (var cat in mainCategories)
+                        {
+                            <a href="/admin/budget/@cat.Url"
+                               class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 hover:border-teal-500 dark:hover:border-teal-500 hover:bg-slate-50/60 dark:hover:bg-slate-800/50 transition-colors group flex items-start gap-3.5">
 
-                        <!-- Left: Icon Container -->
-                        <div class="w-16 h-16 flex items-center justify-center rounded-lg bg-blue-50 text-3xl text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors duration-300 flex-shrink-0">
-                            @cat.Icon
-                        </div>
+                                <div class="h-10 w-10 flex items-center justify-center rounded-lg bg-teal-50 dark:bg-teal-950/60 border border-teal-200/80 dark:border-teal-800 text-teal-700 dark:text-teal-300 group-hover:bg-teal-700 group-hover:text-white transition-colors shrink-0">
+                                    <AppIcon Name="@cat.Icon" Class="text-base" />
+                                </div>
 
-                        <!-- Right: Text Content -->
-                        <div class="flex-grow">
-                            <h3 class="font-bold text-slate-800 text-lg mb-1 group-hover:text-blue-700">@cat.Title</h3>
-                            <p class="text-slate-500 text-sm leading-tight">@cat.Description</p>
-                        </div>
+                                <div class="flex-1 min-w-0">
+                                    <h3 class="font-bold text-slate-900 dark:text-slate-100 text-sm mb-1 group-hover:text-teal-700 dark:group-hover:text-teal-300">@cat.Title</h3>
+                                    <p class="text-slate-500 dark:text-slate-400 text-xs leading-relaxed">@cat.Description</p>
+                                </div>
 
-                        <!-- Right: Arrow (Optional) -->
-                        <div class="text-slate-300 group-hover:text-blue-600 transition-colors">
-                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
-                        </div>
-                    </a>
+                                <div class="text-slate-300 dark:text-slate-600 group-hover:text-teal-600 transition-colors shrink-0 self-center">
+                                    <AppIcon Name="chevron_right" Class="text-base" />
+                                </div>
+                            </a>
+                        }
+                    </div>
                 }
             </div>
-        </div>
+        </section>
 
-        @code {
-        private record Category(string Title, string Url, string Icon, string Description);
-        private record SubItem(string Title, string Icon, string Description, Type? Component); // Assuming this is your SubItem record
+        <style>
+            .budget-cards-grid {
+                display: grid;
+                grid-template-columns: minmax(0, 1fr);
+                gap: 0.75rem;
+                align-items: stretch;
+            }
 
-        private List<Category> mainCategories = new() {
-            new("Overview", "overview", "📈", "View a high-level summary of budget allocations, utilization, and remaining funds."),
-            new("Transactions", "transactions", "🧾", "Record, review, and track individual financial transactions and expenses."),
-            new("Import", "import", "📥", "Upload budget data, expense sheets, or financial records from external files."),
-            new("Reports", "reports", "📊", "View, generate, and export financial summaries and budget data."),
-            new("Manage", "manage", "⚙️", "Configure budget categories, fiscal years, and financial approval workflows.")
-        };
-
-        // Your dropdown logic for the Reports sub-items
-        // private List<SubItem> GetSubItems(string cat) => cat.ToLower() switch
-        // {
-        //     "reports" => new() {
-        //         new("Approved", "✅", "View records of formally approved budget allocations and expenditures.", null),
-        //         new("Monthly", "📅", "Generate month-by-month financial breakdowns and budget usage.", null)
-        // },
-
-            // ... (Add your other sub-items here if Manage, Import, etc. also have dropdowns)
-
-            //_ => new() // Returns empty list if no sub-items exist
-      //  };
-        }
-      
+            @@media (min-width: 768px) {
+                .budget-cards-grid {
+                    grid-template-columns: repeat(3, minmax(0, 1fr));
+                }
+            }
+        </style>
     </Authorized>
 
     <NotAuthorized>
         <div class="p-6">
             <p class="text-slate-500">
-                Please log in to view the dashboard.
+                Please log in to view budget management.
             </p>
         </div>
     </NotAuthorized>
 </AuthorizeView>
 
 @code {
-  
+    private record Category(string Title, string Url, string Icon, string Description);
 
+    private bool loading = true;
+    private bool canViewBudget;
+
+    private readonly List<Category> mainCategories = new()
+    {
+        new("Overview & Execution Reports", "overview", "bar_chart", "Executive summary of budget allocations, personal emoluments utilization, and MoF CSV/PDF exports."),
+        new("Budget Operations & Fiscal Years", "manage", "account_balance", "Configure Fiscal Years, State Budget Allocations, MoF Economic Codes, Virements, and Ledger Transactions."),
+        new("Payroll Budget Bridge", "payroll-bridge", "link", "Automated pre-payroll budget solvency checks and payroll component to MoF COA mappings.")
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var actor = await UserAccess.RequireContextAsync();
+            var isAdmin = actor.IsSuperAdministrator || await UserAccess.HasPermissionAsync("Admin");
+            var isHr = await UserAccess.HasUserGroupAsync("Human Resource: Staff") || await UserAccess.HasUserGroupAsync("Human Resource :Head");
+            canViewBudget = isAdmin || isHr || await UserAccess.HasPermissionAsync("Budget.View") || await UserAccess.HasPermissionAsync("Budget.Manage");
+        }
+        catch
+        {
+            canViewBudget = false;
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
 }

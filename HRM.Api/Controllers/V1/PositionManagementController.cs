@@ -62,4 +62,15 @@ public sealed class PositionManagementController(global::HRM.Application.Contrac
         public global::HRM.Application.Contracts.Pages.PositionMatrixInput input { get; set; } = default!;
     }
 
+
+    [HttpPost("update-position-matrix")]
+    public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> UpdatePositionMatrix([FromBody] PositionManagementUpdatePositionMatrixRequest request)
+    {
+        return Ok(await service.UpdatePositionMatrixAsync(request.input));
+    }
+
+    public sealed class PositionManagementUpdatePositionMatrixRequest
+    {
+        public global::HRM.Application.Contracts.Pages.UpdatePositionMatrixInput input { get; set; } = default!;
+    }
 }

@@ -21,7 +21,8 @@ namespace HRM.Services;
 public sealed class StaffSeparationService(
     IDbContextFactory<HrmTeContext> factory,
     IUserAccessService access,
-    IOperationLogService logs)
+    IOperationLogService? operationLogs = null,
+    IUserContextService? userContexts = null)
     : global::HRM.Services.Contracts.StaffSeparationServiceContracts,
       global::HRM.Services.Contracts.StaffSeparationServiceContracts.IOperations
 {
@@ -117,6 +118,25 @@ public sealed class StaffSeparationService(
                 ClearedTasksCount = s.ClearanceTasks.Count(t => t.Status == StaffSeparationClearanceTaskStatuses.Cleared || t.Status == StaffSeparationClearanceTaskStatuses.Waived)
             })
             .ToListAsync();
+
+        var jobIdsNeedingEmpNo = items
+            .Where(i => string.IsNullOrWhiteSpace(i.EmployeeNumber) || i.EmployeeNumber == i.IndividualId.ToString())
+            .Select(i => i.JobId)
+            .Distinct()
+            .ToList();
+        if (jobIdsNeedingEmpNo.Count > 0)
+        {
+            var empNos = await db.Jobs
+                .AsNoTracking()
+                .Where(j => jobIdsNeedingEmpNo.Contains(j.JobId) && j.Staff != null && !string.IsNullOrWhiteSpace(j.Staff.EmployeeNumber))
+                .Select(j => new { j.JobId, j.Staff!.EmployeeNumber })
+                .ToDictionaryAsync(x => x.JobId, x => x.EmployeeNumber!);
+            foreach (var item in items)
+            {
+                if (empNos.TryGetValue(item.JobId, out var empNo))
+                    item.EmployeeNumber = empNo;
+            }
+        }
 
         var types = await db.SeparationTypes
             .AsNoTracking()
@@ -216,7 +236,7 @@ public sealed class StaffSeparationService(
         var query = db.StaffSeparations
             .AsNoTracking()
             .Include(s => s.SeparationType)
-            .Include(s => s.WorkHandover)!.ThenInclude(h => h.Items)
+            .Include(s => s.WorkHandover).ThenInclude(h => h!.Items)
             .Include(s => s.ClearanceTasks)
             .Include(s => s.AssetClearances)!.ThenInclude(a => a.AssetItem)
             .Include(s => s.FinanceItems)
@@ -398,6 +418,18 @@ public sealed class StaffSeparationService(
         var totalPayable = financeItemsDto.Where(f => f.IsCredit).Sum(f => f.Amount);
         var totalDeduction = financeItemsDto.Where(f => !f.IsCredit).Sum(f => f.Amount);
 
+        var employeeNumberSnapshot = sep.EmployeeNumberSnapshot;
+        if (string.IsNullOrWhiteSpace(employeeNumberSnapshot) || employeeNumberSnapshot == sep.IndividualId.ToString())
+        {
+            var resolvedEmpNo = await db.Jobs
+                .AsNoTracking()
+                .Where(j => j.JobId == sep.JobId && j.Staff != null && !string.IsNullOrWhiteSpace(j.Staff.EmployeeNumber))
+                .Select(j => j.Staff!.EmployeeNumber)
+                .FirstOrDefaultAsync();
+            if (!string.IsNullOrWhiteSpace(resolvedEmpNo))
+                employeeNumberSnapshot = resolvedEmpNo;
+        }
+
         return new StaffSeparationDetailDto
         {
             StaffSeparationId = sep.StaffSeparationId,
@@ -428,7 +460,7 @@ public sealed class StaffSeparationService(
             ExitInterviewDate = sep.ExitInterviewDate,
             ExitInterviewNotes = sep.ExitInterviewNotes,
             FullNameSnapshot = sep.FullNameSnapshot,
-            EmployeeNumberSnapshot = sep.EmployeeNumberSnapshot,
+            EmployeeNumberSnapshot = employeeNumberSnapshot,
             ProtectedIdCardSnapshot = sep.ProtectedIdCardSnapshot,
             PositionTitleSnapshot = sep.PositionTitleSnapshot,
             OrganisationNameSnapshot = sep.OrganisationNameSnapshot,
@@ -471,6 +503,7 @@ public sealed class StaffSeparationService(
 
         var activeJob = await db.Jobs
             .Include(j => j.Individual)
+            .Include(j => j.Staff)
             .Include(j => j.Organisation)
             .Include(j => j.OrganisationStructure)
             .Include(j => j.JobPositions)
@@ -512,7 +545,9 @@ public sealed class StaffSeparationService(
 
         // Snapshot details
         var fullName = FullName(activeJob.Individual);
-        var employeeNumber = activeJob.Individual.BusinessEntityId.ToString();
+        var employeeNumber = !string.IsNullOrWhiteSpace(activeJob.Staff?.EmployeeNumber)
+            ? activeJob.Staff.EmployeeNumber
+            : activeJob.Individual.BusinessEntityId.ToString();
         var department = activeJob.OrganisationStructure?.Name ?? "Department";
         var positionTitle = "Employee";
         var activePosition = activeJob.JobPositions.FirstOrDefault(p => p.JobPositionStateId == 4 && (!p.ToDate.HasValue || p.ToDate > TodayMaldives));
@@ -835,7 +870,7 @@ public sealed class StaffSeparationService(
         await using var db = await factory.CreateDbContextAsync();
 
         var sep = await db.StaffSeparations
-            .Include(s => s.WorkHandover)!.ThenInclude(h => h.Items)
+            .Include(s => s.WorkHandover).ThenInclude(h => h!.Items)
             .FirstOrDefaultAsync(s => s.StaffSeparationId == input.StaffSeparationId);
 
         if (sep == null || sep.WorkHandover == null)
@@ -1136,6 +1171,7 @@ public sealed class StaffSeparationService(
         sep.ExitInterviewNotes = input.ExitInterviewNotes;
         sep.Status = StaffSeparationStatuses.Approved;
 
+        List<int> revokedUserIds = [];
         if (input.ExecuteTerminationNow)
         {
             var job = await db.Jobs.Include(j => j.JobPositions).FirstOrDefaultAsync(j => j.JobId == sep.JobId);
@@ -1150,16 +1186,17 @@ public sealed class StaffSeparationService(
                 }
             }
 
-            // Revoke organization roles
-            var userOrgs = await db.UserOrganisations.Where(uo => uo.BusinessEntityID == org).Select(uo => uo.UserOrganisationID).ToListAsync();
-            var userRoles = await db.UserOrganisationRoles
-                .Where(ur => userOrgs.Contains(ur.UserOrganisationID))
-                .ToListAsync();
-
-            foreach (var r in userRoles)
+            // Revoke all roles, direct permissions, access scopes/grants, and portal access for the terminated staff member
+            int? revokeLogId = null;
+            if (operationLogs != null)
             {
-                r.IsActive = false;
+                var log = await operationLogs.CreateAsync(db, HRM.Components.Shared.SharedConfig.OperationLogActionTypes.USER_ROLE_UPDATE,
+                    $"Revoked all roles and portal access for terminated staff #{sep.IndividualId} (separation #{sep.StaffSeparationId}).");
+                revokeLogId = log.OperationLogId;
             }
+            revokedUserIds = await HRM.Helpers.StaffTerminationAccessRevoker.RevokeAllAccessForTerminatedStaffAsync(
+                db, sep.IndividualId, sep.JobId, org, revokeLogId, actor.UserId,
+                $"Employment terminated (separation #{sep.StaffSeparationId})");
 
             var hasUnresolved = sep.ClearanceTasks.Any(t => t.OutstandingObligation) ||
                                 sep.AssetClearances.Any(a => a.DisposalAction == StaffSeparationAssetDisposalActions.ReportedLost || a.Status == "Disputed") ||
@@ -1197,6 +1234,11 @@ public sealed class StaffSeparationService(
         });
 
         await db.SaveChangesAsync();
+        if (userContexts != null)
+        {
+            foreach (var uid in revokedUserIds)
+                await userContexts.InvalidateAsync(uid);
+        }
         return ServiceResult.Ok(input.ExecuteTerminationNow ? "Separation executed and employment terminated." : "Separation approved.");
     }
 
@@ -1227,6 +1269,18 @@ public sealed class StaffSeparationService(
             _ => "Official Separation Document"
         };
 
+        var docEmpNo = sep.EmployeeNumberSnapshot;
+        if (string.IsNullOrWhiteSpace(docEmpNo) || docEmpNo == sep.IndividualId.ToString())
+        {
+            var resolvedEmpNo = await db.Jobs
+                .AsNoTracking()
+                .Where(j => j.JobId == sep.JobId && j.Staff != null && !string.IsNullOrWhiteSpace(j.Staff.EmployeeNumber))
+                .Select(j => j.Staff!.EmployeeNumber)
+                .FirstOrDefaultAsync();
+            if (!string.IsNullOrWhiteSpace(resolvedEmpNo))
+                docEmpNo = resolvedEmpNo;
+        }
+
         var html = $@"
             <html>
             <head>
@@ -1253,7 +1307,7 @@ public sealed class StaffSeparationService(
                 <div class='section'>
                     <div class='section-title'>1. Employee Details</div>
                     <table>
-                        <tr><th>Full Name</th><td>{sep.FullNameSnapshot}</td><th>Employee ID</th><td>{sep.EmployeeNumberSnapshot}</td></tr>
+                        <tr><th>Full Name</th><td>{sep.FullNameSnapshot}</td><th>Employee ID</th><td>{docEmpNo}</td></tr>
                         <tr><th>Department</th><td>{sep.DepartmentNameSnapshot}</td><th>Designation</th><td>{sep.PositionTitleSnapshot}</td></tr>
                         <tr><th>Joined Date</th><td>{sep.DateJoinedSnapshot:dd-MMM-yyyy}</td><th>Separation Date</th><td>{sep.EffectiveSeparationDate:dd-MMM-yyyy}</td></tr>
                         <tr><th>Separation Reason</th><td>{sep.ReasonCategory}</td><th>Status</th><td>{sep.Status}</td></tr>

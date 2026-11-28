@@ -19,6 +19,11 @@ namespace HRM.DTOs.Attendance
 
         public WorkAssignmentSource AssignmentSource { get; set; }
 
+        /// <summary>Published roster assignment that produced this duty, when AssignmentSource is Roster.</summary>
+        public long? SourceReferenceId { get; set; }
+
+        public int? SourceReferenceType { get; set; }
+
         public WorkOwnershipType? OwnershipType { get; set; }
 
         public bool RequiresAttendance { get; set; }

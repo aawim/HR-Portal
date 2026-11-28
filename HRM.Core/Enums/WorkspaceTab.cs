@@ -29,6 +29,8 @@ namespace HRM.Enum
 
         Teams,
 
+        Departments,
+
         Reports,
 
         Analytics,
@@ -38,6 +40,9 @@ namespace HRM.Enum
         OrgDaily,
 
         Position,
+
+        [Display(Name = "Job History")]
+        JobHistory,
 
         Schedule,
 
@@ -55,7 +60,15 @@ namespace HRM.Enum
         Finance,
         [Display(Name = "Staff Transfer")]
         StaffTransfer,
+        [Display(Name = "Separation & Offboarding")]
+        StaffSeparation,
         Onboarding,
-        Certificates
+        Certificates,
+        [Display(Name = "Goods Loans")]
+        GoodsLoans,
+        [Display(Name = "Bank Details")]
+        Bank,
+        [Display(Name = "Emergency Contacts")]
+        EmergencyContact
     }
 }

@@ -47,6 +47,8 @@ public sealed class LeaveFlowConfigurationService(IDbContextFactory<HrmTeContext
                 .Select(x => new LeaveFlowOption(x.RequestTypeId, x.TypeName)).ToListAsync(),
             UserGroups = await db.UserGroups.AsNoTracking().Where(x => x.IsGlobal || x.UserOrganisation.BusinessEntityID == org)
                 .OrderBy(x => x.GroupName).Select(x => new LeaveFlowOption(x.UserGroupId, x.GroupName)).ToListAsync(),
+            PermissionRoles = await db.Roles.AsNoTracking().OrderBy(x => x.Name)
+                .Select(x => new LeaveFlowOption(x.RoleID, x.RoleKey + " - " + x.Name)).ToListAsync(),
             States = await db.RequestStates.AsNoTracking().Where(x => x.IsProcessingState && !x.IsFinalState && x.RequestStateId != 1)
                 .OrderBy(x => x.RequestStateId).Select(x => new LeaveFlowOption(x.RequestStateId, x.StateName)).ToListAsync()
         };
@@ -89,6 +91,8 @@ public sealed class LeaveFlowConfigurationService(IDbContextFactory<HrmTeContext
             {
                 Name = x.StageName, StateId = imported && requestType == LeaveChangeRequestTypes.EarlyReturn && x.RequestStateId == 3 ? earlyReturnHrState : x.RequestStateId,
                 UserGroupId = x.Approvers.FirstOrDefault(a => a.ApproverType.ToUpper() == "USERGROUP" || a.ApproverType.ToUpper() == "SUPERVISORGROUP")?.ApproverReferenceId ?? 0,
+                ApproverType = x.Approvers.FirstOrDefault()?.ApproverType ?? "UserGroup",
+                PermissionRoleId = x.Approvers.FirstOrDefault(a => a.ApproverType.ToUpper() == "LEADERSHIPPERMISSION")?.ApproverReferenceId ?? 0,
                 ApplicantSupervisorOnly = x.Approvers.Any(a => a.ApproverType.ToUpper() == "SUPERVISOR" || a.ApproverType.ToUpper() == "SUPERVISORGROUP")
             }).ToList() ?? (dutyType ? new List<LeaveFlowStageDto> { new() { Name = "Supervisor approval", StateId = 3, UserGroupId = supervisorGroup, ApplicantSupervisorOnly = true } }
                 : requestType == LeaveChangeRequestTypes.EarlyReturn ? new List<LeaveFlowStageDto> { new() { Name = "HR approval", StateId = earlyReturnHrState } }
@@ -105,16 +109,18 @@ public sealed class LeaveFlowConfigurationService(IDbContextFactory<HrmTeContext
             ? new List<LeaveFlowStageDto> { new() { Name = "Supervisor verification", StateId = 2, UserGroupId = model.SupervisorUserGroupId, ApplicantSupervisorOnly = true }, new() { Name = "HR approval", StateId = 3, UserGroupId = model.HrUserGroupId } }
             : new List<LeaveFlowStageDto> { new() { Name = "HR approval", StateId = 3, UserGroupId = model.HrUserGroupId } });
         if (stages.Count is < 1 or > 20) return ServiceResult.Fail("Configure 1–20 approval stages before enabling submissions. Level 0 has no approval flow.");
-        if (stages.Any(x => string.IsNullOrWhiteSpace(x.Name) || x.Name.Length > 150 || x.UserGroupId <= 0) ||
+        if (stages.Any(x => string.IsNullOrWhiteSpace(x.Name) || x.Name.Length > 150 || (x.ApproverType.Equals("LeadershipPermission", StringComparison.OrdinalIgnoreCase) ? x.PermissionRoleId <= 0 : x.UserGroupId <= 0)) ||
             stages.Select(x => x.StateId).Distinct().Count() != stages.Count)
             return ServiceResult.Fail("Each stage needs a name, User Group and a distinct processing status.");
         if (model.RequestTypeId == LeaveChangeRequestTypes.Extension && (!stages[0].ApplicantSupervisorOnly || stages.Count < 2 || stages[^1].ApplicantSupervisorOnly) ||
             model.RequestTypeId == LeaveChangeRequestTypes.EarlyReturn && (stages.Count != 1 || stages[0].ApplicantSupervisorOnly))
             return ServiceResult.Fail("Extensions require the applicant's supervisor followed by HR. Early returns require one HR stage.");
         await using var db = await factory.CreateDbContextAsync();
-        var groupIds = stages.Select(x => x.UserGroupId).Distinct().ToList();
+        var groupIds = stages.Where(x => !x.ApproverType.Equals("LeadershipPermission", StringComparison.OrdinalIgnoreCase)).Select(x => x.UserGroupId).Distinct().ToList();
+        var leadershipRoleIds = stages.Where(s => s.ApproverType.Equals("LeadershipPermission", StringComparison.OrdinalIgnoreCase)).Select(s => s.PermissionRoleId).Distinct().ToList();
         if (!await db.JobTypes.AnyAsync(x => x.JobTypeId == model.JobTypeId && x.IsActive != false) ||
-            await db.UserGroups.CountAsync(x => groupIds.Contains(x.UserGroupId) && (x.IsGlobal || x.UserOrganisation.BusinessEntityID == org)) != groupIds.Count)
+            (groupIds.Count > 0 && await db.UserGroups.CountAsync(x => groupIds.Contains(x.UserGroupId) && (x.IsGlobal || x.UserOrganisation.BusinessEntityID == org)) != groupIds.Count) ||
+            (leadershipRoleIds.Count > 0 && await db.Roles.CountAsync(x => leadershipRoleIds.Contains(x.RoleID)) != leadershipRoleIds.Count))
             return ServiceResult.Fail("Choose an active Job Type and valid User Groups for this organisation at every stage.");
         var stateIds = stages.Select(x => x.StateId).ToList();
         if (await db.RequestStates.CountAsync(x => stateIds.Contains(x.RequestStateId) && x.IsProcessingState && !x.IsFinalState && x.RequestStateId != 1) != stages.Count)
@@ -145,7 +151,7 @@ public sealed class LeaveFlowConfigurationService(IDbContextFactory<HrmTeContext
         foreach (var (stage, index) in stages.Select((s, i) => (s, i))) definition.Stages.Add(new WfWorkflowStage
         {
             StageOrder = index + 1, StageName = stage.Name.Trim(), RequestStateId = stage.StateId, ApprovalMode = "Any",
-            Approvers = [new() { ApproverType = stage.ApplicantSupervisorOnly ? "SupervisorGroup" : "UserGroup", ApproverReferenceId = stage.UserGroupId }]
+            Approvers = [new() { ApproverType = stage.ApproverType.Equals("LeadershipPermission", StringComparison.OrdinalIgnoreCase) ? "LeadershipPermission" : stage.ApplicantSupervisorOnly ? "SupervisorGroup" : "UserGroup", ApproverReferenceId = stage.ApproverType.Equals("LeadershipPermission", StringComparison.OrdinalIgnoreCase) ? stage.PermissionRoleId : stage.UserGroupId }]
         });
         db.WfWorkflowDefinitions.Add(definition);
         var route = stages.Select(x => x.StateId).Append(4).ToArray();
@@ -159,12 +165,24 @@ public sealed class LeaveFlowConfigurationService(IDbContextFactory<HrmTeContext
             catch (RequestTransitionConfigurationException ex) { missingTransitions.Add(ex.Detail); }
             catch (InvalidOperationException ex) { return ServiceResult.Fail(ex.Message); }
         }
-        if (missingTransitions.Count > 0)
-            return ServiceResult.Fail("Approval flow was not saved. The following transitions must be configured by a Developer:\n" + string.Join("\n", missingTransitions));
         await db.SaveChangesAsync();
         await tx.CommitAsync();
         model.Version = version;
         model.ImportedFromLegacy = false;
+        if (missingTransitions.Count > 0)
+        {
+            // Save the flow first; developers can configure its missing transitions later.
+            var context = new WorkflowRequestContextDto
+            {
+                OrganisationBusinessEntityId = org, JobTypeId = model.JobTypeId, RequestTypeId = requestType
+            };
+            foreach (var detail in missingTransitions)
+                await new WorkflowConfigurationException(context, detail)
+                {
+                    ConfigurationUrl = "/admin/settings/config/state-transitions"
+                }.NotifyAsync(factory);
+            return ServiceResult.Ok("Approval flow saved. The following transitions must be configured by a Developer before request actions using them can proceed:\n" + string.Join("\n", missingTransitions));
+        }
         return ServiceResult.Ok("Approval flow saved. It applies to new submissions; existing requests keep their workflow version.");
     }
 

@@ -35,11 +35,22 @@ public sealed partial class StaffPositionManagementService
         var job=await db.Jobs.SingleAsync(x=>x.JobId==r.JobId);
         job.TerminatedDate=end;job.OperationLogId=audit.OperationLogId;
         // Keep future employment approved; its active period is bounded by TerminatedDate.
-        if(end<=DateTime.UtcNow.AddHours(5).Date)job.JobStateId=TerminationStates[typeName];
+        List<int> revokedUserIds = [];
+        if(end<=DateTime.UtcNow.AddHours(5).Date)
+        {
+            job.JobStateId=TerminationStates[typeName];
+            revokedUserIds=await HRM.Helpers.StaffTerminationAccessRevoker.RevokeAllAccessForTerminatedStaffAsync(
+                db,r.IndividualId,r.JobId,r.OrganisationId,audit.OperationLogId,null,
+                $"{typeName} (request #{r.RequestId})");
+        }
         foreach(var assignment in await db.JobPositions.Where(x=>x.JobId==r.JobId&&x.JobPositionStateId==4&&(!x.ToDate.HasValue||x.ToDate>end)).ToListAsync())
         {assignment.ToDate=end;assignment.OperationLogId=audit.OperationLogId;}
         foreach(var pay in await db.FrameworkJobStepHistories.Where(x=>x.JobId==r.JobId&&(!x.EffectiveTo.HasValue||x.EffectiveTo>end)).ToListAsync())
         {pay.EffectiveTo=end;pay.OperationLogId=audit.OperationLogId;}
         await db.SaveChangesAsync();
+        if(userContexts!=null)
+        {
+            foreach(var uid in revokedUserIds) await userContexts.InvalidateAsync(uid);
+        }
     }
 }

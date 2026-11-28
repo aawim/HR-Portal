@@ -1,0 +1,74 @@
+@page "/online/signature"
+@rendermode RenderMode.InteractiveServer
+@attribute [Authorize]
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.JSInterop
+@inject IJSRuntime JS
+
+<PageTitle>My Digital Signature</PageTitle>
+
+<section class="w-full min-w-0 p-2 space-y-4">
+    <header class="flex flex-wrap items-center justify-between gap-2 px-1 py-0.5">
+        <div class="min-w-0">
+            <div class="flex items-center gap-2 flex-wrap">
+                <h1 class="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 truncate">Digital Signature &amp; Signing Style</h1>
+                <span class="inline-flex items-center gap-1 rounded-full bg-teal-50 border border-teal-200/80 px-2 py-0.5 text-[10px] font-semibold text-teal-700">
+                    <span class="h-1.5 w-1.5 rounded-full bg-teal-500"></span>
+                    e-Sign
+                </span>
+            </div>
+            <p class="text-xs text-slate-500">Switch between Canvas drawing, PNG image upload, or QR Code Seal and manage your Signing PIN.</p>
+        </div>
+        <div class="flex flex-wrap items-center gap-1.5">
+            <button type="button" class="app-button app-button-neutral app-button-sm" @onclick="ToggleFullWidthAsync">
+                <AppIcon Name="@(fullWidth ? "fullscreen_exit" : "fullscreen")" />
+                <span>@(fullWidth ? "Shrink View" : "Full Width")</span>
+            </button>
+            <a href="/profile" class="app-button app-button-secondary app-button-sm">
+                <i class="bi bi-person-circle" aria-hidden="true"></i>
+                <span>My Profile</span>
+            </a>
+        </div>
+    </header>
+
+    <div class="w-full min-w-0 space-y-4 transition-all duration-300 @(fullWidth ? "max-w-none" : "max-w-7xl mx-auto")">
+        <HRM.Components.Shared.SignaturePadCard />
+
+        <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs text-xs text-slate-600 space-y-1.5">
+            <div class="font-bold text-slate-800 flex items-center gap-1.5">
+                <i class="bi bi-info-circle text-blue-600" aria-hidden="true"></i>
+                <span>How Signing Styles Work</span>
+            </div>
+            <ul class="list-disc pl-5 space-y-1 text-[11px]">
+                <li><strong>Canvas (Draw):</strong> Draw your handwritten signature directly on the pad; attached with a QR verification code when signing documents.</li>
+                <li><strong>PNG Image:</strong> Upload a transparent PNG (or WebP/JPG) of your signature to stamp on official HRM documents.</li>
+                <li><strong>QR Code Seal:</strong> Sign documents with a verified cryptographic QR seal (no handwritten image required) displaying your name, position, timestamp, and verification code.</li>
+            </ul>
+        </div>
+    </div>
+</section>
+
+@code {
+    private const string FullWidthKey = "hrm.signature.full-width";
+    private bool fullWidth;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        try
+        {
+            if (string.Equals(await JS.InvokeAsync<string?>("localStorage.getItem", FullWidthKey), "true", StringComparison.OrdinalIgnoreCase))
+            {
+                fullWidth = true;
+                StateHasChanged();
+            }
+        }
+        catch { }
+    }
+
+    private async Task ToggleFullWidthAsync()
+    {
+        fullWidth = !fullWidth;
+        try { await JS.InvokeVoidAsync("localStorage.setItem", FullWidthKey, fullWidth ? "true" : "false"); } catch { }
+    }
+}

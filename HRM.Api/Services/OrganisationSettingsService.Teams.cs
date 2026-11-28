@@ -30,7 +30,13 @@ public partial class OrganisationSettingsService
         var user = await access.RequireContextAsync();
         await using var db = await factory.CreateDbContextAsync();
         var current = user.IsSuperAdministrator ? 0 : await access.GetCurrentOrganisationIdAsync();
-        return await db.Organisations.AsNoTracking().Where(o => user.IsSuperAdministrator || o.BusinessEntityID == current)
+        var inactiveEntityStateIds = await db.BusinessEntityStates.AsNoTracking()
+            .Where(s => s.StateName.Contains("Deleted") || s.StateName.Contains("Inactive") || s.StateName.Contains("Closed") || s.StateName.Contains("Disabled"))
+            .Select(s => s.BusinessEntityStateId)
+            .ToListAsync();
+        return await db.Organisations.AsNoTracking()
+            .Where(o => (user.IsSuperAdministrator || o.BusinessEntityID == current) &&
+                        !db.BusinessEntities.Any(b => b.BusinessEntityID == o.BusinessEntityID && b.BusinessEntityStateId.HasValue && inactiveEntityStateIds.Contains(b.BusinessEntityStateId.Value)))
             .OrderBy(x => x.OrganisationName).Select(x => new OrganisationSettingsOption(x.BusinessEntityID, x.OrganisationName)).ToListAsync();
     }
 

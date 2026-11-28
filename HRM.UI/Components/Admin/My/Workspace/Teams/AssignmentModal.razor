@@ -280,7 +280,8 @@
 
         if (Mode == AssignmentMode.Task && staffProjects.Count == 0)
         {
-            var assignable = await SafeAsync(() => TeamService.SearchAssignableProjectsAsync("", CancellationToken.None));
+            var assignable = await SafeAsync<List<ProjectLookupDto>>(
+                async () => await TeamService.SearchAssignableProjectsAsync("", CancellationToken.None));
             if (assignable != null)
             {
                 staffProjects = assignable.Select(p => new StaffProjectAssignmentDto

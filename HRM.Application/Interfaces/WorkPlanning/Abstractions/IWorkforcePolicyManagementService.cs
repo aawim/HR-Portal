@@ -1,0 +1,8 @@
+namespace HRM.WorkPlanning.Abstractions;
+public sealed record DutyTypeInput(int OrganisationId,string Code,string Name,string Category,string AttendanceStrategy,int? WorkTemplateId,int OperationLogId);
+public sealed record WorkforcePolicyInput(int OrganisationId,string Code,string Name,string RulesJson,DateOnly EffectiveFrom,DateOnly? EffectiveTo,int OperationLogId);
+public sealed record WorkforceDutyTypeRow(int Id,string Code,string Name,string Category,string AttendanceStrategy,int? WorkTemplateId,bool IsActive);
+public sealed record WorkforcePolicyRow(int Id,string Code,string Name,string RulesJson,DateOnly EffectiveFrom,DateOnly? EffectiveTo,int Version,bool IsActive);
+public sealed record WorkforcePolicyAssignmentInput(int OrganisationId,int WorkforcePolicyId,int? JobId,int? IndividualId,int? DutyTypeId,DateOnly EffectiveFrom,DateOnly? EffectiveTo,int Priority,int OperationLogId);
+public sealed record WorkforcePolicyAssignmentRow(int Id,int WorkforcePolicyId,string PolicyName,int? JobId,int? IndividualId,int? DutyTypeId,DateOnly EffectiveFrom,DateOnly? EffectiveTo,int Priority,bool IsActive);
+public interface IWorkforcePolicyManagementService{Task<IReadOnlyList<WorkforceDutyTypeRow>>GetDutyTypesAsync(int organisationId,CancellationToken ct=default);Task<IReadOnlyList<WorkforcePolicyRow>>GetPoliciesAsync(int organisationId,CancellationToken ct=default);Task<IReadOnlyList<WorkforcePolicyAssignmentRow>>GetAssignmentsAsync(int organisationId,CancellationToken ct=default);Task<int>CreateDutyTypeAsync(DutyTypeInput input,CancellationToken ct=default);Task<int>CreatePolicyAsync(WorkforcePolicyInput input,CancellationToken ct=default);Task<int>CreateAssignmentAsync(WorkforcePolicyAssignmentInput input,CancellationToken ct=default);}

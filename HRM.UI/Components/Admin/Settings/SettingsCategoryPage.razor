@@ -1,13 +1,12 @@
 @page "/admin/settings/{CategoryName}"
 @using HRM.Components.Admin.Settings.Positions
 @page "/admin/settings/{CategoryName}/{Section}"
-@page "/admin/settings/org/organisations/{OrganisationId:int}/{OrganisationSection}"
-@page "/admin/settings/org/manage/{OrganisationId:int}/{OrganisationSection}"
 @page "/admin/settings/org/teams/{TeamSection}"
 @inject NavigationManager Navigation
 @using HRM.Components.Admin.Settings.Roles
 @using HRM.Components.Admin.Settings.Users
 @using HRM.Components.Admin.Settings.Workplan
+@using HRM.Components.Admin.Hr.Group
 @using HRM.Components.Leave
 @using HRM.Components.Leave.Policy
 @using HRM.Components.Shared
@@ -22,80 +21,136 @@
 @inject IUserAccessService UserAccess
 @rendermode RenderMode.InteractiveServer
 
-<PageTitle>@(ResolvedCategoryName == "org" ? "Organisation Workspace - Settings" : "Settings - HR Portal")</PageTitle>
+<PageTitle>@(ResolvedCategoryName == "org" ? "Organisation Workspace - Settings" : ResolvedCategoryName == "user" ? "User Workspace - Settings" : ResolvedCategoryName == "roles" ? "Roles & Access Workspace - Settings" : ResolvedCategoryName == "positions" ? "Positions & Pay Frameworks - Settings" : "Settings - HR Portal")</PageTitle>
 
 <AuthorizeView>
     <Authorized>
-        @if (ResolvedCategoryName == "org")
+        @if (checkingAccess)
         {
-            <!-- Admin Workspace Style Layout for /admin/settings/org -->
-            <section class="org-workspace-page w-full min-w-0 p-2 flex flex-col gap-2 bg-slate-50/50 text-slate-900 transition-all duration-300">
-                <!-- Top Header Area Matching Admin Workspace Standard -->
-                <div class="org-workspace-header flex flex-col gap-2 p-2">
-                    <div class="flex items-center justify-between flex-wrap gap-2">
-                        <div>
-                            <div class="flex items-center gap-2">
-                                <h1 class="text-xl md:text-2xl font-bold tracking-tight text-slate-900">Organisation Workspace</h1>
-                                <span class="rounded-full bg-teal-100 px-2.5 py-0.5 text-xs font-semibold text-teal-800">
-                                    Organisation Settings
-                                </span>
-                            </div>
-                            <p class="text-xs text-slate-500 mt-0.5">
-                                Central management for organisation details, document centre, structure types, calendars, locations and permissions.
-                            </p>
+            <div class="m-4 rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-500">Checking settings permissions…</div>
+        }
+        else if (!canAccessCategory)
+        {
+            <div class="m-4 rounded-xl border border-amber-200 bg-amber-50 p-6 text-sm text-amber-900">
+                You do not have permission to access this Settings category.
+            </div>
+        }
+        else if (ResolvedCategoryName is "org" or "user" or "roles" or "positions")
+        {
+            var workspaceTitle = ResolvedCategoryName switch
+            {
+                "org" => "Organisation Workspace",
+                "user" => "User Workspace",
+                "positions" => "Positions & Pay Frameworks",
+                _ => "Roles & Access Workspace"
+            };
+            var workspaceBadge = ResolvedCategoryName switch
+            {
+                "org" => "Organisation Settings",
+                "user" => "User Settings",
+                "positions" => "Position Settings",
+                _ => "Access Settings"
+            };
+            var workspaceSubtitle = ResolvedCategoryName switch
+            {
+                "org" => "Central management for organisation details, document centre, structure types, calendars, locations and permissions.",
+                "user" => "Central management for user accounts, roles, direct permissions, staff records and enrollment numbers.",
+                "positions" => "Manage active positions, pay frameworks, ranks, classifications, and position allowances.",
+                _ => "Central management for permissions, user groups, area map coverage and staff attribute access control."
+            };
+            <!-- Enterprise Workspace Layout for /admin/settings/org, /user, /roles, and /positions -->
+            <section class="org-workspace-page w-full min-w-0 p-2 flex flex-col gap-3 text-slate-900 dark:text-slate-100">
+                <!-- Compact Header (no background/border) -->
+                <header class="flex flex-wrap items-center justify-between gap-2 px-1 py-0.5">
+                    <div class="min-w-0">
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <h1 class="text-lg font-bold text-slate-900 dark:text-slate-100 truncate">@workspaceTitle</h1>
+                            <span class="inline-flex items-center gap-1 rounded-full bg-teal-50 dark:bg-teal-950/60 border border-teal-200/80 dark:border-teal-800 px-2 py-0.5 text-[10px] font-semibold text-teal-700 dark:text-teal-300">
+                                <span class="h-1.5 w-1.5 rounded-full bg-teal-500"></span>
+                                @workspaceBadge
+                            </span>
                         </div>
-                        <div class="flex items-center gap-2">
-                            <button type="button"
-                                    class="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition"
-                                    @onclick="() => StateHasChanged()">
-                                <span>↻</span>
-                                <span>Refresh</span>
-                            </button>
-                        </div>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">
+                            @workspaceSubtitle
+                        </p>
                     </div>
-                </div>
+                    <div class="flex flex-wrap items-center gap-1.5">
+                        <button type="button"
+                                class="app-button app-button-neutral app-button-sm"
+                                @onclick="ToggleWorkspaceFullWidth">
+                            <AppIcon Name="@(workspaceFullWidth ? "fullscreen_exit" : "fullscreen")" Class="text-xs" />
+                            <span>@(workspaceFullWidth ? "Shrink View" : "Full Width")</span>
+                        </button>
+                        <button type="button"
+                                class="app-button app-button-secondary app-button-sm"
+                                @onclick="() => StateHasChanged()">
+                            <AppIcon Name="refresh" Class="text-xs" />
+                            <span>Refresh</span>
+                        </button>
+                    </div>
+                </header>
 
-                <!-- Solid Folder Navigation Tabs Matching Admin Workspace -->
-                <div class="org-workspace-tabs w-full border-b-2 border-teal-700 overflow-x-auto">
-                    <nav class="flex items-end gap-1 min-w-max pb-0" aria-label="Organisation Workspace Sections">
+                <!-- Contextual Folder Navigation Tabs -->
+                <div class="org-workspace-tabs my-workspace-tabs w-full border-b-2 border-teal-700 dark:border-teal-600 overflow-x-auto">
+                    <nav class="flex items-end gap-1 min-w-max pb-0" aria-label="@($"{workspaceTitle} Sections")">
                         @foreach (var item in VisibleItems)
                         {
                             var isActive = activeItem?.Title == item.Title;
                             <button type="button"
                                     aria-current="@(isActive ? "page" : null)"
-                                    class="rounded-t-xl px-4 py-2 font-bold text-xs md:text-sm transition-all border-t border-l border-r flex items-center gap-2 @(isActive ? "bg-teal-700 text-white border-teal-700 shadow-sm" : "bg-[#86b0be]/40 text-slate-800 border-slate-300 hover:bg-[#86b0be]/60")"
+                                    class="rounded-t-xl px-4 py-2 font-bold text-xs md:text-sm transition-all border-t border-l border-r flex items-center gap-2 @(isActive ? "bg-teal-700 dark:bg-teal-600 text-white border-teal-700 dark:border-teal-600 shadow-sm" : "bg-[#86b0be]/30 text-slate-700 hover:text-slate-900 hover:bg-[#86b0be]/50 dark:bg-slate-800/90 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-700 border-slate-300 dark:border-slate-700")"
                                     @onclick="() => SelectItem(item)">
-                                <span class="text-base">@item.Icon</span>
+                                <i class="bi @item.Icon text-base" aria-hidden="true"></i>
                                 <span>@item.Title</span>
                             </button>
                         }
                     </nav>
                 </div>
 
-                <!-- Dynamic Content Panel -->
-                <div class="w-full min-w-0 bg-white rounded-b-2xl rounded-tr-2xl border border-slate-200 p-4 shadow-xs">
-                    @if (activeItem == null)
-                    {
-                        <div class="h-full flex flex-col items-center justify-center text-slate-400 opacity-60 py-12">
-                            <div class="text-6xl mb-4">👈</div>
-                            <p class="text-lg font-medium">Select an item from the menu to view data.</p>
-                        </div>
-                    }
-                    else
-                    {
-                        @if (activeItem.ComponentType != null)
+                <div class="settings-ws-shell @(workspaceFullWidth ? "settings-ws-shell-full" : "settings-ws-shell-standard")">
+
+                    <!-- Dynamic Content Panel -->
+                    <div class="w-full min-w-0 bg-white dark:bg-slate-900 rounded-b-xl rounded-tr-xl border border-slate-200 dark:border-slate-800 p-3">
+                        @if (activeItem == null)
                         {
-                            <DynamicComponent @key="(ResolvedCategoryName, Section)" Type="@activeItem.ComponentType" Parameters="SelectedParameters" />
+                            <div class="h-full flex flex-col items-center justify-center text-slate-400 opacity-60 py-12">
+                                <i class="bi bi-arrow-left-circle text-6xl mb-4" aria-hidden="true"></i>
+                                <p class="text-sm font-medium">Select an item from the menu to view data.</p>
+                            </div>
                         }
                         else
                         {
-                            <div class="bg-slate-50 border border-slate-100 rounded-xl p-8 text-center text-slate-500">
-                                <p><strong>@activeItem.Title</strong> is not available yet. Return to the section menu to choose an available feature.</p>
-                            </div>
+                            @if (activeItem.ComponentType != null)
+                            {
+                                <DynamicComponent @key="(ResolvedCategoryName, Section)" Type="@activeItem.ComponentType" Parameters="SelectedParameters" />
+                            }
+                            else
+                            {
+                                <div class="bg-slate-50 border border-slate-100 rounded-xl p-8 text-center text-xs text-slate-500">
+                                    <p><strong>@activeItem.Title</strong> is not available yet. Return to the section menu to choose an available feature.</p>
+                                </div>
+                            }
                         }
-                    }
+                    </div>
                 </div>
             </section>
+            <style>
+                .settings-ws-shell {
+                    width: 100%;
+                    min-width: 0;
+                    display: flex;
+                    flex-direction: column;
+                    transition: max-width 200ms ease;
+                }
+                .settings-ws-shell-standard {
+                    max-width: 80rem;
+                    margin-left: auto;
+                    margin-right: auto;
+                }
+                .settings-ws-shell-full {
+                    max-width: none;
+                }
+            </style>
         }
         else
         {
@@ -103,7 +158,7 @@
 
                 <div class="flex flex-col md:flex-row gap-3 items-start">
 
-                    <div class="flex-shrink-0 flex flex-col gap-1 transition-all duration-300 ease-in-out overflow-hidden @(isSidebarExpanded ? "w-full md:w-60" : "w-20")">
+                    <div class="@(ResolvedCategoryName == "leaves" ? "leave-settings-sidebar" : "") @(!isSidebarExpanded ? "settings-sidebar-collapsed" : "") flex-shrink-0 flex flex-col gap-1 transition-all duration-300 ease-in-out overflow-hidden @(isSidebarExpanded ? "w-full md:w-60" : "w-20")">
 
                         <div class="flex items-center @(isSidebarExpanded ? "justify-between" : "justify-center") px-1 mb-3">
 
@@ -112,13 +167,11 @@
                             </h2>
 
                             <button aria-expanded="@isSidebarExpanded" aria-label="Toggle settings sections" @onclick="ToggleSidebar" class="p-2 rounded-lg text-slate-500 hover:bg-slate-100 hover:text-blue-600 transition-colors flex-shrink-0" title="@(isSidebarExpanded ? "Collapse Sidebar" : "Expand Sidebar")">
-                                <svg class="w-6 h-6 transition-transform duration-300 @(isSidebarExpanded ? "rotate-180" : "")" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h7"></path>
-                                </svg>
+                                <AppIcon Name="menu" Class="w-6 h-6 transition-transform duration-300 text-2xl " />
                             </button>
                         </div>
 
-                        <div class="settings-section-list @(isSidebarExpanded ? "" : "settings-section-list-collapsed") flex flex-col gap-1 mb-2">
+                        <div class="settings-section-list @(isSidebarExpanded ? "" : "settings-section-list-collapsed") flex flex-col gap-2 mb-2">
                             @foreach (var item in VisibleItems)
                             {
                                 <button aria-current="@(activeItem?.Title == item.Title ? "page" : null)" @onclick="() => SelectItem(item)"
@@ -128,7 +181,7 @@
 
                                     <div class="w-8 h-8 flex items-center justify-center rounded-lg text-xl flex-shrink-0 transition-colors duration-300 mx-auto
                             @(activeItem?.Title == item.Title ? "bg-blue-600 text-white" : "bg-blue-50 text-blue-600 group-hover:bg-blue-100 group-hover:text-blue-700")">
-                                        @item.Icon
+                                        <i class="bi @item.Icon" aria-hidden="true"></i>
                                     </div>
 
                                     <div class="flex-grow min-w-0 transition-all duration-300 @(isSidebarExpanded ? "opacity-100 w-auto" : "opacity-0 w-0 hidden")">
@@ -139,7 +192,7 @@
                                     </div>
 
                                     <div class="flex-shrink-0 transition-all duration-300 @(isSidebarExpanded ? "opacity-100 block" : "opacity-0 hidden") @(activeItem?.Title == item.Title ? "text-blue-600" : "text-slate-300 group-hover:text-blue-600")">
-                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                                        <AppIcon Name="chevron_right" Class="w-5 h-5 text-xl" />
                                     </div>
                                 </button>
                             }
@@ -155,7 +208,7 @@
                                 @if (activeItem == null)
                                 {
                                     <div class="h-full flex flex-col items-center justify-center text-slate-400 opacity-60 py-6">
-                                        <div class="text-6xl mb-4">👈</div>
+                                        <i class="bi bi-arrow-left-circle text-6xl mb-4" aria-hidden="true"></i>
                                         <p class="text-lg font-medium">Select an item from the menu to view data.</p>
                                     </div>
                                 }
@@ -196,6 +249,8 @@
 </AuthorizeView>
 
 @code {
+    private bool workspaceFullWidth = true;
+    private void ToggleWorkspaceFullWidth() => workspaceFullWidth = !workspaceFullWidth;
     [Parameter] public string CategoryName { get; set; } = string.Empty;
     [Parameter] public string? Section { get; set; }
     [Parameter] public int? OrganisationId { get; set; }
@@ -208,8 +263,14 @@
         ? new Dictionary<string, object> { ["InitialOrganisationId"] = (object?)(OrganisationId ?? QueryOrganisationId)!, ["InitialKind"] = TeamSection == "departments" ? "Department" : "Team" }
         : activeItem?.ComponentType == typeof(HRM.Components.Admin.Settings.Organisations.OrganisationSettingsEditor)
             ? new Dictionary<string, object> { ["InitialOrganisationId"] = (object?)OrganisationId!, ["InitialSection"] = OrganisationSection! }
+        : activeItem?.ComponentType == typeof(HRM.Components.Admin.Settings.Organisations.OrganisationPermissions)
+            ? new Dictionary<string, object> { ["InitialOrganisationId"] = (object?)(OrganisationId ?? QueryOrganisationId)!, ["HideHeader"] = true }
         : activeItem?.ComponentType == typeof(HRM.Components.Admin.Hr.Documents.DocumentCentreAdminPanel)
             ? new Dictionary<string, object> { ["InitialSection"] = "types" }
+        : activeItem?.ComponentType == typeof(ManageGroupsGrid)
+            ? new Dictionary<string, object> { ["RequestedTab"] = "types" }
+        : activeItem?.ComponentType == typeof(HRM.Components.Admin.Settings.Roles.AccessRolesGrid)
+            ? new Dictionary<string, object> { ["InitialView"] = activeItem.Title == "Area Map" ? "area-map" : "editor" }
         : activeItem?.ComponentType == typeof(HRM.Components.Admin.Settings.Organisations.OrganisationResources)
             ? new Dictionary<string, object> { ["Kind"] = activeItem.Title switch {
                 "Manage type" => HRM.DTOs.Organisation.OrganisationResourceKind.StructureTypes,
@@ -226,6 +287,7 @@
     {
         "Teams and supervisors" => "teams",
         "Organisation Permissions" => "permissions",
+        "Staff Attribute Access" => "staff-access",
         "Manage" => "manage",
         "Manage type" => "types",
         "Document Centre" => "document-types",
@@ -236,6 +298,9 @@
         "Request Approval Flows" => "approval-flows",
         "Leave Accrual by Job Type" => "accrual",
         "Leave Carry Forward" => "carry-forward",
+        "Projects & Tasks" => "projects",
+        "Project & Task Management" => "projects",
+        "Group Types" => "group-types",
         _ => HRM.Helpers.SectionRoutes.Slug(item.Title)
     };
 
@@ -265,67 +330,72 @@
     private List<SubItem> GetSubItems(string? cat) => (string.IsNullOrWhiteSpace(cat) ? ResolvedCategoryName : cat.Trim().ToLowerInvariant()) switch
     {
         "leaves" => new() {
-            new("Work Handover Rules", "🤝", "", typeof(HandoverRuleSettings)),
-            new("Leave Set Management", "🗂️", "", typeof(LeaveSetsGrid)),
-            new("Leave Accrual by Job Type", "📅", "Configure this tenant's accrual rates, waiting periods and carry-forward for every Job Type.", typeof(LeaveAccrualSettings)),
-            new("Leave Carry Forward", "📅", "HR reviews unused days and processes carry-forward at service-year renewal.", typeof(LeaveCarryForwardSettings)),
-            new("Manage Configurable", "⚙️", "Global leave system variables.", typeof(LeaveConfigGrid)),
-            new("Manage Leave Types", "⚙️", "Global leave system variables.", typeof(LeaveTypeManagement)),
-            new("Manage Leave Policy", "⚙️", "Global leave system variables.", typeof(LeavePolicyManagement)),
+            new("Work Handover Rules", "bi-arrow-left-right", "", typeof(HandoverRuleSettings)),
+            new("Leave Set Management", "bi-collection", "", typeof(LeaveSetsGrid)),
+            new("Leave Accrual by Job Type", "bi-calendar2-plus", "Configure this tenant's accrual rates, waiting periods and carry-forward for every Job Type.", typeof(LeaveAccrualSettings)),
+            new("Leave Carry Forward", "bi-calendar2-check", "HR reviews unused days and processes carry-forward at service-year renewal.", typeof(LeaveCarryForwardSettings)),
+            new("Manage Configurable", "bi-sliders", "Global leave system variables.", typeof(LeaveConfigGrid)),
+            new("Manage Leave Types", "bi-tags", "Global leave system variables.", typeof(LeaveTypeManagement)),
+            new("Manage Leave Policy", "bi-journal-check", "Global leave system variables.", typeof(LeavePolicyManagement)),
 
         },
         "user" => new() {
-            new("Manage Account", "👤", "Edit user account details and account status.", typeof(AccountGrid)),
-            new("Admin Portal Access", "🔐", "Explicitly grant or revoke access to the Admin portal.", typeof(AdminPortalAccess)),
-            new("Manage Permissions", "🔐", "Assign account roles and direct permissions.", typeof(AccountPermissionsGrid)),
+            new("Manage Account", "bi-person-gear", "Edit user account details and account status.", typeof(AccountGrid)),
+            new("Admin Portal Access", "bi-shield-lock", "Explicitly grant or revoke access to the Admin portal.", typeof(AdminPortalAccess)),
+            new("Manage Permissions", "bi-key", "Assign account roles and direct permissions.", typeof(AccountPermissionsGrid)),
         },
         "org" => new() {
-            new("Manage", "🏢", "Manage organisation details, addresses, contacts, teams and supervisors.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationSettingsEditor)),
-            new("Document Centre", "🗂️", "Central enterprise document repository, classifications and document requests.", typeof(HRM.Components.Admin.Hr.Documents.DocumentCentreAdminPanel)),
-            new("Manage type", "🏷️", "Manage Organisation Structure Types, such as departments and divisions.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationResources)),
-            new("Calendar", "📅", "View and assign organisation calendars.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationResources)),
-            new("Locations", "📍", "View organisation locations and manage their addresses.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationResources)),
-            new("Location Types", "🏷️", "Manage the shared location type catalogue.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationResources)),
-            new("Organisation Types", "🏛️", "Manage organisation classifications.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationResources)),
-            new("Structure Request Types", "📥", "Manage request types used for organisation structure changes.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationResources)),
-            new("Organisation Permissions", "🔐", "Manage the permissions available to this organisation.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationPermissions)),
+            new("Manage", "bi-building-gear", "Manage organisation details, structure, locations, addresses, contacts, teams and supervisors.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationSettingsEditor)),
+            new("Roles", "bi-shield-check", "Manage organisation user groups and assigned role permissions.", typeof(HRM.Components.Admin.Settings.Roles.AccessRolesGrid)),
+            new("Permissions", "bi-key", "Control which permissions are enabled for each organisation.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationPermissions)),
+            new("Document Types", "bi-folder2-open", "Configure organisation document classifications and types.", typeof(HRM.Components.Admin.Hr.Documents.DocumentCentreAdminPanel)),
+            new("Manage type", "bi-diagram-3", "Manage Organisation Structure Types, such as departments and divisions.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationResources)),
+            new("Group Types", "bi-people", "Define operational group categories.", typeof(ManageGroupsGrid)),
+            new("Calendar", "bi-calendar3", "View and assign organisation calendars.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationResources)),
+            new("Location Types", "bi-tags", "Manage the shared location type catalogue.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationResources)),
+            new("Organisation Types", "bi-buildings", "Manage organisation classifications.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationResources)),
+            new("Structure Request Types", "bi-inbox", "Manage request types used for organisation structure changes.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationResources)),
         },
         "payroll" => new() {
-            new("Manage Period", "⏳", "Configure pay cycles and deadlines.", null),
-            new("Manage Item Type", "📑", "Categorize payroll income and deductions.", null)
+            new("Manage Period", "bi-hourglass-split", "Configure pay cycles and deadlines.", null),
+            new("Manage Item Type", "bi-receipt", "Categorize payroll income and deductions.", null)
         },
         "roles" => new() {
-            new("Permissions", "🔑", "Manage permissions grouped by area, such as Leave.", typeof(RoleGrid)),
-            new("Roles", "🛡️", "Manage user groups and their assigned permissions.", typeof(HRM.Components.Admin.Settings.Roles.AccessRolesGrid)),
+            new("Permissions", "bi-key", "Manage permissions grouped by area, such as Leave.", typeof(RoleGrid)),
+            new("Roles", "bi-shield-check", "Manage user groups and their assigned permissions.", typeof(HRM.Components.Admin.Settings.Roles.AccessRolesGrid)),
+            new("Area Map", "bi-diagram-3", "Browse Online, Admin, and Developer site map areas, sub-functions, and related permissions.", typeof(HRM.Components.Admin.Settings.Roles.AccessRolesGrid)),
+            new("Staff Attribute Access", "bi-person-lock", "Restrict staff visibility by position classification, user, role or specific staff member.", typeof(HRM.Components.Admin.Settings.Roles.StaffAccessControl)),
         },
         "requests" => new() {
-           new("Request Types", "📋", "Manage request types and default approval workflows.", typeof(HRM.Components.Admin.Settings.RequestTypes.RequestTypeConfiguration)),
+           new("Request Types", "bi-ui-checks", "Manage request types and default approval workflows.", typeof(HRM.Components.Admin.Settings.RequestTypes.RequestTypeConfiguration)),
         },
         "config" => new() {
-            new("Work Types", "📋", "Manage the Work Type catalogue.", typeof(HRM.Components.Admin.Settings.WorkTypeManagement)),
-            new("Request State Transitions", "🔄", "Configure allowed From State and To State for each Request Type.", typeof(RequestStateTransitionSettings)),
-            new("Request Approval Flows", "🔄", "Configure approvals for all staff by Job Type and Request Type.", typeof(LeaveFlowSettings)),
+            new("Work Types", "bi-list-check", "Manage the Work Type catalogue.", typeof(HRM.Components.Admin.Settings.WorkTypeManagement)),
+            new("Request State Transitions", "bi-arrow-repeat", "Configure allowed From State and To State for each Request Type.", typeof(RequestStateTransitionSettings)),
+            new("Request Approval Flows", "bi-diagram-3", "Configure approvals for all staff by Job Type and Request Type.", typeof(LeaveFlowSettings)),
 
-           new("Job Type Configuration", "👥", "Manage job types and staff approval workflows.", typeof(HRM.Components.Admin.Settings.JobTypes.JobTypeConfiguration)),
-           new("Manage Attendance Clients", "🖥️", "Configure attendance clients and devices.", null),
+           new("Job Type Configuration", "bi-people", "Manage job types and staff approval workflows.", typeof(HRM.Components.Admin.Settings.JobTypes.JobTypeConfiguration)),
+           new("Manage Attendance Clients", "bi-pc-display", "Configure attendance clients and devices.", typeof(HRM.Components.Admin.Settings.EdgeAgentManagementPage)),
         },
         "positions" => new() {
-           new("Overview", "📋", "View active positions across both frameworks and their assigned staff.", typeof(PositionOverview)),
-           new("Pay Frameworks", "💰", "Manage shared frameworks, Job Matrices, pay steps, titles and allowances.", typeof(PayFrameworks)),
-           new("Manage Ranks", "🏅", "Configure attendance clients and devices.", typeof(RankGrid)),
-           new("Manage Classiffications", "🏷️", "Configure attendance clients and devices.", typeof(ClassifficationGrid)),
-           new("Manage Positions", "💼", "Manage custom positions and government Job Matrix links.", typeof(PositionGrid)),
-           new("Position Allowances", "💵", "Configure required position allowances.", typeof(PositionAllowances)),
+           new("Overview", "bi-card-list", "View active positions across both frameworks and their assigned staff.", typeof(PositionOverview)),
+           new("Pay Frameworks", "bi-cash-stack", "Manage shared frameworks, Job Matrices, pay steps, titles and allowances.", typeof(PayFrameworks)),
+           new("Manage Ranks", "bi-award", "Define and manage official job ranks.", typeof(RankGrid)),
+           new("Manage Classifications", "bi-tags", "Define and manage position classifications.", typeof(ClassifficationGrid)),
+           new("Manage Positions", "bi-briefcase", "Manage custom positions and government Job Matrix links.", typeof(PositionGrid)),
+           new("Position Allowances", "bi-cash-coin", "Configure required position allowances.", typeof(PositionAllowances)),
         },
-        "workplaning" => new() {
-           new("Working Hours", "🕒", "Configure weekly hours and temporary official start-time amendments.", typeof(WorkingHoursSettings)),
-           new("Duty roster", "📅", "View dated duties, schedule assignments, manual assignments and create rosters.", typeof(HRM.Components.Admin.WorkPlanning.DutyRosterAdmin)),
-           new("Templates", "💼", "Define working hours and required clock events using ordered segments.", typeof(WorkTemplateManagement)),
-           new("Plans", "💼", "Generate assigned schedules or add manual duty to a staff member's daily plan.", typeof(WorkPlanManagement)),
-           new("Segments", "💼", "Manage check-in, work, break and check-out events within templates.", typeof(Segments)),
+        "workplaning" or "work-planning" => new() {
+           new("Working Hours", "bi-clock-history", "Configure weekly hours and temporary official start-time amendments.", typeof(WorkingHoursSettings)),
+           new("Templates", "bi-layout-text-window", "Define working hours and required clock events using ordered segments.", typeof(WorkTemplateManagement)),
+           new("Plans", "bi-calendar2-check", "Generate assigned schedules or add manual duty to a staff member's daily plan.", typeof(WorkPlanManagement)),
+           new("Segments", "bi-segmented-nav", "Manage check-in, work, break and check-out events within templates.", typeof(Segments)),
+        },
+        "projects" => new() {
+            new("Projects & Tasks", "bi-kanban", "Comprehensive management, CRUD operations, timelines and task tracking for all projects.", typeof(HRM.Components.Admin.Settings.Projects.ProjectsManagementHub)),
         },
 
-        _ => new() { new("General Configuration", "🔧", "System level management.", null) }
+        _ => new() { new("General Configuration", "bi-wrench-adjustable", "System level management.", null) }
     };
 
     // --- Authentication and Service Logic ---
@@ -357,6 +427,29 @@
 
     private bool isDeveloper;
     private bool canViewCarryForward;
+    private bool checkingAccess = true;
+    private bool canAccessCategory;
+    private string? checkedCategory;
+
+    private static string[] GetCategoryPermissions(string category) => category.Trim().ToLowerInvariant() switch
+    {
+        "user" => ["Admin", "User.View", "User.Manage", "AdminAccess.Manage"],
+        "org" => ["Admin", "Organisation.View", "Organisation.Manage", "Configuration.View"],
+        "documents" => ["Admin", "Configuration.View", "Documents.View", "Documents.Manage"],
+        "requests" => ["Admin", "Configuration.View"],
+        "teams" => ["Admin", "Organisation.View", "Organisation.Manage"],
+        "schedules" => ["Admin", "Configuration.View", "Schedules.Manage"],
+        "leaves" => ["Admin", "Leave.Configure", "Configuration.View"],
+        "payroll" => ["Admin", "Payroll.View", "Payroll.Configure"],
+        "performance" => ["Admin", "Configuration.View"],
+        "config" => ["Admin", "Configuration.View", "WorkTypes.Manage"],
+        "roles" => ["Admin", "Roles.View", "UserOrganisation.Groups.View", "Organisation.Groups.View", "Developer"],
+        "positions" => ["Admin", "Position.Details", "Staff.Positions.Manage", "Positions.Configure"],
+        "workplaning" or "work-planning" => ["Admin", "WorkPlanning.Manage", "Schedules.Manage", "Configuration.View"],
+        "projects" => ["Admin", "Project.Manage", "Project.View", "Configuration.View"],
+        _ => ["Admin", "Configuration.View"]
+    };
+
     protected override void OnParametersSet()
     {
         CategoryName = ResolvedCategoryName;
@@ -364,7 +457,12 @@
         if (CategoryName == "leaves" && Section == "leave-sets") { Navigation.NavigateTo("/admin/settings/leaves/manage-leave-sets", replace: true); return; }
         if (CategoryName == "documents") { Navigation.NavigateTo("/admin/settings/org/document-types", replace: true); return; }
         if (CategoryName.Equals("org", StringComparison.OrdinalIgnoreCase) && Section is "document-centre" or "document-center") Section = "document-types";
-        if ((CategoryName == "workplaning" && Section == "work-types") ||
+        if (CategoryName is "workplaning" or "work-planning" && Section == "duty-roster")
+        {
+            Navigation.NavigateTo("/admin/hr/work-planning/duty-roster", replace: true);
+            return;
+        }
+        if ((CategoryName is "workplaning" or "work-planning" && Section == "work-types") ||
             ((CategoryName is "job" or "jobs") && (string.IsNullOrWhiteSpace(Section) || Section == "work-types")))
         {
             Navigation.NavigateTo("/admin/settings/config/work-types", replace: true);
@@ -398,8 +496,49 @@
             VisibleItems.FirstOrDefault(x => HRM.Helpers.SectionRoutes.Matches(Section, ItemSlug(x)));
     }
 
+    private int currentOrgId = 3;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var category = ResolvedCategoryName;
+        if (string.Equals(checkedCategory, category, StringComparison.OrdinalIgnoreCase))
+            return;
+
+        checkingAccess = true;
+        canAccessCategory = false;
+        try
+        {
+            var actor = await UserAccess.RequireContextAsync();
+            if (actor.IsSuperAdministrator || await UserAccess.HasPermissionAsync("Admin"))
+            {
+                canAccessCategory = true;
+            }
+            else
+            {
+                foreach (var perm in GetCategoryPermissions(category))
+                {
+                    if (await UserAccess.HasPermissionAsync(perm))
+                    {
+                        canAccessCategory = true;
+                        break;
+                    }
+                }
+            }
+            checkedCategory = category;
+        }
+        catch
+        {
+            canAccessCategory = false;
+        }
+        finally
+        {
+            checkingAccess = false;
+        }
+    }
+
     protected override async Task OnInitializedAsync()
     {
+        try { var id = await UserAccess.GetCurrentOrganisationIdAsync(); if (id > 0) currentOrgId = id; } catch { }
         isDeveloper = await UserAccess.HasUserGroupAsync("Developer");
         canViewCarryForward = await UserAccess.HasPermissionAsync(HRM.Services.Leave.LeaveCarryForwardPermissions.View) &&
             (await UserAccess.HasUserGroupAsync("Human Resource: Staff") || await UserAccess.HasUserGroupAsync("Human Resource :Head"));

@@ -100,4 +100,128 @@ public sealed class ScopeAndQueryTests
         using var cancellation = new CancellationTokenSource(); cancellation.Cancel();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => new CurrentEmployeeSession(access).GetAsync(cancellation.Token));
     }
+
+    [Fact]
+    public async Task Organisational_access_scopes_isolate_divisions_and_redact_sensitive_profile_fields()
+    {
+        var factory = new QueryFactory(ignoreTransactions: true);
+        var access = new FakeAccess();
+        access.Actor!.IsHRStaff = true;
+        access.Permissions.Add("Employee.View");
+        access.Permissions.Add("Directory.View");
+
+        await using (var db = factory.CreateDbContext())
+        {
+            db.Organisations.Add(new() { BusinessEntityID = 10, OrganisationName = "DHR" });
+            db.UserOrganisations.Add(new() { UserOrganisationID = 1, BusinessEntityID = 10 });
+            db.Users.Add(new() { UserId = 1, BusinessEntityID = 100, UserOrganisationId = 1, Username = "alice", IsActive = true, LocalUserStateId = 1 });
+
+            db.OrganisationStructures.AddRange(
+                new() { OrganisationStructureId = 101, OrganisationBusinessEntityID = 10, Name = "Main Office", OrganisationStructureStateId = 3 },
+                new() { OrganisationStructureId = 102, OrganisationBusinessEntityID = 10, Name = "Northern Division", OrganisationStructureStateId = 3 },
+                new() { OrganisationStructureId = 103, OrganisationBusinessEntityID = 10, Name = "Southern Division", OrganisationStructureStateId = 3 });
+
+            foreach (var (person, unit, name, idCard) in new[]
+            {
+                (100, 102, "Alice HR", "A100001"),
+                (201, 101, "Main Staff", "A100002"),
+                (202, 102, "North Staff", "A100003"),
+                (203, 103, "South Staff", "A100004")
+            })
+            {
+                db.Individuals.Add(new() { BusinessEntityId = person, FirstNameEnglish = name });
+                db.Idcards.Add(new() { IdcardId = person, BusinessEntityId = person, IdcardNumber = idCard });
+                db.Staffs.Add(new() { IndividualId = person });
+                db.StaffBankAccounts.Add(new()
+                {
+                    Id = person,
+                    IndividualId = person,
+                    BankName = "BML",
+                    AccountHolderName = name,
+                    AccountNumber = "7730000" + person,
+                    Currency = "MVR",
+                    IsPrimary = true
+                });
+                db.Jobs.Add(new()
+                {
+                    JobId = person,
+                    IndividualID = person,
+                    OrganisationID = 10,
+                    OrganisationStructureId = unit,
+                    JobStateId = 4,
+                    JoinedDate = new DateTime(2025, 1, 1),
+                    BasicSalary = 15000m
+                });
+            }
+
+            db.UserAccessScopes.Add(new()
+            {
+                UserAccessScopeId = 1,
+                OrganisationId = 10,
+                UserId = 1,
+                ScopeType = AccessScopeTypes.Division,
+                UnitId = 102,
+                IncludeDescendants = true,
+                IsActive = true,
+                Reason = "Northern Division HR"
+            });
+
+            await db.SaveChangesAsync();
+        }
+
+        await using (var db = factory.CreateDbContext())
+        {
+            var visibleIds = (await HRM.Helpers.StaffAttributeAccess.FilterViewableAsync(db, access, 10, [100, 201, 202, 203]))
+                .OrderBy(x => x).ToArray();
+            Assert.Equal([100, 202], visibleIds);
+        }
+
+        var directoryQueries = new OrganisationDirectoryQueries(factory, access, new OrganisationService(factory, access), new(access));
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
+            directoryQueries.GetDetailsAsync(new OrganisationUnitKey(OrganisationUnitKind.Structure, 101)));
+        var northDetails = await directoryQueries.GetDetailsAsync(new OrganisationUnitKey(OrganisationUnitKind.Structure, 102));
+        Assert.NotNull(northDetails);
+        Assert.Equal([100, 202], northDetails!.CurrentStaff.Select(x => x.StaffId).OrderBy(x => x).ToArray());
+
+        var jobService = StubProxy.For<HRM.Services.Interfaces.IJobService>((name, args) => name switch
+        {
+            "GetActiveJobAsync" => Task.FromResult<HRM.DTOs.UserContext.ActiveJobDto?>(new HRM.DTOs.UserContext.ActiveJobDto
+            {
+                JobId = (int)args[0]!,
+                OrganisationId = 10,
+                OrganisationStructureId = (int)args[0]! == 202 ? 102 : 101,
+                IsActive = true,
+                JoinedDate = new DateTime(2025, 1, 1),
+                BasicSalary = 15000m
+            }),
+            _ => null
+        });
+        var jobPositionService = StubProxy.For<HRM.Services.Interfaces.JobPosition.IJobPosition>((name, _) => name switch
+        {
+            "GetPositionHistoryByJobAsync" => Task.FromResult(new List<HRM.DTOs.JobPosition.JobPositionHistoryDto>()),
+            _ => null
+        });
+        var profileService = new ProfileService(
+            factory,
+            access,
+            jobService,
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<ProfileService>.Instance,
+            jobPositionService);
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => profileService.GetProfileAsync(201));
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => profileService.GetProfileAsync(203));
+
+        var northProfile = await profileService.GetProfileAsync(202);
+        Assert.NotNull(northProfile);
+        Assert.Null(northProfile!.IdentityCardNumber);
+        Assert.Equal(0m, northProfile.ActiveJob?.BasicSalary);
+        Assert.Empty(northProfile.BankAccounts);
+
+        access.Permissions.Add("Employee.Identification.View");
+        access.Permissions.Add("Employee.Salary.View");
+        var northProfileWithClassifications = await profileService.GetProfileAsync(202);
+        Assert.Equal("A100003", northProfileWithClassifications!.IdentityCardNumber);
+        Assert.Equal(15000m, northProfileWithClassifications.ActiveJob?.BasicSalary);
+        Assert.Single(northProfileWithClassifications.BankAccounts);
+    }
 }

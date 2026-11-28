@@ -22,6 +22,7 @@ public sealed partial class ScopeScheduleSettingsService(IDbContextFactory<HrmTe
             throw new UnauthorizedAccessException("Schedule.Attach permission and access to the selected organisation are required. Only Super Admin can manage another organisation's schedules here.");
         await using var db=await factory.CreateDbContextAsync();
         if(!await db.Organisations.AnyAsync(o=>o.BusinessEntityID==org)) throw new UnauthorizedAccessException("The selected organisation is unavailable.");
+        await HRM.Services.Communications.CommunicationSchemaBootstrapper.EnsureSchemaAsync(db);
         return org;
     }
     public async Task<ScopeScheduleSettingsData> LoadAsync(int? organisationId=null)
@@ -46,10 +47,15 @@ public sealed partial class ScopeScheduleSettingsService(IDbContextFactory<HrmTe
         if(model.OrganisationStructureId.HasValue && !await db.OrganisationStructures.AnyAsync(s=>s.OrganisationStructureId==model.OrganisationStructureId && s.OrganisationBusinessEntityID==org && s.OrganisationStructureStateId==3))
             throw new InvalidOperationException("Select an approved structure in this organisation.");
         if(model.GroupId.HasValue && !await db.Groups.AnyAsync(g=>g.GroupId==model.GroupId && g.BusinessEntityOrganisationId==org)) throw new InvalidOperationException("Select a group in this organisation.");
-        var rotation=StaffScheduleCalendar.Parse(model.RotationTemplateIds);
-        if(model.ScheduleMode=="Rotation" && (!model.RotationAnchorDate.HasValue || rotation.Count is <1 or >90 || rotation.Any(id=>id<0) || !rotation.Any(id=>id>0)))
+        var rotationSlots=StaffScheduleCalendar.ParseSlots(model.RotationTemplateIds);
+        if(model.ScheduleMode=="Rotation" && (!model.RotationAnchorDate.HasValue || rotationSlots.Count is <1 or >90 || rotationSlots.Any(s=>s.TemplateId<0) || !rotationSlots.Any(s=>s.TemplateId>0)))
             throw new InvalidOperationException("Choose a rotation anchor and 1–90 cycle days, including at least one template. Use 0 for rest days.");
-        var ids=(model.ScheduleMode=="Rotation"?rotation.Where(id=>id>0):new[]{model.WorkTemplateId}).Distinct().ToList();
+        if(model.ScheduleMode=="Rotation" && rotationSlots.Any(s=>s.TemplateId>0 && s.StartTime.HasValue && s.EndTime.HasValue && s.StartTime==s.EndTime))
+            throw new InvalidOperationException("Custom shift start and end times cannot be identical.");
+        var serializedRotation=model.ScheduleMode=="Rotation"?SchedulePattern.SerializeSlots(rotationSlots):null;
+        if(serializedRotation!=null && serializedRotation.Length>2000)
+            throw new InvalidOperationException("The rotating shift pattern is too large. Shorten shift labels or cycle length.");
+        var ids=(model.ScheduleMode=="Rotation"?rotationSlots.Where(s=>s.TemplateId>0).Select(s=>s.TemplateId):new[]{model.WorkTemplateId}).Distinct().ToList();
         if(model.ScheduleMode=="Rotation") model.WorkTemplateId=ids.First();
         var available=await db.WorkTemplates.Where(t=>ids.Contains(t.WorkTemplateId) && t.IsActive && (t.IsGlobal || t.OrganisationBusinessEntityId==org) &&
             t.DefaultStartTime.HasValue && t.DefaultEndTime.HasValue && t.WorkTemplateSegments.Any(s=>s.IsActive) &&
@@ -81,7 +87,7 @@ public sealed partial class ScopeScheduleSettingsService(IDbContextFactory<HrmTe
         }
         entity.OrganisationStructureId=model.OrganisationStructureId;entity.GroupId=model.GroupId;entity.WorkTemplateId=model.WorkTemplateId;
         entity.SchedulePurpose=model.SchedulePurpose;entity.ScheduleMode=model.ScheduleMode;entity.WorkingDaysMask=model.ScheduleMode=="Standard"?31:model.WorkingDaysMask;
-        entity.RotationAnchorDate=model.ScheduleMode=="Rotation"?model.RotationAnchorDate?.Date:null;entity.RotationTemplateIds=model.ScheduleMode=="Rotation"?System.Text.Json.JsonSerializer.Serialize(rotation):null;
+        entity.RotationAnchorDate=model.ScheduleMode=="Rotation"?model.RotationAnchorDate?.Date:null;entity.RotationTemplateIds=serializedRotation;
         entity.Priority=model.Priority;entity.EffectiveFrom=model.EffectiveFrom.Date;entity.EffectiveTo=model.EffectiveTo?.Date;entity.OperationLogId=operation.OperationLogId;entity.IsActive=model.IsActive;
         await db.SaveChangesAsync();
         if(entity.IsActive) await ValidateDutiesAsync(db,entity,entity.EffectiveFrom,entity.EffectiveTo);
@@ -168,5 +174,31 @@ public sealed partial class ScopeScheduleSettingsService(IDbContextFactory<HrmTe
         foreach(var plan in plans) {plan.IsValid=false;foreach(var s in plan.WorkPlanSegments)s.IsValid=false;foreach(var a in plan.WorkAssignments){a.IsValid=false;foreach(var s in a.WorkAssignmentSegments)s.IsValid=false;foreach(var owner in a.WorkAssignmentOwners)owner.IsValid=false;}}
         var users=await db.Users.Where(u=>u.IsActive && u.LocalUserStateId==1 && db.Jobs.Any(j=>affected.Contains(j.JobId) && j.IndividualID==u.BusinessEntityID && j.OrganisationID==org && j.JobStateId==4 && !j.TerminatedDate.HasValue)).Select(u=>new{u.UserId,u.BusinessEntityID}).ToListAsync();
         foreach(var user in users)db.StaffNotifications.Add(new(){UserId=user.UserId,IndividualId=user.BusinessEntityID,OrganisationId=org,Kind="Schedule assignment",Message=message,Url="/online",CreatedAtUtc=DateTime.UtcNow});
+        // This method runs inside the schedule mutation transaction. Keep private notifications employee-targeted.
+        var today = DateTime.UtcNow.AddHours(5).Date;
+        var recipients = await (from j in db.Jobs.AsNoTracking()
+            join ind in db.Individuals.AsNoTracking() on j.IndividualID equals ind.BusinessEntityId into indJoin
+            from ind in indJoin.DefaultIfEmpty()
+            where affected.Contains(j.JobId) && j.OrganisationID == org && j.JobStateId == 4 && (!j.TerminatedDate.HasValue || j.TerminatedDate >= today)
+            select new { j.JobId, j.IndividualID, ind.FirstNameEnglish, ind.MiddleNameEnglish, ind.LastNameEnglish }).ToListAsync();
+        foreach (var recipient in recipients)
+        {
+            var aggregate = $"scope:{scope.Id}:job:{recipient.JobId}";
+            var pending = await db.CommunicationOutbox
+                .Where(x => x.OrganisationBusinessEntityId == org && x.AggregateType == "EmployeeSchedule" && x.AggregateId == aggregate && x.Status == "Pending")
+                .OrderByDescending(x => x.CommunicationOutboxId)
+                .FirstOrDefaultAsync();
+            if (pending is null)
+            {
+                pending = new CommunicationOutbox { EventId = Guid.NewGuid(), OrganisationBusinessEntityId = org, EventCode = HRM.Communications.Contracts.CommunicationEventCodes.EmployeeScheduleChanged,
+                    AggregateType = "EmployeeSchedule", AggregateId = aggregate };
+                db.CommunicationOutbox.Add(pending);
+            }
+            var employeeName = string.Join(" ", new[] { recipient.FirstNameEnglish, recipient.MiddleNameEnglish, recipient.LastNameEnglish }.Where(s => !string.IsNullOrWhiteSpace(s)));
+            if (string.IsNullOrWhiteSpace(employeeName)) employeeName = "Employee";
+            pending.PayloadJson = System.Text.Json.JsonSerializer.Serialize(new { ScopeScheduleAssignmentId = scope.Id, ScopeVersion = scope.Version, recipient.JobId, IndividualId = recipient.IndividualID,
+                Title = "Work schedule updated", Description = message, EffectiveDate = from.ToString("yyyy-MM-dd"), EmployeeName = employeeName });
+            pending.OccurredAtUtc = DateTime.UtcNow; pending.AvailableAtUtc = DateTime.UtcNow.AddMinutes(2);
+        }
     }
 }

@@ -6,43 +6,154 @@
 @inject ILogger<RequestStateTransitionSettings> Logger
 
 <PageTitle>Request State Transitions</PageTitle>
-<div class="mx-auto max-w-5xl space-y-4 p-4">
-    <a class="text-sm text-blue-700 underline" href="/admin/settings/config">Back to Configurations</a>
-    <h1 class="text-2xl font-semibold">Request State Transitions</h1>
-    <p class="text-sm text-slate-600">A request can change status only when its Request Type, current From State and target To State match an allowed transition. Permissions and workflow stage order still apply.</p>
-    @if (message != null) { <p role="status" class="rounded border bg-slate-50 p-3">@message</p> }
+<div class="@(Embedded ? "w-full min-w-0 space-y-4" : "mx-auto max-w-7xl p-2 space-y-4")">
+    @if (!Embedded)
+    {
+        <header class="flex flex-wrap items-center justify-between gap-2 px-1 py-0.5">
+            <div class="min-w-0">
+                <div class="flex items-center gap-2 flex-wrap">
+                    <h1 class="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 truncate">Request State Transitions</h1>
+                    <span class="inline-flex items-center gap-1 rounded-full bg-teal-50 border border-teal-200/80 px-2 py-0.5 text-[10px] font-semibold text-teal-700">
+                        <span class="h-1.5 w-1.5 rounded-full bg-teal-500"></span>
+                        Workflow Rules
+                    </span>
+                </div>
+                <p class="text-xs text-slate-500">A request can change status only when its Request Type, current From State and target To State match an allowed transition.</p>
+            </div>
+        </header>
+    }
+    @if (message != null)
+    {
+        <div role="status" class="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-800">
+            <span>@message</span>
+            <button type="button" class="font-bold text-slate-500 hover:text-slate-800" @onclick="() => message = null">✕</button>
+        </div>
+    }
     @if (data != null)
     {
-        <fieldset disabled="@busy" class="space-y-4 rounded-xl border bg-white p-4">
-            <label class="block">Request Type<select id="transition-request-type" class="mt-1 w-full rounded border p-2" @bind="requestType" @bind:after="LoadRowsAsync"><option value="0">Select Request Type</option>@foreach (var x in data.RequestTypes) { <option value="@x.Id">@x.Name</option> }</select></label>
+        <fieldset disabled="@busy" class="space-y-3 rounded-xl border border-slate-200 bg-slate-50/70 p-4">
+            <label class="block text-xs font-medium text-slate-700 p-1">
+                Request Type
+                <select id="transition-request-type" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1.5 text-xs text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" @bind="requestType" @bind:after="LoadRowsAsync">
+                    <option value="0">Select Request Type</option>
+                    @foreach (var x in data.RequestTypes) { <option value="@x.Id">@x.Name</option> }
+                </select>
+            </label>
             <div class="grid gap-3 sm:grid-cols-2">
-                <label>From State<select id="transition-from" class="mt-1 w-full rounded border p-2" @bind="from"><option value="0">Select current state</option>@foreach (var x in data.States) { <option value="@x.Id">@x.Name</option> }</select></label>
-                <label>To State<select id="transition-to" class="mt-1 w-full rounded border p-2" @bind="to"><option value="0">Select next state</option>@foreach (var x in data.States) { <option value="@x.Id">@x.Name</option> }</select></label>
+                <label class="block text-xs font-medium text-slate-700 p-1">
+                    From State
+                    <select id="transition-from" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1.5 text-xs text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" @bind="from">
+                        <option value="0">Select current state</option>
+                        @foreach (var x in data.States) { <option value="@x.Id">@x.Name</option> }
+                    </select>
+                </label>
+                <label class="block text-xs font-medium text-slate-700 p-1">
+                    To State
+                    <select id="transition-to" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1.5 text-xs text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" @bind="to">
+                        <option value="0">Select next state</option>
+                        @foreach (var x in data.States) { <option value="@x.Id">@x.Name</option> }
+                    </select>
+                </label>
             </div>
-            <button type="button" disabled="@(requestType == 0 || from == 0 || to == 0)" @onclick="AddAsync" class="rounded bg-blue-600 px-4 py-2 text-white disabled:opacity-50">Allow transition</button>
+            <div class="flex justify-end">
+                <button type="button" disabled="@(requestType == 0 || from == 0 || to == 0)" @onclick="AddAsync" class="app-button app-button-primary app-button-sm">
+                    <AppIcon Name="bi-plus-lg" />
+                    <span>Allow Transition</span>
+                </button>
+            </div>
         </fieldset>
         @if (requestType > 0)
         {
-            <section class="space-y-3 rounded-xl border bg-white p-4"><h2 class="font-semibold">Allowed transitions</h2>
-                @if (rows.Count == 0) { <p>No transitions configured. Status changes are blocked.</p> }
-                <div class="overflow-x-auto"><table class="w-full text-left text-sm"><thead><tr><th class="p-2">From State</th><th class="p-2">To State</th><th class="p-2">Action</th></tr></thead><tbody>
-                    @foreach (var row in rows) { <tr class="border-t"><td class="p-2">@row.FromState</td><td class="p-2">@row.ToState</td><td class="p-2"><button type="button" disabled="@busy" @onclick="() => RemoveAsync(row)" class="text-red-700 disabled:opacity-50">Remove @row.FromState → @row.ToState</button></td></tr> }
-                </tbody></table></div>
+            <section class="space-y-3 rounded-xl border border-slate-200 bg-white p-4">
+                <div class="flex items-center justify-between gap-2">
+                    <h2 class="text-xs font-bold uppercase tracking-wide text-slate-700">Allowed Transitions (@rows.Count)</h2>
+                </div>
+                @if (rows.Count == 0)
+                {
+                    <div class="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center text-xs text-slate-500">
+                        No transitions configured for this request type. Status changes are currently blocked.
+                    </div>
+                }
+                else
+                {
+                    <div class="overflow-x-auto rounded-xl border border-slate-200">
+                        <table class="w-full text-left text-xs">
+                            <thead class="border-b border-slate-200 bg-slate-50 text-slate-700 font-semibold">
+                                <tr>
+                                    <th class="p-2.5">From State</th>
+                                    <th class="p-2.5">To State</th>
+                                    <th class="p-2.5 text-right">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100">
+                                @foreach (var row in rows)
+                                {
+                                    <tr class="hover:bg-slate-50/50">
+                                        <td class="p-2.5 font-medium text-slate-800">@row.FromState</td>
+                                        <td class="p-2.5 font-medium text-slate-800">@row.ToState</td>
+                                        <td class="p-2.5 text-right">
+                                            <button type="button" disabled="@busy" @onclick="() => RemoveAsync(row)" class="app-button app-button-danger app-button-sm">
+                                                <AppIcon Name="bi-trash" />
+                                                <span>Remove</span>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
             </section>
         }
     }
 </div>
 
 @code {
+    [Parameter] public bool Embedded { get; set; }
+    [Parameter] public int? InitialRequestTypeId { get; set; }
+    [Parameter] public int? InitialFromStateId { get; set; }
+    [Parameter] public int? InitialToStateId { get; set; }
+    [Parameter] public string? InitialRequestTypeName { get; set; }
+    [Parameter] public string? InitialFromStateName { get; set; }
+    [Parameter] public string? InitialToStateName { get; set; }
+    [Parameter] public EventCallback OnConfigurationChanged { get; set; }
     private RequestTransitionSettingsDto? data;
     private List<AllowedRequestTransitionDto> rows = [];
     private int requestType, from, to;
     private bool busy;
     private string? message;
+    private string? appliedPresetKey;
     protected override async Task OnInitializedAsync()
     {
-        try { data = await Configuration.LoadAsync(); }
+        try { data = await Configuration.LoadAsync(); await ApplyPresetAsync(); }
         catch (Exception ex) { Error(ex); }
+    }
+    protected override async Task OnParametersSetAsync()
+    {
+        if (data is not null) await ApplyPresetAsync();
+    }
+    private async Task ApplyPresetAsync()
+    {
+        var presetKey = $"{InitialRequestTypeId}|{InitialFromStateId}|{InitialToStateId}|{InitialRequestTypeName}|{InitialFromStateName}|{InitialToStateName}";
+        if (presetKey == appliedPresetKey) return;
+        var requestOption = InitialRequestTypeId.HasValue
+            ? data!.RequestTypes.FirstOrDefault(x => x.Id == InitialRequestTypeId.Value)
+            : data!.RequestTypes.FirstOrDefault(x => x.Name.Trim().Equals(InitialRequestTypeName?.Trim(), StringComparison.OrdinalIgnoreCase));
+        if (requestOption is null) return;
+        requestType = requestOption.Id;
+        var fromOption = InitialFromStateId.HasValue
+            ? data.States.FirstOrDefault(x => x.Id == InitialFromStateId.Value)
+            : data.States.FirstOrDefault(x => x.Name.Trim().Equals(InitialFromStateName?.Trim(), StringComparison.OrdinalIgnoreCase));
+        var toOption = InitialToStateId.HasValue
+            ? data.States.FirstOrDefault(x => x.Id == InitialToStateId.Value)
+            : data.States.FirstOrDefault(x => x.Name.Trim().Equals(InitialToStateName?.Trim(), StringComparison.OrdinalIgnoreCase));
+        from = fromOption?.Id ?? 0;
+        to = toOption?.Id ?? 0;
+        appliedPresetKey = presetKey;
+        await LoadRowsAsync();
+        message = from > 0 && to > 0
+            ? "Notification values loaded in order: Request Type, From State, To State. Review and select Allow transition."
+            : "Request Type loaded. Select the required From State and To State from the notification details.";
     }
     private async Task LoadRowsAsync()
     {
@@ -57,7 +168,13 @@
     {
         if (busy) return;
         busy = true;
-        try { var result = await Configuration.SetAsync(requestType, source, target, allowed); message = result.Message; rows = await Configuration.GetAsync(requestType); }
+        try
+        {
+            var result = await Configuration.SetAsync(requestType, source, target, allowed);
+            message = result.Message;
+            rows = await Configuration.GetAsync(requestType);
+            if (result.Success && OnConfigurationChanged.HasDelegate) await OnConfigurationChanged.InvokeAsync();
+        }
         catch (Exception ex) { Error(ex); }
         finally { busy = false; }
     }

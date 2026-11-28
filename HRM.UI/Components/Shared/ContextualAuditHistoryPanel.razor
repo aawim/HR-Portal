@@ -1,0 +1,126 @@
+@using HRM.AuditLogs.Models
+@using HRM.UI.Services.Audit
+@inject IAuditLogApiClient AuditApi
+
+<section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs space-y-3">
+    <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
+        <div>
+            <h3 class="text-sm font-bold text-slate-900">@Title</h3>
+            <p class="text-[11px] text-slate-500">Audit trail for @EntityType #@EntityId</p>
+        </div>
+        <button type="button"
+                class="rounded-md border border-slate-300 bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-200 disabled:opacity-50"
+                disabled="@loading"
+                @onclick="LoadAsync">
+            Refresh
+        </button>
+    </div>
+
+    @if (isUnauthorized)
+    {
+        <p class="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
+            Audit history is restricted to authorised roles.
+        </p>
+    }
+    else if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <p role="alert" class="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">@errorMessage</p>
+    }
+    else if (loading)
+    {
+        <p class="py-4 text-center text-xs text-slate-500">Loading audit history...</p>
+    }
+    else if (history == null || history.Items.Count == 0)
+    {
+        <p class="py-4 text-center text-xs text-slate-500">No recorded audit changes yet for this record.</p>
+    }
+    else
+    {
+        <div class="space-y-2.5">
+            @foreach (var item in history.Items)
+            {
+                <div class="rounded-xl border border-slate-200 bg-slate-50/50 p-3 text-xs space-y-2">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <div class="flex items-center gap-2">
+                            <span class="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700 border border-blue-200">@item.Action</span>
+                            <span class="font-semibold text-slate-800">@item.Description</span>
+                        </div>
+                        <span class="font-mono text-[11px] text-slate-500">@item.OccurredAtUtc.ToString("dd MMM yyyy HH:mm") UTC</span>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500">
+                        <span>
+                            <strong class="text-slate-700">User:</strong>
+                            @(!string.IsNullOrWhiteSpace(item.UserName) ? item.UserName : (item.UserId.HasValue ? $"{item.ActorType} #{item.UserId}" : item.ActorType))
+                        </span>
+                        @if (!string.IsNullOrWhiteSpace(item.IpAddress))
+                        {
+                            <span><strong class="text-slate-700">IP:</strong> <span class="font-mono">@item.IpAddress</span></span>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(item.Url))
+                        {
+                            <span class="truncate max-w-xs" title="@item.Url"><strong class="text-slate-700">URL:</strong> <span class="font-mono">@item.Url</span></span>
+                        }
+                    </div>
+                    @if (!string.IsNullOrWhiteSpace(item.Reason))
+                    {
+                        <p class="text-[11px] text-slate-600"><strong>Reason:</strong> @item.Reason</p>
+                    }
+                    @if (item.Details.Count > 0)
+                    {
+                        <div class="grid gap-1 border-t border-slate-200/70 pt-2 text-[11px]">
+                            @foreach (var d in item.Details)
+                            {
+                                <div class="flex flex-wrap items-center gap-1.5">
+                                    <span class="font-semibold text-slate-700">@d.PropertyName:</span>
+                                    <span class="font-mono text-rose-700">@(d.OldValue ?? "(null)")</span>
+                                    <span class="text-slate-400">→</span>
+                                    <span class="font-mono text-emerald-700">@(d.NewValue ?? "(null)")</span>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    }
+</section>
+
+@code {
+    [Parameter] public string EntityType { get; set; } = string.Empty;
+    [Parameter] public string EntityId { get; set; } = string.Empty;
+    [Parameter] public string Title { get; set; } = "Audit History";
+
+    private AuditLogPageResult? history;
+    private bool loading;
+    private bool isUnauthorized;
+    private string? errorMessage;
+    private string? lastKey;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var key = $"{EntityType}:{EntityId}";
+        if (string.IsNullOrWhiteSpace(EntityType) || string.IsNullOrWhiteSpace(EntityId) || lastKey == key)
+            return;
+        lastKey = key;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (string.IsNullOrWhiteSpace(EntityType) || string.IsNullOrWhiteSpace(EntityId)) return;
+        loading = true;
+        errorMessage = null;
+        isUnauthorized = false;
+        try
+        {
+            var (res, unauth, err) = await AuditApi.GetEntityHistoryAsync(EntityType, EntityId);
+            history = res;
+            isUnauthorized = unauth;
+            errorMessage = err;
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+}

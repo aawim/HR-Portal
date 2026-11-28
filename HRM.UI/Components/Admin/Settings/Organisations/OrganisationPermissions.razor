@@ -1,5 +1,4 @@
 @page "/admin/settings/organisation-permissions"
-@page "/online/organisation-permissions"
 @using HRM.DTOs.Organisation
 @using HRM.DTOs.Roles
 @using HRM.Services
@@ -7,125 +6,797 @@
 @attribute [Authorize]
 @inject HRM.Services.Contracts.OrganisationPermissionServiceContracts.IOperations Settings
 @inject ToastService Toasts
+@inject IJSRuntime JS
 
 <PageTitle>Organisation permissions</PageTitle>
-<div class="space-y-4">
-    <div class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-            <h1 class="text-xl font-bold text-slate-900">Organisation permissions</h1>
-            <p class="mt-1 text-sm text-slate-500">Control which resources the organisation can access. Direct permissions and User Groups cannot exceed these limits.</p>
-        </div>
-        <button type="button" @onclick="Refresh" disabled="@(busy || Dirty)" class="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50">Refresh</button>
-    </div>
-    @if (!string.IsNullOrEmpty(error)) { <p class="rounded-xl border p-4" role="alert">@error</p> }
-    @if (data == null && string.IsNullOrEmpty(error)) { <p role="status">Loading organisation permissions…</p> }
-    @if (data != null)
+
+<section class="w-full min-w-0 @(HideHeader ? "space-y-2" : "p-2 space-y-2")">
+    @if (!HideHeader)
     {
-        <section class="rounded-xl border p-4 space-y-3">
-            @if (data.IsSuperAdmin)
-            {
-                <label class="block font-medium">Organisation<select class="form-select mt-2" value="@data.OrganisationId" @onchange="ChangeOrganisation" disabled="@(busy || Dirty)">
-                    @foreach (var org in data.Organisations) { <option value="@org.Id">@org.Name</option> }
-                </select></label>
-            }
-            else { <h3 class="font-semibold">@data.OrganisationName</h3> }
-            <div class="flex flex-wrap gap-3 text-sm">
-                <span class="rounded-lg border px-3 py-2"><strong>@selected.Count</strong> enabled</span>
-                <span class="rounded-lg border px-3 py-2"><strong>@(data.Permissions.Count - selected.Count)</strong> unavailable</span>
-                <span class="rounded-lg border px-3 py-2"><strong>@data.AccountCount</strong> accounts affected</span>
-                <span class="rounded-lg border px-3 py-2" role="status">@(Dirty ? $"{Added.Count} additions · {Removed.Count} removals pending" : "All changes saved")</span>
+        <header class="sticky top-0 z-30 m-0 flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xs px-3 py-3 shadow-xs rounded-2xl">
+            <div class="min-w-0">
+                <div class="flex flex-wrap items-center gap-2">
+                    <h1 class="text-lg font-bold text-slate-900 dark:text-slate-100">Organisation Permissions</h1>
+                    @if (data != null)
+                    {
+                        <span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold @(Dirty ? "bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200" : "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-200")">
+                            @(Dirty ? $"{Added.Count + Removed.Count} pending" : "Saved")
+                        </span>
+                    }
+                </div>
+                <p class="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                    Control which HR modules and permissions this organisation can use. Roles and direct permissions cannot exceed these limits.
+                </p>
             </div>
-            <p class="text-sm">Removing a permission blocks it even when assigned directly or through a User Group. Existing organisation-default grants remain applicable to eligible accounts. Admin portal access still requires an approved grant.</p>
-            @if (!data.CanEdit) { <p class="text-sm">You have view access. Contact an administrator to make changes.</p> }
-            @if (Dirty) { <p class="text-sm">Save or reset your changes before switching organisation or refreshing.</p> }
-        </section>
-        <section class="rounded-xl border p-4 space-y-4">
-            <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                <label class="block text-sm">Search permissions<input class="form-control mt-1" type="search" placeholder="Name, permission key or area…" @bind="search" @bind:event="oninput" /></label>
-                <label class="block text-sm">Show<select class="form-select mt-1" @bind="filter"><option value="all">All permissions</option><option value="enabled">Enabled</option><option value="disabled">Unavailable</option><option value="changed">Changed</option></select></label>
-                <label class="block text-sm">Area<select class="form-select mt-1" @bind="area"><option value="">All areas</option>@foreach (var item in data.Permissions.Select(p => p.Group).Distinct().Order()) { <option value="@item">@item</option> }</select></label>
+            <div class="flex flex-wrap items-center gap-2">
+                <button type="button"
+                        class="app-button app-button-neutral app-button-sm"
+                        @onclick="ToggleFullWidthAsync">
+                    <i class="bi @(isFullWidth ? "bi-arrows-angle-contract" : "bi-arrows-angle-expand")"></i>
+                    @(isFullWidth ? "Shrink View" : "Full Width")
+                </button>
+                <button type="button"
+                        class="app-button app-button-secondary app-button-sm"
+                        @onclick="Refresh"
+                        disabled="@(busy || Dirty)">
+                    <i class="bi bi-arrow-clockwise"></i>
+                    Refresh
+                </button>
             </div>
-            <div class="flex flex-wrap items-center gap-3 text-sm">
-                <span>@Visible.Count() matching permissions</span>
-                @if (data.CanEdit)
-                {
-                    <button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@busy" @onclick="() => SelectVisible(true)">Enable displayed</button>
-                    <button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@busy" @onclick="() => SelectVisible(false)">Disable displayed</button>
-                }
+        </header>
+    }
+
+    <div class="mx-auto w-full min-w-0 space-y-2 @(HideHeader || isFullWidth ? "max-w-none" : "max-w-7xl")">
+        @if (!string.IsNullOrEmpty(error))
+        {
+            <div class="flex items-center justify-between gap-3 rounded-xl border border-rose-200 dark:border-rose-900/60 bg-rose-50 dark:bg-rose-950/40 p-3 text-xs text-rose-800 dark:text-rose-200" role="alert">
+                <div class="flex items-center gap-2">
+                    <i class="bi bi-exclamation-triangle-fill shrink-0"></i>
+                    <span>@error</span>
+                </div>
+                <button type="button" class="text-rose-700 dark:text-rose-300 hover:underline font-semibold" @onclick="() => error = string.Empty">Dismiss</button>
             </div>
-            <div class="space-y-3">
-                @foreach (var group in Visible.GroupBy(p => p.Group).OrderBy(g => g.Key))
-                {
-                    <details class="rounded-xl border" open="@(!string.IsNullOrWhiteSpace(search) || area != "" || filter != "all")">
-                        <summary class="cursor-pointer px-4 py-3 font-medium">@group.Key <span class="text-sm font-normal">· @group.Count(p => selected.Contains(p.Id)) / @group.Count() enabled</span></summary>
-                        <div class="grid gap-2 border-t p-3 lg:grid-cols-2">
-                            @foreach (var permission in group)
+        }
+
+        @if (data == null && string.IsNullOrEmpty(error))
+        {
+            <div class="flex flex-col items-center justify-center rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-10 text-center shadow-xs" role="status">
+                <div class="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent"></div>
+                <p class="mt-3 text-xs font-semibold text-slate-700 dark:text-slate-200">Loading organisation permissions…</p>
+            </div>
+        }
+
+        @if (data != null)
+        {
+            <!-- Workspace layout: scope and staged changes on the left, permission detail on the right. -->
+            <div class="org-perm-panels">
+                <!-- LEFT COLUMN: organisation scope and pending changes -->
+                <aside class="min-w-0 lg:sticky lg:top-2 space-y-2 self-start">
+                    <section class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 shadow-xs space-y-2">
+                        <div class="flex items-start justify-between gap-2">
+                            <div class="min-w-0 flex-1">
+                                @if (data.IsSuperAdmin)
+                                {
+                                    <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 p-1">Organisation</label>
+                                    <select class="mt-0.5 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs font-medium text-slate-900 dark:text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-60"
+                                            value="@data.OrganisationId"
+                                            @onchange="ChangeOrganisation"
+                                            disabled="@(busy || Dirty)">
+                                        @foreach (var org in data.Organisations)
+                                        {
+                                            <option value="@org.Id">@org.Name</option>
+                                        }
+                                    </select>
+                                }
+                                else
+                                {
+                                    <h2 class="text-sm font-bold text-slate-900 dark:text-slate-100">@data.OrganisationName</h2>
+                                    <p class="text-[11px] text-slate-500 dark:text-slate-400">Organisation permission ceiling</p>
+                                }
+                            </div>
+                            @if (HideHeader)
                             {
-                                <label class="flex items-start gap-3 rounded-lg border p-3" @key="permission.Id">
-                                    <input type="checkbox" class="mt-1" checked="@selected.Contains(permission.Id)" disabled="@(busy || !data.CanEdit || !selected.Contains(permission.Id) && !data.AssignableIds.Contains(permission.Id))" @onchange="e => Toggle(permission.Id, e.Value is true)" />
-                                    <span class="min-w-0"><span class="block font-medium">@permission.Name</span><span class="block break-all text-xs">@permission.Key</span>
-                                        @if (!string.IsNullOrEmpty(permission.Description)) { <span class="mt-1 block text-sm">@permission.Description</span> }
-                                        @if (!selected.Contains(permission.Id) && !data.AssignableIds.Contains(permission.Id)) { <span class="block text-xs">Super Admin must enable this permission.</span> }
-                                    </span>
-                                </label>
+                                <button type="button"
+                                        class="app-button app-button-secondary app-button-sm shrink-0 mt-5"
+                                        @onclick="Refresh"
+                                        disabled="@(busy || Dirty)">
+                                    <i class="bi bi-arrow-clockwise"></i>
+                                    Refresh
+                                </button>
                             }
                         </div>
-                    </details>
-                }
-                @if (!Visible.Any()) { <p class="py-6 text-center text-sm">No permissions match these filters.</p> }
-            </div>
-        </section>
-        @if (data.CanEdit)
-        {
-            <section class="rounded-xl border p-4 space-y-3">
-                @if (Dirty)
-                {
-                    <details><summary class="cursor-pointer font-medium">Review pending changes (@(Added.Count + Removed.Count))</summary>
-                        @foreach (var p in data.Permissions.Where(p => Added.Contains(p.Id) || Removed.Contains(p.Id))) { <p class="mt-2 break-all text-sm">@(Added.Contains(p.Id) ? "Enable" : "Disable"): @p.Key</p> }
-                    </details>
-                }
-                <label class="block text-sm">Reason for change<textarea class="form-control mt-1" maxlength="1000" @bind="reason" @bind:event="oninput" disabled="@busy"></textarea></label>
-                <div class="flex flex-wrap gap-3">
-                    <button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@(busy || !Dirty || string.IsNullOrWhiteSpace(reason))" @onclick="Save">@(busy ? "Saving…" : "Save organisation permissions")</button>
-                    <button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@(busy || !Dirty)" @onclick="Reset">Reset changes</button>
+
+                        <div class="grid grid-cols-2 gap-1.5">
+                            <div class="rounded-xl border border-emerald-200/80 dark:border-emerald-900/50 bg-emerald-50/50 dark:bg-emerald-950/30 px-2.5 py-2">
+                                <div class="text-[10px] font-medium text-emerald-700 dark:text-emerald-300">Enabled</div>
+                                <div class="mt-0.5 text-base font-bold text-emerald-900 dark:text-emerald-100">@selected.Count</div>
+                            </div>
+                            <div class="rounded-xl border px-2.5 py-2 @(Dirty ? "border-amber-200 dark:border-amber-800 bg-amber-50/60 dark:bg-amber-950/30" : "border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/50")" role="status">
+                                <div class="text-[10px] font-medium @(Dirty ? "text-amber-700 dark:text-amber-300" : "text-slate-500 dark:text-slate-400")">Changes</div>
+                                <div class="mt-0.5 text-xs font-bold @(Dirty ? "text-amber-900 dark:text-amber-100" : "text-emerald-700 dark:text-emerald-300")">@(Dirty ? $"+{Added.Count} / -{Removed.Count}" : "Saved")</div>
+                            </div>
+                        </div>
+
+                        <!-- Policy Note -->
+                        <div class="flex items-start gap-2 rounded-xl border border-blue-200/70 dark:border-blue-900/50 bg-blue-50/40 dark:bg-blue-950/20 px-3 py-2 text-[11px] leading-relaxed text-slate-700 dark:text-slate-300">
+                            <i class="bi bi-info-circle-fill mt-0.5 shrink-0 text-blue-600 dark:text-blue-400"></i>
+                            <div class="space-y-1">
+                                <p>Disabling a module or permission blocks it even when assigned via Roles or directly. Admin portal access still requires an approved grant.</p>
+                                @if (!data.CanEdit)
+                                {
+                                    <p class="font-semibold text-amber-700 dark:text-amber-300">View-only access. Contact a Super Administrator to make changes.</p>
+                                }
+                                @if (Dirty)
+                                {
+                                    <p class="font-semibold text-amber-700 dark:text-amber-300">Save or reset pending changes before switching organisations or refreshing.</p>
+                                }
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Review & Save Form Card -->
+                    @if (data.CanEdit)
+                    {
+                        <section class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 shadow-xs space-y-2">
+                            <div class="flex items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-2.5">
+                                <div>
+                                    <h3 class="text-sm font-bold text-slate-900 dark:text-slate-100">Review &amp; Save</h3>
+                                    <p class="text-[11px] text-slate-500 dark:text-slate-400">All permission changes are audit logged.</p>
+                                </div>
+                                <span class="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold @(Dirty ? "bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200" : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300")">
+                                    @(Added.Count + Removed.Count) change(s)
+                                </span>
+                            </div>
+
+                            @if (Dirty)
+                            {
+                                <div class="max-h-48 overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 p-2 space-y-1.5">
+                                    @foreach (var p in data.Permissions.Where(p => Added.Contains(p.Id) || Removed.Contains(p.Id)))
+                                    {
+                                        var isAdd = Added.Contains(p.Id);
+                                        <div class="flex items-center justify-between gap-2 rounded-lg bg-white dark:bg-slate-900 px-2.5 py-1.5 border border-slate-200/70 dark:border-slate-700/70 text-[11px]">
+                                            <span class="min-w-0 truncate font-mono text-slate-700 dark:text-slate-200" title="@p.Key">@p.Key</span>
+                                            <span class="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold @(isAdd ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-200" : "bg-rose-100 text-rose-800 dark:bg-rose-900/60 dark:text-rose-200")">
+                                                @(isAdd ? "Enable" : "Disable")
+                                            </span>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="rounded-xl border border-dashed border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/30 p-3.5 text-center text-xs text-slate-500 dark:text-slate-400">
+                                    Toggle permissions on the right to stage changes.
+                                </div>
+                            }
+
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 p-1">
+                                    Reason for change <span class="text-rose-500">*</span>
+                                </label>
+                                <textarea rows="3"
+                                          maxlength="1000"
+                                          placeholder="Explain why these organisation permissions are being updated…"
+                                          @bind="reason"
+                                          @bind:event="oninput"
+                                          disabled="@busy"
+                                          class="mt-0.5 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-2 text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-60"></textarea>
+                                <div class="mt-0.5 text-right text-[10px] text-slate-400">@reason.Length / 1000</div>
+                            </div>
+
+                            <div class="flex flex-wrap items-center gap-2 pt-1">
+                                <button type="button"
+                                        class="app-button app-button-primary app-button-sm flex-1"
+                                        disabled="@(busy || !Dirty || string.IsNullOrWhiteSpace(reason))"
+                                        @onclick="Save">
+                                    @(busy ? "Saving…" : "Save permissions")
+                                </button>
+                                <button type="button"
+                                        class="app-button app-button-neutral app-button-sm"
+                                        disabled="@(busy || !Dirty)"
+                                        @onclick="Reset">
+                                    Reset
+                                </button>
+                            </div>
+                        </section>
+                    }
+                </aside>
+
+                <!-- RIGHT COLUMN: module switches + advanced individual permissions -->
+                <div class="min-w-0 flex flex-col gap-2">
+                    <!-- 1. Quick Module Switches (Recommended) -->
+                    <section class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 shadow-xs flex flex-col gap-2">
+                        <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-2">
+                            <div>
+                                <h3 class="text-xs font-bold text-slate-900 dark:text-slate-100">Organisation Modules</h3>
+                                <p class="text-[11px] text-slate-500 dark:text-slate-400">Click any module to inspect, search, and toggle its permissions, or enable/disable the entire module in one click.</p>
+                            </div>
+                            <span class="rounded-full bg-slate-100 dark:bg-slate-800 px-2 py-0.5 text-[10px] font-semibold text-slate-600 dark:text-slate-300">
+                                @HRM.Helpers.AccessControlUiHelper.Modules.Count(m => ModulePermissions(m.Key).Any(p => selected.Contains(p.Id))) / @HRM.Helpers.AccessControlUiHelper.Modules.Count(m => ModulePermissions(m.Key).Count > 0) active
+                            </span>
+                        </div>
+                        <div class="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                            @foreach (var mod in HRM.Helpers.AccessControlUiHelper.Modules)
+                            {
+                                var modPerms = ModulePermissions(mod.Key);
+                                if (modPerms.Count == 0) continue;
+                                var modEnabledCount = modPerms.Count(p => selected.Contains(p.Id));
+                                var allOn = modEnabledCount == modPerms.Count;
+                                var partial = modEnabledCount > 0 && !allOn;
+                                var anyChanged = modPerms.Any(p => selected.Contains(p.Id) != baseline.Contains(p.Id));
+                                var isExpanded = expandedModuleKey == mod.Key;
+
+                                <div class="rounded-xl border p-2.5 flex flex-col justify-between gap-2 transition @(isExpanded ? "ring-2 ring-teal-500/80 dark:ring-teal-400/80" : "") @(anyChanged ? "border-amber-300 bg-amber-50/40 dark:border-amber-700 dark:bg-amber-950/20" : allOn ? "border-emerald-200 bg-emerald-50/30 dark:border-emerald-900/60 dark:bg-emerald-950/15" : partial ? "border-sky-200 bg-sky-50/30 dark:border-sky-900/60 dark:bg-sky-950/15" : "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900")"
+                                     @key="mod.Key">
+                                    <button type="button"
+                                            class="w-full text-left flex items-start justify-between gap-2 cursor-pointer group"
+                                            title="Click to view and search permissions in @mod.Label"
+                                            @onclick="() => ToggleModuleInspector(mod.Key)">
+                                        <div class="flex items-start gap-2 min-w-0">
+                                            <span class="mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border @(allOn ? "bg-emerald-100/80 border-emerald-200 text-emerald-700" : partial ? "bg-sky-100/80 border-sky-200 text-sky-700" : "bg-slate-100 border-slate-200 text-slate-500")">
+                                                <i class="bi @mod.Icon text-xs"></i>
+                                            </span>
+                                            <div class="min-w-0">
+                                                <p class="text-xs font-bold text-slate-900 dark:text-slate-100 group-hover:text-teal-700 dark:group-hover:text-teal-300 truncate">@mod.Label</p>
+                                                <p class="text-[11px] text-slate-500 dark:text-slate-400 leading-snug">@mod.Description</p>
+                                            </div>
+                                        </div>
+                                        <i class="bi @(isExpanded ? "bi-chevron-up text-teal-600" : "bi-chevron-down text-slate-400 group-hover:text-teal-600") mt-1 shrink-0 text-[11px]"></i>
+                                    </button>
+                                    <div class="flex items-center justify-between gap-2 pt-1 border-t border-slate-100 dark:border-slate-800">
+                                        <button type="button"
+                                                class="rounded-full px-2 py-0.5 text-[10px] font-semibold transition @(allOn ? "bg-emerald-100 text-emerald-800 hover:bg-emerald-200/70" : partial ? "bg-sky-100 text-sky-800 hover:bg-sky-200/70" : "bg-slate-100 text-slate-600 hover:bg-slate-200/70")"
+                                                @onclick="() => ToggleModuleInspector(mod.Key)">
+                                            @(allOn ? $"Enabled ({modEnabledCount}/{modPerms.Count})" : partial ? $"Partial ({modEnabledCount}/{modPerms.Count})" : $"Disabled (0/{modPerms.Count})")
+                                        </button>
+                                        @if (data.CanEdit)
+                                        {
+                                            <button type="button"
+                                                    disabled="@busy"
+                                                    class="app-button @(allOn ? "app-button-neutral" : "app-button-secondary") app-button-sm"
+                                                    @onclick="() => SelectGroup(modPerms, !allOn)">
+                                                @(allOn ? "Disable" : "Enable all")
+                                            </button>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        </div>
+
+                        @if (ExpandedModule is { } activeMod)
+                        {
+                            var activeModPerms = ModulePermissions(activeMod.Key);
+                            var filteredModPerms = FilterModulePermissions(activeModPerms);
+                            var activeModEnabled = activeModPerms.Count(p => selected.Contains(p.Id));
+                            <div class="mt-1 rounded-xl border border-teal-200 dark:border-teal-800/60 bg-slate-50/70 dark:bg-slate-800/30 p-3 flex flex-col gap-2">
+                                <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200/80 dark:border-slate-700/80 pb-2">
+                                    <div class="flex items-center gap-2 min-w-0">
+                                        <span class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-teal-50 dark:bg-teal-950/60 border border-teal-200 dark:border-teal-800 text-teal-700 dark:text-teal-300">
+                                            <i class="bi @activeMod.Icon text-xs"></i>
+                                        </span>
+                                        <div class="min-w-0">
+                                            <h4 class="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">@activeMod.Label Permissions</h4>
+                                            <p class="text-[11px] text-slate-500 dark:text-slate-400">
+                                                @activeModEnabled / @activeModPerms.Count enabled@(string.IsNullOrWhiteSpace(moduleSearch) ? "" : $" · {filteredModPerms.Count} matching")
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div class="flex flex-wrap items-center gap-1.5">
+                                        @if (data.CanEdit && filteredModPerms.Count > 0)
+                                        {
+                                            <button type="button"
+                                                    class="app-button app-button-secondary app-button-sm"
+                                                    disabled="@busy"
+                                                    @onclick="() => SelectGroup(filteredModPerms, true)">
+                                                Select shown
+                                            </button>
+                                            <button type="button"
+                                                    class="app-button app-button-neutral app-button-sm"
+                                                    disabled="@busy"
+                                                    @onclick="() => SelectGroup(filteredModPerms, false)">
+                                                Deselect shown
+                                            </button>
+                                        }
+                                        <button type="button"
+                                                class="app-button app-button-ghost app-button-sm"
+                                                @onclick="CloseModuleInspector">
+                                            Close
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <input type="search"
+                                           placeholder="Search permissions in @activeMod.Label…"
+                                           @bind="moduleSearch"
+                                           @bind:event="oninput"
+                                           class="flex-1 min-w-[200px] rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500" />
+                                    <div class="flex flex-wrap items-center gap-1">
+                                        @foreach (var opt in ModuleActionFilterOptions)
+                                        {
+                                            var activeFilter = moduleActionFilter == opt.Key;
+                                            <button type="button"
+                                                    class="rounded-lg border px-2 py-1 text-[11px] font-semibold transition @(activeFilter ? "border-teal-600 bg-teal-600 text-white" : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:border-teal-400")"
+                                                    @onclick="() => moduleActionFilter = opt.Key">
+                                                @opt.Label
+                                            </button>
+                                        }
+                                    </div>
+                                </div>
+
+                                @if (filteredModPerms.Count == 0)
+                                {
+                                    <div class="rounded-lg border border-dashed border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-4 text-center text-xs text-slate-500">
+                                        No permissions in @activeMod.Label match your search or filter.
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="grid max-h-80 grid-cols-1 gap-2 overflow-y-auto pr-0.5 md:grid-cols-2">
+                                        @foreach (var permission in filteredModPerms)
+                                        {
+                                            var isChecked = selected.Contains(permission.Id);
+                                            var wasChecked = baseline.Contains(permission.Id);
+                                            var isChanged = isChecked != wasChecked;
+                                            var isLocked = !isChecked && !data.AssignableIds.Contains(permission.Id);
+                                            var actionLabel = ActionBucketLabel(HRM.Helpers.AccessControlUiHelper.ResolveAction(permission));
+
+                                            <label class="flex items-start gap-2 rounded-xl border p-2 transition-colors @(isLocked || !data.CanEdit ? "cursor-default" : "cursor-pointer") @(isChanged ? "border-amber-300 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-950/25" : isChecked ? "border-emerald-200/90 dark:border-emerald-900/60 bg-emerald-50/30 dark:bg-emerald-950/15" : "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/60")"
+                                                   @key="permission.Id">
+                                                <input type="checkbox"
+                                                       class="mt-0.5 h-4 w-4 rounded border-slate-300 dark:border-slate-600 accent-teal-700 disabled:opacity-50"
+                                                       checked="@isChecked"
+                                                       disabled="@(busy || !data.CanEdit || isLocked)"
+                                                       @onchange="e => Toggle(permission.Id, e.Value is true)" />
+                                                <span class="min-w-0 flex-1">
+                                                    <span class="flex flex-wrap items-center gap-1.5">
+                                                        <span class="text-xs font-semibold text-slate-900 dark:text-slate-100">@permission.Name</span>
+                                                        <span class="rounded-full bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 text-[10px] font-medium text-slate-600 dark:text-slate-300">@actionLabel</span>
+                                                        @if (isChanged)
+                                                        {
+                                                            <span class="inline-flex rounded-full px-1.5 py-0.5 text-[10px] font-semibold @(isChecked ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-200" : "bg-rose-100 text-rose-800 dark:bg-rose-900/60 dark:text-rose-200")">
+                                                                @(isChecked ? "Adding" : "Removing")
+                                                            </span>
+                                                        }
+                                                    </span>
+                                                    <span class="mt-0.5 block break-all font-mono text-[10px] text-slate-500 dark:text-slate-400">@permission.Key</span>
+                                                    @if (!string.IsNullOrEmpty(permission.Description))
+                                                    {
+                                                        <span class="mt-0.5 block text-[11px] leading-snug text-slate-600 dark:text-slate-300">@permission.Description</span>
+                                                    }
+                                                    @if (isLocked)
+                                                    {
+                                                        <span class="mt-0.5 inline-flex items-center gap-1 text-[10px] font-medium text-amber-700 dark:text-amber-300">
+                                                            <i class="bi bi-lock-fill text-[9px]"></i>
+                                                            Super Admin must enable this permission.
+                                                        </span>
+                                                    }
+                                                </span>
+                                            </label>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </section>
+
+                    <!-- 2. Advanced: Individual Permissions Catalogue -->
+                    <section class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs overflow-hidden">
+                        <button type="button"
+                                class="w-full flex flex-wrap items-center justify-between gap-2 p-3 text-left text-xs font-bold text-slate-800 dark:text-slate-100 hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition"
+                                @onclick="() => showAdvancedPermissions = !showAdvancedPermissions">
+                            <span class="flex items-center gap-2">
+                                <i class="bi @(showAdvancedPermissions ? "bi-chevron-down" : "bi-chevron-right") text-slate-500"></i>
+                                <i class="bi bi-sliders text-slate-500"></i>
+                                <span>Advanced: Individual Permissions (@selected.Count / @data.Permissions.Count enabled)</span>
+                            </span>
+                            <span class="text-[11px] font-normal text-slate-500">@(showAdvancedPermissions ? "Click to collapse" : "Click to expand fine-grained permission overrides")</span>
+                        </button>
+                    @if (showAdvancedPermissions)
+                    {
+                    <div class="border-t border-slate-100 dark:border-slate-800 p-3 flex flex-col gap-2">
+                    <!-- Filter Controls -->
+                    <div class="grid gap-3 sm:grid-cols-3">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 p-1">Search permissions</label>
+                            <input type="search"
+                                   placeholder="Name, permission key or area…"
+                                   @bind="search"
+                                   @bind:event="oninput"
+                                   class="mt-0.5 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 p-1">Show</label>
+                            <select @bind="filter"
+                                    class="mt-0.5 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs text-slate-900 dark:text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500">
+                                <option value="all">All permissions</option>
+                                <option value="enabled">Enabled</option>
+                                <option value="disabled">Unavailable</option>
+                                <option value="changed">Changed</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 p-1">Area</label>
+                            <select @bind="area"
+                                    class="mt-0.5 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs text-slate-900 dark:text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500">
+                                <option value="">All areas</option>
+                                @foreach (var item in data.Permissions.Select(p => p.Group).Distinct().Order())
+                                {
+                                    <option value="@item">@item</option>
+                                }
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Toolbar -->
+                    <div class="flex flex-wrap items-center justify-between gap-2 border-y border-slate-100 dark:border-slate-800 py-2.5">
+                        <span class="text-xs font-semibold text-slate-600 dark:text-slate-300">
+                            Showing <span class="text-slate-900 dark:text-slate-100">@Visible.Count()</span> of @data.Permissions.Count permissions
+                        </span>
+                        <div class="flex flex-wrap items-center gap-2">
+                            <button type="button"
+                                    class="app-button app-button-ghost app-button-sm"
+                                    @onclick="() => expandAll = !expandAll">
+                                @(expandAll ? "Collapse all" : "Expand all")
+                            </button>
+                            @if (data.CanEdit)
+                            {
+                                <button type="button"
+                                        class="app-button app-button-secondary app-button-sm"
+                                        disabled="@busy"
+                                        @onclick="() => SelectVisible(true)">
+                                    Enable displayed
+                                </button>
+                                <button type="button"
+                                        class="app-button app-button-neutral app-button-sm"
+                                        disabled="@busy"
+                                        @onclick="() => SelectVisible(false)">
+                                    Disable displayed
+                                </button>
+                            }
+                        </div>
+                    </div>
+
+                    <!-- Grouped Permissions List -->
+                    <div class="space-y-3">
+                        @{
+                            var groups = Visible.GroupBy(p => p.Group).OrderBy(g => g.Key).ToList();
+                        }
+                        @if (groups.Count == 0)
+                        {
+                            <div class="rounded-xl border border-dashed border-slate-300 dark:border-slate-700 py-10 text-center text-xs text-slate-500 dark:text-slate-400">
+                                No permissions match these filters.
+                            </div>
+                        }
+                        else
+                        {
+                            @foreach (var group in groups)
+                            {
+                                var enabledCount = group.Count(p => selected.Contains(p.Id));
+                                var totalCount = group.Count();
+                                var groupItems = group.ToList();
+                                var isOpen = expandAll || !string.IsNullOrWhiteSpace(search) || area != "" || filter != "all";
+
+                                <details class="group/acc rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-800/30 overflow-hidden" open="@isOpen">
+                                    <summary class="flex cursor-pointer list-none items-center justify-between gap-2 px-3.5 py-2.5 bg-slate-50/80 dark:bg-slate-800/60 hover:bg-slate-100/80 dark:hover:bg-slate-800 transition-colors">
+                                        <div class="flex items-center gap-2 min-w-0">
+                                            <i class="bi bi-chevron-right text-[11px] text-slate-400 transition-transform group-open/acc:rotate-90"></i>
+                                            <span class="truncate text-xs font-bold text-slate-800 dark:text-slate-100">@group.Key</span>
+                                            <span class="inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[10px] font-semibold @(enabledCount == totalCount ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-200" : enabledCount > 0 ? "bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-200" : "bg-slate-200/80 text-slate-600 dark:bg-slate-700 dark:text-slate-300")">
+                                                @enabledCount / @totalCount enabled
+                                            </span>
+                                        </div>
+                                        @if (data.CanEdit)
+                                        {
+                                            <div class="flex items-center gap-1.5 shrink-0" @onclick:stopPropagation="true">
+                                                <button type="button"
+                                                        class="rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-0.5 text-[10px] font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50"
+                                                        disabled="@busy"
+                                                        @onclick="() => SelectGroup(groupItems, true)">
+                                                    All
+                                                </button>
+                                                <button type="button"
+                                                        class="rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-0.5 text-[10px] font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50"
+                                                        disabled="@busy"
+                                                        @onclick="() => SelectGroup(groupItems, false)">
+                                                    None
+                                                </button>
+                                            </div>
+                                        }
+                                    </summary>
+
+                                    <div class="grid gap-2 border-t border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900/80 p-3 md:grid-cols-2">
+                                        @foreach (var permission in groupItems)
+                                        {
+                                            var isChecked = selected.Contains(permission.Id);
+                                            var wasChecked = baseline.Contains(permission.Id);
+                                            var isChanged = isChecked != wasChecked;
+                                            var isLocked = !isChecked && !data.AssignableIds.Contains(permission.Id);
+
+                                            <label class="flex items-start gap-2.5 rounded-xl border p-2.5 transition-colors @(isLocked || !data.CanEdit ? "cursor-default" : "cursor-pointer") @(isChanged ? "border-amber-300 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-950/25 ring-1 ring-amber-200/70 dark:ring-amber-900/40" : isChecked ? "border-emerald-200/90 dark:border-emerald-900/60 bg-emerald-50/30 dark:bg-emerald-950/15 hover:bg-emerald-50/60 dark:hover:bg-emerald-950/30" : "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/60")"
+                                                   @key="permission.Id">
+                                                <input type="checkbox"
+                                                       class="mt-0.5 h-4 w-4 rounded border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-blue-500 disabled:opacity-50"
+                                                       checked="@isChecked"
+                                                       disabled="@(busy || !data.CanEdit || isLocked)"
+                                                       @onchange="e => Toggle(permission.Id, e.Value is true)" />
+                                                <span class="min-w-0 flex-1">
+                                                    <span class="flex flex-wrap items-center gap-1.5">
+                                                        <span class="text-xs font-semibold text-slate-900 dark:text-slate-100">@permission.Name</span>
+                                                        @if (isChanged)
+                                                        {
+                                                            <span class="inline-flex rounded-full px-1.5 py-0.5 text-[10px] font-semibold @(isChecked ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-200" : "bg-rose-100 text-rose-800 dark:bg-rose-900/60 dark:text-rose-200")">
+                                                                @(isChecked ? "Adding" : "Removing")
+                                                            </span>
+                                                        }
+                                                    </span>
+                                                    <span class="mt-0.5 block break-all font-mono text-[11px] text-slate-500 dark:text-slate-400">@permission.Key</span>
+                                                    @if (!string.IsNullOrEmpty(permission.Description))
+                                                    {
+                                                        <span class="mt-1 block text-[11px] leading-relaxed text-slate-600 dark:text-slate-300">@permission.Description</span>
+                                                    }
+                                                    @if (isLocked)
+                                                    {
+                                                        <span class="mt-1 inline-flex items-center gap-1 text-[11px] font-medium text-amber-700 dark:text-amber-300">
+                                                            <i class="bi bi-lock-fill text-[10px]"></i>
+                                                            Super Admin must enable this permission.
+                                                        </span>
+                                                    }
+                                                </span>
+                                            </label>
+                                        }
+                                    </div>
+                                </details>
+                            }
+                        }
+                    </div>
+                    </div>
+                    }
+                    </section>
                 </div>
-            </section>
+            </div>
+        }
+    </div>
+</section>
+
+<style>
+    .org-perm-panels {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        align-items: start;
+        gap: 1rem;
+        width: 100%;
+        min-width: 0;
+        box-sizing: border-box;
+    }
+
+    @@media (min-width: 1024px) {
+        .org-perm-panels {
+            grid-template-columns: minmax(15rem, 3fr) minmax(0, 9fr);
         }
     }
-</div>
+</style>
+
 @code {
+    private const string FullWidthStorageKey = "hrm.org-permissions.full-width";
+
+    [Parameter] public int? InitialOrganisationId { get; set; }
+    [Parameter] public bool HideHeader { get; set; }
+
+    private int? lastInitialOrgId;
     private OrganisationPermissionData? data;
     private HashSet<int> selected = [], baseline = [];
     private string search = "", filter = "all", area = "", reason = "", error = "";
     private bool busy;
+    private bool isFullWidth;
+    private bool expandAll;
+    private bool showAdvancedPermissions;
+    private string? expandedModuleKey;
+    private string moduleSearch = "";
+    private string moduleActionFilter = "all";
+
+    private static readonly (string Key, string Label)[] ModuleActionFilterOptions =
+    [
+        ("all", "All"),
+        ("View", "View"),
+        ("CreateEdit", "Create / Edit"),
+        ("Approve", "Approve"),
+        ("Configure", "Configure")
+    ];
+
+    private HRM.Helpers.AccessModuleDefinition? ExpandedModule =>
+        string.IsNullOrWhiteSpace(expandedModuleKey)
+            ? null
+            : HRM.Helpers.AccessControlUiHelper.Modules.FirstOrDefault(m => m.Key == expandedModuleKey);
+
+    private void ToggleModuleInspector(string moduleKey)
+    {
+        if (expandedModuleKey == moduleKey)
+        {
+            CloseModuleInspector();
+            return;
+        }
+        expandedModuleKey = moduleKey;
+        moduleSearch = "";
+        moduleActionFilter = "all";
+    }
+
+    private void CloseModuleInspector()
+    {
+        expandedModuleKey = null;
+        moduleSearch = "";
+        moduleActionFilter = "all";
+    }
+
+    private List<PermissionDefinitionDto> FilterModulePermissions(List<PermissionDefinitionDto> perms) =>
+        perms.Where(p =>
+            (moduleActionFilter == "all" || HRM.Helpers.AccessControlUiHelper.ResolveAction(p).ToString() == moduleActionFilter) &&
+            (string.IsNullOrWhiteSpace(moduleSearch) ||
+             p.Name.Contains(moduleSearch, StringComparison.OrdinalIgnoreCase) ||
+             p.Key.Contains(moduleSearch, StringComparison.OrdinalIgnoreCase) ||
+             p.Group.Contains(moduleSearch, StringComparison.OrdinalIgnoreCase) ||
+             p.Description.Contains(moduleSearch, StringComparison.OrdinalIgnoreCase)))
+        .OrderBy(p => p.Name)
+        .ToList();
+
+    private static string ActionBucketLabel(HRM.Helpers.AccessActionBucket bucket) => bucket switch
+    {
+        HRM.Helpers.AccessActionBucket.CreateEdit => "Create / Edit",
+        HRM.Helpers.AccessActionBucket.Approve => "Approve",
+        HRM.Helpers.AccessActionBucket.Configure => "Configure",
+        _ => "View"
+    };
+
+    private List<PermissionDefinitionDto> ModulePermissions(string moduleKey) =>
+        (data?.Permissions ?? []).Where(p => HRM.Helpers.AccessControlUiHelper.ResolveModule(p).Key == moduleKey).ToList();
+
     private bool Dirty => !selected.SetEquals(baseline);
     private HashSet<int> Added => selected.Except(baseline).ToHashSet();
     private HashSet<int> Removed => baseline.Except(selected).ToHashSet();
+
     private IEnumerable<PermissionDefinitionDto> Visible => (data?.Permissions ?? []).Where(p =>
-        (area == "" || area == p.Group) && (p.Name.Contains(search, StringComparison.OrdinalIgnoreCase) || p.Key.Contains(search, StringComparison.OrdinalIgnoreCase) || p.Group.Contains(search, StringComparison.OrdinalIgnoreCase)) &&
-        (filter == "all" || filter == "enabled" && selected.Contains(p.Id) || filter == "disabled" && !selected.Contains(p.Id) || filter == "changed" && selected.Contains(p.Id) != baseline.Contains(p.Id)));
-    protected override async Task OnInitializedAsync() => await Load();
-    private async Task Refresh() { if (!Dirty) await Load(data?.OrganisationId); }
+        (area == "" || area == p.Group) &&
+        (p.Name.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+         p.Key.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+         p.Group.Contains(search, StringComparison.OrdinalIgnoreCase)) &&
+        (filter == "all" ||
+         filter == "enabled" && selected.Contains(p.Id) ||
+         filter == "disabled" && !selected.Contains(p.Id) ||
+         filter == "changed" && selected.Contains(p.Id) != baseline.Contains(p.Id)));
+
+    protected override async Task OnInitializedAsync()
+    {
+        lastInitialOrgId = InitialOrganisationId;
+        await Load(InitialOrganisationId);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !HideHeader)
+        {
+            try
+            {
+                var saved = await JS.InvokeAsync<string?>("localStorage.getItem", FullWidthStorageKey);
+                if (string.Equals(saved, "true", StringComparison.OrdinalIgnoreCase))
+                {
+                    isFullWidth = true;
+                    StateHasChanged();
+                }
+            }
+            catch
+            {
+                // Ignore localStorage unavailability.
+            }
+        }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (InitialOrganisationId != lastInitialOrgId && !Dirty)
+        {
+            lastInitialOrgId = InitialOrganisationId;
+            await Load(InitialOrganisationId);
+        }
+    }
+
+    private async Task ToggleFullWidthAsync()
+    {
+        isFullWidth = !isFullWidth;
+        try
+        {
+            await JS.InvokeVoidAsync("localStorage.setItem", FullWidthStorageKey, isFullWidth ? "true" : "false");
+        }
+        catch
+        {
+            // Ignore localStorage unavailability.
+        }
+    }
+
+    private async Task Refresh()
+    {
+        if (!Dirty) await Load(data?.OrganisationId);
+    }
+
     private async Task Load(int? org = null)
     {
         error = "";
-        try { data = await Settings.LoadAsync(org); baseline = data.AllowedIds.ToHashSet(); selected = baseline.ToHashSet(); reason = ""; }
-        catch (Exception ex) { data = null; error = ex is UnauthorizedAccessException or InvalidOperationException ? ex.Message : "Organisation permissions could not be loaded. Please try again."; }
+        try
+        {
+            data = await Settings.LoadAsync(org);
+            baseline = data.AllowedIds.ToHashSet();
+            selected = baseline.ToHashSet();
+            reason = "";
+        }
+        catch (Exception ex)
+        {
+            data = null;
+            error = ex is UnauthorizedAccessException or InvalidOperationException
+                ? ex.Message
+                : "Organisation permissions could not be loaded. Please try again.";
+        }
     }
-    private async Task ChangeOrganisation(ChangeEventArgs e) { if (!Dirty && int.TryParse(e.Value?.ToString(), out var org)) { search = ""; area = ""; filter = "all"; await Load(org); } }
-    private void Reset() { selected = baseline.ToHashSet(); reason = ""; error = ""; }
-    private void Toggle(int id, bool enabled) { if (enabled && data?.AssignableIds.Contains(id) == true) selected.Add(id); else if (!enabled) selected.Remove(id); }
-    private void SelectVisible(bool enabled) { foreach (var p in Visible.ToList()) Toggle(p.Id, enabled); }
+
+    private async Task ChangeOrganisation(ChangeEventArgs e)
+    {
+        if (!Dirty && int.TryParse(e.Value?.ToString(), out var org))
+        {
+            search = "";
+            area = "";
+            filter = "all";
+            await Load(org);
+        }
+    }
+
+    private void Reset()
+    {
+        selected = baseline.ToHashSet();
+        reason = "";
+        error = "";
+    }
+
+    private void Toggle(int id, bool enabled)
+    {
+        if (enabled && data?.AssignableIds.Contains(id) == true) selected.Add(id);
+        else if (!enabled) selected.Remove(id);
+    }
+
+    private void SelectVisible(bool enabled)
+    {
+        foreach (var p in Visible.ToList()) Toggle(p.Id, enabled);
+    }
+
+    private void SelectGroup(IReadOnlyList<PermissionDefinitionDto> items, bool enabled)
+    {
+        foreach (var p in items) Toggle(p.Id, enabled);
+    }
+
     private async Task Save()
     {
         if (busy || data == null || !Dirty) return;
-        busy = true; error = "";
+        busy = true;
+        error = "";
         try
         {
             var result = await Settings.SaveAsync(data.OrganisationId, selected.ToArray(), baseline.ToArray(), reason);
-            if (result.Success) { Toasts.Success(result.Message); await Load(data.OrganisationId); } else error = result.Message;
+            if (result.Success)
+            {
+                Toasts.Success(result.Message);
+                await Load(data.OrganisationId);
+            }
+            else
+            {
+                error = result.Message;
+            }
         }
-        catch (Exception ex) { error = ex is UnauthorizedAccessException or InvalidOperationException ? ex.Message : "The change could not be saved. Refresh and try again."; }
-        finally { busy = false; }
+        catch (Exception ex)
+        {
+            error = ex is UnauthorizedAccessException or InvalidOperationException
+                ? ex.Message
+                : "The change could not be saved. Refresh and try again.";
+        }
+        finally
+        {
+            busy = false;
+        }
     }
 }

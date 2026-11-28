@@ -1,0 +1,44 @@
+using HRM.Hosting;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.EntityFrameworkCore;
+using Intranet.Infrastructure.Persistence;
+
+var builder = WebApplication.CreateBuilder(args);
+builder.Configuration.AddSecureExternalConnectionStrings();
+builder.Services.AddControllers();
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(o =>
+    {
+        o.Authority = builder.Configuration["Auth:Authority"];
+        o.Audience = builder.Configuration["Auth:Audience"];
+        o.TokenValidationParameters.ValidateIssuer = true;
+        o.TokenValidationParameters.ValidateAudience = true;
+        o.TokenValidationParameters.ValidateLifetime = true;
+        o.TokenValidationParameters.ValidateIssuerSigningKey = true;
+        o.TokenValidationParameters.RequireSignedTokens = true;
+    });
+builder.Services.AddAuthorization();
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<Intranet.Application.Security.IOrganisationContext, Intranet.Infrastructure.Security.HttpOrganisationContext>();
+builder.Services.AddScoped<Intranet.Application.Services.IPostService, Intranet.Infrastructure.Services.PostService>();
+builder.Services.AddScoped<Intranet.Application.Services.INewJoinerService, Intranet.Infrastructure.Services.NewJoinerService>();
+var cs = builder.Configuration.GetConnectionString("IntranetDb");
+if (string.IsNullOrWhiteSpace(cs))
+    throw new InvalidOperationException("ConnectionStrings:IntranetDb is required. Configure it in the external secure connectionstrings.json file, user secrets, or environment variables.");
+builder.Services.AddDbContext<IntranetDbContext>(o => o.UseSqlServer(cs));
+var app = builder.Build();
+
+app.Use(async (context, next) =>
+{
+    context.Response.Headers["X-Content-Type-Options"] = "nosniff";
+    context.Response.Headers["X-Frame-Options"] = "SAMEORIGIN";
+    context.Response.Headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
+    context.Response.Headers["Permissions-Policy"] = "geolocation=(), camera=(), microphone=()";
+    await next();
+});
+
+app.UseAuthentication();
+app.UseAuthorization();
+app.MapControllers();
+app.MapGet("/health", () => Results.Ok("healthy"));
+app.Run();

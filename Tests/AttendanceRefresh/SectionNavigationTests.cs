@@ -42,9 +42,9 @@ static class SectionNavigationTests
         _ = Selected(initial);
         var page = new SettingsPage { CategoryName = "org", Section = "teams" };
         Check(Selected(page) == null, "Organisation team URL retained a duplicate settings editor");
-        page.Section = "permissions";
-        Check(Selected(page) == "Organisation Permissions", "Back/forward within a category retained the previous section");
-        foreach (var (section, title) in new[] { ("manage", "Manage"), ("document-types", "Document Types"), ("types", "Manage type"), ("calendar", "Calendar"),
+        page.Section = "locations";
+        Check(Selected(page) == "Locations", "Back/forward within a category retained the previous section");
+        foreach (var (section, title) in new[] { ("manage", "Manage"), ("types", "Manage type"), ("calendar", "Calendar"),
             ("locations", "Locations"), ("location-types", "Location Types"), ("organisation-types", "Organisation Types"), ("requests", "Structure Request Types"), ("structure-request-types", "Structure Request Types") })
         {
             page.Section = section; Check(Selected(page) == title, $"Organisation section {section} did not restore");
@@ -68,7 +68,7 @@ static class SectionNavigationTests
         Check(Route("/online/duty-roster") == typeof(HRM.Components.Pages.Online.DutyRoster), "Employee duty roster route was lost");
         var workPlanningItems = ((System.Collections.IEnumerable)typeof(SettingsPage).GetMethod("GetSubItems", Flags)!.Invoke(new SettingsPage { CategoryName = "workplaning" }, ["workplaning"])!)
             .Cast<object>().Select(x => (string)x.GetType().GetProperty("Title")!.GetValue(x)!).ToList();
-        Check(!workPlanningItems.Contains("Schedule assignments") && !workPlanningItems.Contains("Manual Assignments") && workPlanningItems.Contains("Duty roster"),
+        Check(!workPlanningItems.Contains("Schedule assignments") && !workPlanningItems.Contains("Manual Assignments") && workPlanningItems.Contains("Templates"),
             "Moved work planning editors are still listed in Settings");
         Check(Route("/admin/settings/leaves/manage-leave-sets")==typeof(SettingsPage),"Canonical leave set settings route is missing");
         Check(Selected(new SettingsPage { CategoryName="leaves",Section="work-handover-rules" })=="Work Handover Rules", "Scoped handover settings route is missing");
