@@ -134,8 +134,25 @@
                                 <div class="min-w-0">
                                     <h2 class="text-sm font-bold text-slate-900 dark:text-slate-100">Hi! I'm the GHR Helpdesk Assistant.</h2>
                                     <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                                        Choose a topic below or describe your question. I'll answer immediately — and if I can't solve it, a real Helpdesk Officer will take over seamlessly.
+                                        I can look up your live leave balances, pending requests, profile, and portal access — or answer how-to questions across GHR. If I can't solve it, a real Helpdesk Officer takes over seamlessly.
                                     </p>
+                                </div>
+                            </div>
+
+                            <!-- 1-Click Live Personal Lookups -->
+                            <div class="flex flex-col gap-1.5">
+                                <span class="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Instant Live Lookups</span>
+                                <div class="flex flex-wrap gap-1.5">
+                                    @foreach (var quick in LiveQuickPrompts)
+                                    {
+                                        <button type="button"
+                                                disabled="@busy"
+                                                class="inline-flex items-center gap-1.5 rounded-full border border-teal-200 dark:border-teal-800 bg-teal-50/70 dark:bg-teal-950/40 px-3 py-1 text-[11px] font-semibold text-teal-800 dark:text-teal-200 hover:bg-teal-100 dark:hover:bg-teal-900/50 transition"
+                                                @onclick="() => QuickAskAsync(quick.Category, quick.Prompt)">
+                                            <AppIcon Name="@quick.Icon" Class="text-[11px]" />
+                                            <span>@quick.Label</span>
+                                        </button>
+                                    }
                                 </div>
                             </div>
 
@@ -357,6 +374,15 @@
 @code {
     private const string FullWidthStorageKey = "hrm.helpdesk.full-width";
     private sealed record QuickTopic(string Category, string Icon, string Hint, string StarterPrompt);
+    private sealed record LiveQuickPrompt(string Label, string Category, string Icon, string Prompt);
+
+    private static readonly LiveQuickPrompt[] LiveQuickPrompts =
+    [
+        new("Check my leave balance", "Leave & Attendance", "calendar", "Check my leave balance"),
+        new("Show my pending requests", "Requests & Approvals", "document", "Show my pending requests and leave status"),
+        new("Who is my supervisor?", "General", "person", "Who is my supervisor and what is my department?"),
+        new("Check my portal access & roles", "Account & Access", "bi-shield-lock", "Check my portal access and assigned roles")
+    ];
 
     private static readonly QuickTopic[] QuickTopics =
     [
@@ -462,6 +488,14 @@
         newCategory = topic.Category;
         if (string.IsNullOrWhiteSpace(newMessage) && !string.IsNullOrEmpty(topic.StarterPrompt))
             newMessage = topic.StarterPrompt;
+    }
+
+    private async Task QuickAskAsync(string category, string prompt)
+    {
+        newCategory = category;
+        newSubject = prompt;
+        newMessage = prompt;
+        await CreateTicketAsync();
     }
 
     private async Task CreateTicketAsync()

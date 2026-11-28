@@ -365,6 +365,10 @@
                            placeholder="Search articles..."
                            class="rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs" />
                     <button type="button" class="app-button app-button-secondary app-button-sm" disabled="@busy" @onclick="LoadArticlesAsync">Search</button>
+                    <button type="button" class="app-button app-button-secondary app-button-sm" disabled="@busy" @onclick="OpenImportModal">
+                        <AppIcon Name="bi-upload" Class="text-xs" />
+                        <span>Import Policy (.md/.txt)</span>
+                    </button>
                     <button type="button"
                             class="inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-bold shadow-2xs"
                             style="background-color: #ADD8E6; color: #0f172a; border: 1px solid #7cc0d8;"
@@ -465,6 +469,79 @@
             </div>
         </div>
     }
+
+    <!-- Import Policy / Guide Modal -->
+    @if (showImportModal)
+    {
+        <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4" role="dialog" aria-modal="true" aria-label="Import Policy into Knowledge Base">
+            <div class="w-full max-w-2xl rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+                <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 px-4 py-3" style="background-color: #eef8fc;">
+                    <div>
+                        <h3 class="text-sm font-bold text-slate-900">Import Policy / User Guide into Bot Brain</h3>
+                        <p class="text-[11px] text-slate-600">Upload a Markdown (.md) or Text (.txt) guide. Sections split automatically by headings.</p>
+                    </div>
+                    <button type="button" class="text-slate-500 hover:text-slate-800 font-bold" @onclick="() => showImportModal = false">✕</button>
+                </div>
+                <div class="p-4 flex flex-col gap-3 text-xs overflow-y-auto hda-scroll flex-1">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <label class="block font-medium text-slate-700 dark:text-slate-300">
+                            Default Category
+                            <select @bind="importCategory" class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs">
+                                <option value="General">General</option>
+                                <option value="Leave & Attendance">Leave &amp; Attendance</option>
+                                <option value="Payroll & Payslips">Payroll &amp; Payslips</option>
+                                <option value="Requests & Approvals">Requests &amp; Approvals</option>
+                                <option value="Account & Access">Account &amp; Access</option>
+                                <option value="Technical Issue">Technical Issue</option>
+                            </select>
+                        </label>
+                        <label class="block font-medium text-slate-700 dark:text-slate-300">
+                            Select File (.md or .txt, max 512 KB)
+                            <InputFile OnChange="OnPolicyFileSelectedAsync" accept=".md,.txt,text/markdown,text/plain" class="mt-1 block w-full text-xs text-slate-600" />
+                        </label>
+                    </div>
+
+                    @if (importedDrafts.Count > 0)
+                    {
+                        <div class="rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+                            <div class="bg-slate-50 dark:bg-slate-800 px-3 py-1.5 text-[11px] font-bold text-slate-700 dark:text-slate-200 flex items-center justify-between">
+                                <span>Detected Sections (@importedDrafts.Count(x => x.Selected) selected)</span>
+                                <span class="text-[10px] font-normal text-slate-500">Uncheck any section you want to skip</span>
+                            </div>
+                            <div class="divide-y divide-slate-100 dark:divide-slate-800 max-h-64 overflow-y-auto hda-scroll">
+                                @foreach (var item in importedDrafts)
+                                {
+                                    <label class="flex items-start gap-2.5 p-2.5 cursor-pointer hover:bg-slate-50/70 dark:hover:bg-slate-800/50">
+                                        <input type="checkbox" class="mt-0.5" @bind="item.Selected" />
+                                        <div class="min-w-0 flex-1">
+                                            <p class="font-bold text-slate-900 dark:text-slate-100 truncate">@item.Title</p>
+                                            <p class="text-[11px] text-slate-500 line-clamp-2">@item.Answer</p>
+                                        </div>
+                                    </label>
+                                }
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="rounded-xl border border-dashed border-slate-300 dark:border-slate-700 p-5 text-center text-slate-500">
+                            Upload a `.md` or `.txt` HR policy document or handbook. Headings (`#`, `##`, `###`) become individual searchable bot articles.
+                        </div>
+                    }
+                </div>
+                <div class="flex justify-end gap-2 border-t border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 px-4 py-3">
+                    <button type="button" class="app-button app-button-secondary app-button-sm" @onclick="() => showImportModal = false">Cancel</button>
+                    <button type="button"
+                            class="inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-bold shadow-2xs disabled:opacity-45"
+                            style="background-color: #ADD8E6; color: #0f172a; border: 1px solid #7cc0d8;"
+                            disabled="@(busy || !importedDrafts.Any(x => x.Selected))"
+                            @onclick="ImportSelectedArticlesAsync">
+                        Import @importedDrafts.Count(x => x.Selected) Article@(importedDrafts.Count(x => x.Selected) == 1 ? "" : "s")
+                    </button>
+                </div>
+            </div>
+        </div>
+    }
 </section>
 
 @code {
@@ -492,8 +569,18 @@
     private HelpdeskAgentInboxDto inbox = new();
     private HelpdeskTicketDetailDto? selectedTicket;
     private List<HelpdeskArticleDto> articles = [];
-    private bool showArticleModal;
+    private bool showArticleModal, showImportModal;
     private HelpdeskArticleDto articleDraft = new();
+    private string importCategory = "General";
+    private List<ImportDraftItem> importedDrafts = [];
+
+    private sealed class ImportDraftItem
+    {
+        public bool Selected { get; set; } = true;
+        public string Title { get; set; } = "";
+        public string Keywords { get; set; } = "";
+        public string Answer { get; set; } = "";
+    }
 
     private ElementReference agentMessagesEl;
     private readonly CancellationTokenSource stop = new();
@@ -638,6 +725,118 @@
     {
         articleDraft = new HelpdeskArticleDto { Category = "General", IsActive = true, SortOrder = (articles.Count + 1) * 10 };
         showArticleModal = true;
+    }
+
+    private void OpenImportModal()
+    {
+        importCategory = "General";
+        importedDrafts = [];
+        showImportModal = true;
+    }
+
+    private async Task OnPolicyFileSelectedAsync(InputFileChangeEventArgs e)
+    {
+        error = null;
+        importedDrafts = [];
+        var file = e.File;
+        if (file == null) return;
+        if (file.Size > 512 * 1024)
+        {
+            error = "Policy file must be 512 KB or smaller.";
+            return;
+        }
+        try
+        {
+            using var reader = new StreamReader(file.OpenReadStream(512 * 1024));
+            var raw = await reader.ReadToEndAsync();
+            importedDrafts = ParsePolicySections(file.Name, raw);
+            if (importedDrafts.Count == 0)
+                error = "No readable text sections were found in the uploaded file.";
+        }
+        catch (Exception ex) { Fail(ex); }
+    }
+
+    private static List<ImportDraftItem> ParsePolicySections(string fileName, string content)
+    {
+        var results = new List<ImportDraftItem>();
+        var lines = content.Replace("\r\n", "\n").Split('\n');
+        var currentTitle = Path.GetFileNameWithoutExtension(fileName);
+        var buffer = new List<string>();
+
+        void Flush()
+        {
+            var body = string.Join("\n", buffer).Trim();
+            buffer.Clear();
+            if (body.Length < 15) return;
+            if (body.Length > 3900) body = body[..3900].TrimEnd() + "...";
+            var cleanTitle = currentTitle.Trim('#', ' ', '\t');
+            if (string.IsNullOrWhiteSpace(cleanTitle)) cleanTitle = "Policy Guide";
+            if (cleanTitle.Length > 190) cleanTitle = cleanTitle[..190];
+            var words = System.Text.RegularExpressions.Regex.Matches(cleanTitle.ToLowerInvariant(), "[a-z0-9]{3,}")
+                .Select(m => m.Value)
+                .Distinct()
+                .Take(12);
+            results.Add(new ImportDraftItem
+            {
+                Selected = true,
+                Title = cleanTitle,
+                Keywords = string.Join(", ", words),
+                Answer = body
+            });
+        }
+
+        foreach (var line in lines)
+        {
+            var trimmed = line.Trim();
+            if (trimmed.StartsWith("#", StringComparison.Ordinal))
+            {
+                Flush();
+                currentTitle = trimmed.TrimStart('#').Trim();
+            }
+            else
+            {
+                buffer.Add(line);
+            }
+        }
+        Flush();
+        return results;
+    }
+
+    private async Task ImportSelectedArticlesAsync()
+    {
+        if (busy) return;
+        var selected = importedDrafts.Where(x => x.Selected).ToList();
+        if (selected.Count == 0) return;
+        busy = true;
+        error = null;
+        var imported = 0;
+        try
+        {
+            var order = (articles.Count + 1) * 10;
+            foreach (var item in selected)
+            {
+                var res = await Helpdesk.SaveArticleAsync(new HelpdeskArticleDto
+                {
+                    Category = importCategory,
+                    Title = item.Title,
+                    Keywords = item.Keywords,
+                    Answer = item.Answer,
+                    IsActive = true,
+                    SortOrder = order
+                });
+                if (res.Success)
+                {
+                    imported++;
+                    order += 10;
+                }
+            }
+            Toast.Success($"Imported {imported} Knowledge Base article{(imported == 1 ? "" : "s")}.");
+            showImportModal = false;
+            importedDrafts = [];
+            articles = await Helpdesk.GetArticlesAsync(kbSearch);
+        }
+        catch (Exception ex) { Fail(ex); }
+        finally { busy = false; }
     }
 
     private void OpenEditArticleModal(HelpdeskArticleDto art)

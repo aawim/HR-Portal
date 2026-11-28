@@ -168,8 +168,8 @@ public sealed class HelpdeskService(
             await tx.CommitAsync();
         }
 
-        // Let the hybrid bot engine generate the initial reply
-        await RunBotTurnAsync(db, ticket, orgName, requesterName, cleanBody, activeArticles);
+        // Let the hybrid bot engine generate the initial reply with live user context
+        await RunBotTurnAsync(db, ticket, user, orgName, requesterName, cleanBody, activeArticles);
 
         var isAgent = await IsHelpdeskOfficerAsync();
         return await BuildDetailAsync(db, ticket, user.UserId, isAgent);
@@ -227,7 +227,7 @@ public sealed class HelpdeskService(
                 .Where(a => a.IsActive)
                 .OrderBy(a => a.SortOrder)
                 .ToListAsync();
-            await RunBotTurnAsync(db, ticket, orgName, requesterName, cleanBody, activeArticles);
+            await RunBotTurnAsync(db, ticket, user, orgName, requesterName, cleanBody, activeArticles);
         }
 
         var isAgent = await IsHelpdeskOfficerAsync();
@@ -632,9 +632,99 @@ public sealed class HelpdeskService(
         return ServiceResult.Ok("Knowledge Base article deleted.");
     }
 
+    private async Task<HelpdeskLiveUserContext> BuildLiveUserContextAsync(HrmTeContext db, HRM.DTOs.UserContext.UserContextDto user, string orgName, string requesterName)
+    {
+        var job = user.ActiveJob;
+        var adminPortalEnabled = await db.Users.AsNoTracking()
+            .Where(u => u.UserId == user.UserId)
+            .Select(u => u.AdminPortalAccessEnabled)
+            .FirstOrDefaultAsync();
+
+        List<HelpdeskLeaveBalanceItem> leaveBalances = [];
+        List<HelpdeskRecentLeaveItem> recentLeaves = [];
+        if (job != null && job.JobId > 0)
+        {
+            leaveBalances = await db.JobLeaveTypes.AsNoTracking()
+                .Where(jlt => jlt.JobId == job.JobId && jlt.IsValid && jlt.LeaveTypeId != null)
+                .OrderBy(jlt => jlt.LeaveType.Name)
+                .Select(jlt => new HelpdeskLeaveBalanceItem(
+                    jlt.LeaveType.Name,
+                    jlt.RemainingDays ?? 0m))
+                .ToListAsync();
+
+            recentLeaves = await db.Leaves.AsNoTracking()
+                .Where(l => l.JobId == job.JobId)
+                .OrderByDescending(l => l.LeaveId)
+                .Take(5)
+                .Select(l => new HelpdeskRecentLeaveItem(
+                    l.LeaveType.Name,
+                    l.FromDate,
+                    l.ToDate,
+                    l.Duration,
+                    l.LeaveState.StateName))
+                .ToListAsync();
+        }
+
+        List<HelpdeskRecentRequestItem> recentRequests = [];
+        var individualId = job?.IndividualId > 0 ? job.IndividualId : user.IndividualId;
+        if (individualId > 0)
+        {
+            var rawReqs = await db.Requests.AsNoTracking()
+                .Where(r => r.ApplicantBusinessEntityId == individualId)
+                .OrderByDescending(r => r.ApplicationDate)
+                .ThenByDescending(r => r.RequestId)
+                .Take(8)
+                .Select(r => new
+                {
+                    Ref = r.ReferenceNumber ?? ("#" + r.RequestId),
+                    TypeName = r.RequestType.TypeName,
+                    StateName = r.RequestState.StateName,
+                    IsOpen = r.RequestState.IsProcessingState,
+                    r.ApplicationDate
+                })
+                .ToListAsync();
+
+            recentRequests = rawReqs
+                .Select(r => new HelpdeskRecentRequestItem(r.Ref, r.TypeName, r.StateName, r.IsOpen, r.ApplicationDate))
+                .ToList();
+        }
+
+        var roleGroups = user.UserGroups
+            .Select(g => g.GroupName)
+            .Where(n => !string.IsNullOrWhiteSpace(n))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(n => n)
+            .ToList();
+
+        var teams = job?.Teams
+            .Select(t => t.Name)
+            .Where(n => !string.IsNullOrWhiteSpace(n))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList() ?? [];
+
+        return new HelpdeskLiveUserContext(
+            requesterName,
+            !string.IsNullOrWhiteSpace(job?.OrganisationName) ? job.OrganisationName : orgName,
+            !string.IsNullOrWhiteSpace(job?.DepartmentName) ? job.DepartmentName : job?.OrganisationStructureName,
+            job?.PositionName,
+            job?.JobTypeName,
+            job?.EmployeeNumber,
+            job?.JoinedDate,
+            job?.ServiceDurationText,
+            job?.SupervisorName,
+            teams,
+            adminPortalEnabled,
+            user.IsSuperAdministrator,
+            roleGroups,
+            leaveBalances,
+            recentLeaves,
+            recentRequests);
+    }
+
     private async Task RunBotTurnAsync(
         HrmTeContext db,
         HelpdeskTicket ticket,
+        HRM.DTOs.UserContext.UserContextDto user,
         string orgName,
         string requesterName,
         string userMessage,
@@ -648,6 +738,10 @@ public sealed class HelpdeskService(
             .Select(m => new HelpdeskBotHistoryItem(m.SenderType, m.Body))
             .ToListAsync();
 
+        HelpdeskLiveUserContext? liveContext = null;
+        try { liveContext = await BuildLiveUserContextAsync(db, user, orgName, requesterName); }
+        catch { /* Keep bot functional even if a secondary lookup fails */ }
+
         var botResponse = await botEngine.GenerateReplyAsync(new HelpdeskBotRequest(
             orgName,
             requesterName,
@@ -656,7 +750,8 @@ public sealed class HelpdeskService(
             userMessage,
             ticket.BotUnresolvedTurns,
             recentHistory,
-            activeArticles));
+            activeArticles,
+            liveContext));
 
         var now = DateTime.UtcNow;
         var botMsg = new HelpdeskMessage
