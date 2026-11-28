@@ -1,0 +1,118 @@
+@page "/online/support-center"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using HRM.Components.SuperAdmin
+@using HRM.Services.Interfaces
+@inject IUserAccessService UserAccess
+@inject IJSRuntime JS
+
+<PageTitle>Helpdesk Support Center</PageTitle>
+
+<section class="w-full min-w-0 p-2 flex flex-col gap-2 text-slate-900 dark:text-slate-100">
+    <!-- Compact Borderless Header (never shrinks with Full Width / Shrink View) -->
+    <header class="flex flex-wrap items-center justify-between gap-2 px-1 py-0.5">
+        <div class="min-w-0">
+            <div class="flex items-center gap-2 flex-wrap">
+                <h1 class="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 truncate">Helpdesk Support Center</h1>
+                <span class="inline-flex items-center gap-1 rounded-full border border-teal-200 dark:border-teal-800 bg-teal-50 dark:bg-teal-950/50 px-2 py-0.5 text-[10px] font-semibold text-teal-800 dark:text-teal-200">
+                    <span class="h-1.5 w-1.5 rounded-full bg-teal-600"></span>
+                    Support Officers
+                </span>
+            </div>
+            <p class="text-xs text-slate-500 dark:text-slate-400">Communicate with users, take over escalated bot chats, and save verified answers directly to the Helpdesk Knowledge Base.</p>
+        </div>
+
+        @if (!loading && canAccess)
+        {
+            <div class="flex items-center gap-1.5 shrink-0">
+                <button type="button"
+                        class="app-button app-button-secondary app-button-sm"
+                        title="@(isFullWidth ? "Switch to centered Shrink View" : "Expand to Full Width")"
+                        @onclick="ToggleWidthAsync">
+                    <AppIcon Name="@(isFullWidth ? "bi-arrows-angle-contract" : "bi-arrows-angle-expand")" Class="text-xs" />
+                    <span>@(isFullWidth ? "Shrink View" : "Full Width")</span>
+                </button>
+            </div>
+        }
+    </header>
+
+    @if (loading)
+    {
+        <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-8 text-center text-xs text-slate-500">
+            Checking Support Center permissions...
+        </div>
+    }
+    else if (!canAccess)
+    {
+        <div class="mx-auto w-full max-w-2xl rounded-2xl border border-amber-200 dark:border-amber-800 bg-white dark:bg-slate-900 p-6 shadow-xs text-center flex flex-col items-center gap-3">
+            <div class="h-12 w-12 rounded-2xl bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300 flex items-center justify-center">
+                <AppIcon Name="bi-shield-lock" Class="text-xl" />
+            </div>
+            <div class="space-y-1">
+                <h2 class="text-sm font-bold text-slate-900 dark:text-slate-100">Support Center Access Required</h2>
+                <p class="text-xs text-slate-600 dark:text-slate-400 max-w-md">
+                    You do not currently have permission to access the Helpdesk Support Center. Ask your administrator to assign the
+                    <code class="rounded bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 font-mono text-[11px] font-semibold">Helpdesk.Agent</code>
+                    permission to your role or account.
+                </p>
+            </div>
+            <a href="/online" class="app-button app-button-primary app-button-sm">
+                <AppIcon Name="home" Class="text-xs" />
+                <span>Back to Online Portal</span>
+            </a>
+        </div>
+    }
+    else
+    {
+        <div class="@(isFullWidth ? "w-full min-w-0" : "mx-auto w-full max-w-6xl min-w-0")">
+            <HelpdeskAgentConsole Embedded="true" ShowSettingsTab="false" OnlineTheme="true" />
+        </div>
+    }
+</section>
+
+@code {
+    private const string WidthStorageKey = "hrm_support_center_fullwidth";
+    private bool loading = true;
+    private bool canAccess;
+    private bool isFullWidth = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var actor = await UserAccess.RequireContextAsync();
+            canAccess = actor.IsSuperAdministrator
+                || await UserAccess.HasPermissionAsync("Helpdesk.Agent")
+                || await UserAccess.HasPermissionAsync("Helpdesk.Manage");
+        }
+        catch
+        {
+            canAccess = false;
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        try
+        {
+            var stored = await JS.InvokeAsync<string?>("localStorage.getItem", WidthStorageKey);
+            if (!string.IsNullOrEmpty(stored) && bool.TryParse(stored, out var parsed) && parsed != isFullWidth)
+            {
+                isFullWidth = parsed;
+                StateHasChanged();
+            }
+        }
+        catch { }
+    }
+
+    private async Task ToggleWidthAsync()
+    {
+        isFullWidth = !isFullWidth;
+        try { await JS.InvokeVoidAsync("localStorage.setItem", WidthStorageKey, isFullWidth.ToString().ToLowerInvariant()); }
+        catch { }
+    }
+}

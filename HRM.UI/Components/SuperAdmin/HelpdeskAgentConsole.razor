@@ -5,6 +5,7 @@
 @using HRM.Models
 @inject HRM.Services.Contracts.HelpdeskServiceContracts.IOperations Helpdesk
 @inject HRM.Services.ToastService Toast
+@inject HRM.UI.Services.HelpdeskAvailabilityNotifier HelpdeskNotifier
 @inject IJSRuntime JS
 @inject ILogger<HelpdeskAgentConsole> Logger
 
@@ -21,36 +22,54 @@
                         All Organisations
                     </span>
                 </div>
-                <p class="text-xs text-slate-500 dark:text-slate-400">Monitor bot conversations, take over escalated chats, and maintain the Helpdesk Knowledge Base.</p>
+                <p class="text-xs text-slate-500 dark:text-slate-400">Monitor bot conversations, take over escalated chats, and configure global or tenant-wise chatbot availability.</p>
             </div>
         </header>
     }
 
     <!-- Top Sub-Tabs + Bot Engine Status -->
     <div class="flex flex-wrap items-center justify-between gap-2">
-        <div class="flex items-center gap-1.5">
-            <button type="button"
-                    class="rounded-xl px-3.5 py-1.5 text-xs font-semibold border transition @(subTab == "queue" ? "text-slate-900 shadow-2xs" : "bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-sky-50")"
-                    style="@(subTab == "queue" ? "background-color: #ADD8E6; border-color: #7cc0d8; color: #0f172a;" : null)"
-                    @onclick='() => SwitchSubTabAsync("queue")'>
-                <AppIcon Name="bi-headset" Class="text-xs mr-1" />
-                Support Queue
+        @if (ShowSettingsTab)
+        {
+            <div class="flex items-center gap-1.5">
+                <button type="button"
+                        class="rounded-xl px-3.5 py-1.5 text-xs font-semibold border transition @(subTab == "queue" ? "text-slate-900 shadow-2xs" : "bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-sky-50")"
+                        style="@(subTab == "queue" ? "background-color: #ADD8E6; border-color: #7cc0d8; color: #0f172a;" : null)"
+                        @onclick='() => SwitchSubTabAsync("queue")'>
+                    <AppIcon Name="bi-headset" Class="text-xs mr-1" />
+                    Support Queue
+                    @if (inbox.WaitingCount > 0)
+                    {
+                        <span class="ml-1 rounded-full bg-amber-600 px-1.5 py-0.5 text-[10px] font-bold text-white">@inbox.WaitingCount</span>
+                    }
+                </button>
+                <button type="button"
+                        class="rounded-xl px-3.5 py-1.5 text-xs font-semibold border transition @(subTab == "settings" ? "text-slate-900 shadow-2xs" : "bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-sky-50")"
+                        style="@(subTab == "settings" ? "background-color: #ADD8E6; border-color: #7cc0d8; color: #0f172a;" : null)"
+                        @onclick='() => SwitchSubTabAsync("settings")'>
+                    <AppIcon Name="cog" Class="text-xs mr-1" />
+                    Bot Settings &amp; Tenants
+                </button>
+            </div>
+        }
+        else
+        {
+            <div class="flex items-center gap-2">
+                <span class="inline-flex items-center gap-1.5 rounded-full border border-teal-200 dark:border-teal-800 bg-teal-50 dark:bg-teal-950/50 px-2.5 py-1 text-[11px] font-semibold text-teal-800 dark:text-teal-200">
+                    <AppIcon Name="bi-headset" Class="text-xs" />
+                    <span>Live Support Queue</span>
+                </span>
                 @if (inbox.WaitingCount > 0)
                 {
-                    <span class="ml-1 rounded-full bg-amber-600 px-1.5 py-0.5 text-[10px] font-bold text-white">@inbox.WaitingCount</span>
+                    <span class="inline-flex items-center gap-1 rounded-full bg-amber-100 border border-amber-200 px-2 py-0.5 text-[11px] font-bold text-amber-800">
+                        @inbox.WaitingCount waiting for officer
+                    </span>
                 }
-            </button>
-            <button type="button"
-                    class="rounded-xl px-3.5 py-1.5 text-xs font-semibold border transition @(subTab == "kb" ? "text-slate-900 shadow-2xs" : "bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-sky-50")"
-                    style="@(subTab == "kb" ? "background-color: #ADD8E6; border-color: #7cc0d8; color: #0f172a;" : null)"
-                    @onclick='() => SwitchSubTabAsync("kb")'>
-                <AppIcon Name="bi-robot" Class="text-xs mr-1" />
-                Knowledge Base (Bot Brain)
-            </button>
-        </div>
+            </div>
+        }
 
         <div class="flex items-center gap-2">
-            <span class="inline-flex items-center gap-1.5 rounded-full border border-sky-200 dark:border-sky-800 bg-sky-50 dark:bg-sky-950/50 px-2.5 py-1 text-[11px] font-semibold text-sky-800 dark:text-sky-200">
+            <span class="inline-flex items-center gap-1.5 rounded-full border @(OnlineTheme ? "border-teal-200 dark:border-teal-800 bg-teal-50 dark:bg-teal-950/50 text-teal-800 dark:text-teal-200" : "border-sky-200 dark:border-sky-800 bg-sky-50 dark:bg-sky-950/50 text-sky-800 dark:text-sky-200") px-2.5 py-1 text-[11px] font-semibold">
                 <AppIcon Name="bi-cpu" Class="text-xs" />
                 <span>@inbox.BotEngineMode</span>
             </span>
@@ -169,11 +188,11 @@
                             var isSelected = selectedTicket?.Ticket.Id == item.Id;
                             <button type="button"
                                     @key="item.Id"
-                                    class="w-full p-3 text-left transition flex flex-col gap-1 @(isSelected ? "bg-sky-50/90 dark:bg-sky-950/40" : "hover:bg-slate-50 dark:hover:bg-slate-800/50")"
-                                    style="@(isSelected ? "border-left: 3px solid #0369a1;" : "border-left: 3px solid transparent;")"
+                                    class="w-full p-3 text-left transition flex flex-col gap-1 @(isSelected ? (OnlineTheme ? "bg-teal-50/80 dark:bg-teal-950/40" : "bg-sky-50/90 dark:bg-sky-950/40") : "hover:bg-slate-50 dark:hover:bg-slate-800/50")"
+                                    style="@(isSelected ? (OnlineTheme ? "border-left: 3px solid #0f766e;" : "border-left: 3px solid #0369a1;") : "border-left: 3px solid transparent;")"
                                     @onclick="() => SelectTicketAsync(item.Id)">
                                 <div class="flex items-center justify-between gap-2 w-full">
-                                    <span class="font-mono text-[10px] font-bold text-blue-700 dark:text-blue-300">@item.TicketNumber</span>
+                                    <span class="font-mono text-[10px] font-bold @(OnlineTheme ? "text-teal-700 dark:text-teal-300" : "text-blue-700 dark:text-blue-300")">@item.TicketNumber</span>
                                     <span class="rounded-full px-2 py-0.5 text-[10px] font-semibold @StatusBadgeClass(item.Status)">@StatusLabel(item.Status)</span>
                                 </div>
                                 <p class="text-xs font-bold text-slate-900 dark:text-slate-100 truncate w-full">@item.Subject</p>
@@ -209,10 +228,10 @@
                     var t = selectedTicket.Ticket;
                     <!-- Thread Header -->
                     <div class="shrink-0 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 py-2.5 flex flex-wrap items-center justify-between gap-2"
-                         style="background-color: #f4fafd;">
+                         style="@(OnlineTheme ? "background-color: #f0fdfa;" : "background-color: #f4fafd;")">
                         <div class="min-w-0">
                             <div class="flex items-center gap-1.5 flex-wrap">
-                                <span class="font-mono text-[11px] font-bold text-blue-700">@t.TicketNumber</span>
+                                <span class="font-mono text-[11px] font-bold @(OnlineTheme ? "text-teal-700" : "text-blue-700")">@t.TicketNumber</span>
                                 <h3 class="text-sm font-bold text-slate-900 truncate">@t.Subject</h3>
                                 <span class="rounded-full px-2 py-0.5 text-[10px] font-semibold @StatusBadgeClass(t.Status)">@StatusLabel(t.Status)</span>
                             </div>
@@ -226,24 +245,25 @@
                         </div>
 
                         <div class="flex flex-wrap items-center gap-1.5 shrink-0">
+                            <button type="button"
+                                    class="app-button app-button-secondary app-button-sm"
+                                    title="Save an answer from this chat into the Helpdesk Knowledge Base"
+                                    disabled="@busy"
+                                    @onclick="() => OpenSaveToKbModal(null)">
+                                <AppIcon Name="bi-journal-plus" Class="text-xs" />
+                                <span>Save to KB</span>
+                            </button>
                             @if (t.Status != HelpdeskTicketStatuses.AgentAssigned && t.Status != HelpdeskTicketStatuses.Resolved)
                             {
                                 <button type="button"
                                         class="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold shadow-xs transition"
-                                        style="background-color: #ADD8E6; color: #0f172a; border: 1px solid #7cc0d8;"
+                                        style="@(OnlineTheme ? "background-color: #0f766e; color: #ffffff; border: 1px solid #0d9488;" : "background-color: #ADD8E6; color: #0f172a; border: 1px solid #7cc0d8;")"
                                         disabled="@busy"
                                         @onclick="TakeOverAsync">
                                     <AppIcon Name="bi-headset" Class="text-xs" />
                                     <span>Take Over Chat</span>
                                 </button>
                             }
-                            <button type="button"
-                                    class="app-button app-button-secondary app-button-sm"
-                                    title="Turn this issue into a Knowledge Base article so the bot can solve it next time"
-                                    @onclick="OpenKbFromTicket">
-                                <AppIcon Name="bi-journal-plus" Class="text-xs" />
-                                <span>Save to KB</span>
-                            </button>
                             @if (t.Status != HelpdeskTicketStatuses.Resolved)
                             {
                                 <button type="button" class="app-button app-button-success app-button-sm" disabled="@busy" @onclick="ResolveAsAgentAsync">
@@ -289,8 +309,8 @@
                                 var isAgentMsg = msg.SenderType == HelpdeskSenderTypes.Agent;
                                 var isBotMsg = msg.SenderType == HelpdeskSenderTypes.Bot;
                                 <div @key="msg.Id" class="flex @(isAgentMsg ? "justify-end" : "justify-start")">
-                                    <div class="max-w-[82%] rounded-2xl px-3.5 py-2 text-xs shadow-2xs @(isAgentMsg ? "bg-sky-700 text-white rounded-br-sm" : isBotMsg ? "bg-indigo-50/80 dark:bg-indigo-950/50 border border-indigo-200 dark:border-indigo-800 text-slate-800 dark:text-slate-100 rounded-bl-sm" : "bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 rounded-bl-sm")">
-                                        <div class="flex items-center justify-between gap-3 text-[10px] mb-1 @(isAgentMsg ? "text-sky-100" : "text-slate-500 dark:text-slate-400")">
+                                    <div class="max-w-[82%] rounded-2xl px-3.5 py-2 text-xs shadow-2xs @(isAgentMsg ? (OnlineTheme ? "bg-teal-700 text-white rounded-br-sm" : "bg-sky-700 text-white rounded-br-sm") : isBotMsg ? "bg-indigo-50/80 dark:bg-indigo-950/50 border border-indigo-200 dark:border-indigo-800 text-slate-800 dark:text-slate-100 rounded-bl-sm" : "bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 rounded-bl-sm")">
+                                        <div class="flex items-center justify-between gap-3 text-[10px] mb-1 @(isAgentMsg ? (OnlineTheme ? "text-teal-100" : "text-sky-100") : "text-slate-500 dark:text-slate-400")">
                                             <span class="font-bold">
                                                 @msg.SenderName @(isBotMsg ? "· Bot" : isAgentMsg ? "· Officer" : "· Requester")
                                                 @if (isBotMsg && msg.Confidence.HasValue)
@@ -300,7 +320,26 @@
                                             </span>
                                             <span>@localTime.ToString("dd MMM HH:mm")</span>
                                         </div>
-                                        <p class="whitespace-pre-wrap break-words">@msg.Body</p>
+                                        @if (isBotMsg)
+                                        {
+                                            <div class="break-words space-y-1">@HRM.UI.Helpers.HelpdeskMessageFormatter.Format(msg.Body)</div>
+                                        }
+                                        else
+                                        {
+                                            <p class="whitespace-pre-wrap break-words">@msg.Body</p>
+                                        }
+                                        @if (isAgentMsg)
+                                        {
+                                            <div class="mt-1.5 flex justify-end">
+                                                <button type="button"
+                                                        class="inline-flex items-center gap-1 rounded-md bg-white/15 hover:bg-white/25 px-2 py-0.5 text-[10px] font-semibold text-white transition"
+                                                        title="Save this reply to the Helpdesk Knowledge Base"
+                                                        @onclick="() => OpenSaveToKbModal(msg.Body)">
+                                                    <AppIcon Name="bi-journal-plus" Class="text-[10px]" />
+                                                    <span>Save to KB</span>
+                                                </button>
+                                            </div>
+                                        }
                                     </div>
                                 </div>
                             }
@@ -312,7 +351,7 @@
                         <div class="flex items-center justify-between gap-2">
                             <div class="flex rounded-lg border border-slate-200 dark:border-slate-700 p-0.5 bg-slate-50 dark:bg-slate-800 text-[11px] font-semibold">
                                 <button type="button"
-                                        class="rounded-md px-2.5 py-1 transition @(!agentInternalNote ? "bg-white dark:bg-slate-700 text-sky-800 dark:text-sky-200 shadow-2xs" : "text-slate-500")"
+                                        class="rounded-md px-2.5 py-1 transition @(!agentInternalNote ? (OnlineTheme ? "bg-white dark:bg-slate-700 text-teal-800 dark:text-teal-200 shadow-2xs" : "bg-white dark:bg-slate-700 text-sky-800 dark:text-sky-200 shadow-2xs") : "text-slate-500")"
                                         @onclick="() => agentInternalNote = false">
                                     Reply to Requester
                                 </button>
@@ -337,7 +376,7 @@
                                       class="flex-1 rounded-xl border px-3 py-2 text-xs outline-none @(agentInternalNote ? "border-amber-300 bg-amber-50/50 dark:border-amber-700 dark:bg-amber-950/30" : "border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800")"></textarea>
                             <button type="button"
                                     class="inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-bold shadow-xs transition disabled:opacity-45 shrink-0"
-                                    style="@(agentInternalNote ? "background-color: #d97706; color: #ffffff;" : "background-color: #ADD8E6; color: #0f172a; border: 1px solid #7cc0d8;")"
+                                    style="@(agentInternalNote ? "background-color: #d97706; color: #ffffff;" : OnlineTheme ? "background-color: #0f766e; color: #ffffff; border: 1px solid #0d9488;" : "background-color: #ADD8E6; color: #0f172a; border: 1px solid #7cc0d8;")"
                                     disabled="@(busy || string.IsNullOrWhiteSpace(agentReplyBody))"
                                     @onclick="SendAgentReplyAsync">
                                 <AppIcon Name="bi-send-fill" Class="text-xs" />
@@ -351,193 +390,217 @@
     }
     else
     {
-        <!-- KNOWLEDGE BASE MANAGER (Bot Brain) -->
+        <!-- BOT SETTINGS & TENANT ACCESS CONTROL -->
+        var enabledOrgCount = botSettings.Organisations.Count(o => o.IsEnabled);
+        var filteredSettingsOrgs = botSettings.Organisations
+            .Where(o => string.IsNullOrWhiteSpace(settingsOrgSearch) || o.OrganisationName.Contains(settingsOrgSearch.Trim(), StringComparison.OrdinalIgnoreCase))
+            .OrderBy(o => o.OrganisationName, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
         <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden">
-            <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 dark:border-slate-800 px-4 py-3">
+            <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 dark:border-slate-800 px-4 py-3" style="background-color: #eef8fc;">
                 <div>
-                    <h2 class="text-sm font-bold text-slate-900 dark:text-slate-100">Helpdesk Bot Knowledge Base (@articles.Count)</h2>
-                    <p class="text-[11px] text-slate-500">The Helpdesk Assistant searches these articles before escalating to a real Helpdesk Officer.</p>
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <h2 class="text-sm font-bold text-slate-900">Helpdesk Chatbot Availability &amp; Tenant Controls</h2>
+                        @if (!botSettings.IsEnabled)
+                        {
+                            <span class="rounded-full bg-rose-100 text-rose-800 border border-rose-200 px-2.5 py-0.5 text-[10px] font-bold">Disabled Platform-Wide</span>
+                        }
+                        else if (botSettings.ScopeMode == HelpdeskScopeModes.SelectedOrganisations)
+                        {
+                            <span class="rounded-full bg-amber-100 text-amber-800 border border-amber-200 px-2.5 py-0.5 text-[10px] font-bold">Selected Organisations (@enabledOrgCount / @botSettings.Organisations.Count)</span>
+                        }
+                        else
+                        {
+                            <span class="rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200 px-2.5 py-0.5 text-[10px] font-bold">Enabled Globally (All Organisations)</span>
+                        }
+                    </div>
+                    <p class="text-[11px] text-slate-600 mt-0.5">Control whether the Helpdesk Chatbot and floating chat widget are enabled globally or only for selected organisations.</p>
                 </div>
-                <div class="flex items-center gap-2">
-                    <input type="search"
-                           @bind="kbSearch"
-                           @bind:event="oninput"
-                           placeholder="Search articles..."
-                           class="rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs" />
-                    <button type="button" class="app-button app-button-secondary app-button-sm" disabled="@busy" @onclick="LoadArticlesAsync">Search</button>
-                    <button type="button" class="app-button app-button-secondary app-button-sm" disabled="@busy" @onclick="OpenImportModal">
-                        <AppIcon Name="bi-upload" Class="text-xs" />
-                        <span>Import Policy (.md/.txt)</span>
-                    </button>
-                    <button type="button"
-                            class="inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-bold shadow-2xs"
-                            style="background-color: #ADD8E6; color: #0f172a; border: 1px solid #7cc0d8;"
-                            @onclick="OpenNewArticleModal">
-                        <AppIcon Name="add" Class="text-xs" />
-                        <span>Add Article</span>
-                    </button>
-                </div>
+                <button type="button"
+                        class="inline-flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-xs font-bold shadow-2xs transition disabled:opacity-50"
+                        style="background-color: #ADD8E6; color: #0f172a; border: 1px solid #7cc0d8;"
+                        disabled="@busy"
+                        @onclick="SaveBotSettingsAsync">
+                    <AppIcon Name="save" Class="text-xs" />
+                    <span>@(busy ? "Saving..." : "Save Bot Settings")</span>
+                </button>
             </div>
 
-            <div class="divide-y divide-slate-100 dark:divide-slate-800">
-                @if (articles.Count == 0)
-                {
-                    <p class="p-6 text-center text-xs text-slate-400">No Knowledge Base articles found.</p>
-                }
-                else
-                {
-                    @foreach (var art in articles)
+            <div class="p-4 space-y-4 text-xs">
+                <!-- 1. Master On/Off Switch -->
+                <div class="rounded-xl border @(botSettings.IsEnabled ? "border-emerald-200 bg-emerald-50/50 dark:border-emerald-800 dark:bg-emerald-950/20" : "border-rose-200 bg-rose-50/50 dark:border-rose-800 dark:bg-rose-950/20") p-3.5 flex flex-wrap items-center justify-between gap-3">
+                    <div class="space-y-0.5">
+                        <p class="font-bold text-slate-900 dark:text-slate-100">Master Helpdesk Chatbot Switch</p>
+                        <p class="text-[11px] text-slate-600 dark:text-slate-400">
+                            @(botSettings.IsEnabled
+                                ? "The Helpdesk Chatbot is currently ON. Availability below determines which organisations can access it."
+                                : "The Helpdesk Chatbot is currently OFF across all portals and organisations. Existing tickets remain visible to Helpdesk Officers.")
+                        </p>
+                    </div>
+                    <label class="inline-flex items-center gap-2 cursor-pointer rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 font-bold text-slate-800 dark:text-slate-100 shadow-2xs">
+                        <input type="checkbox" class="h-4 w-4 accent-sky-700" @bind="botSettings.IsEnabled" />
+                        <span>@(botSettings.IsEnabled ? "Chatbot Enabled" : "Chatbot Disabled")</span>
+                    </label>
+                </div>
+
+                <!-- 2. Scope Selector: Global vs Tenant-Wise -->
+                <div class="space-y-2 @(botSettings.IsEnabled ? "" : "opacity-55")">
+                    <p class="font-bold text-slate-800 dark:text-slate-100">Rollout Scope</p>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                        <label class="cursor-pointer rounded-xl border p-3 transition flex items-start gap-2.5 @(botSettings.ScopeMode == HelpdeskScopeModes.Global ? "border-sky-500 bg-sky-50/60 dark:bg-sky-950/30 ring-1 ring-sky-400" : "border-slate-200 dark:border-slate-700 hover:border-slate-300")">
+                            <input type="radio" name="hdScopeMode" class="mt-0.5"
+                                   checked="@(botSettings.ScopeMode == HelpdeskScopeModes.Global)"
+                                   disabled="@(!botSettings.IsEnabled)"
+                                   @onchange='() => botSettings.ScopeMode = HelpdeskScopeModes.Global' />
+                            <div>
+                                <p class="font-bold text-slate-900 dark:text-slate-100">Global (All Organisations)</p>
+                                <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">Every active organisation automatically gets the Helpdesk Chatbot and bottom-right chat launcher.</p>
+                            </div>
+                        </label>
+                        <label class="cursor-pointer rounded-xl border p-3 transition flex items-start gap-2.5 @(botSettings.ScopeMode == HelpdeskScopeModes.SelectedOrganisations ? "border-sky-500 bg-sky-50/60 dark:bg-sky-950/30 ring-1 ring-sky-400" : "border-slate-200 dark:border-slate-700 hover:border-slate-300")">
+                            <input type="radio" name="hdScopeMode" class="mt-0.5"
+                                   checked="@(botSettings.ScopeMode == HelpdeskScopeModes.SelectedOrganisations)"
+                                   disabled="@(!botSettings.IsEnabled)"
+                                   @onchange='() => botSettings.ScopeMode = HelpdeskScopeModes.SelectedOrganisations' />
+                            <div>
+                                <p class="font-bold text-slate-900 dark:text-slate-100">Selected Organisations Only (Tenant-Wise)</p>
+                                <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">Only organisations ticked in the tenant list below can access the Helpdesk Chatbot.</p>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- 3. Tenant-Wise Organisation List -->
+                <div class="rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden @(botSettings.IsEnabled && botSettings.ScopeMode == HelpdeskScopeModes.SelectedOrganisations ? "" : "opacity-65")">
+                    <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 px-3 py-2">
+                        <div class="flex items-center gap-2">
+                            <span class="font-bold text-slate-800 dark:text-slate-100">Tenant-Wise Organisation Access</span>
+                            <span class="rounded-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-2 py-0.5 text-[10px] font-semibold text-slate-700 dark:text-slate-300">
+                                @enabledOrgCount / @botSettings.Organisations.Count enabled
+                            </span>
+                        </div>
+                        <div class="flex flex-wrap items-center gap-1.5">
+                            <input type="search"
+                                   @bind="settingsOrgSearch"
+                                   @bind:event="oninput"
+                                   placeholder="Search organisations..."
+                                   class="rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 py-1 text-xs" />
+                            <button type="button" class="app-button app-button-secondary app-button-sm" disabled="@(!botSettings.IsEnabled)" @onclick="() => SetAllOrganisationsEnabled(true)">Enable All</button>
+                            <button type="button" class="app-button app-button-neutral app-button-sm" disabled="@(!botSettings.IsEnabled)" @onclick="() => SetAllOrganisationsEnabled(false)">Disable All</button>
+                        </div>
+                    </div>
+
+                    @if (botSettings.ScopeMode == HelpdeskScopeModes.Global)
                     {
-                        <div @key="art.Id" class="p-3.5 flex flex-wrap items-start justify-between gap-3 hover:bg-slate-50/60 dark:hover:bg-slate-800/40">
-                            <div class="min-w-0 flex-1 space-y-1">
-                                <div class="flex items-center gap-1.5 flex-wrap">
-                                    <span class="rounded-full bg-sky-50 text-sky-800 border border-sky-200 px-2 py-0.5 text-[10px] font-semibold">@art.Category</span>
-                                    <h3 class="text-xs font-bold text-slate-900 dark:text-slate-100">@art.Title</h3>
-                                    @if (!art.IsActive)
-                                    {
-                                        <span class="rounded-full bg-slate-100 text-slate-500 px-2 py-0.5 text-[10px] font-semibold">Inactive</span>
-                                    }
+                        <div class="border-b border-sky-100 dark:border-sky-900/50 bg-sky-50/50 dark:bg-sky-950/20 px-3 py-1.5 text-[11px] text-sky-900 dark:text-sky-200">
+                            Currently in <strong>Global</strong> mode — all organisations have access. Switch to <strong>Selected Organisations Only</strong> above to enforce per-organisation toggles.
+                        </div>
+                    }
+
+                    <div class="p-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 max-h-80 overflow-y-auto hda-scroll">
+                        @foreach (var org in filteredSettingsOrgs)
+                        {
+                            <label @key="org.OrganisationId"
+                                   class="cursor-pointer rounded-xl border px-3 py-2 flex items-center justify-between gap-2 transition @(org.IsEnabled ? "border-emerald-300 bg-emerald-50/50 dark:border-emerald-800 dark:bg-emerald-950/30" : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50")">
+                                <div class="flex items-center gap-2 min-w-0">
+                                    <input type="checkbox"
+                                           class="accent-teal-700 shrink-0"
+                                           disabled="@(!botSettings.IsEnabled)"
+                                           @bind="org.IsEnabled" />
+                                    <span class="font-semibold text-slate-800 dark:text-slate-100 truncate" title="@org.OrganisationName">@org.OrganisationName</span>
                                 </div>
-                                <p class="text-[11px] text-slate-600 dark:text-slate-300 line-clamp-2 whitespace-pre-line">@art.Answer</p>
-                                <p class="text-[10px] text-slate-400">Keywords: @art.Keywords</p>
-                            </div>
-                            <div class="flex items-center gap-1.5 shrink-0">
-                                <button type="button" class="app-button app-button-secondary app-button-sm" @onclick="() => OpenEditArticleModal(art)">Edit</button>
-                                <button type="button" class="app-button app-button-danger app-button-sm" disabled="@busy" @onclick="() => DeleteArticleAsync(art.Id)">Delete</button>
-                            </div>
-                        </div>
-                    }
-                }
-            </div>
-        </div>
-    }
-
-    <!-- KB Article Editor Modal -->
-    @if (showArticleModal)
-    {
-        <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4" role="dialog" aria-modal="true" aria-label="Knowledge Base Article">
-            <div class="w-full max-w-xl rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-2xl overflow-hidden">
-                <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 px-4 py-3" style="background-color: #eef8fc;">
-                    <h3 class="text-sm font-bold text-slate-900">@(articleDraft.Id == 0 ? "Add Knowledge Base Article" : "Edit Knowledge Base Article")</h3>
-                    <button type="button" class="text-slate-500 hover:text-slate-800 font-bold" @onclick="() => showArticleModal = false">✕</button>
-                </div>
-                <div class="p-4 flex flex-col gap-2.5 text-xs">
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        <label class="block font-medium text-slate-700 dark:text-slate-300">
-                            Category
-                            <select @bind="articleDraft.Category" class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs">
-                                <option value="Leave & Attendance">Leave &amp; Attendance</option>
-                                <option value="Payroll & Payslips">Payroll &amp; Payslips</option>
-                                <option value="Requests & Approvals">Requests &amp; Approvals</option>
-                                <option value="Account & Access">Account &amp; Access</option>
-                                <option value="Technical Issue">Technical Issue</option>
-                                <option value="General">General</option>
-                            </select>
-                        </label>
-                        <label class="block font-medium text-slate-700 dark:text-slate-300">
-                            Sort Order
-                            <input type="number" @bind="articleDraft.SortOrder" class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs" />
-                        </label>
+                                <span class="rounded-full px-1.5 py-0.5 text-[9px] font-bold shrink-0 @(org.IsEnabled ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-500")">
+                                    @(org.IsEnabled ? "ON" : "OFF")
+                                </span>
+                            </label>
+                        }
                     </div>
-                    <label class="block font-medium text-slate-700 dark:text-slate-300">
-                        Title
-                        <input @bind="articleDraft.Title" maxlength="200" placeholder="e.g. How to apply for medical leave" class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs" />
-                    </label>
-                    <label class="block font-medium text-slate-700 dark:text-slate-300">
-                        Trigger Keywords (comma-separated)
-                        <input @bind="articleDraft.Keywords" maxlength="500" placeholder="medical leave, sick leave, certificate, apply leave" class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs" />
-                    </label>
-                    <label class="block font-medium text-slate-700 dark:text-slate-300">
-                        Bot Answer
-                        <textarea @bind="articleDraft.Answer" rows="5" maxlength="4000" placeholder="Step-by-step answer shown by the Helpdesk Assistant..." class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-xs"></textarea>
-                    </label>
-                    <label class="inline-flex items-center gap-2 font-medium text-slate-700 dark:text-slate-300">
-                        <input type="checkbox" @bind="articleDraft.IsActive" />
-                        <span>Active (bot can use this article)</span>
-                    </label>
-                </div>
-                <div class="flex justify-end gap-2 border-t border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 px-4 py-3">
-                    <button type="button" class="app-button app-button-secondary app-button-sm" @onclick="() => showArticleModal = false">Cancel</button>
-                    <button type="button"
-                            class="inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-bold shadow-2xs"
-                            style="background-color: #ADD8E6; color: #0f172a; border: 1px solid #7cc0d8;"
-                            disabled="@busy"
-                            @onclick="SaveArticleAsync">
-                        Save Article
-                    </button>
                 </div>
             </div>
         </div>
     }
-
-    <!-- Import Policy / Guide Modal -->
-    @if (showImportModal)
+    @if (showSaveKbModal)
     {
-        <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4" role="dialog" aria-modal="true" aria-label="Import Policy into Knowledge Base">
-            <div class="w-full max-w-2xl rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
-                <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 px-4 py-3" style="background-color: #eef8fc;">
-                    <div>
-                        <h3 class="text-sm font-bold text-slate-900">Import Policy / User Guide into Bot Brain</h3>
-                        <p class="text-[11px] text-slate-600">Upload a Markdown (.md) or Text (.txt) guide. Sections split automatically by headings.</p>
+        <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-[1px]" role="dialog" aria-modal="true" aria-labelledby="save-kb-modal-title">
+            <div class="w-full max-w-xl rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-2xl overflow-hidden flex flex-col">
+                <div class="flex items-center justify-between gap-2 border-b border-slate-200 dark:border-slate-800 px-4 py-3"
+                     style="@(OnlineTheme ? "background-color: #f0fdfa;" : "background-color: #eef8fc;")">
+                    <div class="min-w-0">
+                        <h3 id="save-kb-modal-title" class="text-sm font-bold text-slate-900 flex items-center gap-1.5">
+                            <AppIcon Name="bi-journal-plus" Class="text-sm" />
+                            <span>Save Answer to Knowledge Base</span>
+                        </h3>
+                        <p class="text-[11px] text-slate-600 mt-0.5">Teach the Helpdesk Bot this answer so future users receive instant help.</p>
                     </div>
-                    <button type="button" class="text-slate-500 hover:text-slate-800 font-bold" @onclick="() => showImportModal = false">✕</button>
+                    <button type="button" class="app-button app-button-ghost app-button-sm app-button-icon" disabled="@savingKb" @onclick="CloseSaveToKbModal">
+                        <AppIcon Name="close" Class="text-xs" />
+                    </button>
                 </div>
-                <div class="p-4 flex flex-col gap-3 text-xs overflow-y-auto hda-scroll flex-1">
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        <label class="block font-medium text-slate-700 dark:text-slate-300">
-                            Default Category
-                            <select @bind="importCategory" class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs">
-                                <option value="General">General</option>
-                                <option value="Leave & Attendance">Leave &amp; Attendance</option>
-                                <option value="Payroll & Payslips">Payroll &amp; Payslips</option>
-                                <option value="Requests & Approvals">Requests &amp; Approvals</option>
-                                <option value="Account & Access">Account &amp; Access</option>
-                                <option value="Technical Issue">Technical Issue</option>
-                            </select>
+
+                <div class="p-4 space-y-3 text-xs max-h-[75vh] overflow-y-auto hda-scroll">
+                    @if (!string.IsNullOrWhiteSpace(kbModalError))
+                    {
+                        <div class="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800">@kbModalError</div>
+                    }
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <label class="block">
+                            <span class="font-semibold text-slate-700 dark:text-slate-200">Category</span>
+                            <input type="text"
+                                   @bind="kbDraft.Category"
+                                   maxlength="60"
+                                   placeholder="e.g. Leave, Attendance, Payroll, General"
+                                   class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs text-slate-900 dark:text-slate-100" />
                         </label>
-                        <label class="block font-medium text-slate-700 dark:text-slate-300">
-                            Select File (.md or .txt, max 512 KB)
-                            <InputFile OnChange="OnPolicyFileSelectedAsync" accept=".md,.txt,text/markdown,text/plain" class="mt-1 block w-full text-xs text-slate-600" />
+                        <label class="block">
+                            <span class="font-semibold text-slate-700 dark:text-slate-200">Search Keywords</span>
+                            <input type="text"
+                                   @bind="kbDraft.Keywords"
+                                   maxlength="500"
+                                   placeholder="comma-separated keywords"
+                                   class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs text-slate-900 dark:text-slate-100" />
                         </label>
                     </div>
 
-                    @if (importedDrafts.Count > 0)
-                    {
-                        <div class="rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
-                            <div class="bg-slate-50 dark:bg-slate-800 px-3 py-1.5 text-[11px] font-bold text-slate-700 dark:text-slate-200 flex items-center justify-between">
-                                <span>Detected Sections (@importedDrafts.Count(x => x.Selected) selected)</span>
-                                <span class="text-[10px] font-normal text-slate-500">Uncheck any section you want to skip</span>
-                            </div>
-                            <div class="divide-y divide-slate-100 dark:divide-slate-800 max-h-64 overflow-y-auto hda-scroll">
-                                @foreach (var item in importedDrafts)
-                                {
-                                    <label class="flex items-start gap-2.5 p-2.5 cursor-pointer hover:bg-slate-50/70 dark:hover:bg-slate-800/50">
-                                        <input type="checkbox" class="mt-0.5" @bind="item.Selected" />
-                                        <div class="min-w-0 flex-1">
-                                            <p class="font-bold text-slate-900 dark:text-slate-100 truncate">@item.Title</p>
-                                            <p class="text-[11px] text-slate-500 line-clamp-2">@item.Answer</p>
-                                        </div>
-                                    </label>
-                                }
-                            </div>
-                        </div>
-                    }
-                    else
-                    {
-                        <div class="rounded-xl border border-dashed border-slate-300 dark:border-slate-700 p-5 text-center text-slate-500">
-                            Upload a `.md` or `.txt` HR policy document or handbook. Headings (`#`, `##`, `###`) become individual searchable bot articles.
-                        </div>
-                    }
+                    <label class="block">
+                        <span class="font-semibold text-slate-700 dark:text-slate-200">Article Title / Question <span class="text-rose-600">*</span></span>
+                        <input type="text"
+                               @bind="kbDraft.Title"
+                               maxlength="200"
+                               placeholder="e.g. How to reset a missed attendance punch"
+                               class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs text-slate-900 dark:text-slate-100" />
+                    </label>
+
+                    <label class="block">
+                        <span class="font-semibold text-slate-700 dark:text-slate-200">Bot Answer <span class="text-rose-600">*</span></span>
+                        <textarea @bind="kbDraft.Answer"
+                                  rows="6"
+                                  maxlength="4000"
+                                  placeholder="Write a clear, reusable step-by-step answer without personal details..."
+                                  class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-xs text-slate-900 dark:text-slate-100"></textarea>
+                        <span class="mt-1 block text-[10px] text-slate-500">Tip: Remove staff names or private ticket details before saving so the answer can safely help any user.</span>
+                    </label>
+
+                    <label class="inline-flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700 dark:text-slate-200">
+                        <input type="checkbox" class="accent-teal-700" @bind="kbDraft.IsActive" />
+                        <span>Active immediately for Helpdesk Bot responses</span>
+                    </label>
                 </div>
-                <div class="flex justify-end gap-2 border-t border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 px-4 py-3">
-                    <button type="button" class="app-button app-button-secondary app-button-sm" @onclick="() => showImportModal = false">Cancel</button>
-                    <button type="button"
-                            class="inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-bold shadow-2xs disabled:opacity-45"
-                            style="background-color: #ADD8E6; color: #0f172a; border: 1px solid #7cc0d8;"
-                            disabled="@(busy || !importedDrafts.Any(x => x.Selected))"
-                            @onclick="ImportSelectedArticlesAsync">
-                        Import @importedDrafts.Count(x => x.Selected) Article@(importedDrafts.Count(x => x.Selected) == 1 ? "" : "s")
-                    </button>
+
+                <div class="flex items-center justify-between gap-2 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 px-4 py-2.5">
+                    <span class="text-[10px] text-slate-500">Bulk file imports (.md / .txt) are managed by Developers.</span>
+                    <div class="flex items-center gap-2 shrink-0">
+                        <button type="button" class="app-button app-button-neutral app-button-sm" disabled="@savingKb" @onclick="CloseSaveToKbModal">Cancel</button>
+                        <button type="button"
+                                class="inline-flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-xs font-bold shadow-2xs transition disabled:opacity-50"
+                                style="@(OnlineTheme ? "background-color: #0f766e; color: #ffffff;" : "background-color: #ADD8E6; color: #0f172a; border: 1px solid #7cc0d8;")"
+                                disabled="@savingKb"
+                                @onclick="SaveKbArticleFromChatAsync">
+                            <AppIcon Name="save" Class="text-xs" />
+                            <span>@(savingKb ? "Saving..." : "Save to KB")</span>
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -546,6 +609,8 @@
 
 @code {
     [Parameter] public bool Embedded { get; set; }
+    [Parameter] public bool ShowSettingsTab { get; set; } = true;
+    [Parameter] public bool OnlineTheme { get; set; }
 
     private static readonly (string Key, string Label)[] QueueFilters =
     [
@@ -560,27 +625,21 @@
     private string subTab = "queue";
     private string statusFilter = "queue";
     private int selectedOrganisationId;
-    private string queueSearch = "", kbSearch = "";
+    private string queueSearch = "";
     private string agentReplyBody = "";
     private bool agentInternalNote;
     private string? error;
     private bool busy, disposed, scroll;
 
+    private bool showSaveKbModal;
+    private bool savingKb;
+    private string? kbModalError;
+    private HelpdeskArticleDto kbDraft = new() { IsActive = true, Category = "General", SortOrder = 50 };
+
     private HelpdeskAgentInboxDto inbox = new();
     private HelpdeskTicketDetailDto? selectedTicket;
-    private List<HelpdeskArticleDto> articles = [];
-    private bool showArticleModal, showImportModal;
-    private HelpdeskArticleDto articleDraft = new();
-    private string importCategory = "General";
-    private List<ImportDraftItem> importedDrafts = [];
-
-    private sealed class ImportDraftItem
-    {
-        public bool Selected { get; set; } = true;
-        public string Title { get; set; } = "";
-        public string Keywords { get; set; } = "";
-        public string Answer { get; set; } = "";
-    }
+    private HelpdeskBotSettingsDto botSettings = new();
+    private string settingsOrgSearch = "";
 
     private ElementReference agentMessagesEl;
     private readonly CancellationTokenSource stop = new();
@@ -603,19 +662,59 @@
 
     private async Task SwitchSubTabAsync(string next)
     {
+        if (!ShowSettingsTab && next == "settings") return;
         subTab = next;
-        if (next == "kb") await LoadArticlesAsync();
+        if (next == "settings") await LoadBotSettingsAsync();
         else await LoadInboxAsync();
     }
 
     private async Task RefreshCurrentAsync()
     {
-        if (subTab == "kb") await LoadArticlesAsync();
+        if (subTab == "settings") await LoadBotSettingsAsync();
         else
         {
             await LoadInboxAsync();
             if (selectedTicket != null) await SelectTicketAsync(selectedTicket.Ticket.Id);
         }
+    }
+
+    private async Task LoadBotSettingsAsync()
+    {
+        if (busy) return;
+        busy = true;
+        error = null;
+        try { botSettings = await Helpdesk.GetBotSettingsAsync(); }
+        catch (Exception ex) { Fail(ex); }
+        finally { busy = false; }
+    }
+
+    private void SetAllOrganisationsEnabled(bool enabled)
+    {
+        foreach (var org in botSettings.Organisations)
+            org.IsEnabled = enabled;
+    }
+
+    private async Task SaveBotSettingsAsync()
+    {
+        if (busy) return;
+        busy = true;
+        error = null;
+        try
+        {
+            var payload = new SaveHelpdeskBotSettingsDto
+            {
+                IsEnabled = botSettings.IsEnabled,
+                ScopeMode = botSettings.ScopeMode,
+                EnabledOrganisationIds = botSettings.Organisations.Where(o => o.IsEnabled).Select(o => o.OrganisationId).ToList()
+            };
+            var result = await Helpdesk.SaveBotSettingsAsync(payload);
+            if (!result.Success) { error = result.Message; Toast.Error(result.Message); return; }
+            Toast.Success(result.Message);
+            botSettings = await Helpdesk.GetBotSettingsAsync();
+            HelpdeskNotifier.NotifyChanged();
+        }
+        catch (Exception ex) { Fail(ex); }
+        finally { busy = false; }
     }
 
     private async Task SetStatusFilterAsync(string filterKey)
@@ -696,6 +795,90 @@
         finally { busy = false; }
     }
 
+    private void OpenSaveToKbModal(string? specificAnswer)
+    {
+        if (selectedTicket == null) return;
+        var t = selectedTicket.Ticket;
+        var suggestedAnswer = !string.IsNullOrWhiteSpace(specificAnswer)
+            ? specificAnswer.Trim()
+            : selectedTicket.Messages
+                .Where(m => m.SenderType == HelpdeskSenderTypes.Agent && !m.IsInternalNote && !string.IsNullOrWhiteSpace(m.Body))
+                .Select(m => m.Body.Trim())
+                .LastOrDefault()
+              ?? (string.IsNullOrWhiteSpace(agentReplyBody) ? "" : agentReplyBody.Trim());
+
+        var keywordParts = new List<string>();
+        if (!string.IsNullOrWhiteSpace(t.Category)) keywordParts.Add(t.Category.Trim().ToLowerInvariant());
+        foreach (var word in (t.Subject ?? "").Split([' ', ',', '.', '?', '!', '/', '-', ':', ';'], StringSplitOptions.RemoveEmptyEntries))
+        {
+            var clean = word.Trim().ToLowerInvariant();
+            if (clean.Length >= 3 && !keywordParts.Contains(clean))
+                keywordParts.Add(clean);
+            if (keywordParts.Count >= 8) break;
+        }
+
+        kbDraft = new HelpdeskArticleDto
+        {
+            Id = 0,
+            Category = string.IsNullOrWhiteSpace(t.Category) ? "General" : t.Category.Trim(),
+            Title = t.Subject?.Trim() ?? "",
+            Keywords = string.Join(", ", keywordParts),
+            Answer = suggestedAnswer,
+            IsActive = true,
+            SortOrder = 50
+        };
+        kbModalError = null;
+        showSaveKbModal = true;
+    }
+
+    private void CloseSaveToKbModal()
+    {
+        if (savingKb) return;
+        showSaveKbModal = false;
+        kbModalError = null;
+    }
+
+    private async Task SaveKbArticleFromChatAsync()
+    {
+        if (savingKb) return;
+        kbModalError = null;
+        if (string.IsNullOrWhiteSpace(kbDraft.Title))
+        {
+            kbModalError = "Enter an article title or question.";
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(kbDraft.Answer))
+        {
+            kbModalError = "Enter the bot answer before saving to the Knowledge Base.";
+            return;
+        }
+
+        savingKb = true;
+        try
+        {
+            kbDraft.Id = 0; // Support Center always creates a new KB entry; editing existing entries is Developer-only.
+            var result = await Helpdesk.SaveArticleAsync(kbDraft);
+            if (!result.Success)
+            {
+                kbModalError = result.Message;
+                return;
+            }
+            showSaveKbModal = false;
+            Toast.Success("Saved to Knowledge Base! The Helpdesk Bot can now answer this automatically.");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Save to KB from Support Center failed");
+            kbModalError = ex is UnauthorizedAccessException or InvalidOperationException
+                ? ex.Message
+                : "Could not save article to Knowledge Base.";
+        }
+        finally
+        {
+            savingKb = false;
+        }
+    }
+
     private async Task ReopenAsAgentAsync()
     {
         if (busy || selectedTicket == null) return;
@@ -706,198 +889,6 @@
             selectedTicket = await Helpdesk.ReopenTicketAsync(selectedTicket.Ticket.Id);
             inbox = await Helpdesk.GetAgentInboxAsync(statusFilter, selectedOrganisationId, queueSearch);
             scroll = true;
-        }
-        catch (Exception ex) { Fail(ex); }
-        finally { busy = false; }
-    }
-
-    private async Task LoadArticlesAsync()
-    {
-        if (busy) return;
-        busy = true;
-        error = null;
-        try { articles = await Helpdesk.GetArticlesAsync(kbSearch); }
-        catch (Exception ex) { Fail(ex); }
-        finally { busy = false; }
-    }
-
-    private void OpenNewArticleModal()
-    {
-        articleDraft = new HelpdeskArticleDto { Category = "General", IsActive = true, SortOrder = (articles.Count + 1) * 10 };
-        showArticleModal = true;
-    }
-
-    private void OpenImportModal()
-    {
-        importCategory = "General";
-        importedDrafts = [];
-        showImportModal = true;
-    }
-
-    private async Task OnPolicyFileSelectedAsync(InputFileChangeEventArgs e)
-    {
-        error = null;
-        importedDrafts = [];
-        var file = e.File;
-        if (file == null) return;
-        if (file.Size > 512 * 1024)
-        {
-            error = "Policy file must be 512 KB or smaller.";
-            return;
-        }
-        try
-        {
-            using var reader = new StreamReader(file.OpenReadStream(512 * 1024));
-            var raw = await reader.ReadToEndAsync();
-            importedDrafts = ParsePolicySections(file.Name, raw);
-            if (importedDrafts.Count == 0)
-                error = "No readable text sections were found in the uploaded file.";
-        }
-        catch (Exception ex) { Fail(ex); }
-    }
-
-    private static List<ImportDraftItem> ParsePolicySections(string fileName, string content)
-    {
-        var results = new List<ImportDraftItem>();
-        var lines = content.Replace("\r\n", "\n").Split('\n');
-        var currentTitle = Path.GetFileNameWithoutExtension(fileName);
-        var buffer = new List<string>();
-
-        void Flush()
-        {
-            var body = string.Join("\n", buffer).Trim();
-            buffer.Clear();
-            if (body.Length < 15) return;
-            if (body.Length > 3900) body = body[..3900].TrimEnd() + "...";
-            var cleanTitle = currentTitle.Trim('#', ' ', '\t');
-            if (string.IsNullOrWhiteSpace(cleanTitle)) cleanTitle = "Policy Guide";
-            if (cleanTitle.Length > 190) cleanTitle = cleanTitle[..190];
-            var words = System.Text.RegularExpressions.Regex.Matches(cleanTitle.ToLowerInvariant(), "[a-z0-9]{3,}")
-                .Select(m => m.Value)
-                .Distinct()
-                .Take(12);
-            results.Add(new ImportDraftItem
-            {
-                Selected = true,
-                Title = cleanTitle,
-                Keywords = string.Join(", ", words),
-                Answer = body
-            });
-        }
-
-        foreach (var line in lines)
-        {
-            var trimmed = line.Trim();
-            if (trimmed.StartsWith("#", StringComparison.Ordinal))
-            {
-                Flush();
-                currentTitle = trimmed.TrimStart('#').Trim();
-            }
-            else
-            {
-                buffer.Add(line);
-            }
-        }
-        Flush();
-        return results;
-    }
-
-    private async Task ImportSelectedArticlesAsync()
-    {
-        if (busy) return;
-        var selected = importedDrafts.Where(x => x.Selected).ToList();
-        if (selected.Count == 0) return;
-        busy = true;
-        error = null;
-        var imported = 0;
-        try
-        {
-            var order = (articles.Count + 1) * 10;
-            foreach (var item in selected)
-            {
-                var res = await Helpdesk.SaveArticleAsync(new HelpdeskArticleDto
-                {
-                    Category = importCategory,
-                    Title = item.Title,
-                    Keywords = item.Keywords,
-                    Answer = item.Answer,
-                    IsActive = true,
-                    SortOrder = order
-                });
-                if (res.Success)
-                {
-                    imported++;
-                    order += 10;
-                }
-            }
-            Toast.Success($"Imported {imported} Knowledge Base article{(imported == 1 ? "" : "s")}.");
-            showImportModal = false;
-            importedDrafts = [];
-            articles = await Helpdesk.GetArticlesAsync(kbSearch);
-        }
-        catch (Exception ex) { Fail(ex); }
-        finally { busy = false; }
-    }
-
-    private void OpenEditArticleModal(HelpdeskArticleDto art)
-    {
-        articleDraft = new HelpdeskArticleDto
-        {
-            Id = art.Id,
-            Category = art.Category,
-            Title = art.Title,
-            Keywords = art.Keywords,
-            Answer = art.Answer,
-            IsActive = art.IsActive,
-            SortOrder = art.SortOrder
-        };
-        showArticleModal = true;
-    }
-
-    private void OpenKbFromTicket()
-    {
-        if (selectedTicket == null) return;
-        var lastAgentMsg = selectedTicket.Messages.LastOrDefault(m => m.SenderType == HelpdeskSenderTypes.Agent && !m.IsInternalNote)?.Body ?? "";
-        articleDraft = new HelpdeskArticleDto
-        {
-            Category = selectedTicket.Ticket.Category,
-            Title = selectedTicket.Ticket.Subject,
-            Keywords = selectedTicket.Ticket.Category.ToLowerInvariant(),
-            Answer = lastAgentMsg,
-            IsActive = true,
-            SortOrder = 100
-        };
-        showArticleModal = true;
-    }
-
-    private async Task SaveArticleAsync()
-    {
-        if (busy) return;
-        busy = true;
-        error = null;
-        try
-        {
-            var result = await Helpdesk.SaveArticleAsync(articleDraft);
-            if (!result.Success) { error = result.Message; Toast.Error(result.Message); return; }
-            Toast.Success(result.Message);
-            showArticleModal = false;
-            articles = await Helpdesk.GetArticlesAsync(kbSearch);
-        }
-        catch (Exception ex) { Fail(ex); }
-        finally { busy = false; }
-    }
-
-    private async Task DeleteArticleAsync(int id)
-    {
-        if (busy) return;
-        busy = true;
-        error = null;
-        try
-        {
-            var result = await Helpdesk.DeleteArticleAsync(id);
-            if (!result.Success) { error = result.Message; Toast.Error(result.Message); return; }
-            Toast.Success(result.Message);
-            articles = await Helpdesk.GetArticlesAsync(kbSearch);
         }
         catch (Exception ex) { Fail(ex); }
         finally { busy = false; }

@@ -59,6 +59,12 @@ public sealed class HelpdeskMessage
     public HelpdeskTicket Ticket { get; set; } = null!;
 }
 
+public static class HelpdeskScopeModes
+{
+    public const string Global = "Global";
+    public const string SelectedOrganisations = "SelectedOrganisations";
+}
+
 public sealed class HelpdeskArticle
 {
     public int Id { get; set; }
@@ -68,5 +74,22 @@ public sealed class HelpdeskArticle
     public string Answer { get; set; } = "";
     public bool IsActive { get; set; } = true;
     public int SortOrder { get; set; }
+    public DateTime UpdatedAtUtc { get; set; }
+}
+
+public sealed class HelpdeskSettings
+{
+    public int Id { get; set; } = 1;
+    public bool IsEnabled { get; set; } = true;
+    public string ScopeMode { get; set; } = HelpdeskScopeModes.Global;
+    public int? UpdatedByUserId { get; set; }
+    public DateTime UpdatedAtUtc { get; set; }
+}
+
+public sealed class HelpdeskOrganisationAccess
+{
+    public int OrganisationId { get; set; }
+    public bool IsEnabled { get; set; } = true;
+    public int? UpdatedByUserId { get; set; }
     public DateTime UpdatedAtUtc { get; set; }
 }

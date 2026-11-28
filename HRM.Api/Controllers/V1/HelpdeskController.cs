@@ -115,4 +115,16 @@ public sealed class HelpdeskController(HelpdeskServiceContracts.IOperations serv
     {
         public int articleId { get; set; }
     }
+
+    [HttpGet("availability")]
+    public async Task<ActionResult<HelpdeskAvailabilityDto>> GetAvailability()
+        => Ok(await service.GetAvailabilityAsync());
+
+    [HttpGet("bot-settings")]
+    public async Task<ActionResult<HelpdeskBotSettingsDto>> GetBotSettings()
+        => Ok(await service.GetBotSettingsAsync());
+
+    [HttpPost("save-bot-settings")]
+    public async Task<ActionResult<ServiceResult>> SaveBotSettings([FromBody] SaveHelpdeskBotSettingsDto model)
+        => Ok(await service.SaveBotSettingsAsync(model));
 }

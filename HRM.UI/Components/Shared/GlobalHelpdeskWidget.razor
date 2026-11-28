@@ -1,0 +1,677 @@
+@implements IAsyncDisposable
+@using HRM.DTOs.Helpdesk
+@using HRM.Models
+@using HRM.UI.Helpers
+@inject HRM.Services.Contracts.HelpdeskServiceContracts.IOperations Helpdesk
+@inject HRM.UI.Services.HelpdeskAvailabilityNotifier HelpdeskNotifier
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@inject ILogger<GlobalHelpdeskWidget> Logger
+
+@if (availabilityLoaded && isChatbotAvailable && !IsOnFullHelpdeskPage)
+{
+    @if (isOpen)
+    {
+        <section class="ghd-panel text-slate-900 dark:text-slate-100" role="dialog" aria-label="GHR Helpdesk Assistant">
+            <!-- Header -->
+            <div class="shrink-0 flex items-center justify-between gap-2 px-3.5 py-2.5 border-b border-slate-200/80 dark:border-slate-800"
+                 style="@HeaderStyle">
+                <div class="flex items-center gap-2 min-w-0">
+                    <div class="h-8 w-8 rounded-full flex items-center justify-center shrink-0"
+                         style="@(IsSuperAdminPortal ? "background-color: #ffffff; color: #0369a1;" : "background-color: rgba(255,255,255,0.18); color: #ffffff;")">
+                        <AppIcon Name="@(activeTicket?.Ticket.Status == HelpdeskTicketStatuses.AgentAssigned ? "bi-headset" : "bi-robot")" Class="text-sm" />
+                    </div>
+                    <div class="min-w-0">
+                        <h2 class="text-xs font-bold truncate">GHR Helpdesk</h2>
+                        <p class="text-[10px] opacity-85 truncate">
+                            @(activeTicket == null
+                                ? "Bot + Live Officers · All Organisations"
+                                : $"{activeTicket.Ticket.TicketNumber} · {StatusLabel(activeTicket.Ticket.Status)}")
+                        </p>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-1 shrink-0">
+                    <button type="button"
+                            class="inline-flex items-center justify-center h-7 px-2 rounded-lg text-[11px] font-semibold transition hover:opacity-85"
+                            style="@HeaderBtnStyle"
+                            title="View my support tickets"
+                            @onclick="ToggleHistoryViewAsync">
+                        <AppIcon Name="@(view == WidgetView.History ? "add" : "history")" Class="text-xs mr-1" />
+                        <span>@(view == WidgetView.History ? "New" : $"Tickets ({tickets.Count})")</span>
+                    </button>
+                    <a href="@FullHelpdeskHref"
+                       class="inline-flex items-center justify-center h-7 w-7 rounded-lg transition hover:opacity-85"
+                       style="@HeaderBtnStyle"
+                       title="Open full Helpdesk view"
+                       aria-label="Open full Helpdesk view"
+                       @onclick="CloseWidget">
+                        <AppIcon Name="fullscreen" Class="text-xs" />
+                    </a>
+                    <button type="button"
+                            class="inline-flex items-center justify-center h-7 w-7 rounded-lg transition hover:opacity-85"
+                            style="@HeaderBtnStyle"
+                            title="Minimize Helpdesk"
+                            aria-label="Minimize Helpdesk"
+                            @onclick="CloseWidget">
+                        <AppIcon Name="close" Class="text-xs" />
+                    </button>
+                </div>
+            </div>
+
+            @if (error != null)
+            {
+                <div role="alert" class="shrink-0 flex items-center justify-between gap-2 bg-rose-50 dark:bg-rose-950/60 border-b border-rose-200 dark:border-rose-800 px-3 py-1.5 text-[11px] text-rose-800 dark:text-rose-200">
+                    <span class="truncate">@error</span>
+                    <button type="button" class="font-bold shrink-0" @onclick="() => error = null">✕</button>
+                </div>
+            }
+
+            @if (view == WidgetView.History)
+            {
+                <!-- My Tickets List -->
+                <div class="ghd-body">
+                    <div class="flex items-center justify-between px-1">
+                        <span class="text-[11px] font-bold text-slate-700 dark:text-slate-200">My Recent Tickets</span>
+                        <button type="button" class="text-[11px] font-semibold text-teal-700 dark:text-teal-300 hover:underline" @onclick="StartNewChat">
+                            + New Chat
+                        </button>
+                    </div>
+                    @if (loadingTickets)
+                    {
+                        <p class="p-4 text-center text-xs text-slate-400">Loading tickets…</p>
+                    }
+                    else if (tickets.Count == 0)
+                    {
+                        <div class="my-auto text-center p-4 space-y-2">
+                            <p class="text-xs font-semibold text-slate-700 dark:text-slate-200">No support chats yet</p>
+                            <button type="button" class="app-button app-button-primary app-button-sm" @onclick="StartNewChat">Start a Helpdesk Chat</button>
+                        </div>
+                    }
+                    else
+                    {
+                        @foreach (var item in tickets)
+                        {
+                            <button type="button"
+                                    @key="item.Id"
+                                    class="w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-2.5 text-left hover:border-teal-400 transition flex flex-col gap-1"
+                                    disabled="@busy"
+                                    @onclick="() => OpenTicketAsync(item.Id)">
+                                <div class="flex items-center justify-between gap-2 w-full">
+                                    <span class="font-mono text-[10px] font-bold text-blue-700 dark:text-blue-300">@item.TicketNumber</span>
+                                    <span class="rounded-full px-1.5 py-0.5 text-[9px] font-semibold @StatusBadgeClass(item.Status)">@StatusLabel(item.Status)</span>
+                                </div>
+                                <p class="text-xs font-semibold text-slate-900 dark:text-slate-100 truncate w-full">@item.Subject</p>
+                                <div class="flex items-center justify-between text-[10px] text-slate-400">
+                                    <span>@item.UpdatedAtUtc.AddHours(5).ToString("dd MMM HH:mm")</span>
+                                    @if (item.UnreadCount > 0)
+                                    {
+                                        <span class="rounded-full bg-teal-700 px-1.5 py-0.2 text-[9px] font-bold text-white">@item.UnreadCount new</span>
+                                    }
+                                </div>
+                            </button>
+                        }
+                    }
+                </div>
+            }
+            else if (view == WidgetView.Home || activeTicket == null)
+            {
+                <!-- Welcome + Instant Quick Prompts -->
+                <div class="ghd-body">
+                    <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 space-y-2 shadow-2xs">
+                        <p class="text-xs font-bold text-slate-900 dark:text-slate-100">Hi! How can I help you?</p>
+                        <p class="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                            Ask about your live leave balance, pending requests, profile, roles, or how to use any module in GHR. If needed, a real Helpdesk Officer will take over here.
+                        </p>
+                    </div>
+
+                    <div class="space-y-1.5">
+                        <p class="px-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">Quick Actions</p>
+                        <div class="flex flex-wrap gap-1.5">
+                            @foreach (var q in QuickPrompts)
+                            {
+                                <button type="button"
+                                        disabled="@busy"
+                                        class="inline-flex items-center gap-1 rounded-full border border-teal-200 dark:border-teal-800 bg-white dark:bg-slate-900 px-2.5 py-1 text-[11px] font-semibold text-teal-800 dark:text-teal-200 hover:bg-teal-50 dark:hover:bg-teal-950/60 transition"
+                                        @onclick="() => QuickAskAsync(q.Category, q.Prompt)">
+                                    <AppIcon Name="@q.Icon" Class="text-[10px]" />
+                                    <span>@q.Label</span>
+                                </button>
+                            }
+                        </div>
+                    </div>
+
+                    @if (tickets.Count > 0)
+                    {
+                        var latest = tickets[0];
+                        <div class="mt-auto pt-2">
+                            <p class="px-1 mb-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">Continue Last Chat</p>
+                            <button type="button"
+                                    class="w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-2.5 text-left hover:border-teal-400 transition flex items-center justify-between gap-2"
+                                    disabled="@busy"
+                                    @onclick="() => OpenTicketAsync(latest.Id)">
+                                <div class="min-w-0">
+                                    <p class="text-xs font-semibold text-slate-800 dark:text-slate-100 truncate">@latest.Subject</p>
+                                    <p class="text-[10px] text-slate-500">@latest.TicketNumber · @StatusLabel(latest.Status)</p>
+                                </div>
+                                <AppIcon Name="chevron_right" Class="text-xs text-slate-400 shrink-0" />
+                            </button>
+                        </div>
+                    }
+                </div>
+
+                <!-- Start Chat Composer -->
+                <fieldset disabled="@busy" class="shrink-0 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-2.5">
+                    <div class="ghd-composer">
+                        <textarea @ref="composerEl"
+                                  @bind="draft"
+                                  @bind:event="oninput"
+                                  rows="1"
+                                  maxlength="4000"
+                                  placeholder="Ask Helpdesk anything… (Enter to send)"
+                                  class="ghd-textarea"></textarea>
+                        <button type="button"
+                                class="inline-flex items-center justify-center h-8 w-8 rounded-lg shrink-0 transition disabled:opacity-40"
+                                style="@LauncherStyle"
+                                disabled="@(busy || string.IsNullOrWhiteSpace(draft))"
+                                aria-label="Send message"
+                                @onclick="SubmitMessageAsync">
+                            <AppIcon Name="bi-send-fill" Class="text-xs" />
+                        </button>
+                    </div>
+                </fieldset>
+            }
+            else
+            {
+                var t = activeTicket.Ticket;
+                <!-- Active Chat Mini Action Strip -->
+                <div class="shrink-0 flex items-center justify-between gap-1.5 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-1.5 text-[11px]">
+                    <span class="truncate font-semibold text-slate-700 dark:text-slate-200">@t.Subject</span>
+                    <div class="flex items-center gap-1 shrink-0">
+                        @if (activeTicket.CanEscalate)
+                        {
+                            <button type="button"
+                                    class="rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-0.5 text-[10px] font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50"
+                                    disabled="@busy"
+                                    @onclick="EscalateAsync">
+                                Talk to Person
+                            </button>
+                        }
+                        @if (activeTicket.CanResolve)
+                        {
+                            <button type="button"
+                                    class="rounded-md bg-emerald-600 px-2 py-0.5 text-[10px] font-semibold text-white hover:bg-emerald-700"
+                                    disabled="@busy"
+                                    @onclick="ResolveAsync">
+                                Solved
+                            </button>
+                        }
+                        <button type="button"
+                                class="rounded-md border border-slate-200 dark:border-slate-700 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-50"
+                                title="Start a new chat"
+                                @onclick="StartNewChat">
+                            + New
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Messages -->
+                <div @ref="messagesEl" class="ghd-body" aria-live="polite">
+                    @foreach (var msg in activeTicket.Messages)
+                    {
+                        var localTime = msg.SentAtUtc.AddHours(5);
+                        if (msg.SenderType == HelpdeskSenderTypes.System)
+                        {
+                            <div @key="msg.Id" class="flex justify-center my-0.5">
+                                <span class="rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-0.5 text-[10px] text-slate-600 dark:text-slate-300 text-center">
+                                    @msg.Body
+                                </span>
+                            </div>
+                        }
+                        else
+                        {
+                            var isUser = msg.SenderType == HelpdeskSenderTypes.User;
+                            var isBot = msg.SenderType == HelpdeskSenderTypes.Bot;
+                            <div @key="msg.Id" class="flex @(isUser ? "justify-end" : "justify-start")">
+                                <div class="@(isUser ? "ghd-bubble-user" : isBot ? "ghd-bubble-bot" : "ghd-bubble-agent")">
+                                    @if (!isUser)
+                                    {
+                                        <div class="mb-0.5 flex items-center gap-1 text-[10px] font-bold text-slate-600 dark:text-slate-300">
+                                            <AppIcon Name="@(isBot ? "bi-robot" : "bi-headset")" Class="text-[10px]" />
+                                            <span>@msg.SenderName</span>
+                                        </div>
+                                    }
+                                    @if (isUser)
+                                    {
+                                        <p class="whitespace-pre-wrap break-words">@msg.Body</p>
+                                    }
+                                    else
+                                    {
+                                        var parsed = HelpdeskMessageFormatter.SplitRelatedGuides(msg.Body);
+                                        <div class="break-words space-y-1">@HelpdeskMessageFormatter.Format(parsed.MainBody)</div>
+                                        @if (parsed.RelatedGuides.Count > 0)
+                                        {
+                                            <div class="mt-2 pt-1.5 border-t border-slate-200/80 dark:border-slate-700/80 space-y-1">
+                                                <p class="text-[9px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Related guides — click to ask</p>
+                                                <div class="flex flex-col gap-1">
+                                                    @foreach (var guide in parsed.RelatedGuides)
+                                                    {
+                                                        var topic = guide;
+                                                        <button type="button"
+                                                                disabled="@busy"
+                                                                class="w-full inline-flex items-center justify-between gap-1.5 rounded-lg border border-teal-200 dark:border-teal-800 bg-teal-50/75 dark:bg-teal-950/50 px-2 py-1 text-[11px] font-semibold text-teal-800 dark:text-teal-200 hover:bg-teal-100 dark:hover:bg-teal-900/60 disabled:opacity-45 transition text-left"
+                                                                @onclick="() => AskRelatedGuideAsync(topic)">
+                                                            <span class="truncate">@topic</span>
+                                                            <AppIcon Name="chevron_right" Class="text-[10px] shrink-0" />
+                                                        </button>
+                                                    }
+                                                </div>
+                                            </div>
+                                        }
+                                    }
+                                    <div class="mt-0.5 text-right text-[9px] @(isUser ? "text-teal-100/85" : "text-slate-400")">
+                                        @localTime.ToString("HH:mm")
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    }
+                </div>
+
+                <!-- Reply Composer -->
+                <fieldset disabled="@busy" class="shrink-0 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-2.5">
+                    <div class="ghd-composer">
+                        <textarea @ref="composerEl"
+                                  @bind="draft"
+                                  @bind:event="oninput"
+                                  rows="1"
+                                  maxlength="4000"
+                                  placeholder="@(t.Status == HelpdeskTicketStatuses.WaitingForAgent ? "Add more details while waiting for an officer..." : "Type a message… (Enter to send)")"
+                                  class="ghd-textarea"></textarea>
+                        <button type="button"
+                                class="inline-flex items-center justify-center h-8 w-8 rounded-lg shrink-0 transition disabled:opacity-40"
+                                style="@LauncherStyle"
+                                disabled="@(busy || string.IsNullOrWhiteSpace(draft))"
+                                aria-label="Send message"
+                                @onclick="SubmitMessageAsync">
+                            <AppIcon Name="bi-send-fill" Class="text-xs" />
+                        </button>
+                    </div>
+                </fieldset>
+            }
+        </section>
+    }
+
+    <!-- Floating Bottom-Right Launcher Button -->
+    <button type="button"
+            class="ghd-launcher"
+            style="@LauncherStyle"
+            aria-label="@(isOpen ? "Close Helpdesk Chat" : "Open Helpdesk Chat")"
+            @onclick="ToggleOpenAsync">
+        <AppIcon Name="@(isOpen ? "close" : "bi-headset")" Class="text-base" />
+        <span class="hidden sm:inline">@(isOpen ? "Close" : "Helpdesk")</span>
+        @if (!isOpen && TotalUnread > 0)
+        {
+            <span class="inline-flex items-center justify-center min-w-[1.15rem] h-4 rounded-full bg-rose-600 px-1 text-[10px] font-bold text-white">
+                @(TotalUnread > 9 ? "9+" : TotalUnread.ToString())
+            </span>
+        }
+    </button>
+}
+
+@code {
+    private enum WidgetView { Home, Chat, History }
+    private sealed record QuickPrompt(string Label, string Category, string Icon, string Prompt);
+
+    private static readonly QuickPrompt[] QuickPrompts =
+    [
+        new("Leave balance", "Leave & Attendance", "calendar", "Check my leave balance"),
+        new("Pending requests", "Requests & Approvals", "document", "Show my pending requests and leave status"),
+        new("My supervisor", "General", "person", "Who is my supervisor and what is my department?"),
+        new("Portal access", "Account & Access", "bi-shield-lock", "Check my portal access and assigned roles"),
+        new("Setup WhatsApp", "General", "chat", "How to set up WhatsApp in the Communication Hub?"),
+        new("Setup Telegram", "General", "chat", "How to set up Telegram in the Communication Hub?")
+    ];
+
+    private bool isOpen, busy, loadingTickets, disposed, scroll, composerBound;
+    private bool availabilityLoaded, isChatbotAvailable;
+    private WidgetView view = WidgetView.Home;
+    private List<HelpdeskTicketSummaryDto> tickets = [];
+    private HelpdeskTicketDetailDto? activeTicket;
+    private string draft = "";
+    private string? error;
+
+    private ElementReference messagesEl;
+    private ElementReference composerEl;
+    private DotNetObjectReference<GlobalHelpdeskWidget>? dotNetRef;
+    private CancellationTokenSource? pollCts;
+    private Task? pollTask;
+
+    private string CurrentPath => new Uri(Navigation.Uri).AbsolutePath;
+    private bool IsSuperAdminPortal => CurrentPath.StartsWith("/superadmin", StringComparison.OrdinalIgnoreCase);
+    private bool IsAdminPortal => CurrentPath.StartsWith("/admin", StringComparison.OrdinalIgnoreCase);
+    private bool IsOnFullHelpdeskPage => CurrentPath.StartsWith("/online/helpdesk", StringComparison.OrdinalIgnoreCase)
+        || CurrentPath.StartsWith("/admin/helpdesk", StringComparison.OrdinalIgnoreCase);
+
+    private string FullHelpdeskHref => IsAdminPortal ? "/admin/helpdesk" : "/online/helpdesk";
+    private int TotalUnread => tickets.Sum(t => t.UnreadCount);
+
+    private string LauncherStyle => IsSuperAdminPortal
+        ? "background-color: #ADD8E6; color: #0f172a; border: 1px solid #7cc0d8;"
+        : "background-color: #0f766e; color: #ffffff; border: 1px solid #115e59;";
+
+    private string HeaderStyle => IsSuperAdminPortal
+        ? "background-color: #ADD8E6; color: #0f172a;"
+        : "background-color: #0f766e; color: #ffffff;";
+
+    private string HeaderBtnStyle => IsSuperAdminPortal
+        ? "background-color: rgba(255,255,255,0.55); color: #0f172a;"
+        : "background-color: rgba(255,255,255,0.16); color: #ffffff;";
+
+    protected override async Task OnInitializedAsync()
+    {
+        Navigation.LocationChanged += HandleLocationChanged;
+        HelpdeskNotifier.Changed += HandleAvailabilityChanged;
+        await CheckAvailabilityAsync();
+    }
+
+    private void HandleAvailabilityChanged()
+    {
+        _ = InvokeAsync(async () =>
+        {
+            await CheckAvailabilityAsync();
+            StateHasChanged();
+        });
+    }
+
+    private async Task CheckAvailabilityAsync()
+    {
+        try
+        {
+            var status = await Helpdesk.GetAvailabilityAsync();
+            isChatbotAvailable = status.IsAvailable;
+            if (!isChatbotAvailable && isOpen) CloseWidget();
+        }
+        catch
+        {
+            isChatbotAvailable = false;
+        }
+        finally
+        {
+            availabilityLoaded = true;
+        }
+    }
+
+    private void HandleLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    {
+        if (IsOnFullHelpdeskPage && isOpen)
+        {
+            CloseWidget();
+        }
+        _ = InvokeAsync(async () =>
+        {
+            await CheckAvailabilityAsync();
+            StateHasChanged();
+        });
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (scroll && isOpen && view == WidgetView.Chat && activeTicket != null)
+        {
+            scroll = false;
+            try { await JS.InvokeVoidAsync("hrmChat.scrollToLatest", messagesEl, true); } catch { }
+        }
+
+        if (isOpen && view != WidgetView.History && !composerBound)
+        {
+            composerBound = true;
+            dotNetRef ??= DotNetObjectReference.Create(this);
+            try { await JS.InvokeVoidAsync("hrmChat.bindComposer", composerEl, dotNetRef); }
+            catch { composerBound = false; }
+        }
+        else if (!isOpen || view == WidgetView.History)
+        {
+            composerBound = false;
+        }
+    }
+
+    private async Task ToggleOpenAsync()
+    {
+        if (isOpen)
+        {
+            CloseWidget();
+            return;
+        }
+        isOpen = true;
+        composerBound = false;
+        error = null;
+        await LoadTicketsAsync();
+        StartPolling();
+    }
+
+    private void CloseWidget()
+    {
+        isOpen = false;
+        composerBound = false;
+        StopPolling();
+    }
+
+    private void StartNewChat()
+    {
+        activeTicket = null;
+        view = WidgetView.Home;
+        composerBound = false;
+        error = null;
+    }
+
+    private async Task ToggleHistoryViewAsync()
+    {
+        if (view == WidgetView.History)
+        {
+            StartNewChat();
+            return;
+        }
+        view = WidgetView.History;
+        composerBound = false;
+        await LoadTicketsAsync();
+    }
+
+    private async Task LoadTicketsAsync()
+    {
+        loadingTickets = true;
+        try { tickets = await Helpdesk.GetMyTicketsAsync(); }
+        catch (Exception ex) { Fail(ex); }
+        finally { loadingTickets = false; }
+    }
+
+    private async Task OpenTicketAsync(long id)
+    {
+        if (busy) return;
+        busy = true;
+        error = null;
+        try
+        {
+            activeTicket = await Helpdesk.GetTicketAsync(id);
+            view = WidgetView.Chat;
+            composerBound = false;
+            scroll = true;
+            tickets = await Helpdesk.GetMyTicketsAsync();
+        }
+        catch (Exception ex) { Fail(ex); }
+        finally { busy = false; }
+    }
+
+    private async Task QuickAskAsync(string category, string prompt)
+    {
+        if (busy) return;
+        busy = true;
+        error = null;
+        try
+        {
+            activeTicket = await Helpdesk.CreateTicketAsync(category, prompt, prompt);
+            view = WidgetView.Chat;
+            composerBound = false;
+            scroll = true;
+            tickets = await Helpdesk.GetMyTicketsAsync();
+        }
+        catch (Exception ex) { Fail(ex); }
+        finally { busy = false; }
+    }
+
+    [JSInvokable]
+    public async Task SubmitFromKeyboardAsync()
+    {
+        if (disposed || busy || !isOpen || string.IsNullOrWhiteSpace(draft)) return;
+        await InvokeAsync(async () =>
+        {
+            await SubmitMessageAsync();
+            StateHasChanged();
+        });
+    }
+
+    private async Task AskRelatedGuideAsync(string topic)
+    {
+        if (busy || activeTicket == null || string.IsNullOrWhiteSpace(topic)) return;
+        draft = topic;
+        await SubmitMessageAsync();
+    }
+
+    private async Task SubmitMessageAsync()
+    {
+        if (busy || string.IsNullOrWhiteSpace(draft)) return;
+        var text = draft.Trim();
+        busy = true;
+        error = null;
+        try
+        {
+            if (activeTicket == null || view == WidgetView.Home)
+            {
+                activeTicket = await Helpdesk.CreateTicketAsync("General", "", text);
+                view = WidgetView.Chat;
+                composerBound = false;
+            }
+            else
+            {
+                activeTicket = await Helpdesk.SendUserMessageAsync(activeTicket.Ticket.Id, text);
+            }
+            draft = "";
+            try { await JS.InvokeVoidAsync("hrmChat.resetComposerHeight", composerEl); } catch { }
+            tickets = await Helpdesk.GetMyTicketsAsync();
+            scroll = true;
+        }
+        catch (Exception ex) { Fail(ex); }
+        finally { busy = false; }
+    }
+
+    private async Task EscalateAsync()
+    {
+        if (busy || activeTicket == null) return;
+        busy = true;
+        error = null;
+        try
+        {
+            activeTicket = await Helpdesk.EscalateToAgentAsync(activeTicket.Ticket.Id, "Requester clicked 'Talk to Person' in floating Helpdesk widget.");
+            tickets = await Helpdesk.GetMyTicketsAsync();
+            scroll = true;
+        }
+        catch (Exception ex) { Fail(ex); }
+        finally { busy = false; }
+    }
+
+    private async Task ResolveAsync()
+    {
+        if (busy || activeTicket == null) return;
+        busy = true;
+        error = null;
+        try
+        {
+            activeTicket = await Helpdesk.MarkResolvedByUserAsync(activeTicket.Ticket.Id, 5);
+            tickets = await Helpdesk.GetMyTicketsAsync();
+            scroll = true;
+        }
+        catch (Exception ex) { Fail(ex); }
+        finally { busy = false; }
+    }
+
+    private void StartPolling()
+    {
+        StopPolling();
+        var cts = new CancellationTokenSource();
+        pollCts = cts;
+        pollTask = Task.Run(async () =>
+        {
+            using var timer = new PeriodicTimer(TimeSpan.FromSeconds(5));
+            try
+            {
+                while (await timer.WaitForNextTickAsync(cts.Token))
+                {
+                    await InvokeAsync(async () =>
+                    {
+                        if (disposed || !isOpen || busy) return;
+                        try
+                        {
+                            tickets = await Helpdesk.GetMyTicketsAsync();
+                            if (view == WidgetView.Chat && activeTicket != null)
+                            {
+                                var prev = activeTicket.Messages.Count;
+                                activeTicket = await Helpdesk.GetTicketAsync(activeTicket.Ticket.Id);
+                                if (activeTicket.Messages.Count > prev) scroll = true;
+                            }
+                            StateHasChanged();
+                        }
+                        catch { }
+                    });
+                }
+            }
+            catch (OperationCanceledException) { }
+            catch (ObjectDisposedException) { }
+        });
+    }
+
+    private void StopPolling()
+    {
+        try { pollCts?.Cancel(); } catch { }
+        pollCts?.Dispose();
+        pollCts = null;
+        pollTask = null;
+    }
+
+    private static string StatusLabel(string status) => status switch
+    {
+        HelpdeskTicketStatuses.BotActive => "Bot",
+        HelpdeskTicketStatuses.WaitingForAgent => "Waiting",
+        HelpdeskTicketStatuses.AgentAssigned => "Live Officer",
+        HelpdeskTicketStatuses.Resolved => "Resolved",
+        _ => status
+    };
+
+    private static string StatusBadgeClass(string status) => status switch
+    {
+        HelpdeskTicketStatuses.BotActive => "bg-blue-50 text-blue-700 border border-blue-200",
+        HelpdeskTicketStatuses.WaitingForAgent => "bg-amber-100 text-amber-800 border border-amber-200",
+        HelpdeskTicketStatuses.AgentAssigned => "bg-emerald-100 text-emerald-800 border border-emerald-200",
+        HelpdeskTicketStatuses.Resolved => "bg-slate-100 text-slate-600 border border-slate-200",
+        _ => "bg-slate-100 text-slate-700"
+    };
+
+    private void Fail(Exception ex)
+    {
+        Logger.LogWarning(ex, "Floating Helpdesk widget failed");
+        error = ex is UnauthorizedAccessException or InvalidOperationException ? ex.Message : "Helpdesk is temporarily unavailable.";
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        disposed = true;
+        Navigation.LocationChanged -= HandleLocationChanged;
+        HelpdeskNotifier.Changed -= HandleAvailabilityChanged;
+        var task = pollTask;
+        StopPolling();
+        if (task != null)
+        {
+            try { await task; } catch { }
+        }
+        dotNetRef?.Dispose();
+    }
+}

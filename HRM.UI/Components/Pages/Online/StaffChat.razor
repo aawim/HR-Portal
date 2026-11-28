@@ -3,6 +3,7 @@
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
 @implements IAsyncDisposable
 @inject HRM.Services.Contracts.StaffChatServiceContracts.IOperations Chat
+@inject HRM.Services.Contracts.HelpdeskServiceContracts.IOperations Helpdesk
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
 @inject ILogger<StaffChat> Logger
@@ -134,25 +135,28 @@
 
                 <!-- Scrollable Thread List -->
                 <div class="flex-1 min-h-0 overflow-y-auto chat-scroll">
-                    <!-- Pinned Cross-Organisation Helpdesk Entry -->
-                    <a href="@HelpdeskRoute"
-                       class="flex items-center gap-3 border-b border-teal-100 dark:border-teal-900/60 bg-teal-50/70 dark:bg-teal-950/35 px-3.5 py-2.5 text-left transition hover:bg-teal-100/70 dark:hover:bg-teal-950/55">
-                        <div class="h-9 w-9 rounded-full bg-teal-700 text-white flex items-center justify-center shrink-0 shadow-2xs">
-                            <AppIcon Name="bi-headset" Class="text-sm" />
-                        </div>
-                        <div class="min-w-0 flex-1">
-                            <div class="flex items-center justify-between gap-2">
-                                <span class="text-xs font-bold text-teal-950 dark:text-teal-100 truncate">GHR Helpdesk</span>
-                                <span class="rounded-full bg-white/90 dark:bg-teal-900/70 border border-teal-200 dark:border-teal-700 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-teal-700 dark:text-teal-200 shrink-0">
-                                    Bot + Live
-                                </span>
+                    @if (helpdeskAvailable)
+                    {
+                        <!-- Pinned Cross-Organisation Helpdesk Entry -->
+                        <a href="@HelpdeskRoute"
+                           class="flex items-center gap-3 border-b border-teal-100 dark:border-teal-900/60 bg-teal-50/70 dark:bg-teal-950/35 px-3.5 py-2.5 text-left transition hover:bg-teal-100/70 dark:hover:bg-teal-950/55">
+                            <div class="h-9 w-9 rounded-full bg-teal-700 text-white flex items-center justify-center shrink-0 shadow-2xs">
+                                <AppIcon Name="bi-headset" Class="text-sm" />
                             </div>
-                            <p class="mt-0.5 text-[11px] text-teal-800/80 dark:text-teal-300/80 truncate">
-                                Instant bot help &amp; real officer takeover
-                            </p>
-                        </div>
-                        <AppIcon Name="chevron_right" Class="text-xs text-teal-700 dark:text-teal-300 shrink-0" />
-                    </a>
+                            <div class="min-w-0 flex-1">
+                                <div class="flex items-center justify-between gap-2">
+                                    <span class="text-xs font-bold text-teal-950 dark:text-teal-100 truncate">GHR Helpdesk</span>
+                                    <span class="rounded-full bg-white/90 dark:bg-teal-900/70 border border-teal-200 dark:border-teal-700 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-teal-700 dark:text-teal-200 shrink-0">
+                                        Bot + Live
+                                    </span>
+                                </div>
+                                <p class="mt-0.5 text-[11px] text-teal-800/80 dark:text-teal-300/80 truncate">
+                                    Instant bot help &amp; real officer takeover
+                                </p>
+                            </div>
+                            <AppIcon Name="chevron_right" Class="text-xs text-teal-700 dark:text-teal-300 shrink-0" />
+                        </a>
+                    }
 
                     @if (FilteredThreads.Count == 0)
                     {
@@ -1036,7 +1040,7 @@
     private readonly Dictionary<int, string> groupUsers = [];
 
     private bool busy, disposed, requestSearched, scroll, forceScroll;
-    private bool isFullWidth;
+    private bool isFullWidth, helpdeskAvailable;
     private bool showInfoDrawer, showAttachPanel, showComposeModal, mobileShowList = true;
     private ComposeMode composeMode = ComposeMode.Direct;
     private long composerBoundForId;
@@ -1083,6 +1087,8 @@
         {
             contacts = await Chat.SearchContactsAsync("");
             threads = await Chat.ListAsync();
+            try { helpdeskAvailable = (await Helpdesk.GetAvailabilityAsync()).IsAvailable; }
+            catch { helpdeskAvailable = false; }
         }
         catch (Exception ex) { Fail(ex); }
         watching = WatchAsync();

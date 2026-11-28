@@ -69,3 +69,31 @@ public sealed class HelpdeskArticleDto
     public int SortOrder { get; set; }
     public DateTime UpdatedAtUtc { get; set; }
 }
+
+public sealed record HelpdeskAvailabilityDto(
+    bool IsAvailable,
+    bool GlobalEnabled,
+    string ScopeMode,
+    string? Message);
+
+public sealed class HelpdeskOrganisationToggleDto
+{
+    public int OrganisationId { get; set; }
+    public string OrganisationName { get; set; } = "";
+    public bool IsEnabled { get; set; }
+}
+
+public sealed class HelpdeskBotSettingsDto
+{
+    public bool IsEnabled { get; set; } = true;
+    public string ScopeMode { get; set; } = "Global";
+    public DateTime? UpdatedAtUtc { get; set; }
+    public List<HelpdeskOrganisationToggleDto> Organisations { get; set; } = [];
+}
+
+public sealed class SaveHelpdeskBotSettingsDto
+{
+    public bool IsEnabled { get; set; } = true;
+    public string ScopeMode { get; set; } = "Global";
+    public List<int> EnabledOrganisationIds { get; set; } = [];
+}

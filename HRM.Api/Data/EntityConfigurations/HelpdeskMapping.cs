@@ -60,9 +60,33 @@ public sealed class HelpdeskArticleMapping : IEntityTypeConfiguration<HelpdeskAr
     }
 }
 
+public sealed class HelpdeskSettingsMapping : IEntityTypeConfiguration<HelpdeskSettings>
+{
+    public void Configure(EntityTypeBuilder<HelpdeskSettings> b)
+    {
+        b.ToTable("HD_HelpdeskSettings");
+        b.HasKey(x => x.Id);
+        b.Property(x => x.Id).ValueGeneratedNever();
+        b.Property(x => x.ScopeMode).HasMaxLength(24).IsRequired();
+    }
+}
+
+public sealed class HelpdeskOrganisationAccessMapping : IEntityTypeConfiguration<HelpdeskOrganisationAccess>
+{
+    public void Configure(EntityTypeBuilder<HelpdeskOrganisationAccess> b)
+    {
+        b.ToTable("HD_HelpdeskOrganisationAccess");
+        b.HasKey(x => x.OrganisationId);
+        b.Property(x => x.OrganisationId).ValueGeneratedNever();
+        b.HasOne<Organisation>().WithMany().HasForeignKey(x => x.OrganisationId).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
 public partial class HrmTeContext
 {
     public DbSet<HelpdeskTicket> HelpdeskTickets => Set<HelpdeskTicket>();
     public DbSet<HelpdeskMessage> HelpdeskMessages => Set<HelpdeskMessage>();
     public DbSet<HelpdeskArticle> HelpdeskArticles => Set<HelpdeskArticle>();
+    public DbSet<HelpdeskSettings> HelpdeskSettings => Set<HelpdeskSettings>();
+    public DbSet<HelpdeskOrganisationAccess> HelpdeskOrganisationAccesses => Set<HelpdeskOrganisationAccess>();
 }

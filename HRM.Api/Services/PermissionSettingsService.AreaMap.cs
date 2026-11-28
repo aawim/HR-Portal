@@ -40,6 +40,8 @@ public partial class PermissionSettingsService
     private static readonly CanonicalPermissionSpec[] CanonicalPermissions =
     [
         new("Communication.Manage", "Manage Communication Hub", "Manage communication integrations, destinations, automation and delivery within the current tenant. Approved Admin Portal access is also required.", "Admin", "Settings"),
+        new("Helpdesk.Agent", "Helpdesk Support Center Access", "Access the Online Portal Helpdesk Support Center (/online/support-center) to communicate with users, take over escalated bot chats, and save replies to the Knowledge Base.", "Online", "Intranet"),
+        new("Helpdesk.Manage", "Manage Helpdesk Support", "Full Helpdesk Support Center access to manage live chats, resolve escalated conversations, and save articles to the Knowledge Base.", "Admin", "Settings"),
         // Individual & Identity
         new("Individual.View", "View Individual Registry", "View individual personal records and registry profiles.", "Admin", "HR"),
         new("Individual.Create", "Create Individual", "Register new individuals in the central registry.", "Admin", "HR"),
@@ -357,7 +359,9 @@ public partial class PermissionSettingsService
                         new("online-dhr-connect", "Intranet (DHR Connect & Organisation Hub)", "/online/dhr-connect", "View organisation announcements, colleague updates, new joiners, and upcoming events.",
                             ["Intranet.Announcement.View", "Directory.PublicProfile.View"]),
                         new("online-staff-chat", "Staff Chat & Request Cards", "/online/chat", "Direct 1-on-1 messaging, group chats, and interactive workflow request cards.",
-                            ["Directory.PublicProfile.View", "Employee.View"])
+                            ["Directory.PublicProfile.View", "Employee.View"]),
+                        new("online-support-center", "Helpdesk Support Center", "/online/support-center", "Handle live user helpdesk chats, take over escalated bot conversations, and save verified answers to the Knowledge Base.",
+                            ["Helpdesk.Agent", "Helpdesk.Manage"])
                     ]),
                 new(
                     "online-leaves-handovers",

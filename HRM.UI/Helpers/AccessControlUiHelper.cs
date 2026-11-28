@@ -124,7 +124,7 @@ public static class AccessControlUiHelper
             return Module("documents");
         if (StartsWithAny(k, "Asset.", "Is.Global.Items.") || ContainsAny(text, "Item", "Asset", "Inventory"))
             return Module("items");
-        if (StartsWithAny(k, "Intranet.", "Communication.") || ContainsAny(text, "Communication", "Chat", "Notification", "Announcement"))
+        if (StartsWithAny(k, "Intranet.", "Communication.", "Helpdesk.") || ContainsAny(text, "Communication", "Chat", "Notification", "Announcement", "Helpdesk", "Support Center"))
             return Module("communications");
         if (StartsWithAny(k, "Edge.", "Settings.", "Reports.", "Developer") ||
             ContainsAny(text, "Audit", "Activity", "ErrorLog", "Developer", "Workflow", "Transition", "Edge", "Diagnostic", "Sequence"))

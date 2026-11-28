@@ -9,6 +9,8 @@
 @inject IUserAccessService UserAccess
 @inject HRM.Services.Contracts.LeadershipAuthorityServiceContracts.IOperations LeadershipAccess
 @inject HRM.UI.Services.Recruitment.IRecruitmentApiClient RecruitmentApi
+@inject HRM.Services.Contracts.HelpdeskServiceContracts.IOperations Helpdesk
+@inject HRM.UI.Services.HelpdeskAvailabilityNotifier HelpdeskNotifier
 
 
 
@@ -81,6 +83,7 @@
 
                             @SectionGroup("dev-infra", "Infrastructure", @<text>
                                 <NavItem Compact="collapsed" Href="/developer/edge-agents" Icon="bi-pc-display" Text="Client Agents" />
+                                <NavItem Compact="collapsed" Href="/developer/bot-resources" Icon="bi-robot" Text="Bot Resources" />
                                 <NavItem Compact="collapsed" Href="/developer/diagnostics" Icon="cog" Text="System & Diagnostics" />
                             </text>)
                         }
@@ -196,7 +199,10 @@
                                     <NavItem Compact="collapsed" Href="/admin/hr/events" Icon="bi-calendar-event" Text="Events" />
                                 }
                                 <NavItem Compact="collapsed" Href="/admin/chat" Icon="chat" Text="Chat" />
-                                <NavItem Compact="collapsed" Href="/admin/helpdesk" Icon="bi-headset" Text="Helpdesk" />
+                                @if (helpdeskAvailable)
+                                {
+                                    <NavItem Compact="collapsed" Href="/admin/helpdesk" Icon="bi-headset" Text="Helpdesk" />
+                                }
                             </text>)
 
                             @if (canViewSettings)
@@ -215,7 +221,14 @@
                             @SectionGroup("emp-overview", "Overview", @<text>
                                 <NavItem Compact="collapsed" Href="/online" Match="NavLinkMatch.All" Icon="home" Text="Home" />
                                 <NavItem Compact="collapsed" Href="/online/chat" Icon="chat" Text="Chat" />
-                                <NavItem Compact="collapsed" Href="/online/helpdesk" Icon="bi-headset" Text="Helpdesk" />
+                                @if (helpdeskAvailable)
+                                {
+                                    <NavItem Compact="collapsed" Href="/online/helpdesk" Icon="bi-headset" Text="Helpdesk" />
+                                }
+                                @if (canAccessSupportCenter)
+                                {
+                                    <NavItem Compact="collapsed" Href="/online/support-center" Icon="bi-life-preserver" Text="Support Center" />
+                                }
                             </text>, isFirst: true)
 
                             @SectionGroup("emp-time", "Time & Leave", @<text>
@@ -323,6 +336,8 @@
     private bool canViewDepartments;
     private bool canViewSupervisors;
     private bool canViewSettings;
+    private bool helpdeskAvailable;
+    private bool canAccessSupportCenter;
 
     private async Task<bool> HasAnyPermissionAsync(params string[] permissions)
     {
@@ -355,6 +370,8 @@
         canViewDepartments = false;
         canViewSupervisors = false;
         canViewSettings = false;
+        helpdeskAvailable = false;
+        canAccessSupportCenter = false;
     }
 
     private (bool HasAccess, bool CanAdmin, bool CanDev, bool CanSuper, string Portal)? loadedPermissionScope;
@@ -425,6 +442,13 @@
 
             var nextIsDeveloper = CanAccessDeveloperPortal || await UserAccess.HasUserGroupAsync("Developer") || await UserAccess.HasPermissionAsync("Developer");
 
+            var nextHelpdeskAvailable = false;
+            try { nextHelpdeskAvailable = (await Helpdesk.GetAvailabilityAsync()).IsAvailable; }
+            catch { nextHelpdeskAvailable = false; }
+
+            var nextCanAccessSupportCenter = actor.IsSuperAdministrator
+                || await HasAnyPermissionAsync("Helpdesk.Agent", "Helpdesk.Manage");
+
             var nextPendingRecruitmentCount = 0;
             if (nextRecruitment && IsAdminPortal)
             {
@@ -453,6 +477,8 @@
             canViewSettings = nextSettings;
             hasLeadershipAuthority = nextLeadershipAuthority;
             isDeveloper = nextIsDeveloper;
+            helpdeskAvailable = nextHelpdeskAvailable;
+            canAccessSupportCenter = nextCanAccessSupportCenter;
             loadedPermissionScope = scope;
         }
         catch
@@ -476,7 +502,18 @@
     protected override void OnInitialized()
     {
         Navigation.LocationChanged += OnLocationChanged;
+        HelpdeskNotifier.Changed += OnHelpdeskAvailabilityChanged;
         EnsurePortalGroupsInitialized();
+    }
+
+    private void OnHelpdeskAvailabilityChanged()
+    {
+        _ = InvokeAsync(async () =>
+        {
+            try { helpdeskAvailable = (await Helpdesk.GetAvailabilityAsync()).IsAvailable; }
+            catch { helpdeskAvailable = false; }
+            StateHasChanged();
+        });
     }
 
     private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
@@ -547,7 +584,7 @@
         {
             if (path.Contains("/request-types") || path.Contains("/transitions") || path.Contains("/notification-resolution") || path.Contains("/workflows"))
                 return "dev-workflows";
-            if (path.Contains("/edge-agents") || path.Contains("/diagnostics"))
+            if (path.Contains("/edge-agents") || path.Contains("/bot-resources") || path.Contains("/diagnostics"))
                 return "dev-infra";
             return "dev-monitoring";
         }
@@ -564,14 +601,14 @@
                 return "admin-finance";
             if (path.StartsWith("/admin/hr/items") || path.StartsWith("/admin/hr/certificates") || path.StartsWith("/admin/hr/documents") || path.StartsWith("/admin/hr/slogans"))
                 return "admin-assets";
-            if (path.StartsWith("/admin/my/workspace/organisation") || path.StartsWith("/admin/hr/supervisors") || path.StartsWith("/admin/hr/events") || path.StartsWith("/admin/chat"))
+            if (path.StartsWith("/admin/my/workspace/organisation") || path.StartsWith("/admin/hr/supervisors") || path.StartsWith("/admin/hr/events") || path.StartsWith("/admin/chat") || path.StartsWith("/admin/helpdesk"))
                 return "admin-org";
             if (path.StartsWith("/admin/settings"))
                 return "admin-settings";
             return "admin-workspace";
         }
 
-        if (path == "/" || path == "/online" || path.StartsWith("/online/chat"))
+        if (path == "/" || path == "/online" || path.StartsWith("/online/chat") || path.StartsWith("/online/helpdesk") || path.StartsWith("/online/support-center"))
             return "emp-overview";
         if (path.StartsWith("/online/attendance") || path.StartsWith("/online/duty-roster") || path.StartsWith("/online/leaves") || path.StartsWith("/online/leave-handovers") || path.StartsWith("/online/ot") || path.StartsWith("/online/overtime"))
             return "emp-time";
@@ -658,6 +695,7 @@
     public void Dispose()
     {
         Navigation.LocationChanged -= OnLocationChanged;
+        HelpdeskNotifier.Changed -= OnHelpdeskAvailabilityChanged;
     }
 
 }

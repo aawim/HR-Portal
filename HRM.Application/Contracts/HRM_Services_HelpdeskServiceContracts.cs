@@ -25,5 +25,9 @@ public abstract class HelpdeskServiceContracts
         Task<List<HelpdeskArticleDto>> GetArticlesAsync(string search);
         Task<ServiceResult> SaveArticleAsync(HelpdeskArticleDto model);
         Task<ServiceResult> DeleteArticleAsync(int articleId);
+
+        Task<HelpdeskAvailabilityDto> GetAvailabilityAsync();
+        Task<HelpdeskBotSettingsDto> GetBotSettingsAsync();
+        Task<ServiceResult> SaveBotSettingsAsync(SaveHelpdeskBotSettingsDto model);
     }
 }

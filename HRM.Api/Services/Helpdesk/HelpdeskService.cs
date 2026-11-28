@@ -57,10 +57,169 @@ public sealed class HelpdeskService(
     private static string ResolveUserDisplayName(string? fullName, string? username, int userId)
         => !string.IsNullOrWhiteSpace(fullName) ? fullName.Trim() : (!string.IsNullOrWhiteSpace(username) ? username.Trim() : $"User #{userId}");
 
+    private async Task RequireSuperAdminOrHelpdeskManageAsync()
+    {
+        var user = await access.RequireContextAsync();
+        if (!user.IsSuperAdministrator && !await access.HasPermissionAsync("Helpdesk.Manage"))
+            throw new UnauthorizedAccessException("SuperAdministrator or Helpdesk management permission is required to configure chatbot settings.");
+    }
+
+    private async Task<HelpdeskAvailabilityDto> EvaluateAvailabilityAsync(HrmTeContext db, int organisationId)
+    {
+        var settings = await db.HelpdeskSettings.AsNoTracking().FirstOrDefaultAsync(x => x.Id == 1);
+        if (settings == null)
+            return new HelpdeskAvailabilityDto(true, true, HelpdeskScopeModes.Global, null);
+
+        if (!settings.IsEnabled)
+            return new HelpdeskAvailabilityDto(false, false, settings.ScopeMode, "The Helpdesk Chatbot is currently disabled by the platform administrator.");
+
+        if (string.Equals(settings.ScopeMode, HelpdeskScopeModes.SelectedOrganisations, StringComparison.OrdinalIgnoreCase))
+        {
+            var orgEnabled = organisationId > 0 && await db.HelpdeskOrganisationAccesses.AsNoTracking()
+                .AnyAsync(x => x.OrganisationId == organisationId && x.IsEnabled);
+            if (!orgEnabled)
+                return new HelpdeskAvailabilityDto(false, true, settings.ScopeMode, "The Helpdesk Chatbot is not currently enabled for your organisation.");
+        }
+
+        return new HelpdeskAvailabilityDto(true, true, settings.ScopeMode, null);
+    }
+
+    public async Task<HelpdeskAvailabilityDto> GetAvailabilityAsync()
+    {
+        var user = await access.RequireContextAsync();
+        await using var db = await factory.CreateDbContextAsync();
+        var orgId = await ResolveRequesterOrganisationIdAsync(db, user.UserId);
+        return await EvaluateAvailabilityAsync(db, orgId);
+    }
+
+    public async Task<HelpdeskBotSettingsDto> GetBotSettingsAsync()
+    {
+        await RequireSuperAdminOrHelpdeskManageAsync();
+        await using var db = await factory.CreateDbContextAsync();
+
+        var settings = await db.HelpdeskSettings.AsNoTracking().FirstOrDefaultAsync(x => x.Id == 1);
+        var inactiveEntityStateIds = await db.BusinessEntityStates.AsNoTracking()
+            .Where(s => s.StateName.Contains("Deleted") || s.StateName.Contains("Inactive") || s.StateName.Contains("Closed") || s.StateName.Contains("Disabled"))
+            .Select(s => s.BusinessEntityStateId)
+            .ToListAsync();
+
+        var orgs = await db.Organisations.AsNoTracking()
+            .Where(o => !db.BusinessEntities.Any(b => b.BusinessEntityID == o.BusinessEntityID && b.BusinessEntityStateId.HasValue && inactiveEntityStateIds.Contains(b.BusinessEntityStateId.Value)))
+            .OrderBy(o => o.OrganisationName)
+            .Select(o => new { o.BusinessEntityID, o.OrganisationName })
+            .ToListAsync();
+
+        var enabledMap = await db.HelpdeskOrganisationAccesses.AsNoTracking()
+            .ToDictionaryAsync(x => x.OrganisationId, x => x.IsEnabled);
+
+        return new HelpdeskBotSettingsDto
+        {
+            IsEnabled = settings?.IsEnabled ?? true,
+            ScopeMode = settings?.ScopeMode ?? HelpdeskScopeModes.Global,
+            UpdatedAtUtc = settings?.UpdatedAtUtc,
+            Organisations = orgs.Select(o => new HelpdeskOrganisationToggleDto
+            {
+                OrganisationId = o.BusinessEntityID,
+                OrganisationName = o.OrganisationName,
+                IsEnabled = enabledMap.GetValueOrDefault(o.BusinessEntityID, false)
+            }).ToList()
+        };
+    }
+
+    public async Task<ServiceResult> SaveBotSettingsAsync(SaveHelpdeskBotSettingsDto model)
+    {
+        await RequireSuperAdminOrHelpdeskManageAsync();
+        if (model == null) return ServiceResult.Fail("Settings payload is required.");
+
+        var scopeMode = string.Equals(model.ScopeMode, HelpdeskScopeModes.SelectedOrganisations, StringComparison.OrdinalIgnoreCase)
+            ? HelpdeskScopeModes.SelectedOrganisations
+            : HelpdeskScopeModes.Global;
+
+        var actor = await access.RequireContextAsync();
+        var now = DateTime.UtcNow;
+        var enabledSet = (model.EnabledOrganisationIds ?? []).Where(id => id > 0).ToHashSet();
+
+        await using var db = await factory.CreateDbContextAsync();
+        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted);
+
+        var settings = await db.HelpdeskSettings.FirstOrDefaultAsync(x => x.Id == 1);
+        if (settings == null)
+        {
+            settings = new HelpdeskSettings
+            {
+                Id = 1,
+                IsEnabled = model.IsEnabled,
+                ScopeMode = scopeMode,
+                UpdatedByUserId = actor.UserId,
+                UpdatedAtUtc = now
+            };
+            db.HelpdeskSettings.Add(settings);
+        }
+        else
+        {
+            settings.IsEnabled = model.IsEnabled;
+            settings.ScopeMode = scopeMode;
+            settings.UpdatedByUserId = actor.UserId;
+            settings.UpdatedAtUtc = now;
+        }
+
+        var existingRows = await db.HelpdeskOrganisationAccesses.ToListAsync();
+        var existingByOrg = existingRows.ToDictionary(x => x.OrganisationId);
+
+        foreach (var row in existingRows)
+        {
+            var shouldEnable = enabledSet.Contains(row.OrganisationId);
+            if (row.IsEnabled != shouldEnable)
+            {
+                row.IsEnabled = shouldEnable;
+                row.UpdatedByUserId = actor.UserId;
+                row.UpdatedAtUtc = now;
+            }
+        }
+
+        var validOrgIds = await db.Organisations.AsNoTracking()
+            .Where(o => enabledSet.Contains(o.BusinessEntityID))
+            .Select(o => o.BusinessEntityID)
+            .ToListAsync();
+
+        foreach (var orgId in validOrgIds)
+        {
+            if (!existingByOrg.ContainsKey(orgId))
+            {
+                db.HelpdeskOrganisationAccesses.Add(new HelpdeskOrganisationAccess
+                {
+                    OrganisationId = orgId,
+                    IsEnabled = true,
+                    UpdatedByUserId = actor.UserId,
+                    UpdatedAtUtc = now
+                });
+            }
+        }
+
+        await db.SaveChangesAsync();
+        await tx.CommitAsync();
+
+        var summary = !model.IsEnabled
+            ? "Helpdesk Chatbot disabled platform-wide."
+            : scopeMode == HelpdeskScopeModes.Global
+                ? "Helpdesk Chatbot enabled globally for all organisations."
+                : $"Helpdesk Chatbot enabled for {validOrgIds.Count} selected organisation{(validOrgIds.Count == 1 ? "" : "s")}.";
+        return ServiceResult.Ok(summary);
+    }
+
+    private async Task RequireChatbotAvailableAsync(HrmTeContext db, int organisationId)
+    {
+        var availability = await EvaluateAvailabilityAsync(db, organisationId);
+        if (!availability.IsAvailable)
+            throw new UnauthorizedAccessException(availability.Message ?? "The Helpdesk Chatbot is currently disabled.");
+    }
+
     public async Task<List<HelpdeskTicketSummaryDto>> GetMyTicketsAsync()
     {
         var user = await access.RequireContextAsync();
         await using var db = await factory.CreateDbContextAsync();
+        var orgId = await ResolveRequesterOrganisationIdAsync(db, user.UserId);
+        await RequireChatbotAvailableAsync(db, orgId);
 
         var tickets = await db.HelpdeskTickets.AsNoTracking()
             .Where(t => t.RequesterUserId == user.UserId)
@@ -82,6 +241,9 @@ public sealed class HelpdeskService(
 
         if (ticket.RequesterUserId != user.UserId && !isAgent)
             throw new UnauthorizedAccessException("You do not have access to this Helpdesk ticket.");
+
+        if (!isAgent)
+            await RequireChatbotAvailableAsync(db, ticket.OrganisationId);
 
         var latestPublicId = await db.HelpdeskMessages.AsNoTracking()
             .Where(m => m.TicketId == ticketId && (isAgent || !m.IsInternalNote))
@@ -120,6 +282,9 @@ public sealed class HelpdeskService(
 
         await using var db = await factory.CreateDbContextAsync();
         var orgId = await ResolveRequesterOrganisationIdAsync(db, user.UserId);
+        var availability = await EvaluateAvailabilityAsync(db, orgId);
+        if (!availability.IsAvailable)
+            throw new InvalidOperationException(availability.Message ?? "The Helpdesk Chatbot is currently disabled for your organisation.");
         var orgName = await db.Organisations.AsNoTracking()
             .Where(o => o.BusinessEntityID == orgId)
             .Select(o => o.OrganisationName)
@@ -190,6 +355,8 @@ public sealed class HelpdeskService(
         if (ticket.RequesterUserId != user.UserId)
             throw new UnauthorizedAccessException("You can only reply to your own Helpdesk tickets.");
 
+        await RequireChatbotAvailableAsync(db, ticket.OrganisationId);
+
         var requesterName = ResolveUserDisplayName(user.FullName, user.Username, user.UserId);
         var now = DateTime.UtcNow;
 
@@ -244,6 +411,8 @@ public sealed class HelpdeskService(
         var isAgent = await IsHelpdeskOfficerAsync();
         if (ticket.RequesterUserId != user.UserId && !isAgent)
             throw new UnauthorizedAccessException("You do not have access to escalate this ticket.");
+        if (!isAgent)
+            await RequireChatbotAvailableAsync(db, ticket.OrganisationId);
 
         if (ticket.Status != HelpdeskTicketStatuses.AgentAssigned && ticket.Status != HelpdeskTicketStatuses.WaitingForAgent)
         {
@@ -286,6 +455,7 @@ public sealed class HelpdeskService(
 
         if (ticket.RequesterUserId != user.UserId)
             throw new UnauthorizedAccessException("Only the requester can mark this ticket resolved here.");
+        await RequireChatbotAvailableAsync(db, ticket.OrganisationId);
 
         var now = DateTime.UtcNow;
         ticket.Status = HelpdeskTicketStatuses.Resolved;
@@ -518,6 +688,8 @@ public sealed class HelpdeskService(
 
         if (ticket.RequesterUserId != user.UserId && !isAgent)
             throw new UnauthorizedAccessException("You do not have permission to reopen this ticket.");
+        if (!isAgent)
+            await RequireChatbotAvailableAsync(db, ticket.OrganisationId);
 
         var now = DateTime.UtcNow;
         ticket.Status = ticket.AssignedAgentUserId.HasValue
@@ -540,9 +712,30 @@ public sealed class HelpdeskService(
         return await BuildDetailAsync(db, ticket, user.UserId, isAgent);
     }
 
+    private async Task RequireDeveloperForBotResourcesAsync()
+    {
+        await access.RequireContextAsync();
+        if (!await access.HasUserGroupAsync("Developer") && !await access.HasPermissionAsync("Developer"))
+            throw new UnauthorizedAccessException("Only Developers can manage Helpdesk Bot resources.");
+    }
+
+    private async Task RequireCanSaveArticleAsync(bool isNewArticle)
+    {
+        await access.RequireContextAsync();
+        var isDeveloper = await access.HasUserGroupAsync("Developer") || await access.HasPermissionAsync("Developer");
+        if (isDeveloper) return;
+
+        if (isNewArticle && await IsHelpdeskOfficerAsync())
+            return;
+
+        throw new UnauthorizedAccessException(isNewArticle
+            ? "Only Helpdesk Officers or Developers can save articles to the Knowledge Base."
+            : "Only Developers can edit existing Helpdesk Bot Knowledge Base articles.");
+    }
+
     public async Task<List<HelpdeskArticleDto>> GetArticlesAsync(string search)
     {
-        await RequireHelpdeskOfficerAsync();
+        await RequireDeveloperForBotResourcesAsync();
         await using var db = await factory.CreateDbContextAsync();
 
         var query = db.HelpdeskArticles.AsNoTracking().AsQueryable();
@@ -575,8 +768,8 @@ public sealed class HelpdeskService(
 
     public async Task<ServiceResult> SaveArticleAsync(HelpdeskArticleDto model)
     {
-        await RequireHelpdeskOfficerAsync();
         if (model == null) return ServiceResult.Fail("Article payload is required.");
+        await RequireCanSaveArticleAsync(isNewArticle: model.Id == 0);
         if (string.IsNullOrWhiteSpace(model.Title)) return ServiceResult.Fail("Enter an article title.");
         if (string.IsNullOrWhiteSpace(model.Answer)) return ServiceResult.Fail("Enter the bot response answer.");
 
@@ -623,7 +816,7 @@ public sealed class HelpdeskService(
 
     public async Task<ServiceResult> DeleteArticleAsync(int articleId)
     {
-        await RequireHelpdeskOfficerAsync();
+        await RequireDeveloperForBotResourcesAsync();
         await using var db = await factory.CreateDbContextAsync();
         var entity = await db.HelpdeskArticles.FirstOrDefaultAsync(a => a.Id == articleId);
         if (entity == null) return ServiceResult.Fail("Article was not found.");
